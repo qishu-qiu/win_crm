@@ -1,0 +1,36 @@
+# 依赖
+node_modules/
+.pnp/
+.yarn/
+
+# 构建产物
+dist/
+build/
+out/
+*.tsbuildinfo
+*.log
+
+# 环境变量 / 密钥（绝不提交）
+.env
+.env.*
+!.env.example
+
+# 编辑器 / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 本地数据库 / 运行时
+*.sqlite
+*.sqlite3
+dump/
+
+# 项目内部数据（记忆/日志，非源码）
+.workbuddy/
+
+# 测试覆盖
+coverage/
+
+# 临时 / 审计产物
+.audit_tmp/

@@ -652,3 +652,10 @@ ul, ol { list-style: none; }
 
 /* 打印 */
 @media print { .sidebar, .topbar, .no-print { display: none !important; } .main { margin-left: 0; } }
+
+/* 顶栏身份预览切换（总经理/经理/销售，便于看不同角色视角） */
+.role-switch { display: inline-flex; align-items: center; gap: 2px; margin-right: 14px; background: #f3f5f8; border-radius: 14px; padding: 2px 4px; }
+.role-switch .rs-label { font-size: 12px; color: #8a94a6; margin: 0 6px 0 4px; }
+.role-switch .rs-btn { border: none; background: transparent; font-size: 12px; color: #5b6577; padding: 4px 10px; border-radius: 12px; cursor: pointer; }
+.role-switch .rs-btn:hover { color: #001529; }
+.role-switch .rs-btn.on { background: #fff; color: #001529; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }

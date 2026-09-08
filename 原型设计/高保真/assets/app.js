@@ -242,6 +242,51 @@
     });
   }
 
+  /* ---------- 顶栏身份预览切换（总经理/经理/销售） ---------- */
+  var ROLE_SWITCH_KEY = 'crm_role_view_v1';
+  function applySavedRole() {
+    try {
+      var r = localStorage.getItem(ROLE_SWITCH_KEY);
+      if (r && window.CRM && window.CRM.data && window.CRM.data.currentUser) {
+        var rc = r === 'sale' ? ['sale'] : r === 'manager' ? ['dept_manager'] : ['gm'];
+        window.CRM.data.currentUser.roleCodes = rc;
+        window.CRM.data.currentUser.roleName = r === 'sale' ? '销售' : r === 'manager' ? '部门经理' : '总经理';
+      }
+    } catch (e) {}
+  }
+  function markActiveRole(role) {
+    Array.prototype.forEach.call(document.querySelectorAll('.rs-btn'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-role') === role);
+    });
+  }
+  function injectRoleSwitch() {
+    var tb = document.querySelector('.topbar');
+    if (!tb || document.getElementById('role-switch')) return;
+    var wrap = document.createElement('span');
+    wrap.id = 'role-switch'; wrap.className = 'role-switch';
+    wrap.innerHTML = '<span class="rs-label">视角</span>' +
+      '<button class="rs-btn" data-role="gm">总经理</button>' +
+      '<button class="rs-btn" data-role="manager">经理</button>' +
+      '<button class="rs-btn" data-role="sale">销售</button>';
+    var bell = tb.querySelector('.bell');
+    tb.insertBefore(wrap, bell);
+    wrap.addEventListener('click', function (e) {
+      var b = e.target.closest('.rs-btn'); if (!b) return;
+      var role = b.getAttribute('data-role');
+      try { localStorage.setItem(ROLE_SWITCH_KEY, role); } catch (e2) {}
+      var rc = role === 'sale' ? ['sale'] : role === 'manager' ? ['dept_manager'] : ['gm'];
+      window.CRM.data.currentUser.roleCodes = rc;
+      window.CRM.data.currentUser.roleName = role === 'sale' ? '销售' : role === 'manager' ? '部门经理' : '总经理';
+      renderTopbarUser();
+      Array.prototype.forEach.call(document.querySelectorAll('.menu-item'), function (a) { a.style.display = ''; });
+      Array.prototype.forEach.call(document.querySelectorAll('.menu-group'), function (g) { g.style.display = ''; var h = g.querySelector('.menu-item.has-sub'); if (h) h.style.display = ''; });
+      applyRoleMenu();
+      markActiveRole(role);
+      toast('已切换为' + (role === 'sale' ? '销售' : role === 'manager' ? '经理' : '总经理') + '视角');
+    });
+    markActiveRole(localStorage.getItem(ROLE_SWITCH_KEY) || 'gm');
+  }
+
   /* ---------- 快捷动作分发：同一动作在不同页面行为一致 ---------- */
   function quickAction(act, item) {
     if (act === 'follow') {
@@ -552,10 +597,12 @@
       el.textContent = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     });
   }
+  applySavedRole();
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { renderTopbarUser(); applyRoleMenu(); });
+    document.addEventListener('DOMContentLoaded', function () { renderTopbarUser(); applyRoleMenu(); injectRoleSwitch(); });
   } else {
     renderTopbarUser();
     applyRoleMenu();
+    injectRoleSwitch();
   }
 })();

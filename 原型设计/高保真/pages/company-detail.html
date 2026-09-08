@@ -120,9 +120,9 @@
         </div>
       </div>
 
-      <!-- V2.5 数据层：公司画像（身份/制度/决策链标签 + 打标人留痕） -->
+      <!-- V2.5 数据层：公司档案（身份/制度/决策链标签 + 打标人留痕） -->
       <div class="card mb16">
-        <div class="card-title">公司画像</div>
+        <div class="card-title">公司档案</div>
         <div id="cpBody" style="padding-top:4px"></div>
       </div>
 
@@ -183,7 +183,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 对应需求：第五章 页面 12 公司档案详情 /company/detail/:id（经理+）
 关键交互点：
 1. 顶部：公司概要 + 三档完善度进度条（必填/成交前必填/成交后强制），缺失强制项红色列出 + "去补全"跳 company-edit.html。
-2. 公司画像卡：身份/制度标签 + 决策链（dict 翻译 label）+ 打标人留痕（profileMarks）。
+2. 公司档案卡：身份/制度标签 + 决策链（dict 翻译 label）+ 打标人留痕（profileMarks）。
 3. Tab1 业务关系：每部门每产品线一条（部门/产品线/状态/主对接/维护人/当前阶段/价值/操作）。
 4. Tab2 联系人（N:M）卡片：姓名/决策权 tag/手机脱敏/在职状态；Tab3 业务线；Tab4 跟单聚合时间轴。
 5. V2.5 数据层：本页全部区块由 CRM.data 渲染，支持 ?id=Cxxxx（缺省回退 C2001）；链接 relation-detail.html 不带参，与全局交互现状保持一致。
@@ -283,7 +283,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   }
   document.getElementById('cdGoEdit').href = 'company-edit.html?id=' + COMP.id;
 
-  /* ---------- 公司画像 ---------- */
+  /* ---------- 公司档案 ---------- */
   var marks = (D.profileMarks || {})[COMP.id] || [];
   function chipList(codes, list, cls) {
     if (!codes || !codes.length) return '<span class="text-sub">—</span>';

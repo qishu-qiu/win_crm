@@ -47,7 +47,7 @@ window.DB.dict = {
     { id: 603, code: 'need_proposal', name: '需方案支持', label: '需方案支持', usageCount: 7, builtin: true, status: 'active' }
   ],
 
-  /* 公司画像：身份标签（多选，全公司共享） */
+  /* 公司档案：身份标签（多选，全公司共享） */
   companyIdentityTags: [
     { id: 101, code: 'local_well_known', label: '本地知名', usageCount: 42, builtin: true,  status: 'active' },
     { id: 102, code: 'listed',           label: '上市公司', usageCount: 8,  builtin: true,  status: 'active' },
@@ -57,7 +57,7 @@ window.DB.dict = {
     { id: 106, code: 'new_industry',     label: '新兴行业', usageCount: 3,  builtin: false, status: 'active' }
   ],
 
-  /* 公司画像：制度标签（多选） */
+  /* 公司档案：制度标签（多选） */
   companyPolicyTags: [
     { id: 201, code: 'need_bidding',      label: '需招投标',     usageCount: 12, builtin: true,  status: 'active' },
     { id: 202, code: 'used_competitor',   label: '已用竞品',     usageCount: 27, builtin: true,  status: 'active' },
@@ -65,7 +65,7 @@ window.DB.dict = {
     { id: 204, code: 'annual_review',     label: '年度框架采购', usageCount: 0,  builtin: false, status: 'disabled' }
   ],
 
-  /* 公司画像：决策链（单选） */
+  /* 公司档案：决策链（单选） */
   decisionChain: [
     { id: 301, code: 'short',   label: '决策链短（老板直拍）', usageCount: 35, builtin: true, status: 'active' },
     { id: 302, code: 'long',    label: '决策链长（多层评审）', usageCount: 21, builtin: true, status: 'active' },

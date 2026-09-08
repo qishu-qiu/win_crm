@@ -20,7 +20,7 @@
 | V1.0 | 2026-09-05 | 首版：70 个接口，覆盖 A~O 共 15 组 | 产品组 |
 | V1.1 | 2026-09-05 | **全页面操作对齐补漏**：① 新增 P 组「通用与支撑」（下拉数据源/操作日志/导出/埋点）、外出记录列表、当前外出中状态、录入预览、关系联系人、合同维护人变更、联系人删除、工作流阶段排序等端点；② 补齐 20 处缺失入参出参（`relationId` `companyId` `expiring` `stageList` 等，详见 4.3 缺口修复清单）；③ 消除字段模板**双真相源**（统一为 K03~K06，`/org/product-lines` 不再返回模板）；④ 字典类型清单补全；⑤ 新增 4.2 节「页面 × 操作 × 接口」反向索引，并新增 4.3 节缺口修复清单。**计数口径变更**：V1.0 标称 70 为路径合并口径，本版拆开合并行、改为**端点编号口径，总表共 99 个端点**，便于逐条追溯与联调打勾 | 产品组 |
 | V1.2 | 2026-09-05 | **框架与标签体系补漏（+9，共 108）**：① 新增 P07/P08 消息通知（列表含未读数、标记已读，`channel` 预留微信/企微）、P09/P10 个人快捷入口读写（≤6，`action` 支持 `dialog:` 直接开弹窗）；② 新增 **E09/E10 客户标签读写**（`source=manual/auto`，自动标签不回传，focus 单选、`play`≤2 服务端校验）；③ 新增 O14~O16 标签字典与自动标签规则；④ 新增业务子码 `20401`（注意力非单选）、`20402`（打法特征超 2 个）；⑤ 明确"本周重点"降级由服务端定时任务执行，前端不做本地修正 | 产品组 |
-| V1.3 | 2026-09-07 | **意向跟进体系（七轮定稿）对齐**：① E09/E10 语义重定义——从四维标签改为**跟进设置**（紧迫档单选 + 业务线价值 + 协同；风险=自动为主+人工可补，自动项只读），业务子码 `20401`（紧迫缺失/非单选）、`20402`（谈判特质超 3 个）随新语义重定义；② E06 阶段接口扩展**跳级/回退/异议无解双出路**（回退或判流失留痕）；③ 新增 G09/G10 **公司画像标签**（身份/制度/决策链，建档勾一次全公司共享，留痕打标人）、G11/G12 **联系人谈判特质**（价格敏感/关系型/方案型…，跟着人走换公司保留）；④ 新增 N12 **部门规则**（客户等级金额档位 A/B/C/D 阈值、灰度寿命 N/M 提醒与公海释放），部门经理级配置；⑤ 字典类型清单补充（urgency/value_level/company_identity_tag/company_policy_tag/decision_chain/contact_trait）。**总表端点计数校正**：历史记录行的 99/108 沿用路径合并口径、未含全部 CRUD 拆分行；本版按编号逐行实数为 **119**（本版新增 G09~G12、N12 共 +5） | 产品组 |
+| V1.3 | 2026-09-07 | **意向跟进体系（七轮定稿）对齐**：① E09/E10 语义重定义——从四维标签改为**跟进设置**（紧迫档单选 + 业务线价值 + 协同；风险=自动为主+人工可补，自动项只读），业务子码 `20401`（紧迫缺失/非单选）、`20402`（谈判特质超 3 个）随新语义重定义；② E06 阶段接口扩展**跳级/回退/异议无解双出路**（回退或判流失留痕）；③ 新增 G09/G10 **公司档案标签**（身份/制度/决策链，建档勾一次全公司共享，留痕打标人）、G11/G12 **联系人谈判特质**（价格敏感/关系型/方案型…，跟着人走换公司保留）；④ 新增 N12 **部门规则**（客户等级金额档位 A/B/C/D 阈值、灰度寿命 N/M 提醒与公海释放），部门经理级配置；⑤ 字典类型清单补充（urgency/value_level/company_identity_tag/company_policy_tag/decision_chain/contact_trait）。**总表端点计数校正**：历史记录行的 99/108 沿用路径合并口径、未含全部 CRUD 拆分行；本版按编号逐行实数为 **119**（本版新增 G09~G12、N12 共 +5） | 产品组 |
 
 ---
 
@@ -173,8 +173,8 @@
 | G06 | POST | /contact/{id}/change-phone | 手机号变更申请 |
 | G07 | PUT | /contact/{id} | 编辑联系人（手机号除外） |
 | G08 | DELETE | /contact/{id} | 删除联系人（仅经理） |
-| G09 | GET | /company/{id}/profile-tags | 公司画像标签读取（身份/制度/决策链+打标人） |
-| G10 | PUT | /company/{id}/profile-tags | 公司画像标签保存（建档勾一次，全公司共享） |
+| G09 | GET | /company/{id}/profile-tags | 公司档案标签读取（身份/制度/决策链+打标人） |
+| G10 | PUT | /company/{id}/profile-tags | 公司档案标签保存（建档勾一次，全公司共享） |
 | G11 | GET | /contact/{id}/traits | 联系人谈判特质读取（含打标人） |
 | G12 | PUT | /contact/{id}/traits | 联系人谈判特质保存（≤3，留痕） |
 | H01 | GET | /search/advanced | 高级搜索 |
@@ -356,7 +356,7 @@
 | 列表（相似度提示） | G01 + D03 |
 | 详情 4 Tab | G02（关系 E01 `companyId` / 联系人 G04 `companyId` / 跟单聚合 C02 `companyId`） |
 | 补全保存（信用代码唯一性） | G03 + **D03（creditCode 强匹配）** |
-| 建档/详情「公司画像」标签组（身份/制度/决策链+打标人） | **G09 / G10** |
+| 建档/详情「公司档案」标签组（身份/制度/决策链+打标人） | **G09 / G10** |
 
 **页面 14/15 联系人档案**
 
@@ -518,9 +518,9 @@
 | `control_type` | 台账控件类型：text/number/date/select/multi_select/link | 字段模板编辑器 |
 | `urgency` | 紧迫档：weekly/monthly/quarterly/long_term/gray（默认 gray） | 跟进设置 D18 / 列表标签列 |
 | `value_level` | 业务线价值：high/medium/low/pending（默认空=pending） | 跟进设置 D18 |
-| `company_identity_tag` | 公司身份标签：local_well_known/listed/state_owned/chain_group/group_type/…（可自定义） | 公司画像 G09/G10 |
-| `company_policy_tag` | 公司制度标签：need_bidding/used_competitor/group_procurement/…（可自定义） | 公司画像 G09/G10 |
-| `decision_chain` | 决策链：short（老板直拍）/long（多层评审）/unknown | 公司画像 G09/G10 |
+| `company_identity_tag` | 公司身份标签：local_well_known/listed/state_owned/chain_group/group_type/…（可自定义） | 公司档案 G09/G10 |
+| `company_policy_tag` | 公司制度标签：need_bidding/used_competitor/group_procurement/…（可自定义） | 公司档案 G09/G10 |
+| `decision_chain` | 决策链：short（老板直拍）/long（多层评审）/unknown | 公司档案 G09/G10 |
 | `contact_trait` | 联系人谈判特质：price_sensitive/relationship/case_oriented/professional/…（≤3，可自定义） | 联系人特质 G11/G12 |
 
 **A08 POST /file/upload** — multipart；限制 PDF/图片/录音，≤20MB，单次 ≤5 个；出参 `fileId,url,size,name`
@@ -621,7 +621,7 @@
 **G07 PUT /contact/{id}** — 姓名/邮箱/微信/标签直接生效（手机号除外）
 **G08 DELETE /contact/{id}**（V1.1 新增）— 仅部门经理及以上；**存在关联业务关系/合同时不允许删除**，返回 `409 + data.refCount`；删除为软删（`status=deleted`），历史跟单留痕保留
 
-**G09 GET /company/{id}/profile-tags**（V1.3 新增）— 公司画像标签读取：`groups[{code(company_identity_tag/company_policy_tag/decision_chain),name,multi,max,options[{tagId,code,label,selected,markedByName,markedAt}]}]`；`decision_chain` 单选，其余多选；建档勾一次、全公司共享，打标留痕
+**G09 GET /company/{id}/profile-tags**（V1.3 新增）— 公司档案标签读取：`groups[{code(company_identity_tag/company_policy_tag/decision_chain),name,multi,max,options[{tagId,code,label,selected,markedByName,markedAt}]}]`；`decision_chain` 单选，其余多选；建档勾一次、全公司共享，打标留痕
 **G10 PUT /company/{id}/profile-tags**（V1.3 新增）— 入参 `groups[{code,selectedTagIds[]}]` 全量覆盖；可后补；写 `operation_log`
 **G11 GET /contact/{id}/traits**（V1.3 新增）— 联系人谈判特质读取：`traits[{tagId,code,label,markedByName,markedAt}]` + `personalTags[]`（个人自由标签分栏）；特质存 contact 层，**换公司保留**
 **G12 PUT /contact/{id}/traits**（V1.3 新增）— 入参 `traitIds[]*`（≤3，超出 `422`+`20402`）全量覆盖；写留痕

@@ -165,8 +165,8 @@
             </div>
           </div>
 
-          <!-- 公司画像组（V2.5 数据层：选项来自 dict，可勾选 chip） -->
-          <div class="group-title mt16">公司画像 <span class="gt-tag" style="background:var(--info-light);color:var(--info)">可选</span></div>
+          <!-- 公司档案组（V2.5 数据层：选项来自 dict，可勾选 chip） -->
+          <div class="group-title mt16">公司档案 <span class="gt-tag" style="background:var(--info-light);color:var(--info)">可选</span></div>
           <div class="form-row">
             <div class="form-item" style="flex:0 0 100%">
               <label class="form-label">身份标签（多选，全公司共享）</label>
@@ -208,7 +208,7 @@
 1. 三档分组表单：必填组（公司全称禁用回显）/成交前必填组/成交后强制组，缺失强制字段红框+红色错误提示。
 2. 统一社会信用代码：18 位正则 + 唯一性实时校验（失焦触发）。
 3. 保存后按 URL redirect 参数回跳：从合同创建流程（完善度校验拦截）进入时，保存成功自动返回继续创建合同。
-4. V2.5 数据层：表单回显来自 CRM.data.companies（?id= 指定，缺省 C2001）；新增公司画像组（dict → 可勾选 chip）；税号字段 DB 无数据，刻意留空并注明。
+4. V2.5 数据层：表单回显来自 CRM.data.companies（?id= 指定，缺省 C2001）；新增公司档案组（dict → 可勾选 chip）；税号字段 DB 无数据，刻意留空并注明。
 -->
 <script src="../assets/app.js"></script>
 <script>
@@ -304,7 +304,7 @@
   var markUser = document.getElementById('ceMarkUser');
   if (markUser && cur) markUser.textContent = cur.name + '·' + (cur.roleName || '');
 
-  /* ---------- 公司画像 chips（dict → 可勾选） ---------- */
+  /* ---------- 公司档案 chips（dict → 可勾选） ---------- */
   function renderChips(boxId, list, codes) {
     var box = document.getElementById(boxId);
     if (!box) return;

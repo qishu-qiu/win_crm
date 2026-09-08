@@ -486,7 +486,7 @@
 
 **④ 标签分层**
 
-- **公司级标签（全部门通用、标注留痕可查谁打的）**：打法特征（如公司画像 `company_profile_tag`：身份/制度/决策链）。
+- **公司级标签（全部门通用、标注留痕可查谁打的）**：打法特征（如公司档案 `company_profile_tag`：身份/制度/决策链）。
 - **关系级标签**：风险（`risk_tags_manual` 人工补 + 规则实时派生 `auto` 项只读回传）、协同（`coop_tags`，可 @ 同事：需陪访/技术支持/方案支持）。
 - **联系人级**：谈判特质 `contact_trait`（≤3，跟着人走、换公司保留）。
 
@@ -885,7 +885,7 @@
 >
 > 本文档与下游三份文档的对应关系（变更时按此优先级 cascade 更新，详见 README 路线 B §八）：
 > 1. **业务规则**：本文档（V2.0）为最高优先级事实来源；
-> 2. **表结构**：《数据库设计文档》V1.1（含 `field_template` 元数据表、`ledger.extra_fields` JSON 列、6 步 `workflow_stage` 种子、`dept_rule` 部门规则、`company_profile_tag` 公司画像、`contact_trait` 联系人谈判特质等）；
+> 2. **表结构**：《数据库设计文档》V1.1（含 `field_template` 元数据表、`ledger.extra_fields` JSON 列、6 步 `workflow_stage` 种子、`dept_rule` 部门规则、`company_profile_tag` 公司档案、`contact_trait` 联系人谈判特质等）；
 > 3. **接口端点**：《接口API文档》V1.3；
 > 4. **页面与字段**：《前端页面开发需求文档》V2.5。
 >

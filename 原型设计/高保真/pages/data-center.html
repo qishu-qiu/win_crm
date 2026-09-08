@@ -153,7 +153,7 @@
       <div class="card mb16">
         <div class="card-title">
           <span class="dc-idx">②</span>标签体系（三层归属）
-          <span class="dc-src">A07 / G09~G11 公司画像 · G12 联系人特质 · V2.5 需求 5.5 标签体系</span>
+          <span class="dc-src">A07 / G09~G11 公司档案 · G12 联系人特质 · V2.5 需求 5.5 标签体系</span>
         </div>
         <div class="dc-scroll">
           <table class="table dc-table">
@@ -207,14 +207,14 @@
         <div class="dc-note" id="relNote"></div>
       </div>
 
-      <!-- V2.5：5. 公司画像 + 联系人特质 -->
+      <!-- V2.5：5. 公司档案 + 联系人特质 -->
       <div class="card mb16">
         <div class="card-title">
-          <span class="dc-idx">⑤</span>公司画像 + 联系人谈判特质
-          <span class="dc-src">G09~G11 公司画像 · G12 联系人（特质跟着人走，换公司保留）</span>
+          <span class="dc-idx">⑤</span>公司档案 + 联系人谈判特质
+          <span class="dc-src">G09~G11 公司档案 · G12 联系人（特质跟着人走，换公司保留）</span>
         </div>
         <div class="dc-block">
-          <div class="dc-block-t">公司画像（<span id="cpName"></span>）</div>
+          <div class="dc-block-t">公司档案（<span id="cpName"></span>）</div>
           <div class="dc-scroll">
             <table class="table dc-table">
               <thead><tr>
@@ -407,9 +407,9 @@
       ? '联系人 ' + D.contacts.length + ' 位，谈判特质均 ≤ 3 个'
       : '谈判特质超过 3 个的联系人：' + overTrait.map(function (c) { return c.name; }).join('、'));
 
-  // 10) 公司画像取值合法
+  // 10) 公司档案取值合法
   var chainOk = !!H.byCode(D.decisionChain, D.companyProfile.decisionChain);
-  markErr(true, chainOk, '公司画像决策链取值「' + dash(D.companyProfile.decisionChain) + '」在决策链字典内');
+  markErr(true, chainOk, '公司档案决策链取值「' + dash(D.companyProfile.decisionChain) + '」在决策链字典内');
 
   // 11) 金额合计（信息项）
   checks.push({ html: '<span class="tag">Σ</span>', text: '业务关系价值评估合计 ' + H.money(sum(D.relations, function (r) { return r.valueEstimate; })) + '，平均 ' + H.money(Math.round(sum(D.relations, function (r) { return r.valueEstimate; }) / relTotal)) });
@@ -418,7 +418,7 @@
   var missCoop = D.coopTags.filter(function (t) { return t.usageCount === undefined; }).length;
   var missRisk = D.riskTags.filter(function (t) { return t.usageCount === undefined; }).length;
   if (missCoop + missRisk > 0) {
-    checks.push({ html: '<span class="tag tag-orange">⚠</span>', text: 'mock-data.js 中 coopTags（协同）/ riskTags（风险）缺 usageCount / builtin / status 字段，本表「使用次数」按业务关系实际引用数实算，另两列显示 —（建议补字段以与公司画像标签对齐）' });
+    checks.push({ html: '<span class="tag tag-orange">⚠</span>', text: 'mock-data.js 中 coopTags（协同）/ riskTags（风险）缺 usageCount / builtin / status 字段，本表「使用次数」按业务关系实际引用数实算，另两列显示 —（建议补字段以与公司档案标签对齐）' });
   }
 
   $('dcCheck').innerHTML = checks.map(function (c) {
@@ -450,7 +450,7 @@
 
   /* ============ ② 标签体系（三层归属） ============ */
   function usageOf(list, key) {
-    // 对公司画像 / 联系人标签取 usageCount；对关系层（风险 / 协同）按业务关系实际引用数实算
+    // 对公司档案 / 联系人标签取 usageCount；对关系层（风险 / 协同）按业务关系实际引用数实算
     return list.map(function (t) {
       if (typeof t.usageCount === 'number') return t.usageCount + '';
       var n = count(D.relations, function (r) { return (r[key] || []).indexOf(t.code) >= 0; });
@@ -472,9 +472,9 @@
     }).join('');
   }
   var tagHtml = '';
-  tagHtml += dictRows('① 公司画像·身份', 'tag-blue', D.companyIdentityTags);
-  tagHtml += dictRows('① 公司画像·制度', 'tag-green', D.companyPolicyTags);
-  tagHtml += dictRows('① 公司画像·决策链', 'tag-orange', D.decisionChain);
+  tagHtml += dictRows('① 公司档案·身份', 'tag-blue', D.companyIdentityTags);
+  tagHtml += dictRows('① 公司档案·制度', 'tag-green', D.companyPolicyTags);
+  tagHtml += dictRows('① 公司档案·决策链', 'tag-orange', D.decisionChain);
   tagHtml += dictRows('② 联系人·特质', '', D.contactTraits);
   tagHtml += D.coopTags.map(function (t, i) {
     return tagRow('③ 业务关系·协同', 'tag-blue', t.name, t.code, usageOf(D.coopTags, 'coopTags')[i], '<span class="text-sub">—</span>', '<span class="tag tag-green">启用</span>', '');
@@ -483,9 +483,9 @@
     return tagRow('③ 业务关系·风险', 'tag-red', t.name, t.code, usageOf(D.riskTags, 'riskTags')[i], '<span class="tag tag-orange">⚙ 系统自动</span>', '<span class="tag tag-green">只读</span>', t.rule);
   }).join('');
   $('tbTags').innerHTML = tagHtml;
-  $('tagNote').innerHTML = '归属规则：① 公司画像标签（身份/制度多选、决策链单选）建档时勾一次，全公司共享；' +
+  $('tagNote').innerHTML = '归属规则：① 公司档案标签（身份/制度多选、决策链单选）建档时勾一次，全公司共享；' +
     '② 联系人谈判特质 ≤3，跟着人走，换公司保留；③ 业务关系层 = 协同（手动，可 @ 同事）+ 风险（系统自动打标，只读带 ⚙，悬停看触发规则）。' +
-    '<br>使用次数列：公司画像 / 联系人标签取 mock-data.js 的 usageCount；业务关系层标签按 CRM.data.relations 实际引用数实算（标「实算」）。';
+    '<br>使用次数列：公司档案 / 联系人标签取 mock-data.js 的 usageCount；业务关系层标签按 CRM.data.relations 实际引用数实算（标「实算」）。';
 
   /* ============ ③ 部门与部门规则 ============ */
   function tierCell(rule) {
@@ -543,7 +543,7 @@
   $('relNote').innerHTML = '主对接销售 = 商机 owner；维护人 = 客服（部门开启「客服开关」才有）。' +
     '「客户等级」由第 ③ 节部门规则的金额档位自动落档，可与「价值评估」金额对照核对。';
 
-  /* ============ ⑤ 公司画像 + 联系人 ============ */
+  /* ============ ⑤ 公司档案 + 联系人 ============ */
   var cp = D.companyProfile;
   function labelOf(list, code) { var t = H.byCode(list, code); return t ? t.label : code; }
   $('cpName').textContent = cp.companyName;

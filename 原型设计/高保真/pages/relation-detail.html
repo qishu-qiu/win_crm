@@ -174,9 +174,9 @@
 
         <!-- 右：侧边栏 -->
         <div>
-          <!-- V2.5：公司画像 + 联系人谈判特质（来自 CRM.data.companyProfile / CRM.data.contacts） -->
+          <!-- V2.5：公司档案 + 联系人谈判特质（来自 CRM.data.companyProfile / CRM.data.contacts） -->
           <div class="card">
-            <div class="card-title">公司画像 · 联系人特质<span class="more">V2.5 三层归属</span></div>
+            <div class="card-title">公司档案 · 联系人特质<span class="more">V2.5 三层归属</span></div>
             <div id="profileCard"></div>
           </div>
           <div class="card mt16">
@@ -231,7 +231,7 @@
 2. 操作按钮组：写跟进(D1 主)/新增预约(D2)/激活业务线(D6)/转交(D7)/创建合同（完善度不足禁用+红字提示）/创建工单(D11)。
 3. 6 Tab 走 URL hash：基础信息/跟单记录(默认)/工作流/合同信息/工单/关系网。
 4. 跟单记录：倒序时间轴（方式图标/摘要/态度·进展色标/🚗外出关联），逾期段红色虚线分隔。
-5. 右侧栏：V2.5 新增「公司画像 · 联系人特质」卡（身份/制度/决策链 + 联系人谈判特质，均标注打标人与打标时间）+ 同公司其他业务关系脱敏卡（金额 *** + 🔒、近30天跟进次数）+ 三档完善度进度条（必填/成交前/成交后）+ 缺失项红字 + 去补全。
+5. 右侧栏：V2.5 新增「公司档案 · 联系人特质」卡（身份/制度/决策链 + 联系人谈判特质，均标注打标人与打标时间）+ 同公司其他业务关系脱敏卡（金额 *** + 🔒、近30天跟进次数）+ 三档完善度进度条（必填/成交前/成交后）+ 缺失项红字 + 去补全。
 6. V2.5：工作流 Tab 面板展示 6 步阶段说明；「异议与卡点」阶段给出"异议无解两种出路：回落长期跟 / 判流失"操作条；数据来自 assets/mock-data.js。
 7. V2.5：价值评估（金额 ¥120,000）与业务线价值（高/中/低/待定档位）是两套字段，界面上分别标注，不混淆。
 -->
@@ -266,7 +266,7 @@
 </div>
 
 <script>
-// V2.5：业务关系详情 —— 6 步进度条 / D18 跟进设置 / 公司画像与联系人特质
+// V2.5：业务关系详情 —— 6 步进度条 / D18 跟进设置 / 公司档案与联系人特质
 (function () {
   'use strict';
   var D = CRM.data, H = CRM.h;
@@ -368,7 +368,7 @@
     alert('已判流失：进入流失审批，需填写流失原因，写操作留痕');
   };
 
-  /* ---------- 公司画像 + 联系人谈判特质（G09 / G11） ---------- */
+  /* ---------- 公司档案 + 联系人谈判特质（G09 / G11） ---------- */
   function labelOf(list, code) { var x = H.byCode(list, code); return x ? x.label : code; }
   function chips(codes, list, cls) {
     if (!codes || !codes.length) return '<span class="text-sub">—</span>';
@@ -376,7 +376,7 @@
   }
   var P = D.companyProfile;
   var ph = '';
-  ph += '<div class="fs13 bold mb8">公司画像 · ' + H.esc(P.companyName) + '</div>';
+  ph += '<div class="fs13 bold mb8">公司档案 · ' + H.esc(P.companyName) + '</div>';
   ph += '<div class="text-sub fs12">身份标签（全公司共享，建档勾一次）</div>' +
     '<div class="mt8" style="display:flex;gap:6px;flex-wrap:wrap">' + chips(P.identityTags, D.companyIdentityTags, 'tag-blue') + '</div>';
   ph += '<div class="text-sub fs12 mt8">制度标签</div>' +

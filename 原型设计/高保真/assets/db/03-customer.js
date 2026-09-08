@@ -72,7 +72,7 @@ window.DB.customer = {
     { id: 'P3011', name: '钱英',   title: '人力总监', decisionRole: 'decision', phoneMasked: '159****2211', companyCount: 1, status: 'left',   traitCodes: [], personalTags: [], companyId: 'C2002', markedBy: '张伟', markedAt: '2026-08-28 15:00' }
   ],
 
-  /* 公司画像标签打标记录（G09 出参带打标人留痕） */
+  /* 公司档案标签打标记录（G09 出参带打标人留痕） */
   profileMarks: {
     'C2001': [
       { group: 'company_identity_tag', code: 'listed', label: '上市公司', markedByName: '张伟', markedAt: '2026-08-12 14:20' },

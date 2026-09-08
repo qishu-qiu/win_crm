@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工单详情 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-list.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item active" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">工单详情</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <!-- V2.5 数据层：工单详情内容由 CRM.data.workorders 对应 id 渲染；无 ?id= 默认第一条 -->
+    <main class="content">
+      <div class="card">
+        <div class="flex-between">
+          <div class="flex gap12" id="wdHead">
+            <span class="fs16 bold">…</span>
+          </div>
+          <button class="btn" onclick="location.href='workorder-list.html'">‹ 返回列表</button>
+        </div>
+        <div class="mt16" id="wdSla">…</div>
+      </div>
+
+      <div class="card">
+        <div class="tabs">
+          <span class="tab active" data-t="t1" onclick="go(this)">详情</span>
+          <span class="tab" data-t="t2" onclick="go(this)">流转记录</span>
+          <span class="tab" data-t="t3" onclick="go(this)">关联业务关系</span>
+        </div>
+
+        <!-- Tab 1：详情（V2.5 数据层：值由脚本按 workorder 字段回填） -->
+        <div id="t1">
+          <div class="desc">
+            <div class="d-item"><div class="d-label">公司</div><div class="d-value" id="wdCompany">…</div></div>
+            <div class="d-item"><div class="d-label">联系人</div><div class="d-value" id="wdContact">—</div></div>
+            <div class="d-item"><div class="d-label">来源</div><div class="d-value" id="wdSource">…</div></div>
+            <div class="d-item"><div class="d-label">处理人</div><div class="d-value" id="wdAssign">…</div></div>
+            <div class="d-item"><div class="d-label">创建人</div><div class="d-value" id="wdCreator">…</div></div>
+            <div class="d-item"><div class="d-label">关联合同</div><div class="d-value" id="wdContract">…</div></div>
+          </div>
+          <div class="mt16">
+            <div class="d-label fs12 text-sub mb8">问题描述</div>
+            <div style="background:var(--bg-page);border-radius:var(--radius);padding:14px;font-size:13px;line-height:1.8">
+              <span id="wdDesc">…</span>
+              <span class="text-sub">（详细诉求/截图数据层未含，此处以标题作演示说明）</span>
+            </div>
+          </div>
+          <div class="flex gap12 mt20">
+            <button class="btn btn-primary">▶ 开始处理</button>
+            <button class="btn">⬆ 升级为商机工单</button>
+            <button class="btn btn-danger-plain">关闭工单</button>
+          </div>
+          <div class="form-tip mt8">升级：售后↔商机双向，必填原因并留痕；关闭需处理人确认解决方案已同步客户。</div>
+        </div>
+
+        <!-- Tab 2：流转记录（V2.5 数据层：DB 无日志字段，由 workorder 字段推导 + 阶段说明） -->
+        <div id="t2" style="display:none">
+          <div class="timeline mt8" id="wdLog">
+            <div class="text-sub">加载中…</div>
+          </div>
+        </div>
+
+        <!-- Tab 3：关联业务关系（V2.5 数据层：由 relation 渲染） -->
+        <div id="t3" style="display:none">
+          <div class="grid grid-2 mt8" id="wdRel">
+            <div class="text-sub">加载中…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部 5 阶段进度条：创建→分派→处理中→客户确认→已关闭 -->
+      <div class="card">
+        <div class="card-title">处理进度</div>
+        <div class="steps" id="wdSteps">…</div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+function go(el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['t1','t2','t3'].forEach(id=>document.getElementById(id).style.display = id===el.dataset.t ? '' : 'none');
+}
+</script>
+
+<!-- 设计说明：对应需求文档「页面 19/20 工单管理 - 详情 /workorder/detail/:id」。
+     要点：顶部工单号+售后橙 tag+P1 橙 tag+SLA 进度条（剩余 60%，超时变红+自动升级告警）；
+     3 Tab：详情（desc 卡+开始处理/升级/关闭操作）；流转记录时间轴含"由商机工单 WO-2026-0310 升级而来 ↗"互链；
+     关联业务关系卡+同公司 GEO 业务线脱敏卡（金额 ***、仅已合作+签约日期）；底部 5 阶段 steps（当前"处理中"）。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：工单详情改为 CRM.data.workorders 对应 id 渲染（无 ?id= 默认第一条）
+// - DB 无处理日志/联系人/关联合同等字段，流转记录用工单字段推导 + 阶段说明；缺字段显示 —
+// - 优先级 SLA 时长：P0 4h/P1 8h/P2 24h/P3 72h（代码内置演示常量）；NOW='2026-09-07 09:00'
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var NOW = '2026-09-07 09:00';
+  var WO_ST = { assigned: { t: '已分派', c: 's-data' }, processing: { t: '处理中', c: 's-intent' }, confirming: { t: '客户确认', c: 's-renew' }, closed: { t: '已关闭', c: 's-customer' } };
+  var WO_STEP_IDX = { assigned: 1, processing: 2, confirming: 3, closed: 4 };
+  var PRI_H = { P0: 4, P1: 8, P2: 24, P3: 72 };
+  var PRI_C = { P0: 'tag-red', P1: 'tag-orange', P2: 'tag-blue', P3: 'tag' };
+  function esc(v) { return H.esc(v); }
+  function relById(id) {
+    for (var i = 0; i < D.relations.length; i++) if (String(D.relations[i].id) === String(id)) return D.relations[i];
+    return null;
+  }
+  function relStatus(rel) {
+    for (var i = 0; i < D.relationStatus.length; i++) {
+      var s = D.relationStatus[i];
+      if (s.code === rel.status) {
+        var color = { data: 'tag', intent: 'tag-blue', customer: 'tag-green', renew: 'tag-orange', lost: 'tag-red' }[s.code] || 'tag';
+        return { text: s.name, cls: color };
+      }
+    }
+    return { text: rel.status, cls: 'tag' };
+  }
+  function lineCls(name) {
+    var m = { '短视频推广': 'l-video', '网站建设': 'l-website', 'GEO': 'l-geo', '财税咨询': 'l-tax', '法律咨询': 'l-law', '房产网': 'l-house', '招牌网': 'l-sign' };
+    return m[name] || 'line';
+  }
+  function lineTag(name) { return '<span class="entity-tag line ' + lineCls(name) + '"><i class="et-icon">🧩</i>' + esc(name) + '</span>'; }
+
+  // 定位工单
+  var m = /[?&]id=([^&]+)/.exec(location.search);
+  var want = m ? decodeURIComponent(m[1]) : '';
+  var w = null;
+  for (var i = 0; i < D.workorders.length; i++) if (String(D.workorders[i].id) === want) { w = D.workorders[i]; break; }
+  if (!w && D.workorders.length) w = D.workorders[0];
+  if (!w) { return; }
+
+  var isWo = w.type === 'aftersale';
+  var typeHtml = isWo ? '<span class="tag tag-orange">售后工单</span>' : '<span class="tag tag-blue">商机工单</span>';
+  var priHtml = w.priority ? '<span class="tag ' + (PRI_C[w.priority] || 'tag') + '">' + esc(w.priority) + '（SLA ' + (PRI_H[w.priority] || '') + 'h）</span>' : '';
+  var sInfo = WO_ST[w.status];
+  var stHtml = sInfo ? '<span class="status-dot ' + sInfo.c + '">' + sInfo.t + '</span>' : '<span class="status-dot">' + esc(w.status) + '</span>';
+  document.getElementById('wdHead').innerHTML = '<span class="fs16 bold">' + esc(w.orderNo) + '</span>' + typeHtml + priHtml + stHtml;
+
+  // SLA 条
+  var slaBox = document.getElementById('wdSla');
+  if (!w.slaDeadline || w.type === 'opportunity') {
+    slaBox.innerHTML = '<div class="flex-between fs13 mb8"><span class="text-sub">商机工单不计 SLA（无截止时间）</span><span class="text-sub">超时将变红并自动升级告警</span></div>' +
+      '<div class="progress"><i style="width:0%"></i></div>';
+  } else {
+    var total = PRI_H[w.priority] || 8;
+    var remain = (new Date(w.slaDeadline.replace(/-/g, '/')) - new Date(NOW.replace(/-/g, '/'))) / 3600000;
+    var pct = Math.max(0, Math.min(100, total ? (remain / total) * 100 : 0));
+    var cls = pct < 20 ? 'danger' : (pct < 50 ? 'warn' : '');
+    if (remain < 0) {
+      slaBox.innerHTML = '<div class="flex-between fs13 mb8"><span>SLA <b class="text-danger">已超时</b></span><span class="text-sub">超时已自动升级告警给部门经理</span></div><div class="progress danger"><i style="width:100%"></i></div>';
+    } else {
+      slaBox.innerHTML = '<div class="flex-between fs13 mb8"><span>SLA 剩余 <b class="' + (pct < 20 ? 'text-danger' : (pct < 50 ? 'text-warning' : '')) + '">' +
+        (Math.round(remain * 10) / 10) + 'h</b> / 共 ' + total + 'h（剩余 ' + Math.round(pct) + '%）</span>' +
+        '<span class="text-sub">超时将变红并自动升级告警</span></div>' +
+        '<div class="progress ' + cls + '"><i style="width:' + pct + '%"></i></div>';
+    }
+  }
+
+  // 详情 Tab
+  document.getElementById('wdCompany').textContent = w.companyName || '—';
+  document.getElementById('wdContact').textContent = '—'; // 工单数据无联系人字段
+  document.getElementById('wdSource').textContent = (w.source || '—') + '（' + (w.createdAt || '—') + '）';
+  document.getElementById('wdAssign').textContent = w.assigneeName || '—';
+  document.getElementById('wdCreator').textContent = w.creatorName || '—';
+  // 关联合同：按 relationId 反查 contracts
+  var ctLink = '—';
+  for (var c = 0; c < D.contracts.length; c++) {
+    if (w.relationId && String(D.contracts[c].relationId) === String(w.relationId)) {
+      var ct = D.contracts[c];
+      ctLink = '<a data-jump="contract-detail.html?id=' + esc(ct.id) + '">' + esc(ct.contractNo + ' ' + ct.productLineName) + '</a>';
+      break;
+    }
+  }
+  document.getElementById('wdContract').innerHTML = ctLink;
+  document.getElementById('wdDesc').textContent = w.title || '';
+
+  // 流转记录（由字段推导 + 阶段说明）
+  var log = [];
+  log.push({ t: (w.createdAt || '—') + ' · ' + (w.creatorName || '创建人'), body: '创建工单（来源：' + esc(w.source || '—') + '）' });
+  if (w.assigneeName) {
+    log.push({ t: '系统分派', body: '按类型分派处理人：' + esc(w.assigneeName) + '；' + (w.slaDeadline ? 'SLA 截止：' + esc(w.slaDeadline) : '不计 SLA') });
+  }
+  if (w.status === 'processing') log.push({ t: '阶段：处理中', body: '工单进入处理中阶段，处理人工作中（演示口径：DB 无逐条日志）' });
+  if (w.status === 'confirming') log.push({ t: '阶段：客户确认', body: '处理结果待客户确认（演示口径）' });
+  if (w.status === 'assigned') log.push({ t: '阶段：已分派', body: '已分派待处理（演示口径）' });
+  if (w.status === 'closed') log.push({ t: '阶段：已关闭', body: '工单已关闭（演示口径）' });
+  document.getElementById('wdLog').innerHTML = log.map(function (e) {
+    return '<div class="tl-item"><div class="tl-time">' + esc(e.t) + '</div><div class="tl-body">' + e.body + '</div></div>';
+  }).join('');
+
+  // 关联业务关系
+  var rel = w.relationId ? relById(w.relationId) : null;
+  var relBox = document.getElementById('wdRel');
+  if (!rel) {
+    relBox.innerHTML = '<div class="text-sub">暂无关联业务关系</div>';
+  } else {
+    var rs = relStatus(rel);
+    var relMeta = [
+      '<span>归属销售：' + esc(rel.ownerName || '—') + '</span>',
+      '<span>维护人：' + esc(rel.maintainerName || '—') + '</span>',
+      '<span>最近跟进：' + esc(rel.lastFollowAt || '—') + '</span>',
+      '<span>预估价值：' + H.money(rel.valueEstimate) + '</span>'
+    ].join('');
+    var html = '<div class="bcard"><div class="b-title">' + esc((rel.companyName) || '') + ' · ' + lineTag(rel.productLineName) +
+      ' <span class="tag ' + rs.cls + ' tag-dot">' + rs.text + '</span></div>' +
+      '<div class="b-meta">' + relMeta + '</div>' +
+      '<div class="b-foot"><span class="text-sub">阶段：' + esc(H.stageName(rel.stageId)) + '</span>' +
+      '<a data-jump="relation-detail.html?id=' + esc(rel.id) + '">查看业务关系 ›</a></div></div>';
+    // 同公司其他业务线跨线卡（仅当关系存在 crossLineTags，展示脱敏口径）
+    if (rel.crossLineTags && rel.crossLineTags.length) {
+      html += '<div class="bcard"><div class="b-title">' + esc(rel.companyName) + ' · 跨业务线</div><div class="b-meta">' +
+        rel.crossLineTags.map(function (t) { return '<span class="tag tag-green tag-dot">' + esc(t) + '</span>'; }).join('') +
+        '<span class="text-sub">金额按权限 <span class="masked">***</span>（跨业务线脱敏，静态口径）</span></div>' +
+        '<div class="b-foot"><span class="text-sub">归属：按业务线归属</span></div></div>';
+    }
+    relBox.innerHTML = html;
+  }
+
+  // 处理进度 steps（创建→分派→处理中→客户确认→已关闭）
+  var idx = WO_STEP_IDX[w.status] || 0;
+  var names = ['创建', '分派', '处理中', '客户确认', '已关闭'];
+  var html2 = '';
+  for (var s = 0; s < names.length; s++) {
+    if (s) html2 += '<div class="step-line"></div>';
+    if (idx === 0 && s === 0) {
+      html2 += '<div class="step active"><span class="s-num">1</span>' + names[s] + '<div class="text-sub fs12">当前节点</div></div>';
+    } else if (s < idx) {
+      html2 += '<div class="step done"><span class="s-num">✓</span>' + names[s] + '<div class="text-sub fs12">' + (s === 0 && w.createdAt ? esc(w.createdAt.slice(0, 10)) : '') + '</div></div>';
+    } else if (s === idx) {
+      html2 += '<div class="step active"><span class="s-num">' + (s + 1) + '</span>' + names[s] + '<div class="text-sub fs12">当前节点</div></div>';
+    } else {
+      html2 += '<div class="step"><span class="s-num">' + (s + 1) + '</span>' + names[s] + '</div>';
+    }
+  }
+  document.getElementById('wdSteps').innerHTML = html2;
+})();
+</script>
+</body>
+</html>

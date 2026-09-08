@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据看板 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* 页面级微调：看板布局与环形图 */
+  .dash-mid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; margin-top: 16px; }
+  .follow-item { display: flex; align-items: center; gap: 12px; padding: 12px 8px; border-bottom: 1px solid var(--border-lighter); cursor: pointer; border-radius: var(--radius); }
+  .follow-item:hover { background: #F5F7FA; }
+  .follow-item:last-child { border-bottom: none; }
+  .follow-item.overdue { background: var(--danger-light); }
+  .follow-item.overdue:hover { background: #FDE2E2; }
+  .f-main { flex: 1; min-width: 0; }
+  .donut-wrap { display: flex; align-items: center; gap: 24px; }
+  .donut {
+    width: 180px; height: 180px; border-radius: 50%; flex: 0 0 auto; position: relative;
+    /* V2.5 数据层：分布占比由 CRM.data.dashboard.distribution 动态生成 conic-gradient（JS 覆写 background） */
+    background: #ECEEF2;
+  }
+  .donut::after {
+    content: attr(data-count) "\A 业务关系"; white-space: pre; text-align: center;
+    position: absolute; inset: 34px; background: #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: var(--text-secondary); font-weight: 600; line-height: 1.5;
+  }
+  .legend li { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 5px 0; color: var(--text-regular); }
+  .legend li i { width: 10px; height: 10px; border-radius: 2px; }
+  .legend li b { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-main); }
+  .alert-card { display: flex; gap: 14px; align-items: flex-start; cursor: pointer; transition: all .2s; }
+  .alert-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+  .alert-icon { width: 44px; height: 44px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; font-size: 22px; flex: 0 0 auto; }
+  /* V2.5 数据层：部门对比 / 销售 TOP 行样式（极简，不新增视觉主题） */
+  .rank-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-lighter); font-size: 13px; }
+  .rank-row:last-child { border-bottom: none; }
+  .rank-row .progress { flex: 1; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item active" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">数据看板</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+
+      <!-- KPI 行（V2.5 数据层：数值取 CRM.data.dashboard.summary） -->
+      <div class="grid grid-4">
+        <div class="card kpi">
+          <div class="k-label">📥 今日新增</div>
+          <div class="k-value" id="kpiNewV">0<span class="unit"> 条</span></div>
+          <div class="k-foot" id="kpiNewF">新录入/新领取业务关系</div>
+        </div>
+        <div class="card kpi">
+          <div class="k-label">⏰ 今日待跟进</div>
+          <div class="k-value" id="kpiTodoV">0<span class="unit"> 个</span></div>
+          <div class="k-foot" id="kpiTodoF"></div>
+        </div>
+        <div class="card kpi">
+          <div class="k-label">💰 本月签约</div>
+          <div class="k-value" id="kpiSignV">¥0</div>
+          <div class="k-foot" id="kpiSignF"></div>
+        </div>
+        <div class="card kpi">
+          <div class="k-label">🤝 业务关系总数</div>
+          <div class="k-value" id="kpiRelV">0<span class="unit"> 个</span></div>
+          <div class="k-foot" id="kpiRelF"></div>
+        </div>
+      </div>
+
+      <!-- 左右分栏 -->
+      <div class="dash-mid">
+        <!-- 今日待跟进（V2.5 数据层：近 4 天需跟进的私海关系派生列表） -->
+        <div class="card">
+          <div class="card-title">⏰ 今日待跟进 <span class="tag tag-red" id="followOverdueTag"></span><span class="more" id="followAllMore">全部 ›</span></div>
+          <div id="followList"></div>
+        </div>
+
+        <!-- 业务关系分布（V2.5 数据层：CRM.data.dashboard.distribution） -->
+        <div>
+          <div class="card">
+            <div class="card-title">📊 业务关系状态分布</div>
+            <div class="donut-wrap">
+              <div class="donut" id="donut"></div>
+              <ul class="legend" id="legendList" style="flex:1;"></ul>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">💡 关键洞察</div>
+            <div class="fs13" id="insightBox" style="line-height:2; color: var(--text-regular);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2.5 数据层：部门签约对比 + 销售签约 TOP（CRM.data.dashboard.deptCompare / salesTop） -->
+      <div class="grid grid-2 mt16">
+        <div class="card">
+          <div class="card-title">🏢 部门签约对比</div>
+          <div id="deptCompareList"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🏆 销售签约 TOP5</div>
+          <div id="salesTopList"></div>
+        </div>
+      </div>
+
+      <!-- 活跃预警（V2.5 数据层：CRM.data.dashboard.alerts） -->
+      <div class="grid grid-3 mt16">
+        <div class="card alert-card">
+          <div class="alert-icon" style="background: var(--warning-light);">📄</div>
+          <div style="flex:1;">
+            <div class="flex-between"><span class="bold">签约到期预警</span><span class="tag tag-orange" id="alertExpTag"></span></div>
+            <div class="text-sub mt8" id="alertExpTxt"></div>
+            <div class="mt8"><a>前往合同管理 ›</a></div>
+          </div>
+        </div>
+        <div class="card alert-card">
+          <div class="alert-icon" style="background: var(--danger-light);"><span class="blink-dot" style="width:14px;height:14px;"></span></div>
+          <div style="flex:1;">
+            <div class="flex-between"><span class="bold">即将掉公海</span><span class="tag tag-red" id="alertDropTag"></span></div>
+            <div class="text-sub mt8" id="alertDropTxt"></div>
+            <div class="mt8"><a class="text-danger">立即跟进保住 ›</a></div>
+          </div>
+        </div>
+        <div class="card alert-card">
+          <div class="alert-icon" style="background: var(--primary-light);">✨</div>
+          <div style="flex:1;">
+            <div class="flex-between"><span class="bold">新商机</span><span class="tag tag-blue" id="alertNewTag"></span></div>
+            <div class="text-sub mt8" id="alertNewTxt"></div>
+            <div class="mt8"><a>查看商机 ›</a></div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+<!--
+  设计说明（对照需求文档）：
+  - 对应章节：5.2 页面 2 数据看板；六、交互需求 1/2/8；七、UI 视觉规范
+  - 关键交互：预警卡点击跳对应列表并带入筛选；待跟进项点击直达工作台并预开 D1 写跟进
+  - 涨跌配色遵守中国习惯：涨红（.up #F56C6C）
+  - V2.5 数据层：KPI 取 dashboard.summary；环形图/图例由 dashboard.distribution 动态渲染（含 CSS attr(data-count) 总数）；
+    待跟进列表为 relations 近 4 天派生；预警卡取 dashboard.alerts；新增部门对比（deptCompare）与销售 TOP（salesTop）两区块
+  - 即将掉公海预警使用 .blink-dot 呼吸红标（style.css 内置动画）
+-->
+<script>
+// V2.5 数据层：数据看板改为 CRM.data.dashboard 驱动渲染
+// 数据源：summary / distribution / alerts / deptCompare / salesTop；
+// 待跟进列表口径：relations 私海(非流失)中 nextFollowAt 落在 2026-09-07 ~ 09-10 的近期需跟进关系（DB 无“今日待跟进”明细表，取近 4 天派生子集）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var NOW = '2026-09-07 18:00'; // V2.5 数据层 演示口径“当前时间”（与 relation-list.html 一致），用于判定是否逾期
+  var sum = D.dashboard.summary || {};
+  var dist = D.dashboard.distribution || [];
+  var alerts = D.dashboard.alerts || {};
+  var STATUS = D.relationStatus || [];
+
+  /* ---- 工具 ---- */
+  function byId(id) { return document.getElementById(id); }
+  function htmlOf(id, s) { var e = byId(id); if (e) e.innerHTML = s; }
+  function textOf(id, s) { var e = byId(id); if (e) e.textContent = s; }
+  function statusColor(code) { var s = H.byCode(STATUS, code); return s ? s.color : '#C0C4CC'; }
+  function statusName(code) { var s = H.byCode(STATUS, code); return s ? s.name : (code || ''); }
+  function countOf(code) { for (var i = 0; i < dist.length; i++) if (dist[i].status === code) return dist[i].count; return 0; }
+  function distTotal() { var t = 0; for (var i = 0; i < dist.length; i++) t += dist[i].count; return t; }
+  function fmtPct(c, t) { return t ? Math.round(c / t * 100) : 0; }
+
+  /* ---- 1. KPI 四卡（summary + distribution） ---- */
+  htmlOf('kpiNewV', sum.todayNew + '<span class="unit"> 条</span>');
+  htmlOf('kpiTodoV', sum.todayFollow + '<span class="unit"> 个</span>');
+  htmlOf('kpiTodoF', '其中 <span class="text-danger bold">逾期 ' + (sum.todayOverdue || 0) + ' 个</span>，请优先处理');
+  textOf('kpiSignV', H.money(sum.monthSignAmount));
+  var prev = Math.round(sum.monthSignAmount / (1 + (sum.monthSignRatio || 0) / 100)); // V2.5 数据层：上月额按环比倒推
+  htmlOf('kpiSignF', '环比 <span class="up">▲ +' + sum.monthSignRatio + '%</span>（上月 ' + H.money(prev) + '）');
+  htmlOf('kpiRelV', sum.relationCount + '<span class="unit"> 个</span>');
+  htmlOf('kpiRelF', '客户 ' + countOf('customer') + ' · 续约 ' + countOf('renew') + ' · 意向 ' + countOf('intent'));
+
+  /* ---- 2. 今日待跟进（relations 派生，最多 5 条） ---- */
+  var followRows = [];
+  D.relations.forEach(function (r) {
+    if (r.seaStatus !== 'private') return;
+    if (r.status === 'lost') return; // V2.5 数据层：流失为终态不计待跟进
+    if (!r.nextFollowAt) return;
+    if (r.nextFollowAt < '2026-09-07 00:00' || r.nextFollowAt > '2026-09-10 23:59') return;
+    followRows.push(r);
+  });
+  followRows.sort(function (a, b) { return a.nextFollowAt < b.nextFollowAt ? -1 : 1; });
+  followRows = followRows.slice(0, 5);
+  var followHtml = '', overdueN = 0;
+  followRows.forEach(function (r) {
+    var overdue = r.nextFollowAt < NOW;
+    if (overdue) overdueN++;
+    followHtml += '<div class="follow-item' + (overdue ? ' overdue' : '') + '">' +
+      '<div class="f-main">' +
+        '<div class="flex gap8"><span class="bold">' + H.esc(r.shortName || r.companyName) + '</span>' +
+          '<span class="tag tag-blue">' + H.esc(r.productLineName) + '</span>' +
+          (overdue ? '<span class="tag tag-red">已逾期</span>' : '') + '</div>' +
+        '<div class="text-sub mt8">约定时间 <span' + (overdue ? ' class="text-danger bold"' : '') + '>' + H.esc(r.nextFollowAt) + '</span> · 主对接 ' + H.esc(r.ownerName || '—') + '</div>' +
+      '</div>' +
+      '<button class="btn btn-sm">写跟进</button>' +
+    '</div>';
+  });
+  htmlOf('followList', followRows.length ? followHtml : '<div class="empty"><div>暂无数据</div></div>');
+  var od = byId('followOverdueTag'); if (od) { od.style.display = overdueN ? '' : 'none'; od.textContent = '逾期 ' + overdueN; }
+  textOf('followAllMore', '全部 ' + followRows.length + ' 个 ›');
+
+  /* ---- 3. 业务关系状态分布（donut + legend） ---- */
+  var total = distTotal(), cum = 0, segs = [];
+  dist.forEach(function (d) {
+    if (!d.count) return;
+    var from = cum * 100 / total, to = (cum + d.count) * 100 / total;
+    cum += d.count;
+    segs.push(statusColor(d.status) + ' ' + from + '% ' + to + '%');
+  });
+  var donut = byId('donut');
+  if (donut) {
+    donut.setAttribute('data-count', String(total));
+    donut.style.background = total ? 'conic-gradient(' + segs.join(',') + ')' : '#ECEEF2';
+  }
+  var legendHtml = '';
+  dist.forEach(function (d) {
+    legendHtml += '<li><i style="background:' + statusColor(d.status) + ';"></i>' + statusName(d.status) +
+      '<b>' + d.count + ' · ' + fmtPct(d.count, total) + '%</b></li>';
+  });
+  htmlOf('legendList', dist.length ? legendHtml : '<li class="text-sub">暂无数据</li>');
+
+  /* ---- 4. 关键洞察（由 distribution / alerts 派生，避免 DB 外的假数字） ---- */
+  var intentPct = fmtPct(countOf('intent'), total);
+  htmlOf('insightBox',
+    '<div>· 意向客户占比 <b class="text-primary">' + intentPct + '%</b>（共 ' + countOf('intent') + ' 家），为最大盘口，建议本周优先集中转化</div>' +
+    '<div>· 续约客户 ' + countOf('renew') + ' 家，合同到期预警 <b class="text-warning">' + (alerts.expiringContracts || {}).count30 + ' 份/30 天内</b>，请尽快启动续约沟通</div>' +
+    '<div>· 资料状态 ' + countOf('data') + ' 个、流失 ' + countOf('lost') + ' 个，建议对长期未推进的资料类集中定性或转入公海</div>');
+
+  /* ---- 5. 预警三卡（alerts） ---- */
+  var exp = alerts.expiringContracts || {};
+  textOf('alertExpTag', '30 天内 ' + exp.count30 + ' 份');
+  htmlOf('alertExpTxt', '系统已识别 ' + exp.count30 + ' 份合同将于 30 天内到期（60 天内 ' + exp.count60 + ' 份 / 90 天内 ' + exp.count90 + ' 份），请关注续约与回款节奏');
+  var drops = alerts.droppingSoon || [];
+  textOf('alertDropTag', '24h 内 ' + drops.length + ' 个');
+  var dropHtml = '';
+  drops.forEach(function (d) {
+    dropHtml += '<span class="blink-dot"></span> ' + H.esc(d.companyName) + '（剩 ' + H.esc(d.hoursLeft) + ' 小时）<br>';
+  });
+  htmlOf('alertDropTxt', drops.length ? dropHtml.slice(0, -4) : '暂无即将掉公海的关系');
+  var newOpp = alerts.newOpportunity || {};
+  textOf('alertNewTag', (newOpp.count || 0) + ' 条');
+  htmlOf('alertNewTxt', '系统识别 ' + (newOpp.count || 0) + ' 条新商机待跟进，建议优先分配并首访（预警源 dashboard.alerts.newOpportunity）');
+
+  /* ---- 6. 部门签约对比 + 销售签约 TOP ---- */
+  var dc = D.dashboard.deptCompare || [], dcMax = 0, dcHtml = '';
+  dc.forEach(function (d) { if (d.signAmount > dcMax) dcMax = d.signAmount; });
+  dc.forEach(function (d) {
+    var rt = d.ratio > 0 ? '<span class="up">↑' + d.ratio + '%</span>'
+      : d.ratio < 0 ? '<span class="down">↓' + (-d.ratio) + '%</span>'
+      : '<span class="text-sub">—</span>';
+    dcHtml += '<div class="rank-row">' +
+      '<span style="width:96px">' + H.esc(d.deptName) + '</span>' +
+      '<div class="progress"><i style="width:' + (dcMax ? Math.round(d.signAmount / dcMax * 100) : 0) + '%"></i></div>' +
+      '<span style="width:86px;text-align:right" class="num">' + H.money(d.signAmount) + '</span>' +
+      '<span style="width:66px;text-align:right">' + rt + '</span>' +
+    '</div>';
+  });
+  htmlOf('deptCompareList', dc.length ? dcHtml : '<div class="empty"><div>暂无数据</div></div>');
+  var stSum = 0, topRows = '';
+  var salesTop = D.dashboard.salesTop || [];
+  salesTop.forEach(function (p) { stSum += p.amount; });
+  salesTop.forEach(function (p, i) {
+    var pct = stSum ? Math.round(p.amount / stSum * 100) : 0;
+    topRows += '<div class="rank-row">' +
+      '<span style="width:24px;font-weight:600;color:' + (i < 3 ? 'var(--danger)' : 'var(--text-secondary)') + '">' + (i + 1) + '</span>' +
+      '<span style="flex:1">' + H.esc(p.name) + '</span>' +
+      '<div class="progress"><i style="width:' + pct + '%"></i></div>' +
+      '<span style="width:86px;text-align:right" class="num">' + H.money(p.amount) + '</span>' +
+      '<span style="width:40px;text-align:right" class="text-sub">' + pct + '%</span>' +
+    '</div>';
+  });
+  htmlOf('salesTopList', salesTop.length ? topRows : '<div class="empty"><div>暂无数据</div></div>');
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>录入 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .radio-row { display: flex; gap: 18px; align-items: center; height: 32px; font-size: 13px; color: var(--text-regular); }
+  .radio-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .tag-input { min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius);
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: #fff; }
+  .tag-input input { border: none; outline: none; font-size: 13px; flex: 1; min-width: 90px; font-family: var(--font); }
+  .ok-tip { font-size: 12px; color: var(--success); }
+  .match-item { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border-lighter);
+    border-radius: var(--radius-lg); }
+  .match-item + .match-item { margin-top: 10px; }
+  .match-item:hover { border-color: var(--primary-border); background: var(--primary-light); }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item active" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">录入联系人 / 公司</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content content-narrow">
+      <div class="card">
+        <!-- 步骤条 -->
+        <div class="steps">
+          <div class="step active"><span class="s-num">1</span>联系人</div>
+          <div class="step-line"></div>
+          <div class="step"><span class="s-num">2</span>公司信息<span class="text-sub fs12">（可跳过）</span></div>
+          <div class="step-line"></div>
+          <div class="step"><span class="s-num">3</span>确认</div>
+        </div>
+
+        <!-- 第一步：联系人 -->
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label"><span class="req">*</span>姓名</label>
+            <input class="input" value="陈志强" maxlength="30">
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="req">*</span>手机号</label>
+            <input class="input" value="138 5712 6645">
+            <span class="ok-tip">✓ 号码可用，未重复</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label">微信号</label>
+            <input class="input" placeholder="选填" value="chenzq_2016">
+          </div>
+          <div class="form-item">
+            <label class="form-label">邮箱</label>
+            <input class="input" placeholder="选填，如 chen@yunqi.cn">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item fixed" style="min-width:260px">
+            <label class="form-label">性别</label>
+            <div class="radio-row">
+              <label><input type="radio" name="gender" checked> 男</label>
+              <label><input type="radio" name="gender"> 女</label>
+              <label><input type="radio" name="gender"> 未知</label>
+            </div>
+          </div>
+          <div class="form-item">
+            <label class="form-label">生日</label>
+            <input class="input" type="date" value="1988-06-15">
+          </div>
+          <div class="form-item">
+            <label class="form-label">关键决策权</label>
+            <select class="select">
+              <option>决策人</option>
+              <option>影响人</option>
+              <option>执行人</option>
+              <option selected>未知 / 待确认</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label">个人标签</label>
+            <div class="tag-input">
+              <span class="tag tag-blue">互联网行业</span>
+              <span class="tag tag-blue">注重ROI</span>
+              <span class="tag tag-green">老客户介绍</span>
+              <input placeholder="输入后回车添加，可新建标签">
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label">备注</label>
+            <textarea class="textarea" placeholder="补充说明，如对接偏好、拜访注意事项等">朋友介绍认识，对短视频获客有明确预算，决策周期预计 2 周。</textarea>
+          </div>
+        </div>
+        <div class="flex-between mt20">
+          <button class="btn">保存草稿<span class="text-sub fs12">（24h 内可恢复）</span></button>
+          <div class="flex gap8">
+            <button class="btn" disabled>上一步</button>
+            <button class="btn btn-primary btn-lg" onclick="document.getElementById('d9').style.display='flex'">下一步：公司信息 →</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- D9 公司匹配确认阻断弹窗（V2.5：默认隐藏，点击「下一步：公司信息」触发查重后弹出） -->
+<div class="dialog-mask" id="d9" style="display:none" onclick="if(event.target===this){this.style.display='none'}">
+  <div class="dialog" style="width:640px">
+    <div class="dialog-head">
+      ⚠️ 检测到相似公司
+      <span class="close" style="cursor:pointer" title="关闭并返回修改录入信息" onclick="document.getElementById('d9').style.display='none'">✕</span>
+    </div>
+    <div class="dialog-body">
+      <div class="text-sub mb16">您输入的「杭州云启科技」与以下已有公司档案高度相似。为避免重复建档，请选择「使用已有」继续录入联系人，或确认新建公司。</div>
+      <div class="match-item">
+        <!-- V2.5 数据层：候选来自 CRM.data.companies / relations（C2001 云启科技 · R1001 张伟） -->
+        <div style="flex:1">
+          <div class="bold">杭州云启科技有限公司</div>
+          <div class="text-sub mt8">已有 1 条业务关系（短视频推广，跨线已合作 GEO）｜ 归属：张伟 ｜ 建档：2026-03-18</div>
+        </div>
+        <span class="tag tag-red">相似度 96%</span>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('✓ 已选择已有公司档案，继续录入联系人');">使用已有</button>
+      </div>
+      <div class="match-item">
+        <!-- V2.5 数据层：候选为按名称字符重合检索的次优结果（C2006 启明装饰 · R1006 王芳） -->
+        <div style="flex:1">
+          <div class="bold">金华启明建筑装饰工程有限公司</div>
+          <div class="text-sub mt8">已有 1 条业务关系（GEO）｜ 归属：王芳 ｜ 最近跟进：2026-08-15</div>
+        </div>
+        <span class="tag tag-orange">相似度 88%</span>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('✓ 已选择已有公司档案，继续录入联系人');">使用已有</button>
+      </div>
+      <!-- V2.5 数据层：演示口径说明——候选为按输入关键词从 CRM.data 检索的真实档案，非虚构样例 -->
+      <div class="text-sub mt16">演示口径：上述候选由系统按名称字符重合度从公司档案（CRM.data.companies）检索得出，含低于阻断阈值一并列出的次优结果。</div>
+      <div class="text-sub mt16">提示：若社会统一信用代码与已有档案强匹配，将强制使用已有档案，不允许新建。</div>
+    </div>
+    <div class="dialog-foot" style="justify-content:space-between">
+      <span class="text-danger fs12" style="align-self:center">新建将产生新公司档案，可能造成客户数据重复</span>
+      <button class="btn btn-danger-plain" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('⚠️ 已确认新建公司档案（将产生独立档案，可能重复）');">确认新建公司</button>
+    </div>
+  </div>
+</div>
+<!--
+设计说明（entry.html）
+对应需求：第五章 页面 7 录入联系人/公司 /entry/new；弹窗 D9 公司匹配确认
+关键交互点：
+1. 分步表单：① 联系人 → ② 公司信息（可跳过）→ ③ 确认（摘要回显+完善度预览）。
+2. 手机号必填，11 位正则，失焦查重：通过→绿色"✓ 号码可用"；已存在→弹 D10 阻断弹窗（是→并入现有档案，否→禁止继续）。
+3. 公司全称输入实时相似度匹配（防抖 500ms），≥90% 触发 D9 阻断弹窗：必须选"使用已有"或"确认新建"；统一信用代码强匹配强制使用已有。
+4. 落点单选：员工私海（默认）/部门公海（第二步）；草稿 localStorage 保存 24h，再入提示恢复。
+5. 成功后三选：继续录入 / 立即激活业务关系 / 查看档案；离开未提交触发路由守卫确认。
+-->
+<script src="../assets/app.js"></script>
+</body>
+</html>

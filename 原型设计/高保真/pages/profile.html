@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人中心 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .cols{display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:start}
+  .big-avatar{width:72px;height:72px;border-radius:50%;background:var(--primary);color:#fff;font-size:30px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+  .stat{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed var(--border-lighter);font-size:13px}
+  .stat:last-child{border-bottom:none}
+  .switch-dot{width:30px;height:18px;border-radius:9px;background:var(--primary);position:relative;display:inline-block;vertical-align:middle;cursor:pointer}
+  .switch-dot::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+  .switch-dot.off{background:var(--border)} .switch-dot.off::after{right:auto;left:2px}
+  .qk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .qk-card{position:relative;border:1px solid var(--primary-border);background:var(--primary-light);border-radius:var(--radius-lg);padding:14px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .18s}
+  .qk-card .qk-icon{font-size:20px} .qk-card .qk-text{font-size:13px;color:var(--text-main)}
+  #libBox .qk-card{background:#fff;border-color:var(--border);color:var(--text-regular)}
+  #libBox .qk-card.added{background:var(--info-light);color:var(--text-placeholder);cursor:not-allowed}
+  .qk-drag{position:absolute;top:6px;left:8px;font-size:13px;color:var(--text-placeholder);cursor:grab}
+  .qk-x{position:absolute;top:4px;right:8px;font-size:12px;color:var(--text-secondary);cursor:pointer}
+  .qk-x:hover{color:var(--danger)}
+  .qk-move{position:absolute;bottom:6px;right:8px;display:flex;gap:4px}
+  .qk-move i{font-style:normal;font-size:11px;width:18px;height:18px;line-height:18px;text-align:center;border:1px solid var(--border);border-radius:3px;background:#fff;color:var(--text-regular);cursor:pointer}
+  .qk-move i:hover{border-color:var(--primary);color:var(--primary)}
+  .qk-flag{position:absolute;top:6px;right:8px;font-size:11px;color:var(--text-placeholder)}
+  .qk-add{font-size:12px;color:var(--primary);margin-top:2px}
+  .qk-card .qk-add{display:inline-block} .qk-card.added .qk-add{display:none}
+  .qk-card .qk-flag{display:none} .qk-card.added .qk-flag{display:inline-block}
+  #selBox .qk-flag,#selBox .qk-add{display:none}
+  #libBox .qk-drag,#libBox .qk-x,#libBox .qk-move{display:none}
+  .toast{position:fixed;left:50%;top:76px;transform:translateX(-50%);background:rgba(0,0,0,.75);color:#fff;font-size:13px;padding:8px 16px;border-radius:16px;z-index:300;display:none}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea-department.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">个人中心</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user" id="topbarUser"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="cols">
+        <!-- 左：个人资料（V2.5 数据层：登录人取自 CRM.data.employees 中 gm → 若无则取首个 dept_manager，字段随人渲染） -->
+        <div class="card" style="text-align:center">
+          <div class="big-avatar" id="bigAvatar"></div>
+          <div style="font-size:16px;font-weight:600" id="name"></div>
+          <div class="text-sub mt8" id="subInfo"></div>
+          <div class="mt12 flex" id="roleRow" style="justify-content:center;gap:6px;flex-wrap:wrap"></div>
+          <div style="text-align:left" class="mt16">
+            <div class="stat"><span class="text-sub">直属经理</span><span id="statManager"></span></div>
+            <div class="stat"><span class="text-sub">管辖部门</span><span id="statDept"></span></div>
+            <div class="stat"><span class="text-sub">手机号</span><span id="statPhone"></span></div>
+          </div>
+          <div class="mt16" style="text-align:left">
+            <div class="form-label mb8" id="statsTitle">我的数据统计（本月）</div>
+            <div class="stat"><span class="text-sub" id="stat1L"></span><span class="bold" id="stat1V"></span></div>
+            <div class="stat"><span class="text-sub" id="stat2L"></span><span class="bold" id="stat2V"></span></div>
+            <div class="stat"><span class="text-sub" id="stat3L"></span><span class="bold text-warning" id="stat3V"></span></div>
+          </div>
+        </div>
+
+        <!-- 右：快捷入口 + 通知设置 -->
+        <div>
+          <div class="card">
+            <div class="card-title">我的快捷入口 <span class="tag tag-blue" id="cnt">6 / 6</span></div>
+            <div style="background:var(--primary-light);color:var(--text-regular);border:1px solid var(--primary-border);border-radius:var(--radius);padding:10px 14px;font-size:13px" class="mb16">
+              💡 最多 6 个 · 将显示在<b>顶部居中位置</b> · 保存后即时生效（原型演示存 localStorage）。拖拽 ⠿ 或用 ↑↓ 调整顺序，顺序即顶部展示顺序。
+            </div>
+
+            <div class="form-label mb8">已选（点击右上角 ✕ 移除）</div>
+            <div class="qk-grid mb16" id="selBox">
+              <div class="qk-card" data-id="follow"><span class="qk-drag">⠿</span><span class="qk-icon">📝</span><span class="qk-text">写跟进</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="appt"><span class="qk-drag">⠿</span><span class="qk-icon">📅</span><span class="qk-text">新增预约</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="visit"><span class="qk-drag">⠿</span><span class="qk-icon">🚗</span><span class="qk-text">外出登记</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="entry"><span class="qk-drag">⠿</span><span class="qk-icon">➕</span><span class="qk-text">录入客户</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="sea"><span class="qk-drag">⠿</span><span class="qk-icon">🌊</span><span class="qk-text">公海领取</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="approval"><span class="qk-drag">⠿</span><span class="qk-icon">✅</span><span class="qk-text">待我审批</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+            </div>
+
+            <div class="form-label mb8">可选库（点击「＋ 添加」加入已选）</div>
+            <div class="qk-grid" id="libBox">
+              <div class="qk-card added" data-id="follow"><span class="qk-drag">⠿</span><span class="qk-icon">📝</span><span class="qk-text">写跟进</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card added" data-id="appt"><span class="qk-drag">⠿</span><span class="qk-icon">📅</span><span class="qk-text">新增预约</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card added" data-id="visit"><span class="qk-drag">⠿</span><span class="qk-icon">🚗</span><span class="qk-text">外出登记</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card added" data-id="entry"><span class="qk-drag">⠿</span><span class="qk-icon">➕</span><span class="qk-text">录入客户</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card added" data-id="sea"><span class="qk-drag">⠿</span><span class="qk-icon">🌊</span><span class="qk-text">公海领取</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="contract"><span class="qk-drag">⠿</span><span class="qk-icon">📄</span><span class="qk-text">新建合同</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="wo"><span class="qk-drag">⠿</span><span class="qk-icon">🎫</span><span class="qk-text">新建工单</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card added" data-id="approval"><span class="qk-drag">⠿</span><span class="qk-icon">✅</span><span class="qk-text">待我审批</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="search"><span class="qk-drag">⠿</span><span class="qk-icon">🔍</span><span class="qk-text">高级搜索</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+              <div class="qk-card" data-id="report"><span class="qk-drag">⠿</span><span class="qk-icon">📈</span><span class="qk-text">报表分析</span><span class="qk-x" data-act="del">✕</span><span class="qk-move"><i data-act="up">↑</i><i data-act="down">↓</i></span><span class="qk-flag">已添加</span><span class="qk-add" data-act="add">＋ 添加</span></div>
+            </div>
+
+            <div class="flex-between mt16">
+              <span class="text-sub">默认由角色模板下发（销售 4 个 / 经理含审批），个人仅可微调</span>
+              <span class="flex gap8"><button class="btn" id="btnReset">恢复默认</button><button class="btn btn-primary" id="btnSave">保存</button></span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">通知设置</div>
+            <div class="stat"><span>站内推送</span><span class="flex gap8"><span class="text-sub">开启</span><span class="switch-dot"></span></span></div>
+            <div class="stat"><span>微信 / 企业微信推送 <span class="tag" style="font-style:italic">V2 开放</span></span><span class="flex gap8"><span class="text-sub" style="font-style:italic">暂未开放</span><span class="switch-dot off" style="opacity:.5"></span></span></div>
+            <div class="mt16 form-label mb8">提醒时机（可多选）</div>
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+              <label class="flex gap8"><input type="checkbox" checked> 预约前 1 小时提醒（含外出通勤建议）</label>
+              <label class="flex gap8"><input type="checkbox" checked> 每日 9:00 待办汇总推送</label>
+              <label class="flex gap8"><input type="checkbox" checked> 客户掉公海前 24 小时预警</label>
+              <label class="flex gap8"><input type="checkbox"> 合同到期前 30 / 15 / 7 天续约提醒</label>
+            </div>
+            <div class="text-sub mt12">推送通道受 V2 的 <span class="masked">channel</span> 字段控制，当前仅站内生效。</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var sel = document.getElementById('selBox'), lib = document.getElementById('libBox'),
+      cnt = document.getElementById('cnt'), toast = document.getElementById('toast');
+  function sync() { cnt.textContent = sel.children.length + ' / 6'; }
+  function tip(m) { toast.textContent = m; toast.style.display = 'block'; setTimeout(function () { toast.style.display = 'none'; }, 1600); }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var card = b.closest('.qk-card'), id = card.getAttribute('data-id'), act = b.getAttribute('data-act');
+    if (act === 'del') {
+      var t = lib.querySelector('[data-id="' + id + '"]'); if (t) t.classList.remove('added');
+      if (sel.children.length > 1) card.remove(); else tip('至少保留 1 个快捷入口');
+    } else if (act === 'add') {
+      if (sel.children.length >= 6) { tip('最多 6 个，请先移除'); return; }
+      card.classList.add('added'); sel.appendChild(card.cloneNode(true));
+    } else if (act === 'up' && card.previousElementSibling) {
+      sel.insertBefore(card, card.previousElementSibling);
+    } else if (act === 'down' && card.nextElementSibling) {
+      sel.insertBefore(card.nextElementSibling, card);
+    }
+    sync();
+  });
+  document.getElementById('btnSave').onclick = function () {
+    var ids = [].map.call(sel.children, function (c) { return c.getAttribute('data-id'); });
+    localStorage.setItem('crm_quick_v1', JSON.stringify(ids));
+    tip('已保存，顶部快捷入口即时生效'); setTimeout(function () { location.reload(); }, 900);
+  };
+  document.getElementById('btnReset').onclick = function () {
+    localStorage.removeItem('crm_quick_v1'); tip('已恢复角色默认'); setTimeout(function () { location.reload(); }, 900);
+  };
+  sync();
+})();
+</script>
+
+<!-- 设计说明：对应需求文档「个人中心 · 快捷入口设置（V3.0 补齐）」。
+     要点：1:2 分栏；左卡头像/工号/角色/直属经理 person-chip/管辖部门（无管理权限灰字）/本月数据统计；
+     右卡「我的快捷入口」最多 6 个，已选支持 ✕ 移除与 ⠿ 拖拽（原型以 ↑↓ 按钮示意排序），可选库 10 项、已选置灰标"已添加"；
+     保存写入 localStorage（key 与 app.js 一致 crm_quick_v1）→ 顶部居中快捷入口即时变化；恢复默认清除配置；
+     「通知设置」站内开启、微信灰化标 V2 开放、提醒时机多选。说明：默认由角色模板下发（销售 4 个 / 经理含审批），个人仅可微调。 -->
+<script>
+// V2.5 数据层：个人中心头部信息按当前登录人渲染
+// 当前登录人 = employees 中 roleCodes 含 gm 者（赵总/总经理），否则取首个 dept_manager；
+// 数据统计取公司级 dashboard.summary（DB 无员工级月度 KPI，GM 视角以公司口径展示）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var emps = D.employees || [], roles = D.roles || [];
+
+  function byCode(list, code) { for (var i = 0; i < list.length; i++) if (list[i].code === code) return list[i]; return null; }
+  function hasRole(e, rc) { return e && e.roleCodes && e.roleCodes.indexOf(rc) >= 0; }
+  var cur = null, i;
+  for (i = 0; i < emps.length; i++) if (hasRole(emps[i], 'gm')) { cur = emps[i]; break; }
+  if (!cur) for (i = 0; i < emps.length; i++) if (hasRole(emps[i], 'dept_manager')) { cur = emps[i]; break; }
+  if (!cur) return;
+
+  function textOf(id, s) { var e = document.getElementById(id); if (e) e.innerHTML = s; }
+  function roleName(rc) { var r = byCode(roles, rc); return r ? r.name : rc; }
+
+  /* 顶栏登录人（仅本页与个人卡保持一致） */
+  var tu = document.getElementById('topbarUser');
+  if (tu) tu.innerHTML = '<span class="avatar">' + H.esc(cur.name.charAt(0)) + '</span>' + H.esc(cur.name);
+
+  /* 头像 + 姓名 + 工号 */
+  var av = document.getElementById('bigAvatar');
+  if (av) av.textContent = cur.name.charAt(0);
+  textOf('name', H.esc(cur.name));
+  textOf('subInfo', '工号 ' + H.esc(cur.workNo || '—') + ' · ' + (hasRole(cur, 'gm') ? '全公司视角' : '部门负责人'));
+
+  /* 角色 / 部门标签（deptId=0 的总部总经理无部门档案 chip，仅显示角色） */
+  var tags = '';
+  (cur.roleCodes || []).forEach(function (rc) { tags += '<span class="tag tag-blue">' + H.esc(roleName(rc)) + '</span>'; });
+  var deptFound = false;
+  (D.departments || []).forEach(function (d) { if (String(d.id) === String(cur.deptId)) deptFound = true; });
+  if (deptFound) tags += '<span class="entity-tag dept"><i class="et-icon">🏢</i>' + H.esc(H.deptName(cur.deptId)) + '</span>';
+  textOf('roleRow', tags);
+
+  /* 直属经理 / 管辖部门 / 手机号 */
+  if (hasRole(cur, 'gm')) {
+    textOf('statManager', '<span class="text-sub" style="font-style:italic">—（已到顶层）</span>');
+    textOf('statDept', '<span class="text-sub">全公司</span>');
+  } else {
+    var gm = null;
+    for (i = 0; i < emps.length; i++) if (hasRole(emps[i], 'gm')) { gm = emps[i]; break; }
+    textOf('statManager', gm ? H.personChip(gm.name, gm.av, 'r-boss', '总经理') : '<span class="text-sub">—</span>');
+    textOf('statDept', '<span class="text-sub">' + H.esc(H.deptName(cur.deptId)) + '</span>');
+  }
+  textOf('statPhone', H.esc(cur.phone || '—'));
+
+  /* 数据统计（GM 登录 → 公司级 dashboard.summary） */
+  var sum = (D.dashboard && D.dashboard.summary) || {};
+  textOf('statsTitle', '公司经营数据概览（本月）');
+  textOf('stat1L', '业务关系总数（全公司）');
+  textOf('stat1V', (sum.relationCount || 0) + ' 条');
+  textOf('stat2L', '本月签约金额');
+  textOf('stat2V', H.money(sum.monthSignAmount) + ' · <span class="up" style="color:var(--danger)">↑' + (sum.monthSignRatio || 0) + '%</span>');
+  textOf('stat3L', '今日待跟进（含逾期）');
+  textOf('stat3V', (sum.todayFollow || 0) + ' 条 · 逾期 ' + (sum.todayOverdue || 0));
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

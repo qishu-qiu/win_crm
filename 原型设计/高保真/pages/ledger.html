@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客户台账 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .th-disabled{color:var(--text-placeholder);font-style:italic;font-weight:400}
+  .td-disabled{color:var(--text-placeholder);background:var(--info-light)}
+  .form-sec-title{font-size:13px;font-weight:600;color:var(--text-regular);margin:20px 0 12px;padding-left:8px;border-left:3px solid var(--primary)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item active" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">客户台账</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <!-- V2.5 数据层：产品线 Tab 由 CRM.data.ledger 中出现的产品线生成（按 productLines 字典顺序），首 Tab=全部 -->
+        <div class="tabs" id="lgTabs"><span class="text-sub" style="padding:4px 8px">加载中…</span></div>
+        <div class="flex gap8 mb16" style="background:var(--primary-light);color:var(--primary);border:1px solid var(--primary-border);border-radius:var(--radius);padding:10px 14px;font-size:13px">
+          ℹ️ 扩展列由【产品线管理 → 字段模板】驱动 · 先登记后写入，未登记 Key 将被拒收
+        </div>
+        <div class="filter-bar">
+          <input class="input search" id="lgKw" type="text" placeholder="🔍 搜索客户名称 / 联系人">
+          <select class="select" id="lgLv"><option value="">全部客户等级</option></select>
+          <button class="btn btn-primary" id="lgBtnQ">搜索</button>
+          <button class="btn" id="lgBtnR">重置</button>
+        </div>
+        <!-- V2.5 数据层：整表（含动态扩展列表头）由 CRM.data.ledger 渲染 -->
+        <div style="overflow-x:auto">
+          <div id="lgWrap"><div class="text-sub" style="padding:12px">加载中…</div></div>
+        </div>
+        <div class="pagination">
+          <span id="lgTotal">共 0 条</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">›</span>
+          <span class="text-sub">20 条/页（演示常量）</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- V2.5 数据层：台账详情抽屉（演示层，默认隐藏，点击表格行打开；标题随选中行，表单为演示骨架不再写死假人名/假数据） -->
+<div class="drawer" id="drawer1" style="display:none">
+  <div class="drawer-head"><span id="lgDrawerTitle">台账详情</span><span class="close" onclick="document.getElementById('drawer1').style.display='none'">×</span></div>
+  <div class="drawer-body">
+    <div class="form-sec-title">通用字段（固定）</div>
+    <div class="form-row">
+      <div class="form-item"><span class="form-label"><span class="req">*</span>客户名称</span><input class="input" placeholder="客户名称"></div>
+      <div class="form-item"><span class="form-label"><span class="req">*</span>客户等级</span><input class="input" placeholder="A / B / C / D 级"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-item"><span class="form-label">签约时间</span><input class="input" placeholder="YYYY-MM-DD"></div>
+      <div class="form-item"><span class="form-label">到期时间</span><input class="input" placeholder="YYYY-MM-DD"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-item"><span class="form-label">联系人</span><input class="input" placeholder="联系人姓名"></div>
+      <div class="form-item"><span class="form-label">交付对接人</span><input class="input" placeholder="交付人员"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-item"><span class="form-label">销售对接人</span><input class="input" placeholder="销售人员"></div>
+      <div class="form-item"><span class="form-label">所属产品线</span><input class="input" placeholder="产品线"></div>
+    </div>
+    <div class="form-sec-title">扩展字段（字段模板驱动 · 演示未绑定）</div>
+    <div class="form-tip mb16">扩展字段按【产品线管理 → 字段模板】动态渲染并整体写入 extra JSON；本抽屉未做数据绑定，值以 placeholder 示意。</div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn" onclick="document.getElementById('drawer1').style.display='none'">取消</button>
+    <button class="btn btn-primary" onclick="document.getElementById('drawer1').style.display='none'">保存</button>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 21 客户台账」。
+     要点：产品线 7 Tab 切换拉取字段模板动态拼表头；通用 8 列固定 + 扩展列（域名/域名到期/服务器/服务器到期/软件版本）；
+     到期 30 天内橙色预警；已停用字段（AI 推荐率）置灰斜体展示历史值；行点击开抽屉，动态表单按模板渲染，保存整体写入 extraFields JSON。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：客户台账改为 CRM.data.ledger 驱动
+// - 固定基列（合同号/客户/产品线/等级/签约/到期/联系人/交付人/销售）+ 动态扩展列 = 各行 extra 键并集，缺 key 显示 —
+// - 产品线 Tab 由数据中出现的产品线生成；到期 30 天内橙/红预警沿用旧页规则；演示锚点 ANCHOR='2026/09/07'
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var ANCHOR = '2026/09/07';
+  var state = { tab: '', lv: '', kw: '' };
+  function esc(v) { return H.esc(v); }
+  function lineCls(name) {
+    var m = { '短视频推广': 'l-video', '网站建设': 'l-website', 'GEO': 'l-geo', '财税咨询': 'l-tax', '法律咨询': 'l-law', '房产网': 'l-house', '招牌网': 'l-sign' };
+    return m[name] || 'line';
+  }
+  function lineTag(name) { return '<span class="entity-tag line ' + lineCls(name) + '"><i class="et-icon">🧩</i>' + esc(name) + '</span>'; }
+  function lvInfo(code) {
+    var m = { A: ['tag-red'], B: ['tag-orange'], C: ['tag-blue'], D: [] };
+    for (var i = 0; i < D.customerLevels.length; i++) {
+      if (D.customerLevels[i].code === code) {
+        return '<span class="tag ' + (m[code] || [''])[0] + '">' + esc(D.customerLevels[i].name) + '</span>';
+      }
+    }
+    return '<span class="tag">' + esc(code || '—') + '</span>';
+  }
+  function empByName(name) {
+    if (!name) return null;
+    for (var i = 0; i < D.employees.length; i++) if (D.employees[i].name === name) return D.employees[i];
+    return null;
+  }
+  function roleOf(e) {
+    if (e.roleCodes.indexOf('sale') >= 0) return { cls: 'r-sales', label: '销售' };
+    if (e.roleCodes.indexOf('delivery') >= 0) return { cls: 'r-delivery', label: '交付' };
+    if (e.roleCodes.indexOf('service') >= 0) return { cls: 'r-service', label: '客服' };
+    if (e.roleCodes.indexOf('dept_manager') >= 0) return { cls: 'r-manager', label: '部门经理' };
+    return null;
+  }
+  function person(name) {
+    var e = empByName(name);
+    if (!e) return esc(name || '—');
+    var r = roleOf(e) || { cls: '', label: '' };
+    return H.personChip(e.name, e.av, r.cls, r.label);
+  }
+  function daysLeft(endStr) {
+    var t = endStr ? new Date(endStr.slice(0, 10).replace(/-/g, '/')) : null;
+    var n = new Date(ANCHOR);
+    return t ? Math.round((t - n) / 86400000) : null;
+  }
+  function expireCell(d) {
+    var n = daysLeft(d);
+    if (n === null) return '<td>—</td>';
+    if (n < 0) return '<td class="text-danger bold">' + esc(d) + '（已到期）</td>';
+    if (n <= 30) return '<td class="text-warning bold">' + esc(d) + '（' + n + ' 天）</td>';
+    return '<td>' + esc(d) + '</td>';
+  }
+
+  // V2.5 数据层：扩展键并集（按出现顺序）
+  var extraKeys = [];
+  D.ledger.forEach(function (r) {
+    Object.keys(r.extra || {}).forEach(function (k) {
+      if (extraKeys.indexOf(k) < 0) extraKeys.push(k);
+    });
+  });
+  var BASE_COLS = 8; // 客户名称/产品线/等级/签约/到期/联系人/交付/销售
+
+  function matched() {
+    return D.ledger.filter(function (r) {
+      if (state.tab && r.productLineName !== state.tab) return false;
+      if (state.lv && r.customerLevel !== state.lv) return false;
+      if (state.kw && (r.companyName + (r.contactName || '') + (r.contractNo || '')).indexOf(state.kw) < 0) return false;
+      return true;
+    });
+  }
+  function rowHtml(r) {
+    var extras = extraKeys.map(function (k) {
+      var v = (r.extra || {})[k];
+      return '<td>' + (v === undefined || v === null || v === '' ? '—' : esc(v)) + '</td>';
+    }).join('');
+    return '<tr onclick="lgOpen(\'' + esc(r.id) + '\')">' +
+      '<td><div class="cell-main">' + esc(r.companyName) + '</div><div class="cell-sub">合同号 ' + esc(r.contractNo || '—') + '</div></td>' +
+      '<td>' + lineTag(r.productLineName) + '</td>' +
+      '<td>' + lvInfo(r.customerLevel) + '</td>' +
+      '<td>' + esc(r.signDate || '—') + '</td>' +
+      expireCell(r.expireDate) +
+      '<td>' + esc(r.contactName || '—') + '</td>' +
+      '<td>' + person(r.deliveryName) + '</td>' +
+      '<td>' + person(r.saleName) + '</td>' +
+      extras +
+      '</tr>';
+  }
+  function renderTable() {
+    var rows = matched();
+    var wrap = document.getElementById('lgWrap');
+    var head = '<tr><th>客户名称</th><th>产品线</th><th>客户等级</th><th>签约日期</th><th>到期日期</th><th>联系人</th><th>交付人</th><th>销售</th>' +
+      extraKeys.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr>';
+    if (!rows.length) {
+      wrap.innerHTML = '<table class="table"><thead>' + head + '</thead><tbody><tr><td colspan="' + (BASE_COLS + extraKeys.length) + '" class="text-sub" style="text-align:center;padding:24px">暂无符合条件的数据</td></tr></tbody></table>';
+    } else {
+      wrap.innerHTML = '<table class="table"><thead>' + head + '</thead><tbody>' + rows.map(rowHtml).join('') + '</tbody></table>';
+    }
+    var pt = document.getElementById('lgTotal');
+    if (pt) pt.textContent = '共 ' + rows.length + ' 条';
+  }
+  function renderTabs() {
+    // 产品线顺序按字典，只保留数据中出现的
+    var present = [];
+    D.productLines.forEach(function (p) {
+      for (var i = 0; i < D.ledger.length; i++) {
+        if (D.ledger[i].productLineName === p.name && present.indexOf(p.name) < 0) { present.push(p.name); }
+      }
+    });
+    // 数据中出现的但不在字典里的行仍纳入（兜底）
+    D.ledger.forEach(function (r) {
+      if (present.indexOf(r.productLineName) < 0) present.push(r.productLineName);
+    });
+    var tabs = [{ v: '', t: '全部' }].concat(present.map(function (n) { return { v: n, t: n }; }));
+    var el = document.getElementById('lgTabs');
+    el.innerHTML = tabs.map(function (t) {
+      var c = D.ledger.filter(function (r) { return !t.v || r.productLineName === t.v; }).length;
+      return '<span class="tab' + (state.tab === t.v ? ' active' : '') + '" data-v="' + esc(t.v) + '">' + esc(t.t) + '<span class="count">' + c + '</span></span>';
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('.tab'), function (tab) {
+      tab.addEventListener('click', function () {
+        state.tab = tab.getAttribute('data-v') || '';
+        renderTabs();
+        renderTable();
+      });
+    });
+  }
+
+  // V2.5 数据层：填充等级下拉
+  var lv = document.getElementById('lgLv');
+  if (lv) lv.innerHTML = '<option value="">全部客户等级</option>' + D.customerLevels.map(function (c) {
+    return '<option value="' + esc(c.code) + '">' + esc(c.name) + '</option>';
+  }).join('');
+
+  document.getElementById('lgBtnQ').addEventListener('click', function () {
+    state.lv = document.getElementById('lgLv').value;
+    state.kw = (document.getElementById('lgKw').value || '').trim();
+    renderTable();
+  });
+  document.getElementById('lgBtnR').addEventListener('click', function () {
+    document.getElementById('lgLv').value = '';
+    document.getElementById('lgKw').value = '';
+    state.lv = ''; state.kw = '';
+    renderTable();
+  });
+  // 抽屉打开：标题随选中行（演示层表单不做数据绑定）
+  window.lgOpen = function (id) {
+    var r = null;
+    for (var i = 0; i < D.ledger.length; i++) if (String(D.ledger[i].id) === String(id)) { r = D.ledger[i]; break; }
+    var t = document.getElementById('lgDrawerTitle');
+    if (t) t.textContent = '台账详情 · ' + (r ? r.companyName : '客户');
+    var d = document.getElementById('drawer1');
+    if (d) d.style.display = 'flex';
+  };
+
+  renderTabs();
+  renderTable();
+})();
+</script>
+</body>
+</html>

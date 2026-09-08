@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公司档案 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .sim-tip { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 12px;
+    background: var(--primary-light); border-radius: var(--radius); font-size: 12px; color: var(--primary); width: fit-content; }
+  .cnt-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px;
+    padding: 0 6px; border-radius: 10px; background: var(--primary-light); color: var(--primary); font-size: 12px; font-weight: 600; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item active" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">公司档案</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- 角色视角提示：普通角色隐藏"总价值评估"列（简表），仅经理+可见完整列 -->
+      <div style="padding:8px 12px;margin-bottom:16px;background:var(--warning-light);border:1px solid #F5DAB1;border-radius:var(--radius);font-size:13px;color:var(--warning)">
+        👁 当前为经理视角（含价值评估列）；普通角色登录时该列自动隐藏
+      </div>
+
+      <!-- 筛选栏 -->
+      <div class="card mb16">
+        <div class="filter-bar" style="margin-bottom:0">
+          <!-- V2.5 数据层：行业/地区/规模下拉选项由 CRM.data.companies 去重生成 -->
+          <select class="select" id="fInd">
+            <option value="">全部行业</option>
+          </select>
+          <select class="select" id="fReg">
+            <option value="">全部地区</option>
+          </select>
+          <select class="select" id="fScale">
+            <option value="">全部规模</option>
+          </select>
+          <div>
+            <input class="input search" id="fKw" placeholder="搜索公司全称" value="云启">
+            <!-- 相似度提示演示：搜索全称时实时模糊匹配，防撞单（静态演示文案，刻意保留） -->
+            <div class="sim-tip">💡 找到 2 家相似公司：杭州云启网络科技有限公司、杭州云启贸易有限公司</div>
+          </div>
+          <button class="btn btn-primary" id="btnQuery">查询</button>
+          <button class="btn" id="btnReset">重置</button>
+        </div>
+      </div>
+
+      <!-- 列表 -->
+      <div class="card">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>公司全称</th>
+              <th>行业</th>
+              <th>地区</th>
+              <th>规模</th>
+              <th>业务线数</th>
+              <th class="sortable">总价值评估 ▼</th>
+              <th class="sortable">首次签约时间 ▼</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <!-- V2.5 数据层：行由 CRM.data.companies 渲染 -->
+          <tbody id="clTbody">
+            <tr><td colspan="8" class="text-sub" style="text-align:center;padding:24px">加载中…</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span class="text-sub" id="clPageTotal">共 0 条</span>
+          <select class="select" style="width:90px;height:30px"><option>20 条/页</option><option>50 条/页</option><option>100 条/页</option></select>
+          <span class="pg">‹</span>
+          <span class="pg active">1</span>
+          <span class="pg">2</span>
+          <span class="pg">3</span>
+          <span class="pg">4</span>
+          <span class="pg">›</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<!--
+设计说明（company-list.html）
+对应需求：第五章 页面 11 公司档案列表 /company/list
+关键交互点：
+1. 表格 8 列：公司全称/行业/地区/规模/业务线数（数字徽标）/总价值评估（¥ 千分位，可排序）/首次签约时间/操作。
+2. 权限：普通角色隐藏"总价值评估"列（简表），本页演示经理视角并以黄色提示条标注。
+3. 搜索公司全称实时相似度提示（💡 找到 2 家相似公司…），服务防撞单场景；筛选行业/地区/规模。
+4. 分页 20/50/100，默认 20（演示常量，页码静态）。
+5. V2.5 数据层：行与筛选下拉来自 CRM.data.companies；分页页码/每页条数下拉/排序箭头为静态演示；相似度提示条为演示文案保留。
+-->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：公司档案列表改为 CRM.data.companies 驱动渲染
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var state = { ind: '', reg: '', scale: '', kw: '' };
+
+  function uniq(list) {
+    var seen = {}, out = [];
+    list.forEach(function (v) { if (v && !seen[v]) { seen[v] = 1; out.push(v); } });
+    return out;
+  }
+  function indText(c) { return (c.industryL1 ? c.industryL1 + ' / ' : '') + (c.industryL2 || ''); }
+  function regText(c) { return c.province + ' ' + c.city; }
+
+  /* V2.5 数据层：填充筛选下拉（行业/地区/规模） */
+  function fillSelect(id, options, allLabel) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">' + H.esc(allLabel) + '</option>' + options.map(function (v) {
+      return '<option value="' + H.esc(v) + '">' + H.esc(v) + '</option>';
+    }).join('');
+  }
+  fillSelect('fInd', uniq(D.companies.map(indText)), '全部行业');
+  fillSelect('fReg', uniq(D.companies.map(regText)), '全部地区');
+  fillSelect('fScale', uniq(D.companies.map(function (c) { return c.scale; })), '全部规模');
+
+  function matched() {
+    return D.companies.filter(function (c) {
+      if (state.ind && indText(c) !== state.ind) return false;
+      if (state.reg && regText(c) !== state.reg) return false;
+      if (state.scale && c.scale !== state.scale) return false;
+      if (state.kw && (c.fullName + c.shortName).indexOf(state.kw) < 0) return false;
+      return true;
+    });
+  }
+
+  function rowHtml(c) {
+    return '<tr>' +
+      '<td><div class="cell-main">' + H.esc(c.fullName) + '</div>' +
+        '<div class="cell-sub">' + H.esc(c.shortName) + '</div></td>' +
+      '<td>' + H.esc(indText(c)) + '</td>' +
+      '<td>' + H.esc(regText(c)) + '</td>' +
+      '<td>' + H.esc(c.scale || '—') + '</td>' +
+      '<td><span class="cnt-badge">' + H.esc(c.businessLineCount) + '</span></td>' +
+      '<td class="num">' + H.money(c.totalValue) + '</td>' +
+      '<td>' + H.esc(c.firstSignAt || '—') + '</td>' +
+      '<td><a class="btn-text" href="company-detail.html?id=' + H.esc(c.id) + '">详情</a></td>' +
+      '</tr>';
+  }
+
+  function render() {
+    var rows = matched();
+    var tb = document.getElementById('clTbody');
+    tb.innerHTML = rows.length
+      ? rows.map(rowHtml).join('')
+      : '<tr><td colspan="8" class="text-sub" style="text-align:center;padding:24px">暂无符合条件的数据</td></tr>';
+    var pt = document.getElementById('clPageTotal');
+    if (pt) pt.textContent = '共 ' + rows.length + ' 条';
+  }
+
+  document.getElementById('btnQuery').addEventListener('click', function () {
+    state.ind = document.getElementById('fInd').value;
+    state.reg = document.getElementById('fReg').value;
+    state.scale = document.getElementById('fScale').value;
+    state.kw = (document.getElementById('fKw').value || '').trim();
+    render();
+  });
+  document.getElementById('btnReset').addEventListener('click', function () {
+    document.getElementById('fInd').value = '';
+    document.getElementById('fReg').value = '';
+    document.getElementById('fScale').value = '';
+    document.getElementById('fKw').value = '';
+    state.ind = state.reg = state.scale = state.kw = '';
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

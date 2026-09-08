@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>创建合同 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .alert-pass{background:var(--warning-light);border:1px solid #F5DAB1;color:var(--warning);border-radius:var(--radius);padding:10px 14px;font-size:13px}
+  /* 自动续约开关 */
+  .switch{position:relative;width:44px;height:24px;border-radius:12px;background:var(--primary);display:inline-block;vertical-align:middle;cursor:pointer}
+  .switch::after{content:"";position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+  /* 续约提醒 chip */
+  .chip{display:inline-flex;align-items:center;height:30px;padding:0 14px;border:1px solid var(--border);border-radius:15px;font-size:13px;color:var(--text-regular);cursor:pointer;background:#fff}
+  .chip.on{background:var(--primary-light);border-color:var(--primary-border);color:var(--primary);font-weight:600}
+  /* 附件上传虚线框 */
+  .upload-box{border:1.5px dashed var(--border);border-radius:var(--radius-lg);padding:28px;text-align:center;color:var(--text-secondary);cursor:pointer;background:#FAFCFF}
+  .upload-box:hover{border-color:var(--primary)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item active" href="contract-list.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">创建合同</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content content-narrow">
+      <!-- 前置完善度校验：本页演示"校验通过"态；若不达标则列出缺失字段并跳补全页（带回跳参数） -->
+      <div class="alert-pass mb16">✓ 业务关系完善度校验通过：公司信息、联系人、主对接人均已补齐，可创建合同。</div>
+
+      <div class="card">
+        <div class="card-title">合同信息</div>
+        <div class="form-row">
+          <div class="form-item">
+            <!-- V2.5 数据层：编号系统生成，静态文案保留 -->
+            <label class="form-label">合同编号</label>
+            <input class="input" value="（保存时系统自动生成）" disabled>
+          </div>
+          <div class="form-item">
+            <!-- V2.5 数据层：业务关系改为 DB 关系下拉，变更时联动产品线/联系人/签单人 -->
+            <label class="form-label"><span class="req">*</span>业务关系</label>
+            <select class="select" id="fRel"></select>
+            <span class="form-tip" id="relTip">…</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label"><span class="req">*</span>产品线</label>
+            <select class="select" id="fPl"></select>
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="req">*</span>联系人</label>
+            <select class="select" id="fContact"></select>
+          </div>
+          <div class="form-item">
+            <!-- V2.5 数据层：签单人改为员工下拉（原为写死"默认当前用户"的占位名） -->
+            <label class="form-label"><span class="req">*</span>签单人</label>
+            <select class="select" id="fSg"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <!-- V2.5 数据层：新建场景清空演示已填金额，改为空输入 -->
+            <label class="form-label"><span class="req">*</span>合同金额（元，&gt;0，两位小数）</label>
+            <input class="input" placeholder="¥ 0.00" value="">
+          </div>
+          <div class="form-item">
+            <!-- V2.5 数据层：付款方式=代码内置常量，与 DB contracts.payType 对应（once/installment/monthly/yearly），DB 无独立字典 -->
+            <label class="form-label"><span class="req">*</span>付款方式</label>
+            <select class="select"><option>一次性</option><option>分期</option><option>月付</option><option>年付</option></select>
+          </div>
+          <div class="form-item">
+            <label class="form-label">已收款（元）</label>
+            <input class="input" placeholder="¥ 0.00" value="">
+            <span class="form-tip">已收款 &gt; 0 时合同自动进入「部分回款 / 执行中」</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label"><span class="req">*</span>签约日期</label>
+            <input class="input" type="date" value="2026-09-05">
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="req">*</span>服务开始日期</label>
+            <input class="input" type="date" value="2026-09-10">
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="req">*</span>服务截止日期</label>
+            <input class="input" type="date" value="2027-09-09">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item fixed" style="min-width:220px">
+            <label class="form-label">自动续约</label>
+            <div class="flex gap8"><span class="switch"></span><span class="text-sub">到期前按原条款自动续签</span></div>
+          </div>
+          <div class="form-item">
+            <label class="form-label">续约提醒（多选）</label>
+            <div class="flex gap8">
+              <span class="chip on">到期前 30 天</span>
+              <span class="chip on">到期前 60 天</span>
+              <span class="chip">到期前 90 天</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label">合同附件</label>
+            <div class="upload-box">
+              <div style="font-size:26px">📎</div>
+              <div class="mt8">点击或拖拽上传合同扫描件</div>
+              <div class="form-tip mt8">支持 PDF / 图片，单个 ≤ 20MB，最多 5 个</div>
+            </div>
+          </div>
+        </div>
+        <div class="flex gap12 mt20" style="justify-content:flex-end">
+          <button class="btn btn-lg" onclick="history.back()">取消</button>
+          <button class="btn btn-primary btn-lg" onclick="location.href='contract-detail.html'">创建合同</button>
+        </div>
+        <div class="form-tip mt12" style="text-align:right">创建成功后跳转合同详情；该业务关系状态自动变为「客户」。</div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 16~18 合同管理 - 创建 /contract/create?relationId=」。
+     要点：前置完善度校验（本页演示通过态，不达标→列缺失字段+跳补全页带回跳）；编号自动只读、业务关系带入只读、联系人带出可改、签单人默认当前用户；
+     金额 >0 两位小数；付款方式（一次性/分期/月付/年付）；签约日期默认今天；自动续约开关+续约提醒多选 chip（30/60/90 天）；
+     附件 PDF/图片 ≤20MB×5；成功后业务关系自动变「客户」。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：创建合同页下拉由 CRM.data 驱动
+// - 业务关系 = CRM.data.relations（私海且在跟进），默认预填 R1001（云启科技 · 短视频推广）
+// - 产品线 = CRM.data.productLines；联系人 = CRM.data.contacts 按所选关系 companyId 过滤
+// - 签单人 = CRM.data.employees 中销售角色，默认取所选关系的 ownerName（无 owner 时取当前登录人）
+// 金额/日期等输入留空/静态，属"输入中表单值"；付款方式选项为代码内置常量（DB 无独立付款方式字典）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  function esc(v) { return H.esc(v); }
+  function fillSel(id, html) {
+    var s = document.getElementById(id);
+    if (s) s.innerHTML = html;
+  }
+  // 可签约的业务关系：私海活跃且未流失
+  var rels = D.relations.filter(function (r) { return r.seaStatus === 'private' && r.status !== 'lost'; });
+  var defaultRel = rels[0] || null;
+  fillSel('fRel', rels.map(function (r) {
+    return '<option value="' + esc(r.id) + '"' + (defaultRel && r.id === defaultRel.id ? ' selected' : '') + '>' +
+      esc((r.shortName || r.companyName) + ' · ' + r.productLineName) + '</option>';
+  }).join(''));
+
+  fillSel('fPl', D.productLines.map(function (p) {
+    return '<option value="' + esc(p.name) + '">' + esc(p.name) + '</option>';
+  }).join(''));
+
+  var sales = D.employees.filter(function (e) { return e.roleCodes && e.roleCodes.indexOf('sale') >= 0; });
+  fillSel('fSg', sales.map(function (e) {
+    return '<option value="' + esc(e.name) + '"' + (defaultRel && defaultRel.ownerName === e.name ? ' selected' : '') + '>' + esc(e.name) + '</option>';
+  }).join(''));
+
+  function companyNameOf(relId) {
+    for (var i = 0; i < D.relations.length; i++) {
+      if (String(D.relations[i].id) === String(relId)) return D.relations[i].companyName;
+    }
+    return '';
+  }
+  function syncContacts(relId) {
+    var rel = null;
+    for (var i = 0; i < D.relations.length; i++) if (String(D.relations[i].id) === String(relId)) { rel = D.relations[i]; break; }
+    if (!rel) return;
+    var tip = document.getElementById('relTip');
+    if (tip) tip.textContent = '所属公司：' + esc(companyNameOf(rel.id)) + '（从业务关系带入，演示为预填其一）';
+    var list = D.contacts.filter(function (c) { return c.companyId === rel.companyId; });
+    fillSel('fContact', list.length
+      ? list.map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.name + ' · ' + (c.title || '')) + '</option>'; }).join('')
+      : '<option value="">暂无联系人</option>');
+    // 产品线同步为该关系产品线
+    var pl = document.getElementById('fPl');
+    if (pl) {
+      for (var k = 0; k < pl.options.length; k++) {
+        if (pl.options[k].value === rel.productLineName) { pl.selectedIndex = k; break; }
+      }
+    }
+    // 签单人同步为该关系 owner（owner 不在销售列表则保持默认）
+    if (rel.ownerName) {
+      var sg = document.getElementById('fSg');
+      if (sg) {
+        for (var j = 0; j < sg.options.length; j++) {
+          if (sg.options[j].value === rel.ownerName) { sg.selectedIndex = j; break; }
+        }
+      }
+    }
+  }
+  function onRelChange() {
+    var sel = document.getElementById('fRel');
+    if (sel && sel.value) syncContacts(sel.value);
+  }
+  var relSel = document.getElementById('fRel');
+  if (relSel) relSel.addEventListener('change', onRelChange);
+  if (defaultRel) syncContacts(defaultRel.id);
+})();
+</script>
+</body>
+</html>

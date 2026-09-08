@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据字典 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .dict-layout{display:grid;grid-template-columns:230px 1fr;gap:16px}
+  .dict-item{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:var(--radius);
+    font-size:13px;color:var(--text-regular);cursor:pointer}
+  .dict-item:hover{background:var(--info-light)}
+  .dict-item.active{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .dict-item .cnt{margin-left:auto;font-size:11px;color:var(--text-placeholder)}
+  .dict-item.active .cnt{color:var(--primary)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="org-employee.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="setting-dict.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item active" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">数据字典</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <div class="card mb16" style="background:var(--primary-light);border:1px solid var(--primary-border);color:var(--primary);font-size:13px;padding:12px 16px">
+        ℹ 字典修改即时生效并记录操作日志；内置枚举不可删除（可停用），停用后历史数据保留展示
+      </div>
+      <div class="dict-layout">
+        <!-- 左：字典目录（V2.5 数据层：由 dict 域各数组生成） -->
+        <div class="card" style="padding:12px">
+          <div class="form-label mb8" style="padding:0 4px">字典目录（<span id="dict-cat-count">0</span>）</div>
+          <div id="dict-list"></div>
+          <div class="dict-item mt8" style="border-top:1px solid var(--border-lighter);border-radius:0;padding-top:12px;color:var(--text-placeholder)">＋ 新增字典（V2）</div>
+        </div>
+        <!-- 右：选项表格（V2.5 数据层：随左侧选中类型切换） -->
+        <div class="card">
+          <div class="card-title" id="dict-title">数据字典</div>
+          <table class="table">
+            <thead>
+              <tr><th>选项名</th><th>编码</th><th>排序</th><th>使用次数</th><th>状态</th><th>类型</th><th>操作</th></tr>
+            </thead>
+            <tbody id="dict-tbody"></tbody>
+          </table>
+          <div class="flex-between mt16">
+            <span class="text-sub" id="dict-log">最近修改：—</span>
+            <button class="btn btn-primary">＋ 新增选项</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 25 系统设置 - 数据字典 /setting/dict」。
+     要点：左侧字典目录（行业/跟进方式/客户等级/工单来源/掉公海原因/付款方式），右侧选项表格（选项名/排序/状态/操作）；
+     内置枚举灰 tag 不可删（可停用）；自定义选项可增改停；停用项置灰、历史数据保留展示；修改即时生效并记录操作日志。 -->
+<script src="../assets/app.js"></script>
+<script>
+/* ============================================================
+ * V2.5 数据层：数据字典 = CRM.db.dict 各数组
+ * 左侧目录列出 dict 域主要枚举；右侧选项表渲染选中数组的
+ * code/label(选项名)/排序/使用次数/内置(builtin)/状态(status)。
+ * 无该字段的数组按「基础枚举·默认启用」处理（代码注释说明）。
+ * ============================================================ */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  if (!C || !C.data) return;
+
+  // 字典类型清单：key=CRM.data 上的数组名；code=展示用的类型标识（仅展示，非 DB 字段）
+  var TYPES = [
+    { key: 'followMethod',      name: '跟进方式',       icon: '📞', code: 'follow_method' },
+    { key: 'customerLevels',    name: '客户等级',       icon: '⭐', code: 'customer_level' },
+    { key: 'urgency',           name: '紧迫档',         icon: '⏱', code: 'urgency' },
+    { key: 'valueLevel',        name: '业务线价值',     icon: '💰', code: 'value_level' },
+    { key: 'relationStatus',    name: '关系状态',       icon: '🧭', code: 'relation_status' },
+    { key: 'seaStatus',         name: '公海状态',       icon: '🌊', code: 'sea_status' },
+    { key: 'riskTags',          name: '风险标签',       icon: '⚠️', code: 'risk_tag' },
+    { key: 'coopTags',          name: '协同标签',       icon: '🤝', code: 'coop_tag' },
+    { key: 'companyIdentityTags', name: '公司身份标签', icon: '🏷', code: 'company_identity_tag' },
+    { key: 'companyPolicyTags',   name: '公司制度标签', icon: '📜', code: 'company_policy_tag' },
+    { key: 'decisionChain',     name: '决策链',         icon: '⛓', code: 'decision_chain' },
+    { key: 'contactTraits',     name: '联系人谈判特质', icon: '🧠', code: 'contact_traits' },
+    { key: 'attitude',          name: '跟单态度',       icon: '🙂', code: 'attitude' },
+    { key: 'progress',          name: '意向进展',       icon: '📈', code: 'progress' },
+    { key: 'decisionRole',      name: '决策角色',       icon: '🎯', code: 'decision_role' },
+    { key: 'lostReason',        name: '流失原因',       icon: '💔', code: 'lost_reason' },
+    { key: 'seaReason',         name: '掉公海原因',     icon: '🌪', code: 'sea_reason' },
+    { key: 'approvalType',      name: '审批类型',       icon: '✅', code: 'approval_type' },
+    { key: 'woPriority',        name: '工单优先级',     icon: '⏫', code: 'wo_priority' }
+  ];
+
+  var listBox = document.getElementById('dict-list');
+  var catCount = document.getElementById('dict-cat-count');
+  var tbody = document.getElementById('dict-tbody');
+  var titleEl = document.getElementById('dict-title');
+  var logEl = document.getElementById('dict-log');
+  if (!listBox || !tbody) return;
+
+  var current = TYPES[0];
+  function dataOf(t) { return C.data[t.key] || []; }
+  function findType(key) {
+    for (var i = 0; i < TYPES.length; i++) { if (TYPES[i].key === key) return TYPES[i]; }
+    return TYPES[0];
+  }
+  function esc(s) { return String(s === null || s === undefined ? '' : s); }
+  function isOff(it) { return it.status === 'disabled'; }
+  // builtin 字段缺失的数组为系统基础枚举，默认按内置处理
+  function isBuiltin(it) { return it.builtin !== false; }
+
+  function optLabel(it) { return it.label || it.name || it.code || '—'; }
+
+  function renderList() {
+    var html = '';
+    TYPES.forEach(function (t) {
+      var list = dataOf(t);
+      html += '<div class="dict-item' + (t.key === current.key ? ' active' : '') + '" data-key="' + t.key + '">' +
+        t.icon + ' ' + esc(t.name) + ' <span class="cnt">' + list.length + ' 项</span></div>';
+    });
+    listBox.innerHTML = html;
+    if (catCount) catCount.textContent = TYPES.length;
+  }
+
+  function rowHtml(it, idx) {
+    var off = isOff(it);
+    var label = optLabel(it);
+    var dot = it.color ? '<i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + esc(it.color) + ';margin-right:6px;vertical-align:middle"></i>' : '';
+    var nameCell = '<td class="cell-main"' + (it.rule ? ' title="系统自动：' + esc(it.rule) + '"' : '') + '>' +
+      dot + esc(label) + (off ? ' <span class="tag" style="font-style:italic">已停用</span>' : '') + '</td>';
+    var codeCell = '<td class="num" style="color:var(--text-secondary)">' + esc(it.code != null ? it.code : '—') + '</td>';
+    var sortCell = '<td class="num">' + esc(it.sort != null ? it.sort : idx + 1) + '</td>';
+    var usageCell = '<td class="num">' + (it.usageCount != null ? it.usageCount : '—') + '</td>';
+    var statusHtml = off ? '<span class="tag tag-dot">停用</span>' : '<span class="tag tag-green tag-dot">启用</span>';
+    var typeHtml = isBuiltin(it) ? '<span class="tag">内置</span>' : '<span class="tag tag-blue">自定义</span>';
+    var ops = off
+      ? '<span class="text-sub fs12">历史数据保留展示</span>'
+      : (isBuiltin(it)
+          ? '<button class="btn-text">编辑</button><span class="text-sub fs12" title="内置枚举不可删除，可停用">不可删</span>'
+          : '<button class="btn-text">编辑</button><button class="btn-text danger">停用</button>');
+    return '<tr' + (off ? ' style="color:var(--text-placeholder);background:var(--info-light)"' : '') + '>' +
+      nameCell + codeCell + sortCell + usageCell + '<td>' + statusHtml + '</td><td>' + typeHtml + '</td><td>' + ops + '</td></tr>';
+  }
+
+  function renderTable() {
+    var list = dataOf(current);
+    tbody.innerHTML = list.length
+      ? list.map(rowHtml).join('')
+      : '<tr><td colspan="7" class="text-sub" style="text-align:center;padding:24px 0">暂无数据</td></tr>';
+    if (titleEl) {
+      titleEl.innerHTML = esc(current.name) + ' <span class="tag tag-blue">' + esc(current.code) + '</span>' +
+        ' <span class="more">全站共用字典 · 共 ' + list.length + ' 项</span>';
+    }
+    if (logEl) {
+      var u = C.data.currentUser;
+      // 日期为原型演示常量；人员名取自 DB currentUser（原静态页的虚构经理名已去除）
+      logEl.textContent = '最近修改：' + (u ? (u.name + '（' + (u.roleName || '') + '）') : '系统管理员') +
+        ' 2026-09-03 14:22 · 字典变更已写入操作日志';
+    }
+  }
+
+  function refresh() { renderList(); renderTable(); }
+
+  listBox.addEventListener('click', function (e) {
+    var item = e.target && e.target.closest ? e.target.closest('.dict-item') : null;
+    if (!item || !item.getAttribute('data-key')) return;
+    current = findType(item.getAttribute('data-key'));
+    refresh();
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>

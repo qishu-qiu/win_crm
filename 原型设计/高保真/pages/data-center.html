@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据总览 · 数据中心 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* V2.5 数据总览页补充样式（仅本页内联，不动 style.css） */
+  .dc-scroll { overflow-x: auto; }
+  .dc-block + .dc-block { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border-lighter); }
+  .dc-block > .dc-block-t { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dc-check { display: flex; flex-direction: column; gap: 8px; }
+  .dc-check .ck { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 22px; }
+  .dc-check .ck .tag { height: 22px; flex: 0 0 auto; }
+  .dc-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; border: 1px solid rgba(0,0,0,.08); }
+  .dc-note { font-size: 12px; color: var(--text-secondary); margin-top: 10px; line-height: 1.8; }
+  .dc-src { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+  .dc-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 1200px) { .dc-2col { grid-template-columns: 1fr; } }
+  .dc-idx { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+    border-radius: 4px; background: var(--primary-light); color: var(--primary); font-size: 12px; font-weight: 600; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+          <!-- V2.5：数据总览（演示数据中心），仅本页高亮 -->
+          <a class="menu-item active" href="data-center.html">数据总览</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">数据总览 · 数据中心</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+
+      <!-- V2.5：0. 校验提示区（需求第 8 节，置于页首，先核对口径再往下看） -->
+      <div class="card mb16" style="border-left:4px solid var(--primary)">
+        <div class="card-title">
+          <span class="dc-idx">⑧</span>校验提示区
+          <span class="dc-src">由 assets/mock-data.js 实时实算 · 改数据后刷新本页即变</span>
+        </div>
+        <div class="dc-check" id="dcCheck"></div>
+        <div class="dc-note">说明：✓=口径符合预期；⚠=需要确认（可能是刻意构造的演示空态/异常态）；✗=数据自相矛盾，必须修。</div>
+      </div>
+
+      <!-- V2.5：1. 口径速查 -->
+      <div class="card mb16">
+        <div class="card-title">
+          <span class="dc-idx">①</span>口径速查：6 步阶段 / 紧迫 5 档 / 业务线价值 4 档
+          <span class="dc-src">A07 数据字典 · V2.5 需求 5.6.2（阶段） 5.6.3（紧迫档/价值）</span>
+        </div>
+
+        <div class="dc-block">
+          <div class="dc-block-t">6 步阶段（V2.5 状态机，替换旧 5 步）</div>
+          <div class="dc-scroll">
+            <table class="table dc-table">
+              <thead><tr><th style="width:70px">顺序</th><th style="width:80px">阶段 ID</th><th style="width:140px">阶段名</th><th>口径说明</th><th style="width:120px">终态</th></tr></thead>
+              <tbody id="tbStage"></tbody>
+            </table>
+          </div>
+          <div class="mt16" id="stageDemo"></div>
+        </div>
+
+        <div class="dc-2col">
+          <div class="dc-block" style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--border-lighter)">
+            <div class="dc-block-t">紧迫 5 档（纯手动 · 无自动降级 · 默认灰度）</div>
+            <table class="table dc-table">
+              <thead><tr><th style="width:56px">排序</th><th style="width:110px">编码</th><th>名称 / 配色</th><th style="width:80px">默认</th></tr></thead>
+              <tbody id="tbUrgency"></tbody>
+            </table>
+          </div>
+          <div class="dc-block" style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--border-lighter)">
+            <div class="dc-block-t">业务线价值 4 档（愿意标才标 · 默认待定）</div>
+            <table class="table dc-table">
+              <thead><tr><th style="width:110px">编码</th><th>名称 / 配色</th><th style="width:80px">默认</th></tr></thead>
+              <tbody id="tbValue"></tbody>
+            </table>
+            <div class="dc-note">注意：「业务线价值（高/中/低/待定）」与「价值评估（金额 ¥）」是两套字段，不要混用。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2.5：2. 标签体系（三层归属） -->
+      <div class="card mb16">
+        <div class="card-title">
+          <span class="dc-idx">②</span>标签体系（三层归属）
+          <span class="dc-src">A07 / G09~G11 公司画像 · G12 联系人特质 · V2.5 需求 5.5 标签体系</span>
+        </div>
+        <div class="dc-scroll">
+          <table class="table dc-table">
+            <thead><tr>
+              <th style="width:150px">层级 / 归属</th><th style="width:150px">标签名</th><th style="width:160px">编码</th>
+              <th style="width:80px">使用次数</th><th style="width:110px">是否预设</th><th style="width:80px">状态</th><th>触发规则（仅风险）</th>
+            </tr></thead>
+            <tbody id="tbTags"></tbody>
+          </table>
+        </div>
+        <div class="dc-note" id="tagNote"></div>
+      </div>
+
+      <!-- V2.5：3. 部门与部门规则 -->
+      <div class="card mb16">
+        <div class="card-title">
+          <span class="dc-idx">③</span>部门与部门规则
+          <span class="dc-src">N12 部门规则 · V2.5 需求 5.4（等级档位 / 灰度 N 天提醒 / M 天释放候选）</span>
+        </div>
+        <div class="dc-scroll">
+          <table class="table dc-table">
+            <thead><tr>
+              <th style="width:130px">部门</th><th style="width:100px">上级</th><th style="width:160px">产品线</th>
+              <th style="width:80px">客服开关</th><th style="width:130px">部门经理</th>
+              <th>等级档位 A-D 阈值</th><th style="width:90px">灰度 N 天提醒</th><th style="width:110px">M 天释放候选</th><th style="width:90px">配置状态</th>
+            </tr></thead>
+            <tbody id="tbDept"></tbody>
+          </table>
+        </div>
+        <div class="dc-note">等级档位按「价值评估金额」落档；灰度 N 天提醒 → 提醒销售，M 天 → 自动列入公海释放候选（需经理确认）。</div>
+      </div>
+
+      <!-- V2.5：4. 业务关系演示数据 -->
+      <div class="card mb16">
+        <div class="card-title">
+          <span class="dc-idx">④</span>业务关系演示数据
+          <span class="dc-src">E01 /relation/list · E02 /relation/detail · V2.5 需求 5.6</span>
+        </div>
+        <div class="dc-scroll">
+          <table class="table dc-table">
+            <thead><tr>
+              <th style="width:190px">公司 / 业务线</th><th style="width:80px">状态</th><th style="width:70px">紧迫</th><th style="width:70px">价值</th>
+              <th style="width:110px">阶段</th><th style="width:120px">主对接</th><th style="width:120px">维护人</th>
+              <th style="width:130px">下次跟进</th><th style="width:130px">最近跟进</th><th style="width:100px">价值评估</th>
+              <th style="width:120px">风险</th><th style="width:110px">协同</th><th style="width:70px">客户等级</th>
+              <th style="width:70px">竞争</th><th style="width:90px">公海状态</th><th style="width:80px">灰度天数</th><th style="width:110px">流失原因</th>
+            </tr></thead>
+            <tbody id="tbRel"></tbody>
+          </table>
+        </div>
+        <div class="dc-note" id="relNote"></div>
+      </div>
+
+      <!-- V2.5：5. 公司画像 + 联系人特质 -->
+      <div class="card mb16">
+        <div class="card-title">
+          <span class="dc-idx">⑤</span>公司画像 + 联系人谈判特质
+          <span class="dc-src">G09~G11 公司画像 · G12 联系人（特质跟着人走，换公司保留）</span>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">公司画像（<span id="cpName"></span>）</div>
+          <div class="dc-scroll">
+            <table class="table dc-table">
+              <thead><tr>
+                <th style="width:110px">公司 ID</th><th style="width:180px">公司名称</th><th>身份标签</th><th style="width:130px">制度标签</th>
+                <th style="width:150px">决策链</th><th style="width:90px">打标人</th><th style="width:130px">打标时间</th>
+              </tr></thead>
+              <tbody id="tbCompany"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">联系人列表（谈判特质 ≤ 3）</div>
+          <div class="dc-scroll">
+            <table class="table dc-table">
+              <thead><tr>
+                <th style="width:100px">姓名</th><th style="width:110px">职务</th><th style="width:90px">决策权</th><th style="width:130px">手机（脱敏）</th>
+                <th style="width:210px">谈判特质（≤3）</th><th style="width:130px">个人标签</th><th style="width:90px">打标人</th><th style="width:130px">打标时间</th>
+              </tr></thead>
+              <tbody id="tbContact"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2.5：6. 工作台数据 -->
+      <div class="card mb16">
+        <div class="card-title">
+          <span class="dc-idx">⑥</span>工作台数据
+          <span class="dc-src">C01 写跟单建议阶段 · B06 今日预约 · D1 写跟单</span>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">今日跟单（含建议阶段）</div>
+          <div class="dc-scroll">
+            <table class="table dc-table">
+              <thead><tr>
+                <th style="width:70px">时间</th><th style="width:120px">公司</th><th style="width:90px">联系人</th><th style="width:80px">方式</th>
+                <th>跟进摘要</th><th style="width:80px">态度</th><th style="width:80px">进展</th><th style="width:150px">建议阶段</th><th style="width:80px">紧迫</th>
+              </tr></thead>
+              <tbody id="tbFollow"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">今日预约（含阶段 / 紧迫 / 距掉公海）</div>
+          <div class="dc-scroll">
+            <table class="table dc-table">
+              <thead><tr>
+                <th style="width:140px">预约时间</th><th style="width:120px">公司</th><th style="width:90px">联系人</th>
+                <th>事项</th><th style="width:120px">阶段</th><th style="width:80px">紧迫</th><th style="width:120px">距掉公海</th>
+              </tr></thead>
+              <tbody id="tbAppt"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">建议阶段规则表（跟进方式 → 建议阶段）</div>
+          <div class="dc-scroll">
+            <table class="table dc-table">
+              <thead><tr><th style="width:120px">跟进方式</th><th style="width:200px">提示文案</th><th style="width:120px">建议阶段 ID</th><th style="width:160px">建议阶段名</th></tr></thead>
+              <tbody id="tbSuggest"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2.5：7. 报表口径 -->
+      <div class="card">
+        <div class="card-title">
+          <span class="dc-idx">⑦</span>报表口径
+          <span class="dc-src">M01 阶段漏斗 · M02 紧迫分布 / 灰度预警 · V2.5 需求 5.7</span>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">6 步漏斗（含每层转化率）</div>
+          <div class="funnel-6" id="funnelBox"></div>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">紧迫分布</div>
+          <div class="urg-dist" id="urgBox"></div>
+        </div>
+        <div class="dc-block">
+          <div class="dc-block-t">灰度预警清单（含命中阈值与建议动作）</div>
+          <div class="dc-scroll">
+            <table class="table dc-table">
+              <thead><tr>
+                <th style="width:100px">关系 ID</th><th style="width:140px">公司</th><th style="width:90px">归属销售</th><th style="width:130px">部门</th>
+                <th style="width:90px">灰度天数</th><th style="width:200px">命中阈值</th><th style="width:110px">级别</th><th>建议动作</th>
+              </tr></thead>
+              <tbody id="tbGray"></tbody>
+            </table>
+          </div>
+          <div class="dc-note">阈值口径：灰度天数 ≥ N（提醒）→ 触发提醒；≥ M（释放）→ 列入公海释放候选。N/M 取自该部门规则（见第 ③ 节）。</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+// V2.5：数据总览 / 数据中心 —— 全部内容由 assets/mock-data.js（CRM.data.*）渲染，改数据一处生效
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  function $(id) { return document.getElementById(id); }
+  function dash(v) { return (v === null || v === undefined || v === '') ? '—' : H.esc(v); }
+  function sum(arr, f) { var s = 0; for (var i = 0; i < arr.length; i++) { s += (f(arr[i]) || 0); } return s; }
+  function count(arr, f) { var n = 0; for (var i = 0; i < arr.length; i++) { if (f(arr[i])) n++; } return n; }
+
+  /* ============ ⑧ 校验提示区（页面顶部） ============ */
+  var checks = [];
+  function markErr(fatal, ok, text) {
+    checks.push({ html: (ok ? '<span class="tag tag-green">✓</span>' : (fatal ? '<span class="tag tag-red">✗</span>' : '<span class="tag tag-orange">⚠</span>')), text: text });
+  }
+  // 中性信息项（非对非错，仅给老板核对口径用）
+  function markInfo(text) { checks.push({ html: '<span class="tag">ℹ</span>', text: text }); }
+
+  // 1) 阶段口径
+  var stageIds = D.stages.map(function (s) { return s.id; });
+  var stageOk = D.stages.length === 6;
+  markErr(true, stageOk, '阶段共 6 步（当前 ' + D.stages.length + ' 步）：' + D.stages.map(function (s) { return s.id + '.' + s.name; }).join(' → '));
+  var seqOk = stageIds.every(function (id, i) { return id === i + 1; });
+  markErr(true, seqOk, '阶段 ID 连续且从 1 开始（id=' + stageIds.join(',') + '）');
+
+  // 2) 紧迫 / 价值默认值
+  var gray = H.byCode(D.urgency, 'gray');
+  var maxSort = D.urgency.reduce(function (m, u) { return Math.max(m, u.sort || 0); }, 0);
+  var urgOk = D.urgency.length === 5 && !!gray && gray.sort === maxSort;
+  markErr(true, urgOk, '紧迫共 5 档，默认档 = 灰度（gray，sort=' + (gray ? gray.sort : '—') + ' 为最大）');
+  var pend = H.byCode(D.valueLevel, 'pending');
+  markErr(true, D.valueLevel.length === 4 && !!pend, '业务线价值 4 档，默认 = 待定（pending）');
+
+  // 3) 业务关系统计
+  var relTotal = D.relations.length;
+  var noValue = count(D.relations, function (r) { return !r.valueLevel || r.valueLevel === 'pending'; });
+  var grayCnt = count(D.relations, function (r) { return r.urgency === 'gray'; });
+  var lostCnt = count(D.relations, function (r) { return r.status === 'lost'; });
+  var grayDayCnt = count(D.relations, function (r) { return (r.grayDays || 0) > 0; });
+  markInfo('业务关系 ' + relTotal + ' 条：未设价值 ' + noValue + ' 条、灰度 ' + grayCnt + ' 条、已流失 ' + lostCnt + ' 条、灰度天数 > 0 的 ' + grayDayCnt + ' 条（未设价值=默认待定，非错误）');
+
+  // 4) 阶段越界
+  var badStage = D.relations.filter(function (r) { return stageIds.indexOf(r.stageId) < 0; });
+  markErr(true, badStage.length === 0, badStage.length === 0
+    ? '业务关系 stageId 全部落在 6 步口径内'
+    : '业务关系 stageId 越界 ' + badStage.length + ' 条：' + badStage.map(function (r) { return r.id; }).join('、'));
+
+  // 5) 部门规则
+  var noRule = D.depts.filter(function (d) { return !d.rule; });
+  markErr(false, noRule.length === 0,
+    noRule.length === 0
+      ? '全部 ' + D.depts.length + ' 个部门均已配置规则'
+      : '未配置部门规则的部门：' + noRule.map(function (d) { return d.name; }).join('、') + '（' + noRule.length + ' 个，演示空态，页面应提示经理去配置）');
+  var tierBad = D.depts.filter(function (d) { return d.rule && (!d.rule.levelTiers || d.rule.levelTiers.length !== 4); });
+  markErr(true, tierBad.length === 0, '已配置规则的部门，等级档位均为 A/B/C/D 四档');
+
+  // 6) 标签引用有效性
+  var riskCodes = D.riskTags.map(function (t) { return t.code; });
+  var coopCodes = D.coopTags.map(function (t) { return t.code; });
+  var badRisk = [], badCoop = [];
+  D.relations.forEach(function (r) {
+    (r.riskTags || []).forEach(function (c) { if (riskCodes.indexOf(c) < 0) badRisk.push(r.id + ':' + c); });
+    (r.coopTags || []).forEach(function (c) { if (coopCodes.indexOf(c) < 0) badCoop.push(r.id + ':' + c); });
+  });
+  markErr(true, badRisk.length + badCoop.length === 0,
+    badRisk.length + badCoop.length === 0
+      ? '业务关系引用的风险 / 协同标签编码均在字典内命中'
+      : '字典外标签编码：' + badRisk.concat(badCoop).join('、'));
+
+  // 7) 漏斗 / 紧迫分布
+  var funnelOk = D.funnel.length === 6 && D.funnel.every(function (f, i) { return f.stageId === i + 1; });
+  markErr(true, funnelOk, '阶段漏斗 6 层，stageId 与 6 步口径一一对应');
+  var fDown = D.funnel.every(function (f, i) { return i === 0 || f.count <= D.funnel[i - 1].count; });
+  markErr(false, fDown, fDown ? '漏斗逐层递减，无倒挂' : '漏斗存在倒挂（下层数量大于上层）');
+  var urgStatOk = D.urgencyStats.length === 5 && D.urgencyStats.every(function (u) { return !!H.byCode(D.urgency, u.code); });
+  markErr(true, urgStatOk, '紧迫分布 5 档齐全，编码与紧迫口径一致（合计 ' + sum(D.urgencyStats, function (u) { return u.count; }) + ' 条）');
+
+  // 8) 灰度预警一致性
+  var alertIds = D.grayAlerts.map(function (a) { return a.relationId; });
+  var hitAll = D.grayAlerts.every(function (a) {
+    var r = D.relations.filter(function (x) { return x.id === a.relationId; })[0];
+    return r && r.grayDays === a.grayDays;
+  });
+  markErr(false, hitAll && D.grayAlerts.length === grayDayCnt,
+    '灰度预警 ' + D.grayAlerts.length + ' 条（' + alertIds.join('、') + '），与关系中灰度天数 > 0 的 ' + grayDayCnt + ' 条'
+    + (hitAll ? ' 且天数一致' : ' 存在天数不一致'));
+
+  // 9) 联系人特质 ≤ 3
+  var overTrait = D.contacts.filter(function (c) { return (c.traits || []).length > 3; });
+  markErr(true, overTrait.length === 0,
+    overTrait.length === 0
+      ? '联系人 ' + D.contacts.length + ' 位，谈判特质均 ≤ 3 个'
+      : '谈判特质超过 3 个的联系人：' + overTrait.map(function (c) { return c.name; }).join('、'));
+
+  // 10) 公司画像取值合法
+  var chainOk = !!H.byCode(D.decisionChain, D.companyProfile.decisionChain);
+  markErr(true, chainOk, '公司画像决策链取值「' + dash(D.companyProfile.decisionChain) + '」在决策链字典内');
+
+  // 11) 金额合计（信息项）
+  checks.push({ html: '<span class="tag">Σ</span>', text: '业务关系价值评估合计 ' + H.money(sum(D.relations, function (r) { return r.valueEstimate; })) + '，平均 ' + H.money(Math.round(sum(D.relations, function (r) { return r.valueEstimate; }) / relTotal)) });
+
+  // 12) 数据层字段缺失（如实提示，供补充 mock-data.js）
+  var missCoop = D.coopTags.filter(function (t) { return t.usageCount === undefined; }).length;
+  var missRisk = D.riskTags.filter(function (t) { return t.usageCount === undefined; }).length;
+  if (missCoop + missRisk > 0) {
+    checks.push({ html: '<span class="tag tag-orange">⚠</span>', text: 'mock-data.js 中 coopTags（协同）/ riskTags（风险）缺 usageCount / builtin / status 字段，本表「使用次数」按业务关系实际引用数实算，另两列显示 —（建议补字段以与公司画像标签对齐）' });
+  }
+
+  $('dcCheck').innerHTML = checks.map(function (c) {
+    return '<div class="ck">' + c.html + '<span>' + c.text + '</span></div>';
+  }).join('');
+
+  /* ============ ① 口径速查 ============ */
+  $('tbStage').innerHTML = D.stages.map(function (s) {
+    return '<tr><td>' + s.id + '</td><td class="dc-kv">stageId=' + s.id + '</td><td class="bold">' + H.esc(s.name) + '</td>' +
+      '<td>' + H.esc(s.desc) + '</td><td>' + (s.id === 6 ? '<span class="tag tag-green">终态 isTerminal</span>' : '<span class="text-sub">进行中</span>') + '</td></tr>';
+  }).join('');
+  $('stageDemo').innerHTML = '<div class="text-sub mb8">6 步进度条示意（示例：当前处于第 4 步「异议与卡点」）</div>' + H.stageSteps(4, false);
+
+  $('tbUrgency').innerHTML = D.urgency.map(function (u) {
+    var isDef = u.code === 'gray';
+    return '<tr><td>' + u.sort + '</td><td class="dc-kv">' + u.code + '</td>' +
+      '<td><span class="dc-swatch" style="background:' + u.color + '"></span>' + H.esc(u.name) +
+      ' <span class="text-sub">' + u.color + '</span></td>' +
+      '<td>' + (isDef ? '<span class="tag">默认</span>' : '') + '</td></tr>';
+  }).join('');
+
+  $('tbValue').innerHTML = D.valueLevel.map(function (v) {
+    var isDef = v.code === 'pending';
+    return '<tr><td class="dc-kv">' + v.code + '</td>' +
+      '<td><span class="dc-swatch" style="background:' + v.color + '"></span>' + H.esc(v.name) +
+      ' <span class="text-sub">' + v.color + '</span></td>' +
+      '<td>' + (isDef ? '<span class="tag">默认</span>' : '') + '</td></tr>';
+  }).join('');
+
+  /* ============ ② 标签体系（三层归属） ============ */
+  function usageOf(list, key) {
+    // 对公司画像 / 联系人标签取 usageCount；对关系层（风险 / 协同）按业务关系实际引用数实算
+    return list.map(function (t) {
+      if (typeof t.usageCount === 'number') return t.usageCount + '';
+      var n = count(D.relations, function (r) { return (r[key] || []).indexOf(t.code) >= 0; });
+      return n + ' <span class="text-sub">（实算）</span>';
+    });
+  }
+  function tagRow(level, cls, name, code, usage, builtinCell, statusCell, rule) {
+    return '<tr><td rowspan="1"><span class="tag ' + cls + '">' + level + '</span></td>' +
+      '<td class="bold">' + H.esc(name) + '</td><td class="dc-kv">' + H.esc(code) + '</td>' +
+      '<td class="num">' + usage + '</td><td>' + builtinCell + '</td><td>' + statusCell + '</td><td>' + (rule ? H.esc(rule) : '<span class="text-sub">—</span>') + '</td></tr>';
+  }
+  function dictRows(level, cls, list) {
+    return list.map(function (t) {
+      var b = t.builtin === true ? '<span class="tag tag-blue">预设 builtin</span>'
+        : (t.builtin === false ? '<span class="tag">自定义</span>' : '<span class="text-sub">—</span>');
+      var s = t.status === 'active' ? '<span class="tag tag-green">启用</span>'
+        : (t.status === 'disabled' ? '<span class="tag">停用</span>' : '<span class="text-sub">—</span>');
+      return tagRow(level, cls, t.label, t.code, typeof t.usageCount === 'number' ? t.usageCount : '—', b, s, '');
+    }).join('');
+  }
+  var tagHtml = '';
+  tagHtml += dictRows('① 公司画像·身份', 'tag-blue', D.companyIdentityTags);
+  tagHtml += dictRows('① 公司画像·制度', 'tag-green', D.companyPolicyTags);
+  tagHtml += dictRows('① 公司画像·决策链', 'tag-orange', D.decisionChain);
+  tagHtml += dictRows('② 联系人·特质', '', D.contactTraits);
+  tagHtml += D.coopTags.map(function (t, i) {
+    return tagRow('③ 业务关系·协同', 'tag-blue', t.name, t.code, usageOf(D.coopTags, 'coopTags')[i], '<span class="text-sub">—</span>', '<span class="tag tag-green">启用</span>', '');
+  }).join('');
+  tagHtml += D.riskTags.map(function (t, i) {
+    return tagRow('③ 业务关系·风险', 'tag-red', t.name, t.code, usageOf(D.riskTags, 'riskTags')[i], '<span class="tag tag-orange">⚙ 系统自动</span>', '<span class="tag tag-green">只读</span>', t.rule);
+  }).join('');
+  $('tbTags').innerHTML = tagHtml;
+  $('tagNote').innerHTML = '归属规则：① 公司画像标签（身份/制度多选、决策链单选）建档时勾一次，全公司共享；' +
+    '② 联系人谈判特质 ≤3，跟着人走，换公司保留；③ 业务关系层 = 协同（手动，可 @ 同事）+ 风险（系统自动打标，只读带 ⚙，悬停看触发规则）。' +
+    '<br>使用次数列：公司画像 / 联系人标签取 mock-data.js 的 usageCount；业务关系层标签按 CRM.data.relations 实际引用数实算（标「实算」）。';
+
+  /* ============ ③ 部门与部门规则 ============ */
+  function tierCell(rule) {
+    if (!rule || !rule.levelTiers) return '<span class="text-sub">未配置</span>';
+    return '<div class="follow-cell">' + rule.levelTiers.map(function (t) {
+      var cls = t.level === 'A' ? 'tag-red' : t.level === 'B' ? 'tag-orange' : t.level === 'C' ? 'tag-blue' : '';
+      return '<span class="tag ' + cls + '">' + t.level + ' ≥ ' + H.money(t.minAmount) + '</span>';
+    }).join('') + '</div>';
+  }
+  $('tbDept').innerHTML = D.depts.map(function (d) {
+    var r = d.rule;
+    return '<tr>' +
+      '<td class="bold">' + H.esc(d.name) + ' <span class="text-sub">#' + d.id + '</span></td>' +
+      '<td>' + dash(d.parentName) + '</td>' +
+      '<td>' + (d.productLines || []).map(function (p) { return '<span class="tag tag-green">' + H.esc(p) + '</span>'; }).join(' ') + '</td>' +
+      '<td>' + (d.serviceEnabled ? '<span class="tag tag-green">开启</span>' : '<span class="tag">关闭</span>') + '</td>' +
+      '<td><span class="person-chip"><i class="pc-avatar ' + d.manager.av + '">' + H.esc(d.manager.name.charAt(0)) + '</i>' +
+        '<span class="pc-name">' + H.esc(d.manager.name) + '</span><span class="pc-role r-manager">经理</span></span></td>' +
+      '<td>' + tierCell(r) + '</td>' +
+      '<td>' + (r ? '<span class="tag tag-orange">N = ' + r.grayRemindDays + ' 天</span>' : '<span class="text-sub">—</span>') + '</td>' +
+      '<td>' + (r ? '<span class="tag tag-red">M = ' + r.grayReleaseDays + ' 天</span>' : '<span class="text-sub">—</span>') + '</td>' +
+      '<td>' + (r ? '<span class="tag tag-green">已配置</span>' : '<span class="tag tag-orange">未配置</span>') + '</td>' +
+      '</tr>';
+  }).join('');
+
+  /* ============ ④ 业务关系演示数据 ============ */
+  var LEVEL_CLS = { A: 'tag-green', B: 'tag-blue', C: 'tag-orange', D: '' };
+  var SEA_TEXT = { private: '私海', public: '公海', to_release: '待释放' };
+  $('tbRel').innerHTML = D.relations.map(function (r) {
+    var risk = H.riskChips(r.riskTags) || '<span class="text-sub">—</span>';
+    var coop = H.coopChips(r.coopTags) || '<span class="text-sub">—</span>';
+    var gd = r.grayDays || 0;
+    return '<tr>' +
+      '<td><div class="cell-main">' + H.esc(r.companyName) + '</div><div class="cell-sub">' + H.esc(r.shortName) + ' · ' + H.esc(r.productLineName) + ' · ' + H.esc(r.deptName) + '</div></td>' +
+      '<td>' + H.statusDot(r.status) + '</td>' +
+      '<td>' + H.urgencyChip(r.urgency) + '</td>' +
+      '<td>' + H.valueChip(r.valueLevel) + '</td>' +
+      '<td>' + H.esc(H.stageName(r.stageId)) + ' <span class="text-sub">#' + r.stageId + '</span></td>' +
+      '<td><span class="person-chip mini"><i class="pc-avatar ' + r.ownerAv + '">' + H.esc(r.ownerName.charAt(0)) + '</i>' +
+        '<span class="pc-name">' + H.esc(r.ownerName) + '</span><span class="pc-role r-sales">销售</span></span></td>' +
+      '<td><span class="person-chip mini"><i class="pc-avatar ' + r.maintainerAv + '">' + H.esc(r.maintainerName.charAt(0)) + '</i>' +
+        '<span class="pc-name">' + H.esc(r.maintainerName) + '</span><span class="pc-role r-service">客服</span></span></td>' +
+      '<td>' + dash(r.nextFollowAt) + '</td>' +
+      '<td>' + dash(r.lastFollowAt) + '</td>' +
+      '<td class="num">' + H.money(r.valueEstimate) + '</td>' +
+      '<td>' + risk + '</td>' +
+      '<td>' + coop + '</td>' +
+      '<td><span class="tag ' + (LEVEL_CLS[r.customerLevel] || '') + '">' + dash(r.customerLevel) + ' 级</span></td>' +
+      '<td>' + (r.competitorFlag ? '<span class="tag tag-red">竞争</span>' : '<span class="text-sub">—</span>') + '</td>' +
+      '<td><span class="tag' + (r.seaStatus === 'private' ? '' : ' tag-orange') + '">' + H.esc(SEA_TEXT[r.seaStatus] || r.seaStatus) + '</span></td>' +
+      '<td class="num">' + (gd > 0 ? '<span class="' + (gd >= 14 ? 'text-danger bold' : 'text-warning bold') + '">' + gd + ' 天</span>' : '<span class="text-sub">0</span>') + '</td>' +
+      '<td>' + dash(r.lostReason) + '</td>' +
+      '</tr>';
+  }).join('');
+  $('relNote').innerHTML = '主对接销售 = 商机 owner；维护人 = 客服（部门开启「客服开关」才有）。' +
+    '「客户等级」由第 ③ 节部门规则的金额档位自动落档，可与「价值评估」金额对照核对。';
+
+  /* ============ ⑤ 公司画像 + 联系人 ============ */
+  var cp = D.companyProfile;
+  function labelOf(list, code) { var t = H.byCode(list, code); return t ? t.label : code; }
+  $('cpName').textContent = cp.companyName;
+  $('tbCompany').innerHTML = '<tr>' +
+    '<td class="dc-kv">' + H.esc(cp.companyId) + '</td>' +
+    '<td class="bold">' + H.esc(cp.companyName) + '</td>' +
+    '<td>' + (cp.identityTags || []).map(function (c) { return '<span class="tag tag-blue">' + H.esc(labelOf(D.companyIdentityTags, c)) + '</span>'; }).join(' ') + '</td>' +
+    '<td>' + (cp.policyTags || []).map(function (c) { return '<span class="tag tag-green">' + H.esc(labelOf(D.companyPolicyTags, c)) + '</span>'; }).join(' ') + '</td>' +
+    '<td><span class="tag tag-orange">' + H.esc(labelOf(D.decisionChain, cp.decisionChain)) + '</span></td>' +
+    '<td>' + dash(cp.markedBy) + '</td><td>' + dash(cp.markedAt) + '</td></tr>';
+
+  var ROLE_TEXT = { decision: '决策人', influence: '影响人', execute: '执行人' };
+  $('tbContact').innerHTML = D.contacts.map(function (c) {
+    var traits = (c.traits || []).map(function (t) { return H.esc(labelOf(D.contactTraits, t)); });
+    var over = (c.traits || []).length > 3;
+    return '<tr>' +
+      '<td class="bold">' + H.esc(c.name) + ' <span class="text-sub">' + H.esc(c.id) + '</span></td>' +
+      '<td>' + dash(c.title) + '</td>' +
+      '<td>' + (ROLE_TEXT[c.decisionRole] ? '<span class="tag ' + (c.decisionRole === 'decision' ? 'tag-red' : c.decisionRole === 'influence' ? 'tag-orange' : '') + '">' + ROLE_TEXT[c.decisionRole] + '</span>' : dash(c.decisionRole)) + '</td>' +
+      '<td><span class="masked">' + dash(c.phone) + '</span></td>' +
+      '<td>' + (traits.length
+        ? '<div class="follow-cell">' + traits.map(function (t) { return '<span class="tag tag-blue">' + t + '</span>'; }).join('') +
+          '<span class="text-sub">' + traits.length + '/3</span></div>' + (over ? '<div class="text-danger fs12 mt8">⚠ 超过 3 个</div>' : '')
+        : '<span class="text-sub">未打标</span>') + '</td>' +
+      '<td>' + ((c.personalTags || []).length ? (c.personalTags || []).map(function (t) { return '<span class="tag">' + H.esc(t) + '</span>'; }).join(' ') : '<span class="text-sub">—</span>') + '</td>' +
+      '<td>' + dash(c.markedBy) + '</td><td>' + dash(c.markedAt) + '</td></tr>';
+  }).join('');
+
+  /* ============ ⑥ 工作台数据 ============ */
+  var ATT = { positive: ['tag-green', '积极'], neutral: ['', '中性'], negative: ['tag-red', '消极'] };
+  var PRG = { forward: ['tag-green', '推进 ↑'], flat: ['', '持平 →'], back: ['tag-red', '后退 ↓'] };
+  $('tbFollow').innerHTML = D.todayFollows.map(function (f) {
+    var a = ATT[f.attitude] || ['', dash(f.attitude)];
+    var p = PRG[f.progress] || ['', dash(f.progress)];
+    var same = H.stageName(f.suggestedStageId);
+    return '<tr><td class="bold">' + dash(f.followAt) + '</td>' +
+      '<td>' + dash(f.companyName) + '</td><td>' + dash(f.contactName) + '</td>' +
+      '<td><span class="tag tag-blue">' + dash(f.method) + '</span></td>' +
+      '<td>' + dash(f.summary) + '</td>' +
+      '<td><span class="tag ' + a[0] + '">' + a[1] + '</span></td>' +
+      '<td><span class="tag ' + p[0] + '">' + p[1] + '</span></td>' +
+      '<td><span class="tag tag-blue">#' + f.suggestedStageId + ' ' + H.esc(same) + '</span></td>' +
+      '<td>' + H.urgencyChip(f.urgency) + '</td></tr>';
+  }).join('');
+
+  $('tbAppt').innerHTML = D.todayAppointments.map(function (a) {
+    var d = a.dropDaysLeft;
+    var cls = d <= 7 ? 'tag-red' : d <= 14 ? 'tag-orange' : '';
+    return '<tr><td class="bold">' + dash(a.appointmentAt) + '</td>' +
+      '<td>' + dash(a.companyName) + '</td><td>' + dash(a.contactName) + '</td>' +
+      '<td>' + dash(a.note) + '</td>' +
+      '<td>' + H.esc(H.stageName(a.stageId)) + ' <span class="text-sub">#' + a.stageId + '</span></td>' +
+      '<td>' + H.urgencyChip(a.urgency) + '</td>' +
+      '<td><span class="tag ' + cls + '">' + d + ' 天</span></td></tr>';
+  }).join('');
+
+  $('tbSuggest').innerHTML = D.suggestRules.map(function (s) {
+    var inDict = stageIds.indexOf(s.suggestedStageId) >= 0;
+    return '<tr><td class="bold">' + dash(s.method) + '</td><td>' + dash(s.hintText) + '</td>' +
+      '<td class="dc-kv">stageId=' + s.suggestedStageId + (inDict ? ' <span class="tag tag-green">✓</span>' : ' <span class="tag tag-red">✗</span>') + '</td>' +
+      '<td>' + dash(s.suggestedStageName) + (inDict && H.stageName(s.suggestedStageId) === s.suggestedStageName ? '' : ' <span class="text-sub">（口径阶段名：' + H.esc(H.stageName(s.suggestedStageId)) + '）</span>') + '</td></tr>';
+  }).join('');
+
+  /* ============ ⑦ 报表口径 ============ */
+  var fmax = D.funnel.reduce(function (m, f) { return Math.max(m, f.count); }, 0) || 1;
+  $('funnelBox').innerHTML = D.funnel.map(function (f, i) {
+    var prev = i === 0 ? f.count : D.funnel[i - 1].count;
+    var rate = prev ? (f.count / prev * 100) : 0;
+    var total = f.count / D.funnel[0].count * 100;
+    return '<div class="fn-row">' +
+      '<span class="fn-name">' + (i + 1) + '. ' + H.esc(f.name) + '</span>' +
+      '<div class="fn-bar"><i style="width:' + (f.count / fmax * 100).toFixed(1) + '%"></i>' +
+      '<span>' + f.count + ' 条 · 占首层 ' + total.toFixed(1) + '%</span></div>' +
+      '<span class="fn-rate">' + (i === 0 ? '首层 100%' : '层间 ' + rate.toFixed(1) + '%') + '</span></div>';
+  }).join('');
+
+  $('urgBox').innerHTML = D.urgencyStats.map(function (u) {
+    var def = H.byCode(D.urgency, u.code) || { color: '#909399', name: u.name };
+    var all = sum(D.urgencyStats, function (x) { return x.count; }) || 1;
+    return '<div class="ud-item"><div class="ud-num" style="color:' + def.color + '">' + u.count + '</div>' +
+      '<div class="ud-name">' + H.esc(def.name) + '</div>' +
+      '<div class="text-sub">' + (u.count / all * 100).toFixed(1) + '% · ' + u.code + '</div></div>';
+  }).join('');
+
+  $('tbGray').innerHTML = D.grayAlerts.map(function (a) {
+    var hit = a.grayDays >= a.releaseDays ? 'release' : (a.grayDays >= a.remindDays ? 'remind' : 'none');
+    var lvl = a.level === 'release'
+      ? '<span class="tag tag-red">释放候选</span>'
+      : (a.level === 'remind' ? '<span class="tag tag-orange">提醒</span>' : '<span class="tag">' + dash(a.level) + '</span>');
+    var hitOk = hit === a.level;
+    return '<tr><td class="dc-kv">' + dash(a.relationId) + '</td>' +
+      '<td class="bold">' + dash(a.companyName) + '</td>' +
+      '<td>' + dash(a.ownerName) + '</td><td>' + dash(a.deptName) + '</td>' +
+      '<td class="num ' + (a.grayDays >= a.releaseDays ? 'text-danger bold' : 'text-warning bold') + '">' + a.grayDays + ' 天</td>' +
+      '<td><span class="tag tag-orange">N=' + a.remindDays + ' 提醒</span> <span class="tag tag-red">M=' + a.releaseDays + ' 释放</span>' +
+        (hitOk ? ' <span class="tag tag-green">✓ 命中</span>' : ' <span class="tag">未命中</span>') + '</td>' +
+      '<td>' + lvl + '</td><td>' + dash(a.action) + '</td></tr>';
+  }).join('');
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息通知中心 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .nlist{display:flex;flex-direction:column;gap:12px}
+  .nitem{display:flex;gap:14px;background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:16px;position:relative;transition:box-shadow .2s}
+  .nitem:hover{box-shadow:var(--shadow-hover)}
+  .nitem.read{background:#FAFAFA;filter:grayscale(.9);opacity:.72}
+  .n-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex:0 0 auto}
+  .n-icon.todo{background:var(--warning-light)} .n-icon.appr{background:var(--primary-light)}
+  .n-icon.sys{background:var(--info-light)} .n-icon.risk{background:var(--danger-light)}
+  .n-body{flex:1;min-width:0}
+  .n-summary{font-size:13px;color:var(--text-regular);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .n-meta{margin-top:8px;font-size:12px;color:var(--text-secondary);display:flex;gap:16px;flex-wrap:wrap}
+  .n-act{display:flex;flex-direction:column;justify-content:center;flex:0 0 auto}
+  .udot{position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%;background:var(--primary)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea-department.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">消息通知中心</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <div class="flex-between mb16">
+          <!-- V2.5 数据层：分段数量由 CRM.data.notifications 统计后写入 cAll/cTodo/cAppr/cSys -->
+          <div class="seg" id="nseg">
+            <span class="seg-item active" data-t="all">全部 (<b id="cAll">0</b>)</span>
+            <span class="seg-item" data-t="todo">待办 (<b id="cTodo">0</b>)</span>
+            <span class="seg-item" data-t="appr">审批 (<b id="cAppr">0</b>)</span>
+            <span class="seg-item" data-t="sys">系统 (<b id="cSys">0</b>)</span>
+          </div>
+          <button class="btn-text" onclick="document.querySelectorAll('.nitem').forEach(function(n){n.classList.add('read');n.querySelector('.udot')&&n.querySelector('.udot').remove()})">全部标记已读</button>
+        </div>
+
+        <!-- V2.5 数据层：通知卡片由 CRM.data.notifications 渲染（type/bizType/title/createdAt/read/targetUrl） -->
+        <div class="nlist" id="nlist"></div>
+        <div class="empty" id="nEmpty" style="display:none"><div>暂无数据</div></div>
+
+        <div class="pagination">
+          <span id="pageTotal">共 0 条</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">›</span>
+        </div>
+
+        <div class="text-sub" style="text-align:right;margin-top:14px">
+          推送通道：站内（V1 已上线）；<span class="masked">channel</span> 字段已预留 <b>微信 / 企业微信</b>（V2 开放，届时同一条消息按 channel 分流）
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+// V2.5 数据层：分段过滤逻辑保留，空分类显示“暂无数据”占位
+document.getElementById('nseg').addEventListener('click', function (e) {
+  var t = e.target.getAttribute('data-t'); if (!t) return;
+  [].forEach.call(this.children, function (c) { c.classList.toggle('active', c === e.target); });
+  var vis = 0;
+  [].forEach.call(document.querySelectorAll('#nlist .nitem'), function (n) {
+    var show = (t === 'all' || n.getAttribute('data-t') === t);
+    n.style.display = show ? '' : 'none';
+    if (show) vis++;
+  });
+  var empty = document.getElementById('nEmpty');
+  if (empty) empty.style.display = vis ? 'none' : '';
+});
+</script>
+
+<!-- 设计说明：对应需求文档「消息通知中心（V3.0 补齐）」+ 顶栏铃铛入口。
+     要点：类型 Seg（全部 / 待办 / 审批 / 系统，风险预警类聚合在“待办”下）；卡片流非表格；
+     未读右上角蓝点、已读整卡灰化；操作按钮按 targetUrl 直达对应业务页（去处理→appointment / 去审批→approval / 去跟进→relation-detail）；
+     V2.5 数据层：卡片与分段数量由 CRM.data.notifications 动态渲染。
+     右下角标注推送通道：站内 V1，channel 字段预留微信·企微 V2。 -->
+<script>
+// V2.5 数据层：通知中心列表渲染
+// 分类口径：bizType=approval → 审批(appr)；type=system → 系统(sys)；其余（todo/risk…）→ 待办(todo)
+// read=true 整卡灰化且无蓝点；按钮文字按类型区分，跳转 targetUrl
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var list = D.notifications || [];
+
+  function catOf(n) {
+    if (n.type === 'system') return 'sys';
+    if (n.bizType === 'approval' || n.type === 'approval') return 'appr';
+    return 'todo';
+  }
+  // 卡片视觉：图标 + n-icon 配色 + 按钮
+  function viewOf(n) {
+    if (n.bizType === 'approval' || n.type === 'approval') return { icon: '✅', cls: 'appr', btn: '去审批', primary: true };
+    if (n.type === 'risk') return { icon: '⚠', cls: 'risk', btn: '去跟进', primary: true };
+    if (n.type === 'system') return { icon: '⚙', cls: 'sys', btn: '查看详情', primary: false };
+    return { icon: '⏰', cls: 'todo', btn: '去处理', primary: true }; // todo
+  }
+  function bizLabel(n) {
+    var m = { gray: '灰度预警', approval: '审批待办', rule: '规则更新' };
+    return m[n.bizType] || (n.bizType === 'rule' ? '规则更新' : (n.type === 'system' ? '系统通知' : '业务提醒'));
+  }
+
+  var html = '';
+  list.forEach(function (n) {
+    var v = viewOf(n), read = !!n.read;
+    html += '<div class="nitem' + (read ? ' read' : '') + '" data-t="' + catOf(n) + '">' +
+      (read ? '' : '<span class="udot"></span>') +
+      '<span class="n-icon ' + v.cls + '">' + v.icon + '</span>' +
+      '<div class="n-body">' +
+        '<div class="n-title">' + H.esc(n.title) + '</div>' +
+        '<div class="n-meta"><span>' + H.esc(bizLabel(n)) + '</span><span>🕒 ' + H.esc(n.createdAt) + '</span></div>' +
+      '</div>' +
+      '<div class="n-act"><a class="btn' + (v.primary ? ' btn-primary' : '') + ' btn-sm" href="' + H.esc(n.targetUrl || '#') + '">' + v.btn + '</a></div>' +
+    '</div>';
+  });
+  var box = document.getElementById('nlist');
+  if (box) box.innerHTML = html;
+
+  // 分段数量
+  function cntOf(cat) { var c = 0; list.forEach(function (n) { if (catOf(n) === cat) c++; }); return c; }
+  var el;
+  if ((el = document.getElementById('cAll'))) el.textContent = list.length;
+  if ((el = document.getElementById('cTodo'))) el.textContent = cntOf('todo');
+  if ((el = document.getElementById('cAppr'))) el.textContent = cntOf('appr');
+  if ((el = document.getElementById('cSys'))) el.textContent = cntOf('sys');
+  var pt = document.getElementById('pageTotal');
+  if (pt) pt.textContent = '共 ' + list.length + ' 条';
+
+  // 列表为空时的占位
+  var empty = document.getElementById('nEmpty');
+  if (empty) empty.style.display = list.length ? 'none' : '';
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

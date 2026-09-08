@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工单列表 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .sla-cell .progress{width:90px;margin-top:4px}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-list.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item active" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">工单管理</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <div class="flex-between mb16">
+          <!-- V2.5 数据层：Tab 计数随 CRM.data.workorders 的 type 分组 -->
+          <div class="tabs" style="margin-bottom:0;border-bottom:none" id="woTabs">
+            <span class="tab active" data-t="all">全部<span class="count">0</span></span>
+            <span class="tab" data-t="aftersale">售后工单<span class="count">0</span></span>
+            <span class="tab" data-t="opportunity">商机工单<span class="count">0</span></span>
+          </div>
+          <!-- 点击打开 D11 创建工单抽屉（类型单选/关联业务关系/标题/富文本描述/来源联动/优先级 P0-P3 仅售后/处理人/附件）；按钮文字保留 -->
+          <button class="btn btn-primary">＋ 新建工单</button>
+        </div>
+        <div class="filter-bar">
+          <select class="select" id="woSt"><option value="">全部状态</option></select>
+          <select class="select" id="woPr"><option value="">全部优先级</option></select>
+          <input class="input search" id="woKw" placeholder="搜索工单号 / 公司 / 标题">
+          <button class="btn btn-primary" id="woBtnQ">查询</button>
+          <button class="btn" id="woBtnR">重置</button>
+        </div>
+        <!-- V2.5 数据层：行由 CRM.data.workorders 渲染，详情经 data-jump 携带 id -->
+        <table class="table">
+          <thead>
+            <tr>
+              <th>工单号</th><th>类型</th><th>公司</th><th>标题</th><th>来源</th><th>处理人</th><th>优先级</th><th>SLA 剩余</th><th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="woTbody">
+            <tr><td colspan="9" class="text-sub" style="text-align:center;padding:24px">加载中…</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span id="woTotal">共 0 条</span>
+          <span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">›</span>
+          <span class="text-sub">20 条/页（演示常量）</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 19/20 工单管理 - 列表 /workorder/list」。
+     要点：类型 Tab（全部/售后/商机）+ 状态/优先级筛选；「新建工单」打开 D11 创建抽屉；
+     类型 tag（售后橙/商机蓝）；优先级 P0 红(4h)/P1 橙(8h)/P2 蓝(24h)/P3 灰(72h)，商机工单无优先级与 SLA；
+     SLA 剩余 <20% 红色倒计时「剩 1.2h」+ danger 进度条；状态按 创建→分派→处理中→客户确认→已关闭 五色状态点；每页 20。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：工单列表改为 CRM.data.workorders 驱动
+// - 类型：aftersale 售后 / opportunity 商机；状态（页内映射，DB 无字典）：assigned 已分派 / processing 处理中 / confirming 客户确认 / closed 已关闭
+// - 优先级 P0~P3 配色取自 dict woPriority；SLA 剩余 = slaDeadline - NOW('2026-09-07 09:00')，商机工单不计 SLA
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var NOW = '2026-09-07 09:00';
+  var state = { tab: 'all', st: '', pr: '', kw: '' };
+  var WO_ST = { assigned: { t: '已分派', c: 's-data' }, processing: { t: '处理中', c: 's-intent' }, confirming: { t: '客户确认', c: 's-renew' }, closed: { t: '已关闭', c: 's-customer' } };
+  // SLA 总时长按优先级（代码内置演示常量，与页面注释一致 P0 4h/P1 8h/P2 24h/P3 72h）
+  var PRI_H = { P0: 4, P1: 8, P2: 24, P3: 72 };
+  var PRI_C = { P0: 'tag-red', P1: 'tag-orange', P2: 'tag-blue', P3: 'tag' };
+  function esc(v) { return H.esc(v); }
+  function empByName(name) {
+    if (!name) return null;
+    for (var i = 0; i < D.employees.length; i++) if (D.employees[i].name === name) return D.employees[i];
+    return null;
+  }
+  function personChip(name) {
+    var e = empByName(name);
+    if (!e) return esc(name || '—');
+    var cls = 'r-delivery', label = '交付';
+    if (e.roleCodes.indexOf('sale') >= 0) { cls = 'r-sales'; label = '销售'; }
+    else if (e.roleCodes.indexOf('service') >= 0) { cls = 'r-service'; label = '客服'; }
+    return H.personChip(e.name, e.av, cls, label);
+  }
+  function typeTag(w) {
+    return w.type === 'opportunity'
+      ? '<span class="tag tag-blue">商机</span>'
+      : '<span class="tag tag-orange">售后</span>';
+  }
+  function slaCell(w) {
+    if (!w.slaDeadline || w.type === 'opportunity') {
+      return '<td class="text-sub">不计 SLA</td>';
+    }
+    var total = PRI_H[w.priority] || 8;
+    var remain = (new Date(w.slaDeadline.replace(/-/g, '/')) - new Date(NOW.replace(/-/g, '/'))) / 3600000;
+    var pct = Math.max(0, Math.min(100, total ? (remain / total) * 100 : 0));
+    if (remain < 0) {
+      return '<td class="sla-cell"><span class="text-danger bold">已超时</span><div class="progress danger"><i style="width:100%"></i></div></td>';
+    }
+    var cls = pct < 20 ? 'danger' : (pct < 50 ? 'warn' : '');
+    var warn = pct < 20 ? 'text-danger bold' : (pct < 50 ? '' : '');
+    return '<td class="sla-cell"><span class="' + warn + '">剩 ' + (Math.round(remain * 10) / 10) + 'h</span><div class="progress ' + cls + '"><i style="width:' + pct + '%"></i></div></td>';
+  }
+  function stCell(code) {
+    var s = WO_ST[code];
+    if (!s) return '<td><span class="text-sub">' + esc(code) + '</span></td>';
+    return '<td><span class="status-dot ' + s.c + '">' + s.t + '</span></td>';
+  }
+  function rowHtml(w) {
+    var pr = w.priority
+      ? '<span class="tag ' + (PRI_C[w.priority] || 'tag') + '">' + esc(w.priority) + '</span>'
+      : '<span class="text-sub">—</span>';
+    return '<tr>' +
+      '<td class="cell-main"><a data-jump="workorder-detail.html?id=' + esc(w.id) + '">' + esc(w.orderNo) + '</a></td>' +
+      '<td>' + typeTag(w) + '</td>' +
+      '<td>' + esc(w.companyName) + '</td>' +
+      '<td>' + esc(w.title) + '</td>' +
+      '<td>' + esc(w.source || '—') + '</td>' +
+      '<td>' + personChip(w.assigneeName) + '</td>' +
+      '<td>' + pr + '</td>' +
+      slaCell(w) +
+      stCell(w.status) +
+      '</tr>';
+  }
+  function matched() {
+    return D.workorders.filter(function (w) {
+      if (state.tab !== 'all' && w.type !== state.tab) return false;
+      if (state.st && w.status !== state.st) return false;
+      if (state.pr && w.priority !== state.pr) return false;
+      if (state.kw && (w.orderNo + w.companyName + w.title).indexOf(state.kw) < 0) return false;
+      return true;
+    });
+  }
+  function render() {
+    var rows = matched();
+    var tb = document.getElementById('woTbody');
+    tb.innerHTML = rows.length
+      ? rows.map(rowHtml).join('')
+      : '<tr><td colspan="9" class="text-sub" style="text-align:center;padding:24px">暂无符合条件的数据</td></tr>';
+    var pt = document.getElementById('woTotal');
+    if (pt) pt.textContent = '共 ' + rows.length + ' 条';
+    // Tab 计数随数据
+    var tabs = document.getElementById('woTabs');
+    if (tabs) {
+      var ts = tabs.querySelectorAll('.tab');
+      for (var i = 0; i < ts.length; i++) {
+        var v = ts[i].getAttribute('data-t');
+        var cnt = ts[i].querySelector('.count');
+        if (cnt) cnt.textContent = D.workorders.filter(function (w) { return v === 'all' || w.type === v; }).length;
+        ts[i].className = 'tab' + (state.tab === v ? ' active' : '');
+      }
+    }
+  }
+  function fillSels() {
+    var st = document.getElementById('woSt');
+    if (st) st.innerHTML = '<option value="">全部状态</option>' + Object.keys(WO_ST).map(function (k) {
+      return '<option value="' + esc(k) + '">' + esc(WO_ST[k].t) + '</option>';
+    }).join('');
+    var pr = document.getElementById('woPr');
+    if (pr) pr.innerHTML = '<option value="">全部优先级</option>' + D.woPriority.map(function (p) {
+      return '<option value="' + esc(p.code) + '">' + esc(p.code) + '（' + esc(PRI_H[p.code] || '') + 'h）</option>';
+    }).join('');
+  }
+  var tabsEl = document.getElementById('woTabs');
+  if (tabsEl) {
+    var tEls = tabsEl.querySelectorAll('.tab');
+    for (var i = 0; i < tEls.length; i++) {
+      tEls[i].addEventListener('click', function () {
+        state.tab = this.getAttribute('data-t');
+        render();
+      });
+    }
+  }
+  document.getElementById('woBtnQ').addEventListener('click', function () {
+    state.st = document.getElementById('woSt').value;
+    state.pr = document.getElementById('woPr').value;
+    state.kw = (document.getElementById('woKw').value || '').trim();
+    render();
+  });
+  document.getElementById('woBtnR').addEventListener('click', function () {
+    document.getElementById('woSt').value = '';
+    document.getElementById('woPr').value = '';
+    document.getElementById('woKw').value = '';
+    state.st = state.pr = state.kw = '';
+    render();
+  });
+  fillSels();
+  render();
+})();
+</script>
+</body>
+</html>

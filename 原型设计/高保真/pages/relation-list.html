@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>业务关系 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .comp-badge { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 4px;
+    font-size: 12px; background: var(--danger-light); color: var(--danger); border: 1px solid #FBC4C4; }
+  /* V2.5：旧四维标签词（决策链长/价格敏感等）已移出关系行，cust-tag 相关样式不再使用 */
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item active" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">业务关系</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- 快捷视图 seg -->
+      <div class="card mb16">
+        <div class="flex-between flex-wrap gap12">
+          <!-- V2.5：快捷视图同步 6 步/紧迫档口径，新增「灰度预警」并带条数角标 -->
+          <div class="seg" id="viewSeg">
+            <span class="seg-item active" data-view="all">我的全部</span>
+            <span class="seg-item" data-view="weekly">⭐ 周重点<span data-count="weekly"></span></span>
+            <span class="seg-item" data-view="following">跟进中</span>
+            <span class="seg-item" data-view="customer">已合作</span>
+            <span class="seg-item" data-view="lost">已流失</span>
+            <span class="seg-item" data-view="overdue">逾期未跟进<span data-count="overdue"></span></span>
+            <span class="seg-item" data-view="gray">灰度预警<span data-count="gray"></span></span>
+          </div>
+          <span class="text-sub" id="relTotal">共 0 条业务关系</span>
+        </div>
+        <div class="filter-bar mt16" style="margin-bottom:0">
+          <select class="select">
+            <option>全部部门</option>
+            <option>线上营销一部</option>
+            <option>线上营销二部</option>
+            <option>客户服务部</option>
+          </select>
+          <select class="select">
+            <option>全部产品线</option>
+            <option>短视频推广</option>
+            <option>GEO 优化</option>
+            <option>网站建设</option>
+            <option>电商代运营</option>
+          </select>
+          <select class="select">
+            <option>全部主对接销售</option>
+            <option>张伟</option>
+            <option>刘洋</option>
+            <option>张伟</option>
+          </select>
+          <input class="input search" id="fKw" placeholder="搜索 公司全称 / 联系人 / 手机号">
+          <!-- V2.5：旧「全部标签」（旧四维词）下拉移除，改按紧迫档 / 业务线价值筛选 -->
+          <select class="select" id="fUrgency">
+            <option value="">全部紧迫档</option>
+            <option value="weekly">周重点</option>
+            <option value="monthly">月重点</option>
+            <option value="quarterly">季度跟</option>
+            <option value="long_term">长期跟</option>
+            <option value="gray">灰度</option>
+          </select>
+          <select class="select" id="fValue">
+            <option value="">全部价值</option>
+            <option value="high">高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+            <option value="pending">待定</option>
+          </select>
+          <button class="btn btn-primary" id="btnQuery">查询</button>
+          <button class="btn" id="btnReset">重置</button>
+        </div>
+      </div>
+
+      <!-- 列表 -->
+      <div class="card">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>公司 / 业务线</th>
+              <th>状态</th>
+              <!-- V2.5：跟进列 = 紧迫档 + 业务线价值 + 风险（自动项 ⚙ 灰显），末尾 ＋ 开 D18 -->
+              <th style="width:220px">跟进</th>
+              <th>阶段</th>
+              <th>部门 · 产品线</th>
+              <th>主对接销售</th>
+              <th>维护人</th>
+              <th class="sortable">下次跟进时间 ▼</th>
+              <th>最近跟进时间</th>
+              <th class="sortable">价值评估 ▼</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="relTbody"></tbody>
+        </table>
+        <div class="pagination">
+          <span class="text-sub" id="relPageTotal">共 0 条</span>
+          <select class="select" style="width:90px;height:30px"><option>20 条/页</option><option>50 条/页</option><option>100 条/页</option></select>
+          <span class="pg">‹</span>
+          <span class="pg active">1</span>
+          <span class="pg">2</span>
+          <span class="pg">3</span>
+          <span class="pg">›</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<!--
+设计说明（relation-list.html）
+对应需求：第五章 页面 5 业务关系列表 /relation/list
+关键交互点：
+1. 顶部 seg 快捷视图 V2.5 口径：我的全部/⭐周重点(紧迫档 weekly)/跟进中(资料+意向)/已合作/已流失/逾期未跟进/灰度预警(灰度且≥7天)，后三者带条数角标。
+2. 表头 11 列：下次跟进时间、价值评估可排序；逾期红色、"⚠ 24h 内掉公海"橙色警示。
+3. 特殊显示：跨业务线"已合作 GEO"蓝 tag、跨部门"竞争"红徽标、"公海待领"灰 tag。
+4. 行操作：详情/写跟进(D1)/更多⋯（转交 D7、创建合同、创建工单 D11）。
+5. 分页 20/50/100，默认 20；空态引导"去公海领取 / 录入新联系人"。
+6. V2.5：跟进列 = 紧迫档 + 业务线价值 + 风险（自动⚙只读），末尾"＋"开 D18 跟进设置弹窗；阶段列走 6 步口径；tbody 由 assets/mock-data.js 的 CRM.data.relations 渲染。
+-->
+<!-- V2.5：D18 跟进设置弹窗（560px；关闭由 app.js 的 data-close 接管，打开由本页脚本事件委托） -->
+<div class="dialog-mask" id="dialog-follow-setup" style="display:none">
+  <div class="dialog" style="width:560px">
+    <div class="dialog-head">⚙ 跟进设置 · <span id="d18RelName">业务关系</span> <span class="close" data-close>✕</span></div>
+    <div class="dialog-body">
+      <div class="setup-group">
+        <div class="sg-title">紧迫档 <span class="sg-tip">单选 · 纯手动计划，不做自动降级，默认灰度</span></div>
+        <div class="tag-opts" data-group="urgency" data-single="1"></div>
+      </div>
+      <div class="setup-group">
+        <div class="sg-title">业务线价值 <span class="sg-tip">单选 · 默认待定；与「价值评估（金额）」是两套字段，不混淆</span></div>
+        <div class="tag-opts" data-group="valueLevel" data-single="1"></div>
+      </div>
+      <div class="setup-group">
+        <div class="sg-title">协同 <span class="sg-tip">多选 · 可 @ 同事</span></div>
+        <div class="tag-opts" data-group="coopTags"></div>
+        <input class="input" style="width:160px;margin-top:8px" placeholder="@同事，如 @李娜">
+      </div>
+      <div class="setup-group" style="margin-bottom:0">
+        <div class="sg-title">风险 <span class="sg-tip">系统自动打标，只读；鼠标悬停看触发规则</span></div>
+        <div class="tag-opts" data-group="riskTags"></div>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" data-close>取消</button>
+      <button class="btn btn-primary" id="d18Save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// V2.5：业务关系列表改为数据驱动渲染（数据源 CRM.data.relations）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var NOW = '2026-09-07 18:00'; // V2.5 演示口径“当前时间”，用于判定是否逾期
+  var state = { view: 'all', urgency: '', value: '', kw: '' };
+
+  // V2.5 快捷视图口径
+  var VIEW = {
+    all: function () { return true; },
+    weekly: function (r) { return r.urgency === 'weekly'; },
+    following: function (r) { return r.status === 'data' || r.status === 'intent'; },
+    customer: function (r) { return r.status === 'customer' || r.status === 'renew'; }, // 已合作 = 客户 + 续约
+    lost: function (r) { return r.status === 'lost'; },
+    overdue: function (r) { return !r.nextFollowAt || r.nextFollowAt < NOW; },
+    gray: function (r) { return r.urgency === 'gray' && r.grayDays >= 7; }
+  };
+
+  function badge(n) {
+    return '<i style="display:inline-block;margin-left:4px;min-width:16px;height:16px;line-height:16px;padding:0 4px;' +
+      'border-radius:8px;background:#F56C6C;color:#fff;font-size:11px;font-style:normal;text-align:center">' + n + '</i>';
+  }
+
+  function personChip(name, av, roleCls, roleName) {
+    return '<span class="person-chip mini"><i class="pc-avatar ' + av + '">' + H.esc(name.charAt(0)) + '</i>' +
+      '<span class="pc-name">' + H.esc(name) + '</span>' +
+      '<span class="pc-role ' + roleCls + '">' + roleName + '</span></span>';
+  }
+
+  function rowHtml(r) {
+    var badges = '';
+    if (r.competitorFlag) badges += ' <span class="comp-badge">竞争</span>';
+    (r.crossLineTags || []).forEach(function (t) { badges += ' <span class="tag tag-blue">' + H.esc(t) + '</span>'; });
+    if (r.seaStatus && r.seaStatus !== 'private') badges += ' <span class="tag">公海待领</span>';
+    if (r.status === 'lost' && r.lostReason) badges += ' <span class="tag">已流失（' + H.esc(r.lostReason) + '）</span>';
+
+    var nf = r.nextFollowAt
+      ? (r.nextFollowAt < NOW ? '<span class="text-danger bold">' + r.nextFollowAt + '（已逾期）</span>' : r.nextFollowAt)
+      : '—';
+    if (r.grayDays >= 14) nf += '<div class="text-warning bold fs12 mt8">⚠ 24h 内掉公海</div>';
+
+    return '<tr data-rel="' + r.id + '">' +
+      '<td><div class="cell-main flex gap8">' + H.esc(r.companyName) + badges + '</div>' +
+        '<div class="cell-sub">' + H.esc(r.productLineName) + '</div></td>' +
+      '<td>' + H.statusDot(r.status) + '</td>' +
+      '<td>' + H.followColumn(r, true) + '</td>' +
+      '<td>' + H.esc(H.stageName(r.stageId)) + '</td>' +
+      '<td><span class="entity-tags">' +
+        '<span class="entity-tag dept"><i class="et-icon">🏢</i>' + H.esc(r.deptName) + '</span>' +
+        '<span class="entity-tag line"><i class="et-icon">🧩</i>' + H.esc(r.productLineName) + '</span></span></td>' +
+      '<td>' + personChip(r.ownerName, r.ownerAv, 'r-sales', '销售') + '</td>' +
+      '<td>' + personChip(r.maintainerName, r.maintainerAv, 'r-service', '客服') + '</td>' +
+      '<td>' + nf + '</td>' +
+      '<td>' + H.esc(r.lastFollowAt || '—') + '</td>' +
+      '<td class="num">' + H.money(r.valueEstimate) + '</td>' +
+      '<td><a href="relation-detail.html" class="btn-text">详情</a>' +
+        '<a class="btn-text">写跟进</a><a class="btn-text">更多⋯</a></td>' +
+      '</tr>';
+  }
+
+  function matched() {
+    return D.relations.filter(function (r) {
+      if (r.seaStatus !== 'private') return false; // 公海关系属于公海页，不进私海列表
+      if (!VIEW[state.view](r)) return false;
+      if (state.urgency && r.urgency !== state.urgency) return false;
+      if (state.value && r.valueLevel !== state.value) return false;
+      if (state.kw && (r.companyName + r.shortName + r.ownerName).indexOf(state.kw) < 0) return false;
+      return true;
+    });
+  }
+
+  function render() {
+    var rows = matched();
+    document.getElementById('relTbody').innerHTML = rows.length
+      ? rows.map(rowHtml).join('')
+      : '<tr><td colspan="11" class="text-sub" style="text-align:center;padding:24px">暂无符合条件的业务关系</td></tr>';
+    var pt = document.getElementById('relPageTotal');
+    if (pt) pt.textContent = '共 ' + rows.length + ' 条';
+  }
+
+  function paintCounts() {
+    var priv = D.relations.filter(function (r) { return r.seaStatus === 'private'; });
+    ['weekly', 'overdue', 'gray'].forEach(function (v) {
+      var el = document.querySelector('[data-count="' + v + '"]');
+      if (el) el.innerHTML = badge(priv.filter(VIEW[v]).length);
+    });
+    var total = document.getElementById('relTotal');
+    if (total) total.textContent = '共 ' + priv.length + ' 条业务关系（私海）';
+  }
+
+  /* ---------- D18 跟进设置弹窗 ---------- */
+  var mask = document.getElementById('dialog-follow-setup');
+
+  function optHtml(list, cls, titleKey) {
+    return list.map(function (x) {
+      var title = titleKey ? ' title="系统自动规则：' + H.esc(x[titleKey]) + '"' : '';
+      return '<span class="tag-opt' + (cls ? ' ' + cls : '') + '" data-code="' + x.code + '"' + title + '>' +
+        H.esc(x.name) + '</span>';
+    }).join('');
+  }
+  document.querySelector('[data-group="urgency"]').innerHTML = optHtml(D.urgency);
+  document.querySelector('[data-group="valueLevel"]').innerHTML = optHtml(D.valueLevel);
+  document.querySelector('[data-group="coopTags"]').innerHTML = optHtml(D.coopTags);
+  document.querySelector('[data-group="riskTags"]').innerHTML = optHtml(D.riskTags, 'is-auto', 'rule');
+
+  function setSel(group, codes) {
+    var g = document.querySelector('[data-group="' + group + '"]');
+    Array.prototype.forEach.call(g.querySelectorAll('.tag-opt'), function (o) {
+      if (codes.indexOf(o.getAttribute('data-code')) >= 0) o.classList.add('sel');
+      else o.classList.remove('sel');
+    });
+  }
+  function relById(id) {
+    for (var i = 0; i < D.relations.length; i++) { if (D.relations[i].id === id) return D.relations[i]; }
+    return null;
+  }
+
+  // 选项点击：单选组互斥、多选组切换；风险为自动项只读
+  mask.addEventListener('click', function (e) {
+    var opt = e.target.closest ? e.target.closest('.tag-opt') : null;
+    if (!opt || opt.classList.contains('is-auto')) return;
+    var group = opt.parentNode;
+    if (group.getAttribute('data-single')) {
+      Array.prototype.forEach.call(group.querySelectorAll('.tag-opt'), function (o) { o.classList.remove('sel'); });
+      opt.classList.add('sel');
+    } else {
+      opt.classList.toggle('sel');
+    }
+  });
+
+  // 行内“＋”打开 D18（行由 JS 渲染，用事件委托）
+  document.getElementById('relTbody').addEventListener('click', function (e) {
+    var plus = e.target.closest ? e.target.closest('.follow-plus') : null;
+    if (!plus) return;
+    var tr = plus.closest('tr');
+    var rel = relById(tr.getAttribute('data-rel'));
+    if (!rel) return;
+    document.getElementById('d18RelName').textContent = rel.shortName + ' · ' + rel.productLineName;
+    setSel('urgency', [rel.urgency]);
+    setSel('valueLevel', [rel.valueLevel || 'pending']);
+    setSel('coopTags', rel.coopTags || []);
+    setSel('riskTags', rel.riskTags || []); // 自动风险仅展示
+    mask.style.display = 'flex';
+  });
+
+  document.getElementById('d18Save').addEventListener('click', function () {
+    alert('已保存：紧迫档 / 业务线价值 / 协同 变更将写入跟单流水并留痕（风险为系统自动打标，不可改）');
+    mask.style.display = 'none';
+  });
+
+  /* ---------- 快捷视图与筛选 ---------- */
+  var seg = document.getElementById('viewSeg');
+  seg.addEventListener('click', function (e) {
+    var it = e.target.closest ? e.target.closest('.seg-item') : null;
+    if (!it) return;
+    Array.prototype.forEach.call(seg.querySelectorAll('.seg-item'), function (x) { x.classList.remove('active'); });
+    it.classList.add('active');
+    state.view = it.getAttribute('data-view');
+    render();
+  });
+
+  document.getElementById('btnQuery').addEventListener('click', function () {
+    state.urgency = document.getElementById('fUrgency').value;
+    state.value = document.getElementById('fValue').value;
+    state.kw = document.getElementById('fKw').value.trim();
+    render();
+  });
+  document.getElementById('btnReset').addEventListener('click', function () {
+    document.getElementById('fUrgency').value = '';
+    document.getElementById('fValue').value = '';
+    document.getElementById('fKw').value = '';
+    state.urgency = state.value = state.kw = '';
+    render();
+  });
+
+  paintCounts();
+  render();
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

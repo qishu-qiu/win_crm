@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公海规则 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .lv-bar{display:flex;align-items:center;gap:12px;border-radius:var(--radius);padding:12px 16px;color:#fff;font-size:13px}
+  .lv-bar .lv-tag{font-weight:700;font-size:12px;background:rgba(255,255,255,.25);border-radius:10px;padding:2px 10px}
+  .lv-arrow{text-align:center;color:var(--text-placeholder);font-size:12px;line-height:1.6}
+  .flow-node{border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px 14px;font-size:13px;background:#fff;min-width:150px;text-align:center}
+  .flow-node .fn-title{font-weight:600}
+  .flow-node .fn-sub{font-size:12px;color:var(--text-secondary);margin-top:4px}
+  .flow-node.miss{color:var(--text-secondary);background:var(--info-light);border-style:dashed}
+  .flow-node.hit{border-color:var(--success);background:var(--success-light)}
+  .flow-arrow{font-size:18px;color:var(--text-placeholder)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="org-employee.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item active" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">公海规则</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <!-- 4 层覆盖关系：色深 = 优先级，L4 最优先，命中即停 -->
+      <div class="card">
+        <div class="card-title">规则覆盖关系 <span class="more">L1 → L4 优先级递增，自最深层向上匹配，命中即停</span></div>
+        <div class="lv-bar" style="background:#C9E2FB"><span class="lv-tag">L1</span>全局默认 · 全公司 <span style="margin-left:auto">跟进 3 天 · 成单 30 天 · 停滞 7 天</span></div>
+        <div class="lv-arrow">↓ 被覆盖</div>
+        <div class="lv-bar" style="background:#8FC1F7"><span class="lv-tag">L2</span>产品线级 · 如「短视频推广」 <span style="margin-left:auto">跟进 3 天 · 成单 15 天 · 停滞 5 天</span></div>
+        <div class="lv-arrow">↓ 被覆盖</div>
+        <div class="lv-bar" style="background:#5E9FEE"><span class="lv-tag">L3</span>部门级 · 如「短视频部」 <span style="margin-left:auto">跟进 3 天 · 成单 15 天 · 停滞 5 天</span></div>
+        <div class="lv-arrow">↓ 被覆盖</div>
+        <div class="lv-bar" style="background:#2F7DE1"><span class="lv-tag">L4</span>部门 × 产品线 · 如「线上营销一部 × 网站建设」 <span style="margin-left:auto">跟进 3 天 · 成单 25 天 · 停滞 5 天</span></div>
+        <!-- V2.5 数据层：上图为层级机制示意；真实可配置数据见下方「规则列表」（产品线默认规则） -->
+        <div class="text-sub mt8">注：上图为 L1→L4 覆盖机制示意图（示例数值，非真实配置）；当前原型真实规则为「产品线级默认」，来自各产品线 seaDefaults。</div>
+      </div>
+
+      <!-- 规则列表 -->
+      <div class="card mt16">
+        <div class="card-title">规则列表 <span class="more"><button class="btn btn-primary btn-sm">＋ 新建规则</button></span></div>
+        <!-- V2.5 数据层：规则行 = 各产品线 seaDefaults（L2 产品线级默认） -->
+        <table class="table">
+          <thead>
+            <tr><th>层级</th><th>范围</th><th>跟进频次</th><th>成单周期</th><th>停滞天数</th><th>设置人</th><th>操作</th></tr>
+          </thead>
+          <tbody id="tb-sea"></tbody>
+        </table>
+        <div class="text-sub mt12">阈值范围：跟进频次 1-30 天 · 成单周期 1-180 天 · 停滞 1-30 天 · 无推进次数 1-10 次；部门经理仅可配置部门级（L3）及以下</div>
+      </div>
+
+      <!-- 规则解析演示（V2.5 数据层：公司/部门/产品线来自 DB，命中路径动态计算） -->
+      <div class="card mt16">
+        <div class="card-title">规则解析演示 <span class="more">选择业务关系上下文，动态展示命中路径</span></div>
+        <div class="filter-bar">
+          <select class="select" id="sea-co"></select>
+          <select class="select" id="sea-dept"></select>
+          <select class="select" id="sea-pl"></select>
+          <button class="btn btn-primary" id="btn-resolve">解析规则</button>
+        </div>
+        <div class="flex gap12 mt8" style="justify-content:center;flex-wrap:wrap" id="resolve-flow"></div>
+        <div class="text-sub mt12" style="text-align:center" id="resolve-note"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 25 系统设置 - 公海规则 /setting/sea-rule」。
+     要点：4 层覆盖（全局→产品线→部门→部门×产品线，色深=优先级，L4 最优先）；规则列表含层级/范围/阈值/设置人/操作；
+     新建/编辑走抽屉，层级按角色可选（经理仅 L3 及以下）；保存前弹确认框「将影响 N 条业务关系掉落判定」；
+     规则解析演示：L4 未配置向上回溯，L3 命中即停。 -->
+<script src="../assets/app.js"></script>
+<script>
+/* ============================================================
+ * V2.5 数据层：公海规则
+ * 规则列表 = 各产品线 seaDefaults（freq/deal/stay，即 L2 产品线级默认）；
+ * 解析演示以真实业务关系上下文（公司→部门→产品线）向上回溯：L4/L3 未配置 ✗，L2 命中即停。
+ * ============================================================ */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  if (!C || !C.data) return;
+  var pls = C.data.productLines || [];
+  var depts = C.data.departments || [];
+  // 取私海非流失的真实关系作为解析上下文
+  var rels = (C.data.relations || []).filter(function (r) {
+    return r.seaStatus === 'private' && r.status !== 'lost' && r.productLineId && r.deptId;
+  });
+
+  function esc(s) { return String(s === null || s === undefined ? '' : s); }
+  function deptName(id) {
+    for (var i = 0; i < depts.length; i++) { if (String(depts[i].id) === String(id)) return depts[i].name; }
+    return '—';
+  }
+  function plById(id) {
+    for (var i = 0; i < pls.length; i++) { if (String(pls[i].id) === String(id)) return pls[i]; }
+    return null;
+  }
+  function relByCompany(cid) {
+    for (var i = 0; i < rels.length; i++) { if (String(rels[i].companyId) === String(cid)) return rels[i]; }
+    return null;
+  }
+
+  // ---------- 规则列表（产品线 L2 默认） ----------
+  var tb = document.getElementById('tb-sea');
+  if (tb) {
+    tb.innerHTML = pls.map(function (p) {
+      var sd = p.seaDefaults || {};
+      var freq = sd.freq == null ? '—' : sd.freq;
+      var deal = sd.deal == null ? '—' : sd.deal;
+      var stay = sd.stay == null ? '—' : sd.stay;
+      return '<tr>' +
+        '<td><span class="tag tag-blue">L2 产品线</span></td>' +
+        '<td class="cell-main">' + esc(p.name) + '<span class="text-sub" style="font-size:12px">（默认）</span></td>' +
+        '<td class="num">' + esc(String(freq)) + ' 天</td>' +
+        '<td class="num">' + esc(String(deal)) + ' 天</td>' +
+        '<td class="num">' + esc(String(stay)) + ' 天</td>' +
+        '<td>系统内置</td>' +
+        '<td><button class="btn-text">编辑</button></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  // ---------- 解析演示 ----------
+  var seaCo = document.getElementById('sea-co');
+  var seaDept = document.getElementById('sea-dept');
+  var seaPl = document.getElementById('sea-pl');
+  var flow = document.getElementById('resolve-flow');
+  var note = document.getElementById('resolve-note');
+  if (!seaCo || !seaDept || !seaPl || !flow) return;
+
+  function fill(sel, list, textOf, valOf) {
+    sel.innerHTML = list.map(function (it) {
+      return '<option value="' + esc(valOf(it)) + '">' + esc(textOf(it)) + '</option>';
+    }).join('');
+  }
+  fill(seaCo, rels, function (r) { return r.companyName; }, function (r) { return r.companyId; });
+  fill(seaDept, depts, function (d) { return d.name; }, function (d) { return d.id; });
+  fill(seaPl, pls, function (p) { return p.name; }, function (p) { return p.id; });
+
+  seaCo.addEventListener('change', function () {
+    var rel = relByCompany(seaCo.value);
+    if (rel) { seaDept.value = rel.deptId; seaPl.value = rel.productLineId; }
+  });
+
+  function missNode(title, sub) {
+    return '<div class="flow-node miss"><div class="fn-title">' + esc(title) + '</div>' +
+      '<div class="fn-sub">' + esc(sub) + '</div><div class="fn-sub">未配置 ✗</div></div>';
+  }
+
+  function resolve() {
+    var rel = relByCompany(seaCo.value);
+    var dId = seaDept.value;
+    var pId = seaPl.value;
+    var pl = plById(pId);
+    var dName = dId ? deptName(dId) : '—';
+    var pName = pl ? pl.name : '—';
+    var sd = pl && pl.seaDefaults ? pl.seaDefaults : {};
+    var freq = sd.freq == null ? '—' : sd.freq;
+    var deal = sd.deal == null ? '—' : sd.deal;
+    var stay = sd.stay == null ? '—' : sd.stay;
+
+    var html =
+      missNode('L4 部门×产品线', dName + ' × ' + pName) + '<span class="flow-arrow">→</span>' +
+      missNode('L3 部门级', dName) + '<span class="flow-arrow">→</span>' +
+      '<div class="flow-node hit"><div class="fn-title">L2 产品线级 · 命中 ✓</div>' +
+        '<div class="fn-sub">' + esc(pName) + '</div>' +
+        '<div class="fn-sub text-success bold">跟进 ' + esc(String(freq)) + ' 天 · 成单 ' + esc(String(deal)) + ' 天 · 停滞 ' + esc(String(stay)) + ' 天</div></div>' +
+      '<span class="flow-arrow">→</span>' +
+      '<div class="flow-node"><div class="fn-title">生效结果</div>' +
+        '<div class="fn-sub">' + esc(String(freq)) + ' 天未跟进预警 · ' + esc(String(deal)) + ' 天未成单掉公海</div>' +
+        '<div class="fn-sub">' + esc(String(stay)) + ' 天无推进判停滞</div></div>';
+    flow.innerHTML = html;
+    if (note) {
+      note.textContent = '自最深层 L4 向上回溯：L4/L3 未配置 → L2（产品线默认）命中即停，不再继续查 L1。当前选择：' +
+        (rel ? rel.companyName : '') + ' · ' + dName + ' · ' + pName;
+    }
+  }
+
+  var btnResolve = document.getElementById('btn-resolve');
+  if (btnResolve) {
+    btnResolve.addEventListener('click', function (e) { e.stopPropagation(); resolve(); });
+  }
+  // 默认选中第一条真实关系并展示命中路径
+  if (rels.length) {
+    var first = rels[0];
+    seaCo.value = first.companyId;
+    seaDept.value = first.deptId;
+    seaPl.value = first.productLineId;
+    resolve();
+  } else {
+    flow.innerHTML = '<div class="flow-node miss"><div class="fn-title">暂无上下文</div><div class="fn-sub">无可用业务关系</div></div>';
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高级搜索 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item active" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">高级搜索</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- V2.5 数据层：数据范围提示由 currentUser + depts 动态生成 -->
+      <div class="mb16" id="asBanner" style="background:var(--primary-light);color:var(--primary);border:1px solid var(--primary-border);border-radius:var(--radius);padding:10px 14px;font-size:13px">
+        ℹ️ 数据范围…
+      </div>
+      <div class="card">
+        <div class="flex-between mb12">
+          <span class="bold">筛选条件</span>
+          <span class="text-sub">🔒 不支持导出（V2 开放）</span>
+        </div>
+        <!-- V2.5 数据层：下拉选项来自 CRM.data（depts/employees/productLines/relationStatus/customerLevels） -->
+        <div class="form-row">
+          <div class="form-item"><span class="form-label">关键词</span><input class="input" id="fKw" placeholder="公司全称 / 联系人 / 手机号"></div>
+          <div class="form-item"><span class="form-label">部门（单选）</span><select class="select" id="fDept"></select></div>
+          <div class="form-item"><span class="form-label">成员</span><select class="select" id="fOwner"></select></div>
+          <div class="form-item"><span class="form-label">产品线</span><select class="select" id="fPl"></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-item"><span class="form-label">业务关系状态</span><select class="select" id="fStatus"></select></div>
+          <div class="form-item"><span class="form-label">客户等级</span><select class="select" id="fLevel"></select></div>
+          <div class="form-item"><span class="form-label">最后跟进时间段</span><input class="input" id="fLastRange" placeholder="2026-08-01 ~ 2026-09-05"></div>
+          <div class="form-item"><span class="form-label">价值评估区间</span><input class="input" id="fValRange" placeholder="¥10,000 ~ ¥500,000"></div>
+        </div>
+        <div class="flex gap8">
+          <button class="btn btn-primary" id="btnSearch">搜索</button>
+          <button class="btn" id="btnReset">重置</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">搜索结果 <span class="more" id="asResultMeta">共 0 条</span></div>
+        <!-- V2.5 数据层：结果行由 CRM.data.relations（私海）渲染 -->
+        <table class="table">
+          <thead>
+            <tr><th>公司 / 业务线</th><th>状态</th><th>所属部门</th><th>归属成员</th><th>产品线</th><th>当前阶段</th><th class="sortable">最后跟进 ⇅</th><th>下次跟进</th><th class="sortable">价值评估 ⇅</th><th>操作</th></tr>
+          </thead>
+          <tbody id="asTbody">
+            <tr><td colspan="10" class="text-sub" style="text-align:center;padding:24px">加载中…</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span id="asPageTotal">共 0 条</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">›</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 8 高级搜索」（经理+）。
+     要点：数据范围=管辖部门列表，默认全公司；结果仅可查看，操作需跳详情按原权限判断；
+     不支持导出（V2 接导出审批）；结果支持任意列排序；空态"换个条件试试"；越权访问 403 占位。
+     V2.5 数据层：筛选下拉来自 DB 字典/组织；关键词真过滤（公司名/联系人/手机号）；
+     时间范围与价值区间控件按文本格式（~ 分隔）参与过滤；列排序箭头为静态演示。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：高级搜索改为 CRM.data.relations 驱动渲染 + 真过滤
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var NOW = '2026-09-07 18:00'; // V2.5 演示口径"当前时间"，用于判定是否逾期
+  var state = { kw: '', dept: '', owner: '', pl: '', status: '', level: '', lastRange: '', valRange: '' };
+
+  function optFill(id, options, allLabel, map) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">' + H.esc(allLabel) + '</option>' + options.map(function (x) {
+      return '<option value="' + H.esc(map(x)) + '">' + H.esc(x.name) + '</option>';
+    }).join('');
+  }
+  function byName(list, v) {
+    for (var i = 0; i < list.length; i++) { if (list[i].name === v) return list[i]; }
+    return null;
+  }
+
+  /* V2.5 数据层：填充筛选下拉 */
+  var deptSel = document.getElementById('fDept');
+  optFill('fDept', D.depts, '全部部门', function (d) { return String(d.id); });
+  var saleEmps = D.employees.filter(function (e) { return e.roleCodes && e.roleCodes.indexOf('sale') >= 0; });
+  function fillOwner(deptId) {
+    var list = deptId ? saleEmps.filter(function (e) { return e.deptId === deptId; }) : saleEmps;
+    optFill('fOwner', list, '全部成员', function (e) { return String(e.id); });
+  }
+  fillOwner(0);
+  optFill('fPl', D.productLines, '全部产品线', function (p) { return String(p.id); });
+  optFill('fStatus', D.relationStatus, '全部状态', function (s) { return s.code; });
+  optFill('fLevel', D.customerLevels, '全部等级', function (l) { return l.code; });
+
+  /* V2.5 数据层：切换部门时成员下拉联动为本部门销售 */
+  deptSel.addEventListener('change', function () {
+    fillOwner(Number(deptSel.value) || 0);
+  });
+
+  /* V2.5 数据层：结果集取私海业务关系 */
+  function base() { return D.relations.filter(function (r) { return r.seaStatus === 'private'; }); }
+
+  function contactsOfCompany(cid) {
+    return D.contacts.filter(function (c) { return c.companyId === cid; });
+  }
+  function kwMatched(r, kw) {
+    if (!kw) return true;
+    if ((r.companyName + r.shortName).indexOf(kw) >= 0) return true;
+    return contactsOfCompany(r.companyId).some(function (c) {
+      return (c.name + c.phoneMasked).indexOf(kw) >= 0;
+    });
+  }
+
+  /* V2.5 数据层：区间控件解析（支持 "2026-08-01 ~ 2026-09-05" / "¥10,000 ~ ¥500,000"） */
+  function parseDateRange(txt) {
+    if (!txt) return null;
+    var ds = (txt.match(/\d{4}-\d{2}-\d{2}/g) || []).map(function (x) { return x; });
+    return ds.length >= 2 ? { min: ds[0], max: ds[ds.length - 1] } : null;
+  }
+  function parseMoneyRange(txt) {
+    if (!txt) return null;
+    var ns = (txt.match(/[\d,]+/g) || []).map(function (x) { return parseFloat(x.replace(/,/g, '')); });
+    if (!ns.length) return null;
+    var min = Math.min.apply(null, ns), max = Math.max.apply(null, ns);
+    return { min: min, max: max };
+  }
+
+  function matched() {
+    return base().filter(function (r) {
+      if (state.dept && String(r.deptId) !== state.dept) return false;
+      if (state.owner && String(r.ownerId || '') !== state.owner) return false;
+      if (state.pl && String(r.productLineId || '') !== state.pl) return false;
+      if (state.status && r.status !== state.status) return false;
+      if (state.level && (r.customerLevel || '') !== state.level) return false;
+      if (!kwMatched(r, state.kw)) return false;
+      var dr = state.lastRange ? parseDateRange(state.lastRange) : null;
+      if (dr && r.lastFollowAt) {
+        var d = (r.lastFollowAt || '').substring(0, 10);
+        if (d && (d < dr.min || d > dr.max)) return false;
+      }
+      var mr = state.valRange ? parseMoneyRange(state.valRange) : null;
+      if (mr && (r.valueEstimate < mr.min || r.valueEstimate > mr.max)) return false;
+      return true;
+    });
+  }
+
+  function rowHtml(r) {
+    var nf = r.nextFollowAt
+      ? (r.nextFollowAt < NOW ? '<span class="text-danger bold">' + H.esc(r.nextFollowAt) + '（已逾期）</span>' : H.esc(r.nextFollowAt))
+      : '—';
+    var comp = H.byId(D.companies, r.companyId);
+    var lineCount = comp ? comp.businessLineCount : D.relations.filter(function (x) { return x.companyId === r.companyId; }).length;
+    return '<tr>' +
+      '<td><div class="cell-main">' + H.esc(r.companyName) + '</div><div class="cell-sub">' + H.esc(lineCount) + ' 条业务线</div></td>' +
+      '<td>' + H.statusDot(r.status) + '</td>' +
+      '<td><span class="entity-tag dept"><i class="et-icon">🏢</i>' + H.esc(r.deptName) + '</span></td>' +
+      '<td>' + H.personChip(r.ownerName, r.ownerAv, 'r-sales', '销售') + '</td>' +
+      '<td><span class="entity-tag line"><i class="et-icon">🧩</i>' + H.esc(r.productLineName) + '</span></td>' +
+      '<td>' + H.esc(H.stageName(r.stageId)) + '</td>' +
+      '<td>' + H.esc(r.lastFollowAt || '—') + '</td>' +
+      '<td>' + nf + '</td>' +
+      '<td class="num bold">' + H.money(r.valueEstimate) + '</td>' +
+      '<td><a class="btn-text" href="relation-detail.html">查看详情</a></td>' +
+      '</tr>';
+  }
+
+  function render() {
+    var rows = matched();
+    var tb = document.getElementById('asTbody');
+    tb.innerHTML = rows.length ? rows.map(rowHtml).join('')
+      : '<tr><td colspan="10" class="text-sub" style="text-align:center;padding:24px">换个条件试试，暂无匹配数据</td></tr>';
+    var meta = document.getElementById('asResultMeta');
+    if (meta) meta.textContent = '共 ' + rows.length + ' 条';
+    var pg = document.getElementById('asPageTotal');
+    if (pg) pg.textContent = '共 ' + rows.length + ' 条';
+  }
+
+  document.getElementById('btnSearch').addEventListener('click', function () {
+    state.kw = (document.getElementById('fKw').value || '').trim();
+    state.dept = document.getElementById('fDept').value;
+    state.owner = document.getElementById('fOwner').value;
+    state.pl = document.getElementById('fPl').value;
+    state.status = document.getElementById('fStatus').value;
+    state.level = document.getElementById('fLevel').value;
+    state.lastRange = (document.getElementById('fLastRange').value || '').trim();
+    state.valRange = (document.getElementById('fValRange').value || '').trim();
+    render();
+  });
+  document.getElementById('btnReset').addEventListener('click', function () {
+    ['fKw', 'fDept', 'fOwner', 'fPl', 'fStatus', 'fLevel', 'fLastRange', 'fValRange'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    fillOwner(0);
+    state.kw = state.dept = state.owner = state.pl = state.status = state.level = state.lastRange = state.valRange = '';
+    render();
+  });
+
+  /* V2.5 数据层：数据范围提示（总经理视角 → 全公司可见） */
+  var cur = D.currentUser;
+  var banner = document.getElementById('asBanner');
+  if (banner && cur) {
+    banner.innerHTML = 'ℹ️ 数据范围：' + H.esc(cur.roleName || '当前角色') + ' 可查看全公司 ' + D.depts.length + ' 个部门（' +
+      D.depts.map(function (d) { return H.esc(d.name); }).join(' / ') + '），默认显示全部';
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

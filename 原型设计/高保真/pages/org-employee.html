@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>员工管理 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .avatar-sm{width:26px;height:26px;font-size:11px}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="org-employee.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item active" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">员工管理</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <div class="flex-between mb16">
+        <!-- V2.5 数据层：计数由脚本按 employees 动态填充 -->
+        <span class="text-sub" id="emp-total">共 0 名员工 · 角色可多选，主部门唯一，兼部门用于跨部门协同</span>
+        <button class="btn btn-primary">＋ 新增员工</button>
+      </div>
+      <div class="card">
+        <!-- V2.5 数据层：部门/角色下拉由 DB 生成，筛选真实生效 -->
+        <div class="filter-bar">
+          <select class="select" id="f-dept"></select>
+          <select class="select" id="f-role"></select>
+          <select class="select" id="f-status">
+            <option value="">全部状态</option><option value="active">在职</option><option value="disabled">停用</option>
+          </select>
+          <input class="input search" id="f-keyword" placeholder="搜索姓名 / 工号">
+          <button class="btn btn-primary" id="btn-query">查询</button>
+          <button class="btn" id="btn-reset">重置</button>
+        </div>
+        <!-- V2.5 数据层：表头列对齐 employees 字段；行由脚本渲染 -->
+        <table class="table">
+          <thead>
+            <tr><th>姓名</th><th>工号</th><th>部门</th><th>角色</th><th>手机号</th><th>状态</th><th>操作</th></tr>
+          </thead>
+          <tbody id="tb-emp"></tbody>
+        </table>
+        <div class="pagination">
+          <!-- V2.5 数据层：总数随筛选动态更新；页码区为原型演示常量 -->
+          <span id="emp-page-total">共 0 条</span>
+          <span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">›</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 24 组织架构 - 员工管理 /org/employee」。
+     要点：筛选=部门/角色/状态+姓名工号搜索；角色多标签（销售+部门经理同一人）；主部门唯一、兼部门用于跨部门协同；
+     停用员工灰显、名下业务关系需先转交；新增/编辑弹窗含角色多选与关联产品线勾选（本页未展开演示）。 -->
+<script src="../assets/app.js"></script>
+<script>
+/* ============================================================
+ * V2.5 数据层：员工列表 = CRM.data.employees 渲染 + 真实筛选
+ * 只读演示：行按钮（编辑/停用/启用）由 app.js 按文本语义兜底。
+ * ============================================================ */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  if (!C || !C.data) return;
+  var emps = C.data.employees || [];
+  var depts = C.data.departments || [];
+  var roles = C.data.roles || [];
+
+  var tb = document.getElementById('tb-emp');
+  var totalEl = document.getElementById('emp-total');
+  var pageTotalEl = document.getElementById('emp-page-total');
+  var fDept = document.getElementById('f-dept');
+  var fRole = document.getElementById('f-role');
+  var fStatus = document.getElementById('f-status');
+  var fKw = document.getElementById('f-keyword');
+  var btnQ = document.getElementById('btn-query');
+  var btnR = document.getElementById('btn-reset');
+  if (!tb) return;
+
+  function roleName(code) {
+    for (var i = 0; i < roles.length; i++) { if (roles[i].code === code) return roles[i].name; }
+    return code;
+  }
+  function deptName(id) {
+    // deptId=0 的赵总归口总部（DB 中 总部 为部门父级名）
+    if (String(id) === '0') return '总部';
+    for (var i = 0; i < depts.length; i++) { if (String(depts[i].id) === String(id)) return depts[i].name; }
+    return '—';
+  }
+  function esc(s) { return String(s === null || s === undefined ? '' : s); }
+
+  function rowHtml(e) {
+    var isActive = e.status === 'active';
+    var nameHtml = '<span class="person-chip mini"><i class="pc-avatar ' + esc(e.av || 'av0') + '">' +
+      esc((e.name || '?').charAt(0)) + '</i><span class="pc-name">' + esc(e.name || '—') + '</span></span>';
+    var roleHtml = (e.roleCodes || []).map(function (c) {
+      return '<span class="tag tag-blue">' + esc(roleName(c)) + '</span>';
+    }).join(' ');
+    var statusHtml = isActive ? '<span class="tag tag-green tag-dot">在职</span>' : '<span class="tag tag-dot">停用</span>';
+    var ops = '<button class="btn-text">编辑</button>' +
+      (isActive ? '<button class="btn-text danger">停用</button>' : '<button class="btn-text">启用</button>');
+    return '<tr>' +
+      '<td>' + nameHtml + '</td>' +
+      '<td class="num">' + esc(e.workNo || '—') + '</td>' +
+      '<td><span class="entity-tag dept"><i class="et-icon">🏢</i>' + esc(deptName(e.deptId)) + '</span></td>' +
+      '<td>' + (roleHtml || '<span class="text-sub">—</span>') + '</td>' +
+      '<td>' + esc(e.phone || '—') + '</td>' +
+      '<td>' + statusHtml + '</td>' +
+      '<td>' + ops + '</td>' +
+      '</tr>';
+  }
+
+  function emptyRow() {
+    return '<tr><td colspan="7" class="text-sub" style="text-align:center;padding:24px 0">暂无数据</td></tr>';
+  }
+
+  function render() {
+    var kw = (fKw ? fKw.value.trim() : '').toLowerCase();
+    var dv = fDept ? fDept.value : '';
+    var rv = fRole ? fRole.value : '';
+    var sv = fStatus ? fStatus.value : '';
+    var rows = emps.filter(function (e) {
+      if (dv && String(e.deptId) !== dv) return false;
+      if (rv && (e.roleCodes || []).indexOf(rv) < 0) return false;
+      if (sv === 'active' && e.status !== 'active') return false;
+      if (sv === 'disabled' && e.status === 'active') return false;
+      if (kw) {
+        var hay = ((e.name || '') + ' ' + (e.workNo || '')).toLowerCase();
+        if (hay.indexOf(kw) < 0) return false;
+      }
+      return true;
+    });
+    tb.innerHTML = rows.length ? rows.map(rowHtml).join('') : emptyRow();
+    if (pageTotalEl) pageTotalEl.textContent = '共 ' + rows.length + ' 条';
+  }
+
+  // 下拉选项来自 DB（部门 / 角色）
+  function fillOptions(sel, label, list, textOf, valOf) {
+    var html = '<option value="">' + label + '</option>';
+    list.forEach(function (it) {
+      html += '<option value="' + esc(valOf(it)) + '">' + esc(textOf(it)) + '</option>';
+    });
+    sel.innerHTML = html;
+  }
+  if (fDept) fillOptions(fDept, '全部部门', depts, function (d) { return d.name; }, function (d) { return d.id; });
+  if (fRole) fillOptions(fRole, '全部角色', roles, function (r) { return r.name; }, function (r) { return r.code; });
+
+  if (totalEl) totalEl.textContent = '共 ' + emps.length + ' 名员工 · 角色可多选，主部门唯一，兼部门用于跨部门协同';
+  render();
+
+  // 阻止冒泡到 app.js 的通用兜底 toast；自身完成过滤
+  function bind(id, fn) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function (e) { e.stopPropagation(); fn(); });
+  }
+  bind('btn-query', render);
+  bind('btn-reset', function () {
+    if (fDept) fDept.value = '';
+    if (fRole) fRole.value = '';
+    if (fStatus) fStatus.value = '';
+    if (fKw) fKw.value = '';
+    render();
+  });
+})();
+</script>
+</body>
+</html>

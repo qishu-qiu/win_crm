@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作流阶段配置 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .stage-flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:4px 0}
+  .stage-card{border:1px solid var(--border);border-radius:var(--radius-lg);background:#fff;padding:14px 12px;
+    min-width:160px;flex:1;text-align:center;cursor:grab;position:relative;transition:all .2s}
+  .stage-card:hover{border-color:var(--primary-border);box-shadow:var(--shadow-hover)}
+  .stage-card .drag{color:var(--text-placeholder);font-size:12px;letter-spacing:2px}
+  .stage-card .s-name{font-weight:600;margin:6px 0 2px}
+  .stage-card .s-idx{font-size:11px;color:var(--text-placeholder)}
+  .stage-card .s-ops{margin-top:8px;font-size:13px;display:flex;justify-content:center;gap:10px}
+  .stage-card .s-ops span{cursor:pointer}
+  .stage-card .s-ops .disabled{color:var(--text-placeholder);cursor:not-allowed}
+  .stage-link{display:flex;align-items:center;color:var(--text-placeholder);font-size:18px;padding:0 6px;flex:0 0 auto}
+  .stage-lock-note{font-size:11px;color:var(--warning);margin-top:6px}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="org-employee.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="setting-workflow.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item active" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">工作流阶段配置</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <div class="card-title">配置范围 <span class="more">阶段序列按「部门 × 产品线」维度独立配置</span></div>
+        <!-- V2.5 数据层：部门/产品线选项与阶段模板数由 DB 生成 -->
+        <div class="filter-bar" style="margin-bottom:0">
+          <span class="form-label">部门</span>
+          <select class="select" id="wf-dept"></select>
+          <span class="form-label">产品线</span>
+          <select class="select" id="wf-pl"></select>
+          <span class="tag tag-blue" id="wf-tpl-tag">当前使用默认阶段模板</span>
+        </div>
+        <div class="text-sub mt8" id="wf-desc"></div>
+      </div>
+
+      <div class="card mt16">
+        <div class="card-title">阶段序列 <span class="more">拖拽排序 · 改名即时生效 · 阶段推进过渡 300ms</span></div>
+        <!-- V2.5 数据层：6 步阶段卡片由 CRM.data.stages 渲染；引用数由 relations 统计 -->
+        <div class="stage-flow" id="stage-flow"></div>
+        <div class="flex-between mt20">
+          <button class="btn" data-toast="演示环境：新增阶段（追加至序列末尾，需命名并校验终态唯一）">＋ 添加阶段</button>
+          <span class="flex gap12">
+            <button class="btn" data-toast="演示环境：已恢复 6 步默认阶段模板">恢复默认模板</button>
+            <button class="btn btn-primary" data-toast="演示环境：已保存配置（阶段变更将同步业务关系进度条）">保存配置</button>
+          </span>
+        </div>
+        <div class="text-sub mt12" id="wf-note">说明：改名/排序不影响历史跟单记录；删除阶段前需无业务关系引用。</div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 25 系统设置 - 工作流阶段配置 /setting/workflow」。
+     要点：按部门×产品线配置阶段序列；默认 5 阶段（初步接触→需求确认→方案报价→商务谈判→成交签约）；
+     支持增删/改名/拖拽排序；已被业务关系使用的阶段不可删并提示影响数（演示：方案报价被 23 条引用）；
+     保存后即时作用于业务关系详情页的工作流进度条。 -->
+<script src="../assets/app.js"></script>
+<script>
+/* ============================================================
+ * V2.5 数据层：工作流阶段 = CRM.data.stages（6 步状态机）
+ * 使用中被引用数由 CRM.data.relations.stageId 实时统计；
+ * 被引用或终态阶段不可删（锁定并展示原因）。增删排序按钮保留（toast 演示）。
+ * ============================================================ */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  if (!C || !C.data) return;
+  var stages = C.data.stages || [];
+  var rels = C.data.relations || [];
+  var depts = C.data.departments || [];
+  var pls = C.data.productLines || [];
+
+  function esc(s) { return String(s === null || s === undefined ? '' : s); }
+
+  function stageUsed(id) {
+    var n = 0;
+    rels.forEach(function (r) { if (String(r.stageId) === String(id)) n++; });
+    return n;
+  }
+  function terminalId() { return stages.length ? stages[stages.length - 1].id : null; }
+
+  function stageCardHtml(s) {
+    var isTerm = stages.length > 0 && s.id === terminalId();
+    var used = stageUsed(s.id);
+    var cardStyle = isTerm ? 'style="border-color:var(--success);background:var(--success-light)"' : '';
+    var rename = '<span class="wf-act" data-act="rename" title="改名">✏️</span>';
+    var del;
+    if (isTerm) {
+      del = '<span class="disabled" title="终态阶段不可删">🗑</span>';
+    } else if (used > 0) {
+      del = '<span class="disabled" title="已被 ' + used + ' 条业务关系使用，不可删">🗑</span>';
+    } else {
+      del = '<span class="wf-act" data-act="delete" title="删除">🗑</span>';
+    }
+    var lock = '';
+    if (isTerm) lock = '<div class="stage-lock-note">🔒 终态阶段不可删</div>';
+    else if (used > 0) lock = '<div class="stage-lock-note">🔒 已被 ' + used + ' 条业务关系使用，不可删</div>';
+    var idxTxt = '阶段 ' + s.id + (isTerm ? ' · 终态' : '');
+    return '<div class="stage-card" ' + cardStyle + '>' +
+      '<div class="drag">⠿</div>' +
+      '<div class="s-name">' + esc(s.name) + '</div>' +
+      (s.desc ? '<div style="font-size:11px;color:var(--text-placeholder);margin-top:2px">' + esc(s.desc) + '</div>' : '') +
+      '<div class="s-idx">' + esc(idxTxt) + '</div>' +
+      '<div class="s-ops">' + rename + del + '</div>' +
+      lock + '</div>';
+  }
+
+  var flow = document.getElementById('stage-flow');
+  if (flow) {
+    var html = stages.map(function (s) {
+      return stageCardHtml(s);
+    }).join('<div class="stage-link">→</div>');
+    flow.innerHTML = html || '<div class="text-sub">暂无数据</div>';
+
+    // 改名/删除演示：删除在「被引用/终态」时已禁用，不会触发
+    flow.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('wf-act')) return;
+      if (window.__toast) {
+        window.__toast(t.getAttribute('data-act') === 'rename' ? '演示环境：阶段改名（静态原型未持久化）' : '演示环境：删除前需校验无业务关系引用');
+      }
+    });
+  }
+
+  var tag = document.getElementById('wf-tpl-tag');
+  if (tag) tag.textContent = '当前使用默认 ' + stages.length + ' 阶段模板';
+  var desc = document.getElementById('wf-desc');
+  if (desc) desc.textContent = stages.length + ' 步状态机已定稿；业务关系允许跳级推进与回退，全部操作留痕。（数据源：dict.stages）';
+  var note = document.getElementById('wf-note');
+  if (note && stages.length) {
+    note.textContent = '说明：改名/排序不影响历史跟单记录；删除阶段前需无业务关系引用；「' + stages[stages.length - 1].name + '」为终态阶段不可删。';
+  }
+
+  function fill(selId, list, textOf, valOf) {
+    var el = document.getElementById(selId);
+    if (!el) return;
+    el.innerHTML = list.map(function (it) {
+      return '<option value="' + esc(valOf(it)) + '">' + esc(textOf(it)) + '</option>';
+    }).join('');
+  }
+  fill('wf-dept', depts, function (d) { return d.name; }, function (d) { return d.id; });
+  fill('wf-pl', pls, function (p) { return p.name; }, function (p) { return p.id; });
+})();
+</script>
+</body>
+</html>

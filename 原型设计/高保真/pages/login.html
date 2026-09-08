@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* 登录页独立布局（不使用侧边栏骨架） */
+  .login-wrap { display: flex; min-height: 100vh; }
+  .login-brand {
+    flex: 1.2; background: linear-gradient(135deg, #001529 0%, #003a8c 100%);
+    color: #fff; display: flex; flex-direction: column; justify-content: center; padding: 0 8%;
+  }
+  .login-brand h1 { font-size: 40px; letter-spacing: 2px; display: flex; align-items: center; gap: 14px; }
+  .login-brand h1 .logo-badge { width: 44px; height: 44px; border-radius: 10px; background: var(--primary);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 20px; }
+  .login-brand .slogan { margin-top: 16px; font-size: 18px; color: rgba(255,255,255,.85); }
+  .login-brand .feats { margin-top: 48px; display: flex; flex-direction: column; gap: 20px; }
+  .login-brand .feat { display: flex; align-items: center; gap: 12px; font-size: 15px; color: rgba(255,255,255,.8); }
+  .login-brand .feat .f-ico { width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,.12);
+    display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .login-form-side { flex: 1; display: flex; align-items: center; justify-content: center; background: #fff; }
+  .login-card { width: 380px; max-width: 88vw; }
+  .login-card h2 { font-size: 22px; margin-bottom: 6px; }
+  .login-err {
+    display: flex; align-items: center; gap: 6px; padding: 8px 12px; margin-bottom: 16px;
+    background: var(--danger-light); border: 1px solid #FBC4C4; border-radius: var(--radius);
+    color: var(--danger); font-size: 13px;
+  }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="login-wrap">
+  <!-- 左：品牌区 -->
+  <div class="login-brand">
+    <h1><span class="logo-badge">CRM</span>销售 CRM</h1>
+    <div class="slogan">客户资产，公司所有</div>
+    <div class="feats">
+      <div class="feat"><span class="f-ico">🌊</span>3 层公海模型 · 客户资源永不流失</div>
+      <div class="feat"><span class="f-ico">🛡️</span>防撞单机制 · 录入即查重，归属清晰</div>
+      <div class="feat"><span class="f-ico">🔗</span>全流程闭环 · 跟单 → 合同 → 交付 → 续约</div>
+    </div>
+  </div>
+  <!-- 右：登录表单 -->
+  <div class="login-form-side">
+    <div class="login-card">
+      <h2>欢迎登录</h2>
+      <p class="text-sub mb16">请使用工号或手机号登录系统</p>
+      <!-- V2.5 数据层：演示账号提示由 DB currentUser 填充 -->
+      <p class="text-sub mb16" style="color:var(--primary)" id="demo-acc-tip">演示账号：… / 密码任意</p>
+      <!-- 失败提示演示：连续 5 次错误将锁定账号 10 分钟（错误态 UI 演示，刻意保留） -->
+      <div class="login-err">⚠ 账号或密码错误（今日第 3 次失败）</div>
+      <div class="form-item mb16">
+        <label class="form-label"><span class="req">*</span>账号</label>
+        <input class="input" id="login-account" style="height:40px" placeholder="工号 / 手机号">
+      </div>
+      <div class="form-item mb16">
+        <label class="form-label"><span class="req">*</span>密码</label>
+        <input class="input" id="login-pwd" style="height:40px" type="password" placeholder="请输入密码（≥6 位）" value="123456">
+      </div>
+      <!-- V2.5 数据层：登录按钮经 app.js data-jump 跳转 dashboard -->
+      <button class="btn btn-primary btn-lg" style="width:100%" data-jump="dashboard.html">登 录</button>
+      <p class="text-sub mt16" style="text-align:center">忘记密码请联系系统管理员重置</p>
+    </div>
+  </div>
+</div>
+<!--
+设计说明（login.html）
+对应需求：第五章 页面 1 登录页 /login
+关键交互点：
+1. 全屏左右分栏：左品牌区深蓝渐变（#001529→#003a8c），右白色表单卡，PC 1366×768 以上。
+2. 账号（工号/手机号）非空校验；密码 ≥6 位；登录按钮 loading + 禁用防重复，成功跳 /dashboard。
+3. 失败统一提示"账号或密码错误"（红色提示条）；连续 5 次错误锁定 10 分钟（本页仅静态演示）。
+-->
+<script src="../assets/app.js"></script>
+<script>
+/* V2.5 数据层：演示账号（工号/姓名/角色）取自 DB currentUser */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  var u = C && C.data && C.data.currentUser;
+  var acc = document.getElementById('login-account');
+  var tip = document.getElementById('demo-acc-tip');
+  if (u) {
+    if (acc && !acc.value) acc.value = u.workNo || '';
+    if (tip) tip.textContent = '演示账号：' + (u.workNo || '') + ' / 任意密码（' + (u.name || '') + ' · ' + (u.roleName || '') + '）';
+  }
+})();
+</script>
+</body>
+</html>

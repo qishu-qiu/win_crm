@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>联系人详情 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .ct-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; align-items: start; }
+  .ct-avatar { width: 72px; height: 72px; border-radius: 50%; background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 600; }
+  .info-line { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 7px 0;
+    border-bottom: 1px dashed var(--border-lighter); }
+  .info-line .il-label { width: 64px; color: var(--text-secondary); flex-shrink: 0; }
+  .sub-title { font-size: 13px; font-weight: 600; color: var(--text-regular); margin: 18px 0 10px; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item active" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">联系人详情</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <!-- 删除按钮仅经理角色可见 -->
+      <a class="btn-text danger">删除</a>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- V2.5 数据层：联系人详情由 CRM.data.contacts 渲染（?id=Pxxxx，缺省 P3001） -->
+      <div class="ct-layout">
+        <!-- 左栏：基础信息 -->
+        <div class="card" style="margin-top:0">
+          <div class="flex gap16 mb16">
+            <div class="ct-avatar" id="ctAv">—</div>
+            <div>
+              <div class="fs16 bold" id="ctName">—</div>
+              <div class="flex gap8 mt8" id="ctTags"></div>
+              <div class="text-sub mt8" id="ctCompanyLine">—</div>
+            </div>
+          </div>
+          <div class="info-line">
+            <span class="il-label">手机</span>
+            <span class="masked" id="ctPhone">—</span>
+            <!-- 手机号修改走 D14：需经理审核，审核期间原号码冻结 24 小时（说明刻意保留） -->
+            <a class="btn-text">申请变更</a>
+          </div>
+          <!-- V2.5 数据层：邮箱/微信不在 DB 演示字段，保留编辑入口与占位 -->
+          <div class="info-line"><span class="il-label">邮箱</span><span id="ctEmail">—</span><a class="btn-text">编辑</a></div>
+          <div class="info-line"><span class="il-label">微信</span><span id="ctWechat">—</span><a class="btn-text">编辑</a></div>
+          <div class="info-line" style="border-bottom:none">
+            <span class="il-label">标签</span>
+            <span class="flex gap8" style="flex-wrap:wrap" id="ctPersonalTags"></span>
+          </div>
+
+          <!-- V2.5 数据层：谈判特质 + 打标留痕（DB：traitCodes/markedBy/markedAt） -->
+          <div id="ctTraitsBox"></div>
+
+          <div class="sub-title">就职历史</div>
+          <div class="timeline" id="ctHistory"></div>
+
+          <div class="sub-title">变更历史</div>
+          <div class="fs12 text-sub" style="padding:8px 10px;background:var(--info-light);border-radius:var(--radius)" id="ctChangeLog">
+            —<!-- V2.5 数据层：操作人来自 DB 联系人 markedBy（原"张伟"为占位名，已去除） -->
+          </div>
+        </div>
+
+        <!-- 右栏：3 Tab -->
+        <div class="card" style="margin-top:0">
+          <div class="tabs">
+            <span class="tab active" data-t="t-feed">跟单聚合</span>
+            <span class="tab" data-t="t-comp">关联公司<span class="count" id="cntComp">0</span></span>
+            <span class="tab" data-t="t-net">关系网络</span>
+          </div>
+
+          <!-- Tab1 跟单聚合 -->
+          <div class="tab-pane" id="t-feed">
+            <!-- V2.5 数据层：follows 按 contactName 匹配（跨公司聚合口径） -->
+            <div class="timeline" id="tFeedBody"></div>
+          </div>
+
+          <!-- Tab2 关联公司 -->
+          <div class="tab-pane" id="t-comp" style="display:none">
+            <div class="grid grid-2" id="tCompBody"></div>
+          </div>
+
+          <!-- Tab3 关系网络 -->
+          <div class="tab-pane" id="t-net" style="display:none">
+            <!-- V2.5 数据层：DB 无关系网络数据，保留空态引导文案 -->
+            <div class="empty" style="padding:24px 0">
+              <div class="fs12">暂无关系网络记录，成交后可引导客户转介绍</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+// Tab 切换（极简演示）
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(x=>x.style.display='none');
+  t.classList.add('active');
+  document.getElementById(t.dataset.t).style.display='block';
+});
+</script>
+<!--
+设计说明（contact-detail.html）
+对应需求：第五章 页面 15 联系人详情 /contact/detail/:id
+关键交互点：
+1. 左右分栏（1:2）：左栏基础信息（头像/在职状态/决策权/手机脱敏）+ 就职历史时间轴（当前绿点/历史灰点）+ 变更历史留痕。
+2. 手机号"申请变更"走 D14：需经理审核，审核期间原号码冻结 24 小时；姓名/邮箱/微信编辑直接生效。
+3. 右栏 3 Tab：跨公司跟单聚合时间轴 / 关联公司卡（当前+历史就职）/ 关系网络。
+4. V2.5 数据层：本页由 CRM.data.contacts 渲染；邮箱/微信 DB 无字段故占位保留编辑入口；DB 未录多段就职与关系网络明细，故以"DB 未录明细"空态注明（刻意保留）。
+-->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：联系人详情改为 CRM.data.contacts / follows / relations 驱动
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+
+  function qp(n) {
+    var m = new RegExp('[?&]' + n + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  var CONT = H.byId(D.contacts, qp('id')) || D.contacts[0];
+  var COMP = H.byId(D.companies, CONT.companyId) || null;
+
+  function labelOf(list, code) { var x = H.byCode(list, code); return x ? (x.label || x.name) : code; }
+  function decRoleName(code) { var x = H.byCode(D.decisionRole, code); return x ? x.name : '—'; }
+  function relsOfCompany(cid) { return D.relations.filter(function (r) { return r.companyId === cid; }); }
+
+  /* ---------- 左栏基础信息 ---------- */
+  document.getElementById('ctAv').textContent = (CONT.name || '?').charAt(0);
+  document.getElementById('ctName').textContent = CONT.name;
+  var statusTag = CONT.status === 'active'
+    ? '<span class="tag tag-green tag-dot">在职</span>'
+    : '<span class="tag tag-dot">已离职</span>';
+  var roleTag = '<span class="tag tag-orange">' + H.esc(decRoleName(CONT.decisionRole)) + '</span>';
+  document.getElementById('ctTags').innerHTML = statusTag + roleTag;
+  document.getElementById('ctCompanyLine').textContent =
+    (COMP ? COMP.fullName + ' · ' : '') + (CONT.title || '');
+  document.getElementById('ctPhone').textContent = CONT.phoneMasked || '—';
+  document.getElementById('ctEmail').textContent = '—';
+  document.getElementById('ctWechat').textContent = '—';
+  document.getElementById('ctPersonalTags').innerHTML = (CONT.personalTags || []).length
+    ? CONT.personalTags.map(function (t) {
+        return '<span class="tag tag-blue">' + H.esc(t) + ' ✕</span>';
+      }).join('') + '<a class="btn-text">+ 添加</a>'
+    : '<span class="text-sub">—</span><a class="btn-text">+ 添加</a>';
+
+  /* ---------- 谈判特质留痕（跟着人走，换公司保留） ---------- */
+  var traitHtml = (CONT.traitCodes || []).length
+    ? CONT.traitCodes.map(function (code) {
+        return '<span class="tag" style="background:#F0F9EB;color:#67C23A">' + H.esc(labelOf(D.contactTraits, code)) + '</span>';
+      }).join(' ')
+    : '—';
+  document.getElementById('ctTraitsBox').innerHTML =
+    '<div class="sub-title">谈判特质 <span class="text-sub fs12">（≤3 · 换公司保留）</span></div>' +
+    '<div class="flex gap8" style="flex-wrap:wrap;margin-top:-6px">' + traitHtml + '</div>' +
+    '<div class="fs12 text-sub" style="margin-top:6px">' + H.esc((CONT.markedBy || '—')) + ' 于 ' + H.esc((CONT.markedAt || '—')) + ' 打标</div>';
+
+  /* ---------- 就职历史 ---------- */
+  var hist = document.getElementById('ctHistory');
+  var active = CONT.status === 'active';
+  var dotCls = active ? 'text-success' : '';
+  if (COMP) {
+    var timeHtml = active
+      ? '入职至今 · <span class="' + dotCls + '">●</span> 当前在职'
+      : '在职期间 · <span style="color:#C0C4CC">●</span> 已离职';
+    hist.innerHTML =
+      '<div class="tl-item" style="--tl-c:var(--success)">' +
+        '<div class="tl-time">' + timeHtml + '</div>' +
+        '<div class="tl-body">' + H.esc(COMP.fullName) + ' · ' + H.esc(CONT.title || '—') + '</div>' +
+      '</div>';
+    if ((CONT.companyCount || 1) > 1) {
+      hist.innerHTML += '<div class="tl-item"><div class="tl-time" style="color:#C0C4CC">● 历史</div>' +
+        '<div class="tl-body text-sub">另有 ' + ((CONT.companyCount || 1) - 1) + ' 段历史就职（DB 未录明细，V2.5 刻意保留）</div></div>';
+    }
+  } else {
+    hist.innerHTML = '<div class="text-sub" style="padding:8px 0">暂无就职记录</div>';
+  }
+
+  /* ---------- 变更历史 ---------- */
+  document.getElementById('ctChangeLog').innerHTML =
+    '2026-08-12 手机号变更（经理审核通过）· 操作人：' + H.esc(CONT.markedBy || '—');
+
+  /* ---------- Tab1 跨公司跟单聚合 ---------- */
+  var relByRelId = {};
+  D.relations.forEach(function (r) { relByRelId[r.id] = r; });
+  var feeds = D.follows.filter(function (f) { return f.contactName === CONT.name; })
+    .slice().sort(function (a, b) { return b.followAt < a.followAt ? -1 : (b.followAt > a.followAt ? 1 : 0); });
+  document.getElementById('tFeedBody').innerHTML = feeds.length ? feeds.map(function (f) {
+    var rel = relByRelId[f.relationId] || {};
+    return '<div class="tl-item">' +
+      '<div class="tl-time">' + H.esc(f.followAt) + ' · ' + H.esc(f.creatorName) +
+        ' · ' + H.esc(f.companyName) + (rel.productLineName ? ' / ' + H.esc(rel.productLineName) : '') + '</div>' +
+      '<div class="tl-body">' + H.esc(f.summary || '—') + '</div></div>';
+  }).join('') : '<div class="empty" style="padding:24px 0">暂无跟单记录</div>';
+
+  /* ---------- Tab2 关联公司 ---------- */
+  document.getElementById('cntComp').textContent = CONT.companyCount || (COMP ? 1 : 0);
+  var compBody = document.getElementById('tCompBody');
+  if (COMP) {
+    var rels = relsOfCompany(COMP.id);
+    var compTag = CONT.status === 'active'
+      ? '<span class="tag tag-green">当前在职</span>'
+      : '<span class="tag">历史就职</span>';
+    var lineText = rels.length
+      ? rels.map(function (r) {
+          var s = H.byCode(D.relationStatus, r.status);
+          return '<span>' + H.esc(r.productLineName) + '（' + H.esc(s ? s.name : r.status) + '）</span>';
+        }).join('')
+      : '<span class="text-sub">暂无业务线</span>';
+    compBody.innerHTML =
+      '<div class="bcard">' +
+        '<div class="b-title">' + H.esc(COMP.fullName) + ' ' + compTag + '</div>' +
+        '<div class="b-meta">' +
+          '<span>职务：' + H.esc(CONT.title || '—') + ' · 决策权：' + H.esc(decRoleName(CONT.decisionRole)) + '</span>' +
+          '<span>业务线：</span>' + lineText +
+        '</div></div>' +
+        (((CONT.companyCount || 1) > 1)
+          ? '<div class="bcard"><div class="b-meta"><span class="text-sub">另有 ' + ((CONT.companyCount || 1) - 1) + ' 段历史就职公司（DB 未录明细）</span></div></div>'
+          : '');
+  } else {
+    compBody.innerHTML = '<div class="card" style="grid-column:1/-1"><div class="empty" style="padding:24px 0">暂无关联公司</div></div>';
+  }
+})();
+</script>
+</body>
+</html>

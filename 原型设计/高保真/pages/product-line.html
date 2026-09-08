@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>产品线管理 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:14px;background:var(--info-light);color:var(--text-regular);font-size:12px}
+  .switch-dot{width:30px;height:18px;border-radius:9px;background:var(--primary);position:relative;display:inline-block;vertical-align:middle;cursor:pointer}
+  .switch-dot::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+  .switch-dot.off{background:var(--border)}
+  .switch-dot.off::after{right:auto;left:2px}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item active" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">产品线管理</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <div class="flex-between mb16">
+        <!-- V2.5 数据层：产品线计数由 productLines 动态填充 -->
+        <span class="text-sub" id="pl-total">共 0 条产品线 · 公海规则与台账字段模板按产品线配置</span>
+        <button class="btn btn-primary">＋ 新增产品线</button>
+      </div>
+      <!-- V2.5 数据层：产品线卡片由 CRM.data.productLines 渲染 -->
+      <div class="grid grid-3" id="pl-grid"></div>
+
+      <!-- 字段模板编辑器（网站建设 · 展开演示） -->
+      <div class="card mt16">
+        <div class="card-title">字段模板编辑器 · 网站建设（WEB）<span class="more">保存模板</span></div>
+        <div class="mb16" style="background:var(--warning-light);color:var(--warning);border:1px solid #F5DAB1;border-radius:var(--radius);padding:10px 14px;font-size:13px">
+          ⚠ 字段先登记后写入：所有自定义字段必须在此登记，禁止未登记 Key 写入数据；key 与控件类型保存后锁定，调整只能"停用旧字段 + 新增字段"
+        </div>
+        <div class="form-label mb8">通用字段（固定 8 项，不可删改）</div>
+        <div class="flex gap8 mb16" style="flex-wrap:wrap">
+          <span class="chip">🔒 客户名称</span><span class="chip">🔒 客户等级</span><span class="chip">🔒 签约时间</span><span class="chip">🔒 到期时间</span>
+          <span class="chip">🔒 联系人</span><span class="chip">🔒 交付对接人</span><span class="chip">🔒 销售对接人</span><span class="chip">🔒 备注</span>
+        </div>
+        <div class="form-label mb8">扩展字段（差异化字段，值存 extraFields JSON）</div>
+        <table class="table">
+          <thead>
+            <tr><th>标签</th><th>key</th><th>类型</th><th>必填</th><th>排序</th><th>列表显示</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cell-main">域名</td><td class="masked">domain 🔒</td><td>文本 🔒</td>
+              <td><span class="tag tag-red">必填</span></td><td class="num">1</td>
+              <td><span class="switch-dot"></span></td>
+              <td><button class="btn-text">编辑</button><button class="btn-text danger">停用</button></td>
+            </tr>
+            <tr>
+              <td class="cell-main">域名到期</td><td class="masked">domain_expire 🔒</td><td>日期 🔒</td>
+              <td><span class="tag">选填</span></td><td class="num">2</td>
+              <td><span class="switch-dot"></span></td>
+              <td><button class="btn-text">编辑</button><button class="btn-text danger">停用</button></td>
+            </tr>
+            <tr>
+              <td class="cell-main">服务器</td><td class="masked">server 🔒</td><td>文本 🔒</td>
+              <td><span class="tag">选填</span></td><td class="num">3</td>
+              <td><span class="switch-dot"></span></td>
+              <td><button class="btn-text">编辑</button><button class="btn-text danger">停用</button></td>
+            </tr>
+            <tr>
+              <td class="cell-main">服务器到期</td><td class="masked">server_expire 🔒</td><td>日期 🔒</td>
+              <td><span class="tag">选填</span></td><td class="num">4</td>
+              <td><span class="switch-dot"></span></td>
+              <td><button class="btn-text">编辑</button><button class="btn-text danger">停用</button></td>
+            </tr>
+            <tr>
+              <td class="cell-main">软件版本</td><td class="masked">software_version 🔒</td><td>单选 🔒</td>
+              <td><span class="tag">选填</span></td><td class="num">5</td>
+              <td><span class="switch-dot"></span></td>
+              <td><button class="btn-text">编辑</button><button class="btn-text danger">停用</button></td>
+            </tr>
+            <tr style="color:var(--text-placeholder);background:var(--info-light)">
+              <td>AI 推荐率 <span class="tag" style="font-style:italic">已停用</span></td><td class="masked">ai_rate 🔒</td><td>数字 🔒</td>
+              <td>-</td><td class="num">6</td>
+              <td><span class="switch-dot off"></span></td>
+              <td><span class="text-sub">历史数据保留展示</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="form-row mt16" style="align-items:flex-end">
+          <div class="form-item"><span class="form-label">字段标签</span><input class="input" placeholder="如：ICP 备案号"></div>
+          <div class="form-item"><span class="form-label">key（系统按语义自动生成）</span><input class="input" placeholder="icp_number（保存后锁定）" disabled></div>
+          <div class="form-item"><span class="form-label">控件类型</span><select class="select"><option>文本</option><option>数字</option><option>日期</option><option>单选</option><option>多选</option><option>链接</option></select></div>
+          <div class="form-item fixed"><span class="form-label">必填</span><label class="flex gap8" style="height:32px"><input type="checkbox"> 必填</label></div>
+          <div class="form-item fixed"><button class="btn btn-primary">添加</button></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 24 组织架构 - 产品线管理」。
+     要点：产品线卡片含编码/承接部门/服务周期/公海规则默认值；字段模板编辑器 = 扩展字段元数据登记入口；
+     通用字段 8 项只读锁定；扩展字段可改标签/必填/排序、可停用不可删除；key 与类型保存后锁定；停用字段历史值置灰保留。 -->
+<script src="../assets/app.js"></script>
+<script>
+/* ============================================================
+ * V2.5 数据层：产品线卡片 = CRM.data.productLines
+ * 承接部门按 deptIds→部门名；服务周期 serviceCycleDays(天)→约X个月；
+ * 公海默认 seaDefaults(freq/deal/stay)。卡片 tag 为编码展示别名（CHIP，仅展示用）。
+ * 字段模板编辑器为静态演示（DB 无模板数据），刻意保留。
+ * ============================================================ */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  if (!C || !C.data) return;
+  var pls = C.data.productLines || [];
+  var grid = document.getElementById('pl-grid');
+  var total = document.getElementById('pl-total');
+  if (!grid) return;
+
+  // 编码 → 卡片 tag 展示别名（DB code 为 snake_case，取语义短名展示）
+  var CHIP = { short_video: '短视频', website: '网站', geo: 'GEO', tax: '财税', law: '法律', estate: '房产', recruit: '招牌' };
+
+  function esc(s) { return String(s === null || s === undefined ? '' : s); }
+  function deptName(id) {
+    if (C.h && C.h.deptName) return C.h.deptName(id);
+    return '—';
+  }
+  function months(days) { return Math.round((days || 0) / 30); }
+
+  function cardHtml(p, idx) {
+    var tag = CHIP[p.code] || p.code;
+    var deptTxt = (p.deptIds || []).map(deptName).join(' / ') || '—';
+    var sd = p.seaDefaults || {};
+    var isWebDemo = p.id === 2; // 字段模板编辑器演示对「网站建设」展开
+    var ops = '<button class="btn btn-sm">编辑</button>' +
+      (isWebDemo ? ' <button class="btn btn-sm btn-primary">字段模板</button>' : '');
+    return '<div class="card">' +
+      '<div class="card-title">' + esc(p.name || p.code) + ' <span class="tag tag-blue">' + esc(tag) + '</span></div>' +
+      '<div class="b-meta" style="font-size:12px;color:var(--text-secondary);display:flex;flex-direction:column;gap:6px">' +
+      '<span>承接部门：' + esc(deptTxt) + '</span>' +
+      '<span>服务周期：' + esc(String(p.serviceCycleDays)) + ' 天（约 ' + months(p.serviceCycleDays) + ' 个月）</span>' +
+      '<span>公海规则默认值：跟进 ' + esc(String(sd.freq == null ? '—' : sd.freq)) + ' 天 · 成单 ' +
+        esc(String(sd.deal == null ? '—' : sd.deal)) + ' 天 · 停滞 ' +
+        esc(String(sd.stay == null ? '—' : sd.stay)) + ' 天</span>' +
+      '</div>' +
+      '<div class="mt12">' + ops + '</div>' +
+      '</div>';
+  }
+
+  grid.innerHTML = pls.length ? pls.map(cardHtml).join('') : '<div class="card"><span class="text-sub">暂无数据</span></div>';
+  if (total) total.textContent = '共 ' + pls.length + ' 条产品线 · 公海规则与台账字段模板按产品线配置';
+})();
+</script>
+</body>
+</html>

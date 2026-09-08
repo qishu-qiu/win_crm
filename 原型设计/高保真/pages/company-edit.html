@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公司档案补全 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .miss .input { border-color: var(--danger); }
+  .miss .form-label { color: var(--danger); }
+  .group-title { font-size: 14px; font-weight: 600; margin: 4px 0 14px; padding-left: 8px;
+    border-left: 3px solid var(--primary); display: flex; align-items: center; gap: 8px; }
+  .group-title .gt-tag { font-size: 11px; font-weight: 400; padding: 2px 8px; border-radius: 10px; }
+  .tag-opt { cursor: pointer; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item active" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">公司档案补全</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="content-narrow">
+        <!-- V2.5 数据层：强制完善度提示条由 missingFields 动态生成 -->
+        <div id="ceBanner" style="padding:10px 14px;margin-bottom:16px;background:var(--danger-light);border:1px solid #FBC4C4;border-radius:var(--radius);font-size:13px;color:var(--danger)">
+          加载中…
+        </div>
+
+        <div class="card">
+          <div class="card-title" id="ceTitle">公司档案 · 补全</div>
+
+          <!-- 第一档：必填组（已填回显，公司全称不可改） -->
+          <div class="group-title">必填信息 <span class="gt-tag" id="gtC1" style="background:var(--success-light);color:var(--success)">已完成 100%</span></div>
+          <div class="form-row">
+            <div class="form-item">
+              <label class="form-label"><span class="req">*</span>公司全称</label>
+              <input class="input" id="fFullName" disabled>
+              <span class="form-tip">公司全称创建后不可修改</span>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="req">*</span>行业</label>
+              <!-- V2.5 数据层：选项由 CRM.data.companies 的行业组合去重生成 -->
+              <select class="select" id="fInd"></select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="req">*</span>地区</label>
+              <input class="input" id="fRegion">
+            </div>
+          </div>
+
+          <!-- 第二档：成交前必填组 -->
+          <div class="group-title mt16">成交前必填 <span class="gt-tag" id="gtC2" style="background:var(--primary-light);color:var(--primary)">已完成 80%</span></div>
+          <div class="form-row">
+            <div class="form-item">
+              <label class="form-label"><span class="req">*</span>公司规模</label>
+              <!-- V2.5 数据层：选项为 DB scale 唯一值 -->
+              <select class="select" id="fScale"></select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="req">*</span>官网</label>
+              <input class="input" id="fWebsite" placeholder="请输入官网地址">
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="req">*</span>详细地址</label>
+              <input class="input" id="fAddress" placeholder="请输入详细地址">
+            </div>
+          </div>
+
+          <!-- 第三档：成交后强制组（缺失项红框高亮，随 missingFields 动态标记） -->
+          <div class="group-title mt16">成交后强制 <span class="gt-tag" id="gtC3" style="background:var(--danger-light);color:var(--danger)">缺失 0 项</span></div>
+          <div class="form-row">
+            <div class="form-item" id="fCreditCodeBox">
+              <label class="form-label"><span class="req">*</span>统一社会信用代码</label>
+              <input class="input" id="fCreditCode" placeholder="请输入 18 位统一社会信用代码">
+              <span class="form-error" id="errCreditCode" style="display:none">必填，18 位（数字+大写字母），实时唯一性校验</span>
+            </div>
+            <div class="form-item" id="fBankBox">
+              <label class="form-label"><span class="req">*</span>开户行</label>
+              <input class="input" id="fBank" placeholder="如：中国工商银行杭州滨江支行">
+              <span class="form-error" id="errBank" style="display:none">必填，用于合同开票信息</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-item" id="fInvoiceBox">
+              <label class="form-label"><span class="req">*</span>发票抬头</label>
+              <input class="input" id="fInvoice" placeholder="默认与公司全称一致">
+              <span class="form-error" id="errInvoice" style="display:none">必填</span>
+            </div>
+            <div class="form-item" id="fTaxBox">
+              <label class="form-label"><span class="req">*</span>税号</label>
+              <input class="input" id="fTax" placeholder="请输入税号">
+              <!-- V2.5 数据层：DB 无独立税号字段，演示留空（与统一社会信用代码同源） -->
+              <span class="form-tip">税号与统一社会信用代码同源，原型演示留空</span>
+            </div>
+          </div>
+
+          <!-- 公司画像组（V2.5 数据层：选项来自 dict，可勾选 chip） -->
+          <div class="group-title mt16">公司画像 <span class="gt-tag" style="background:var(--info-light);color:var(--info)">可选</span></div>
+          <div class="form-row">
+            <div class="form-item" style="flex:0 0 100%">
+              <label class="form-label">身份标签（多选，全公司共享）</label>
+              <div class="flex gap8" style="flex-wrap:wrap" id="chipIdentity"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-item" style="flex:0 0 100%">
+              <label class="form-label">制度标签（多选）</label>
+              <div class="flex gap8" style="flex-wrap:wrap" id="chipPolicy"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-item" style="flex:0 0 100%">
+              <label class="form-label">决策链（单选）</label>
+              <div class="flex gap8" style="flex-wrap:wrap" id="chipChain"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-item" style="flex:0 0 100%">
+              <span class="form-tip">画像标签保存后由当前登录人打标留痕（demo：<span id="ceMarkUser">赵总·总经理</span>）</span>
+            </div>
+          </div>
+
+          <div class="flex gap12 mt24">
+            <!-- 保存后按 redirect 参数回跳：从合同创建流程进入时自动返回继续创建合同 -->
+            <button class="btn btn-primary">保存</button>
+            <a class="btn" href="company-detail.html?id=C2001">取消</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<!--
+设计说明（company-edit.html）
+对应需求：第五章 页面 13 公司档案补全/编辑 /company/edit/:id
+关键交互点：
+1. 三档分组表单：必填组（公司全称禁用回显）/成交前必填组/成交后强制组，缺失强制字段红框+红色错误提示。
+2. 统一社会信用代码：18 位正则 + 唯一性实时校验（失焦触发）。
+3. 保存后按 URL redirect 参数回跳：从合同创建流程（完善度校验拦截）进入时，保存成功自动返回继续创建合同。
+4. V2.5 数据层：表单回显来自 CRM.data.companies（?id= 指定，缺省 C2001）；新增公司画像组（dict → 可勾选 chip）；税号字段 DB 无数据，刻意留空并注明。
+-->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：公司档案补全/编辑表单改为 CRM.data.companies 回显
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+
+  function qp(n) {
+    var m = new RegExp('[?&]' + n + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  var COMP = H.byId(D.companies, qp('id')) || D.companies[0];
+
+  var MISS_LABEL = {
+    bank_name: '开户行', invoice_title: '发票抬头', tax_no: '税号', credit_code: '统一社会信用代码'
+  };
+  var mf = COMP.missingFields || [];
+
+  function uniq(list) {
+    var seen = {}, out = [];
+    list.forEach(function (v) { if (v && !seen[v]) { seen[v] = 1; out.push(v); } });
+    return out;
+  }
+  function indText(c) { return (c.industryL1 ? c.industryL1 + ' / ' : '') + (c.industryL2 || ''); }
+  function missName(code) { return MISS_LABEL[code] || code; }
+
+  /* ---------- 顶部提示条 ---------- */
+  var banner = document.getElementById('ceBanner');
+  if (mf.length) {
+    banner.style.background = 'var(--danger-light)';
+    banner.style.borderColor = '#FBC4C4';
+    banner.style.color = 'var(--danger)';
+    banner.innerHTML = '⚠ 成交后强制完善度：还差 ' + mf.length + ' 项（' + mf.map(missName).join('、') + '），补全后才可创建合同';
+  } else {
+    banner.style.background = 'var(--success-light)';
+    banner.style.borderColor = '#C2E7B0';
+    banner.style.color = 'var(--success)';
+    banner.innerHTML = '✓ 成交后强制信息已齐，可创建合同';
+  }
+  document.getElementById('ceTitle').textContent = COMP.fullName + ' · 档案补全';
+
+  /* ---------- 组状态 tag ---------- */
+  function setGroupTag(id, text, bg, color) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.style.background = bg;
+    el.style.color = color;
+  }
+  var cp = COMP.completeness || {};
+  setGroupTag('gtC1', '已完成 ' + (cp.c1 == null ? 0 : cp.c1) + '%', 'var(--success-light)', 'var(--success)');
+  setGroupTag('gtC2', '已完成 ' + (cp.c2 == null ? 0 : cp.c2) + '%', 'var(--primary-light)', 'var(--primary)');
+  setGroupTag('gtC3',
+    mf.length ? '缺失 ' + mf.length + ' 项' : '已完成 ' + (cp.c3 == null ? 0 : cp.c3) + '%',
+    mf.length ? 'var(--danger-light)' : 'var(--success-light)',
+    mf.length ? 'var(--danger)' : 'var(--success)');
+
+  /* ---------- 表单回显 ---------- */
+  document.getElementById('fFullName').value = COMP.fullName;
+
+  var indOpts = uniq(D.companies.map(indText));
+  document.getElementById('fInd').innerHTML = indOpts.map(function (v) {
+    return '<option' + (v === indText(COMP) ? ' selected' : '') + '>' + H.esc(v) + '</option>';
+  }).join('');
+
+  document.getElementById('fRegion').value = (COMP.province || '') + ' ' + (COMP.city || '');
+
+  var scaleOpts = uniq(D.companies.map(function (c) { return c.scale; }));
+  document.getElementById('fScale').innerHTML = scaleOpts.map(function (v) {
+    return '<option' + (v === COMP.scale ? ' selected' : '') + '>' + H.esc(v) + '</option>';
+  }).join('');
+
+  document.getElementById('fWebsite').value = COMP.website || '';
+  document.getElementById('fAddress').value = COMP.address || '';
+  document.getElementById('fCreditCode').value = COMP.creditCode || '';
+
+  function applyMiss(boxId, inputId, errId, isMiss) {
+    var box = document.getElementById(boxId);
+    if (box) {
+      if (isMiss) box.classList.add('miss');
+      else box.classList.remove('miss');
+    }
+    var err = errId ? document.getElementById(errId) : null;
+    if (err) err.style.display = isMiss ? 'block' : 'none';
+  }
+  applyMiss('fBankBox', 'fBank', 'errBank', mf.indexOf('bank_name') >= 0);
+  applyMiss('fInvoiceBox', 'fInvoice', 'errInvoice', mf.indexOf('invoice_title') >= 0);
+  applyMiss('fCreditCodeBox', 'fCreditCode', 'errCreditCode', mf.indexOf('credit_code') >= 0);
+  applyMiss('fTaxBox', 'fTax', null, mf.indexOf('tax_no') >= 0);
+
+  var cur = D.currentUser;
+  var markUser = document.getElementById('ceMarkUser');
+  if (markUser && cur) markUser.textContent = cur.name + '·' + (cur.roleName || '');
+
+  /* ---------- 公司画像 chips（dict → 可勾选） ---------- */
+  function renderChips(boxId, list, codes) {
+    var box = document.getElementById(boxId);
+    if (!box) return;
+    var act = list.filter(function (x) { return !x.status || x.status === 'active'; });
+    box.innerHTML = act.map(function (x) {
+      var on = codes.indexOf(x.code) >= 0;
+      return '<span class="tag-opt' + (on ? ' sel' : '') + '" data-code="' + H.esc(x.code) + '">' +
+        H.esc(x.label || x.name) + '</span>';
+    }).join('') || '<span class="text-sub">—</span>';
+  }
+  renderChips('chipIdentity', D.companyIdentityTags, COMP.identityTagCodes || []);
+  renderChips('chipPolicy', D.companyPolicyTags, COMP.policyTagCodes || []);
+  renderChips('chipChain', D.decisionChain, COMP.decisionChain ? [COMP.decisionChain] : []);
+
+  document.getElementById('chipIdentity').addEventListener('click', onChipClick(false));
+  document.getElementById('chipPolicy').addEventListener('click', onChipClick(false));
+  document.getElementById('chipChain').addEventListener('click', onChipClick(true));
+
+  function onChipClick(single) {
+    return function (e) {
+      var chip = e.target && e.target.closest ? e.target.closest('.tag-opt') : null;
+      if (!chip) return;
+      var box = chip.parentNode;
+      if (single) {
+        Array.prototype.forEach.call(box.querySelectorAll('.tag-opt'), function (o) { o.classList.remove('sel'); });
+        chip.classList.add('sel');
+      } else {
+        chip.classList.toggle('sel');
+      }
+    };
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作台(移动端) - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* 页面级微调：移动稿舞台与手机内组件 */
+  .stage { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: 48px; padding: 40px 24px; background: #E9EDF2; }
+  .stage-note { max-width: 300px; }
+  .stage-note h2 { font-size: 18px; margin-bottom: 12px; }
+  .stage-note p { font-size: 13px; color: var(--text-regular); line-height: 2; }
+  .stage-note .n-tag { display: inline-block; margin-top: 10px; }
+
+  .m-topbar {
+    height: 48px; background: #fff; display: flex; align-items: center; padding: 0 16px;
+    font-size: 16px; font-weight: 600; box-shadow: var(--shadow-card); position: relative; z-index: 2;
+  }
+  .m-topbar .m-bell { margin-left: auto; font-size: 18px; position: relative; }
+  .m-topbar .m-bell i { position: absolute; top: -2px; right: -4px; width: 8px; height: 8px; background: var(--danger); border-radius: 50%; }
+  .m-body { padding: 14px 14px 76px; }
+  .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .m-quick {
+    background: #fff; border: 1px solid var(--primary-border); border-radius: var(--radius-lg);
+    padding: 18px 0 14px; text-align: center; cursor: pointer; box-shadow: var(--shadow-card);
+  }
+  .m-quick .mq-icon { font-size: 30px; }
+  .m-quick .mq-title { font-size: 14px; font-weight: 600; margin-top: 8px; }
+  .m-sec { font-size: 14px; font-weight: 600; margin: 18px 2px 10px; display: flex; align-items: center; gap: 6px; }
+  .m-card {
+    background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+    padding: 14px; margin-bottom: 12px;
+  }
+  .m-card .mc-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .m-card .mc-body { margin-top: 8px; font-size: 13px; color: var(--text-regular); line-height: 1.7; }
+  .m-card .mc-foot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-lighter); display: flex; align-items: center; justify-content: space-between; }
+  .m-tabbar {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: #fff;
+    border-top: 1px solid var(--border-lighter); display: flex; z-index: 3;
+  }
+  .m-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
+  .m-tab .t-icon { font-size: 20px; }
+  .m-tab.active { color: var(--primary); font-weight: 600; }
+  .phone-screen { position: relative; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="stage">
+
+  <!-- 手机壳 -->
+  <div class="phone-frame">
+    <div class="p-status"><i></i></div>
+    <div class="phone-screen">
+      <!-- 顶部标题栏 -->
+      <div class="m-topbar">🧰 工作台 <span class="m-bell">🔔<i></i></span></div>
+
+      <div class="m-body">
+        <!-- 2×2 快捷宫格 -->
+        <div class="m-grid">
+          <div class="m-quick"><div class="mq-icon">📝</div><div class="mq-title">填写跟单</div></div>
+          <div class="m-quick"><div class="mq-icon">📅</div><div class="mq-title">新增预约</div></div>
+          <div class="m-quick"><div class="mq-icon">🚗</div><div class="mq-title">外出登记</div></div>
+          <div class="m-quick"><div class="mq-icon">➕</div><div class="mq-title">录入客户</div></div>
+        </div>
+
+        <!-- 今日跟单（V2.5 数据层：CRM.data.todayFollows 渲染，口径同 PC workbench） -->
+        <div class="m-sec">📝 今日跟单 <span class="tag tag-blue" id="mFollowCount">0</span></div>
+        <div id="mFollowList"></div>
+
+        <!-- 今日新建预约（V2.5 数据层：CRM.data.todayAppointments 渲染，口径同 PC workbench） -->
+        <div class="m-sec">📅 今日新建预约 <span class="tag tag-blue" id="mApptCount">0</span></div>
+        <div id="mApptList"></div>
+      </div>
+
+      <!-- 底部 Tab Bar -->
+      <div class="m-tabbar">
+        <div class="m-tab active"><span class="t-icon">🧰</span>工作台</div>
+        <div class="m-tab"><span class="t-icon">📅</span>预约</div>
+        <div class="m-tab"><span class="t-icon">🤝</span>客户</div>
+        <div class="m-tab"><span class="t-icon">👤</span>我的</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧注释 -->
+  <div class="stage-note">
+    <h2>工作台 · 移动端 H5</h2>
+    <p>· 移动端（375px 起）<b>仅适配工作台页</b>，销售在外可完成全部 4 个快捷动作。</p>
+    <p>· 4 张快捷卡变为 2×2 宫格大按钮；弹窗 D1/D2 在移动端改为全屏抽屉。</p>
+    <p>· 其余页面（看板/列表/详情等）移动端访问时提示"请使用 PC 端操作"，并支持一键复制链接。</p>
+    <span class="tag tag-blue n-tag">对照需求文档 5.3 / 9.1</span>
+  </div>
+
+</div>
+<!--
+  设计说明（对照需求文档）：
+  - 对应章节：5.3 页面 3 工作台移动端适配规则；9.1 兼容性（移动端仅适配工作台）
+  - 布局：三段式纵向堆叠；快捷卡 2×2 宫格；时间轴改单卡片全宽
+  - 底部固定 Tab Bar：工作台(active)/预约/客户/我的；写跟进等弹窗移动端改全屏抽屉
+  - V2.5 数据层：今日跟单 / 今日新建预约改由 CRM.data.todayFollows / todayAppointments 渲染
+-->
+<script>
+// V2.5 数据层：移动端工作台列表渲染（数据源与 PC workbench.html 同源）
+// ① 今日跟单：todayFollows → 态度/进展 tag + 记录时间·联系人·摘要 + 可选外出登记号
+// ② 今日新建预约：todayAppointments → 状态 tag + 紧迫档 + 距掉公海倒计时
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+
+  var M_ICON = { '电话': '📞', '微信': '💬', '到访': '🚗', '陌拜': '🚗', '邮件': '📧', '异议': '⚠', '报价': '💰' };
+  var ATT = {
+    positive: { text: '态度积极', cls: 'tag tag-green tag-dot' },
+    neutral:  { text: '态度中立', cls: 'tag tag-dot' },
+    negative: { text: '态度消极', cls: 'tag tag-red tag-dot' }
+  };
+  var PRG = { forward: '意向进展：推进 ↑', flat: '意向进展：持平 →', back: '意向进展：后退 ↓' };
+
+  function esc(s) { return H.esc(s); }
+
+  /* ① 今日跟单 */
+  var follows = D.todayFollows || [], fHtml = '';
+  follows.forEach(function (f) {
+    var att = ATT[f.attitude] || ATT.neutral;
+    var methodLine = (M_ICON[f.method] || '📌') + ' ' + esc(f.method) + ' ' + esc(f.followAt) + ' · ' + esc(f.contactName);
+    var visitLine = f.visitNo ? '<br><span class="tag tag-orange mt8">🚗 关联外出登记 #' + esc(f.visitNo) + '</span>' : '';
+    fHtml += '<div class="m-card">' +
+      '<div class="mc-head">' + esc(f.companyName) + ' <span class="' + att.cls + '">' + att.text + '</span></div>' +
+      '<div class="mc-body">' + methodLine + ' · ' + esc(f.summary) + visitLine + '</div>' +
+      '<div class="mc-foot"><span class="text-sub">' + (PRG[f.progress] || PRG.flat) + '</span>' +
+        '<span class="flex gap8">' + H.urgencyChip(f.urgency) + '</span></div>' +
+    '</div>';
+  });
+  document.getElementById('mFollowList').innerHTML = follows.length
+    ? fHtml : '<div class="empty"><div>暂无数据</div></div>';
+  document.getElementById('mFollowCount').textContent = follows.length;
+
+  /* ② 今日新建预约 */
+  var appts = D.todayAppointments || [], aHtml = '';
+  appts.forEach(function (a) {
+    var stTag = a.status === 'expired'
+      ? '<span class="tag tag-red">已过期</span>'
+      : '<span class="tag tag-blue">未来</span>';
+    aHtml += '<div class="m-card">' +
+      '<div class="mc-head">' + esc(a.companyName) + ' ' + stTag + '</div>' +
+      '<div class="mc-body">📅 ' + esc(a.appointmentAt) + ' · ' + esc(a.note) + '（' + esc(a.contactName) + '）</div>' +
+      '<div class="mc-foot"><span class="flex gap8">' + H.urgencyChip(a.urgency) +
+        (a.dropDaysLeft ? '<span class="tag tag-red">距掉公海 ' + a.dropDaysLeft + ' 天</span>' : '') + '</span>' +
+        '<a class="fs12">改期 ›</a></div>' +
+    '</div>';
+  });
+  document.getElementById('mApptList').innerHTML = appts.length
+    ? aHtml : '<div class="empty"><div>暂无数据</div></div>';
+  document.getElementById('mApptCount').textContent = appts.length;
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

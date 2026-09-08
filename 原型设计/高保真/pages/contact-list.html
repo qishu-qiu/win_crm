@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>联系人档案 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .dec-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 3px; font-size: 11px; }
+  .dt-boss { background: var(--warning-light); color: var(--warning); }
+  .dt-inf { background: var(--primary-light); color: var(--primary); }
+  .dt-exec { background: var(--info-light); color: var(--info); }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item active" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">联系人档案</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- 筛选栏（V2.5 数据层：在职状态/决策权选项来自 CRM.data，搜索姓名/手机号） -->
+      <div class="card mb16">
+        <div class="filter-bar" style="margin-bottom:0">
+          <select class="select" id="fStatus">
+            <option value="">全部在职状态</option>
+            <option value="active">在职</option>
+            <option value="left">已离职</option>
+          </select>
+          <select class="select" id="fRole">
+            <option value="">全部决策权角色</option>
+          </select>
+          <input class="input search" id="fKw" placeholder="搜索 姓名 / 手机号">
+          <button class="btn btn-primary" id="btnQuery">查询</button>
+          <button class="btn" id="btnReset">重置</button>
+          <span class="spacer" style="flex:1"></span>
+          <span class="text-sub" id="ctTotal">共 0 位联系人</span>
+        </div>
+      </div>
+
+      <div class="text-sub fs12 mb16" style="padding-left:2px">💡 谈判特质（≤3）随联系人保留，换公司不丢失</div>
+
+      <!-- V2.5 数据层：联系人卡片网格由 CRM.data.contacts 渲染 -->
+      <div class="grid grid-2" id="clGrid">
+        <div class="bcard"><div class="b-meta"><span>加载中…</span></div></div>
+      </div>
+
+      <div class="pagination">
+        <span class="text-sub" id="clPageTotal">共 0 条</span>
+        <select class="select" style="width:90px;height:30px"><option>20 条/页</option><option>50 条/页</option></select>
+        <span class="pg">‹</span>
+        <span class="pg active">1</span>
+        <span class="pg">2</span>
+        <span class="pg">3</span>
+        <span class="pg">…</span>
+        <span class="pg">7</span>
+        <span class="pg">›</span>
+      </div>
+    </main>
+  </div>
+</div>
+<!--
+设计说明（contact-list.html）
+对应需求：第五章 页面 14 联系人档案列表 /contact/list
+关键交互点：
+1. 双列卡片网格：姓名+在职状态徽标（在职绿/已离职灰）、决策权 tag（决策人/影响人/执行人）、关联公司数、手机脱敏、谈判特质、个人标签、当前/历史就职（历史灰字）。
+2. 筛选：在职状态/决策权角色；搜索姓名/手机号（防抖 300ms）。
+3. 点击卡片进详情 contact-detail.html。
+4. V2.5 数据层：卡片来自 CRM.data.contacts（currentCompany 经 companyId 反查 companies）；分页页码/每页条数为静态演示；"换公司保留"提示刻意保留。
+-->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：联系人档案列表改为 CRM.data.contacts 驱动渲染
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var state = { status: '', role: '', kw: '' };
+
+  /* V2.5 数据层：决策权下拉选项来自 CRM.data.decisionRole */
+  var fRole = document.getElementById('fRole');
+  fRole.innerHTML = '<option value="">全部决策权角色</option>' + D.decisionRole.map(function (x) {
+    return '<option value="' + H.esc(x.code) + '">' + H.esc(x.name) + '</option>';
+  }).join('');
+
+  function labelOf(list, code) { var x = H.byCode(list, code); return x ? (x.label || x.name) : code; }
+  function decRoleName(code) { var x = H.byCode(D.decisionRole, code); return x ? x.name : '—'; }
+  function companyOf(c) { return H.byId(D.companies, c.companyId); }
+
+  function matched() {
+    return D.contacts.filter(function (c) {
+      if (state.status && c.status !== state.status) return false;
+      if (state.role && c.decisionRole !== state.role) return false;
+      if (state.kw && (c.name + c.phoneMasked).indexOf(state.kw) < 0) return false;
+      return true;
+    });
+  }
+
+  function cardHtml(c) {
+    var roleCls = c.decisionRole === 'decision' ? 'dt-boss' : (c.decisionRole === 'influence' ? 'dt-inf' : 'dt-exec');
+    var statusTag = c.status === 'active'
+      ? '<span class="tag tag-green">在职</span>'
+      : '<span class="tag">已离职</span>';
+    var comp = companyOf(c);
+    var compLine = comp
+      ? (c.status === 'active'
+          ? '<span>当前就职：' + H.esc(comp.fullName) + '（' + H.esc(c.title || '—') + '）</span>'
+          : '<span class="text-sub">历史就职：' + H.esc(comp.fullName) + '（' + H.esc(c.title || '—') + '）</span>')
+      : '<span>就职公司：<span class="text-sub">—</span></span>';
+
+    var traitChips = (c.traitCodes || []).map(function (code) {
+      return '<span class="tag" style="background:#F0F9EB;color:#67C23A">' + H.esc(labelOf(D.contactTraits, code)) + '</span>';
+    }).join('');
+    var perTags = (c.personalTags || []).map(function (t) {
+      return '<span class="tag tag-blue">' + H.esc(t) + '</span>';
+    }).join('');
+
+    return '<div class="bcard" onclick="location.href=\'contact-detail.html?id=' + H.esc(c.id) + '\'">' +
+      '<div class="b-title">' + H.esc(c.name) + ' ' + statusTag + ' <span class="dec-tag ' + roleCls + '">' + H.esc(decRoleName(c.decisionRole)) + '</span></div>' +
+      '<div class="b-meta">' +
+        '<span>手机：<span class="masked">' + H.esc(c.phoneMasked) + '</span></span>' +
+        compLine +
+        '<span>关联公司：' + H.esc(c.companyCount) + ' 家</span>' +
+        (traitChips || perTags
+          ? '<span class="flex gap8" style="flex-wrap:wrap">' + traitChips + perTags + '</span>'
+          : '<span class="text-sub">暂无特质/个人标签</span>') +
+      '</div></div>';
+  }
+
+  function render() {
+    var rows = matched();
+    var grid = document.getElementById('clGrid');
+    grid.innerHTML = rows.length ? rows.map(cardHtml).join('') : '<div class="bcard"><div class="b-meta"><span>暂无数据</span></div></div>';
+    var t1 = document.getElementById('ctTotal');
+    if (t1) t1.textContent = '共 ' + rows.length + ' 位联系人';
+    var t2 = document.getElementById('clPageTotal');
+    if (t2) t2.textContent = '共 ' + rows.length + ' 条';
+  }
+
+  document.getElementById('btnQuery').addEventListener('click', function () {
+    state.status = document.getElementById('fStatus').value;
+    state.role = document.getElementById('fRole').value;
+    state.kw = (document.getElementById('fKw').value || '').trim();
+    render();
+  });
+  document.getElementById('btnReset').addEventListener('click', function () {
+    document.getElementById('fStatus').value = '';
+    document.getElementById('fRole').value = '';
+    document.getElementById('fKw').value = '';
+    state.status = state.role = state.kw = '';
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

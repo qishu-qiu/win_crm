@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>杭州云启科技有限公司·短视频推广 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .detail-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
+  .wf-steps { display: flex; align-items: center; gap: 0; margin-top: 14px; }
+  .wf-node { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; font-size: 12px; color: var(--text-secondary); }
+  .wf-node .w-dot { width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .wf-node.done { color: var(--success); }
+  .wf-node.done .w-dot { background: var(--success); border-color: var(--success); color: #fff; }
+  .wf-node.cur { color: var(--primary); font-weight: 600; }
+  .wf-node.cur .w-dot { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .wf-line { flex: 1; height: 2px; background: var(--border-lighter); margin: 0 6px 20px; min-width: 24px; }
+  .wf-line.done { background: var(--success); }
+  .tl-divider { display: flex; align-items: center; gap: 10px; margin: 4px 0 20px -20px; padding-left: 20px; }
+  .tl-divider i { flex: 1; border-top: 1px dashed var(--danger); }
+  .tl-divider span { font-size: 12px; color: var(--danger); }
+  .rel-mini { border: 1px solid var(--border-lighter); border-radius: var(--radius-lg); padding: 12px 14px; }
+  .rel-mini + .rel-mini { margin-top: 10px; }
+  .tag-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* V2.5：Tab 面板显隐（本页 Tab 之前只有标题没有面板） */
+  .tab-pane { display: none; }
+  .tab-pane.show { display: block; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item active" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">业务关系详情</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- 顶部信息卡 -->
+      <div class="card">
+        <div class="flex-between flex-wrap gap12">
+          <div>
+            <div class="flex gap12" style="flex-wrap:wrap">
+              <a class="fs16 bold" style="color:var(--text-main)">杭州云启科技有限公司</a>
+              <span class="tag tag-blue">短视频推广</span>
+              <span class="status-dot s-intent">意向</span>
+              <!-- V2.5：紧迫档 chip（紧迫档 ≠ 客户标签，是手动跟进计划档位） -->
+              <span id="relUrgencyChip"></span>
+            </div>
+            <!-- V2.5：主对接/维护人/下次跟进/价值评估（金额）；金额与「业务线价值档位」是两套字段 -->
+            <div class="text-sub mt8" id="relMetaLine"></div>
+            <!-- V2.5：标签区（业务线价值 + 协同 + 风险自动只读），末尾 ＋ 打开 D18 跟进设置 -->
+            <div class="flex gap8 mt8" style="align-items:center;flex-wrap:wrap" id="relTagArea"></div>
+          </div>
+          <div class="flex gap8" style="flex-wrap:wrap">
+            <button class="btn btn-primary">📝 写跟进</button>
+            <button class="btn">📅 新增预约</button>
+            <button class="btn">⚡ 激活业务线</button>
+            <button class="btn">🔁 转交</button>
+            <button class="btn">🎫 创建工单</button>
+          </div>
+        </div>
+        <!-- V2.5：工作流进度条改 6 节点（CRM.h.stageSteps 渲染，节点可点 → 跳级/回退留痕提示） -->
+        <div id="relStageSteps" style="margin-top:14px"></div>
+        <div id="stageTip" style="display:none"></div>
+        <div class="flex gap8 mt12" style="align-items:flex-start">
+          <button class="btn" disabled>📄 创建合同</button>
+          <span class="text-danger fs12 mt8">公司档案完善度不足，还差 3 项（开票信息、对公账户、营业执照附件）</span>
+        </div>
+      </div>
+
+      <!-- Tab 区 -->
+      <div class="card mt16" style="padding-bottom:0">
+        <div class="tabs" style="margin-bottom:0">
+          <span class="tab">基础信息</span>
+          <!-- V2.5：跟单记录 / 工作流 两个 Tab 接面板，可切换 -->
+          <span class="tab active" data-pane="pane-follow">跟单记录</span>
+          <span class="tab" data-pane="pane-workflow">工作流</span>
+          <span class="tab">合同信息</span>
+          <span class="tab">工单</span>
+          <span class="tab">关系网</span>
+        </div>
+      </div>
+
+      <div class="detail-grid mt16">
+        <!-- V2.5 左：Tab 面板「跟单记录」 -->
+        <div class="tab-pane show" id="pane-follow">
+        <div class="card">
+          <div class="card-title">跟单记录<span class="more" id="relFollowCount"></span></div>
+          <div class="timeline" id="relFollowTl"></div>
+        </div>
+        </div><!-- V2.5 /pane-follow -->
+
+        <!-- V2.5 左：Tab 面板「工作流」—— 6 步口径 + 异议无解双出路 -->
+        <div class="tab-pane" id="pane-workflow">
+          <div class="card">
+            <div class="card-title">工作流（6 步口径）<span class="more">点击节点可跳级 / 回退，均留痕</span></div>
+            <div id="wfTabSteps"></div>
+            <div id="wfTabTip" style="display:none"></div>
+            <div class="mt16" id="wfStageList"></div>
+            <div class="mt16" id="wfObjTip"></div>
+            <div class="text-sub fs12 mt8">回落：紧迫档改为「长期跟」，保留关系继续培育；判流失：进入流失审批并填写流失原因。两者均写入跟单流水留痕。</div>
+          </div>
+        </div>
+
+        <!-- 右：侧边栏 -->
+        <div>
+          <!-- V2.5：公司画像 + 联系人谈判特质（来自 CRM.data.companyProfile / CRM.data.contacts） -->
+          <div class="card">
+            <div class="card-title">公司画像 · 联系人特质<span class="more">V2.5 三层归属</span></div>
+            <div id="profileCard"></div>
+          </div>
+          <div class="card mt16">
+            <div class="card-title">同公司其他业务关系<span class="more">脱敏视图</span></div>
+            <div class="rel-mini">
+              <div class="flex-between">
+                <span class="bold">GEO 优化</span>
+                <span class="status-dot s-customer">客户</span>
+              </div>
+              <div class="text-sub mt8">归属：刘洋（线上营销二部）</div>
+              <div class="text-sub">合同金额：<span class="masked">¥***</span> ｜ 签约：2026-03-18</div>
+              <div class="text-sub">近 30 天跟进 4 次</div>
+            </div>
+            <div class="rel-mini">
+              <div class="flex-between">
+                <span class="bold">网站建设</span>
+                <span class="status-dot s-lost">流失</span>
+              </div>
+              <div class="text-sub mt8">归属：张伟（线上营销二部）</div>
+              <div class="text-sub">合同金额：<span class="masked">¥***</span> ｜ 流失原因：预算缩减</div>
+              <div class="text-sub">近 30 天跟进 0 次</div>
+            </div>
+          </div>
+          <div class="card mt16">
+            <div class="card-title">公司档案完善度</div>
+            <div class="mb12">
+              <div class="flex-between mb8"><span class="fs13">必填信息</span><span class="fs12 text-success">100%</span></div>
+              <div class="progress success"><i style="width:100%"></i></div>
+            </div>
+            <div class="mb12">
+              <div class="flex-between mb8"><span class="fs13">成交前必填</span><span class="fs12 text-primary">80%</span></div>
+              <div class="progress"><i style="width:80%"></i></div>
+            </div>
+            <div class="mb12">
+              <div class="flex-between mb8"><span class="fs13">成交后强制</span><span class="fs12 text-warning">40%</span></div>
+              <div class="progress warn"><i style="width:40%"></i></div>
+            </div>
+            <div class="text-danger fs12 mb12">缺失 3 项：开票信息、对公账户、营业执照附件</div>
+            <button class="btn btn-primary" style="width:100%">去补全</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<!--
+设计说明（relation-detail.html）
+对应需求：第五章 页面 6 业务关系详情 /relation/detail/:id
+关键交互点：
+1. 顶部信息卡：公司全称（跳公司档案）/产品线/状态/紧迫档 chip/主对接/维护人/下次跟进/价值评估（金额）；标签区展示业务线价值 + 协同 + 风险（自动⚙只读），末尾"＋"开 D18 跟进设置。
+1b. V2.5：工作流进度条改 6 节点（初步建联→需求确认→面访产品讲解→异议与卡点→逼单→已合作），节点可点，跳级/回退均提示"写入跟单流水并留痕"。
+2. 操作按钮组：写跟进(D1 主)/新增预约(D2)/激活业务线(D6)/转交(D7)/创建合同（完善度不足禁用+红字提示）/创建工单(D11)。
+3. 6 Tab 走 URL hash：基础信息/跟单记录(默认)/工作流/合同信息/工单/关系网。
+4. 跟单记录：倒序时间轴（方式图标/摘要/态度·进展色标/🚗外出关联），逾期段红色虚线分隔。
+5. 右侧栏：V2.5 新增「公司画像 · 联系人特质」卡（身份/制度/决策链 + 联系人谈判特质，均标注打标人与打标时间）+ 同公司其他业务关系脱敏卡（金额 *** + 🔒、近30天跟进次数）+ 三档完善度进度条（必填/成交前/成交后）+ 缺失项红字 + 去补全。
+6. V2.5：工作流 Tab 面板展示 6 步阶段说明；「异议与卡点」阶段给出"异议无解两种出路：回落长期跟 / 判流失"操作条；数据来自 assets/mock-data.js。
+7. V2.5：价值评估（金额 ¥120,000）与业务线价值（高/中/低/待定档位）是两套字段，界面上分别标注，不混淆。
+-->
+<!-- V2.5：D18 跟进设置弹窗（560px；关闭由 app.js 的 data-close 接管，打开由本页脚本绑定） -->
+<div class="dialog-mask" id="dialog-follow-setup" style="display:none">
+  <div class="dialog" style="width:560px">
+    <div class="dialog-head">⚙ 跟进设置 · <span id="d18RelName">业务关系</span> <span class="close" data-close>✕</span></div>
+    <div class="dialog-body">
+      <div class="setup-group">
+        <div class="sg-title">紧迫档 <span class="sg-tip">单选 · 纯手动计划，不做自动降级，默认灰度</span></div>
+        <div class="tag-opts" data-group="urgency" data-single="1"></div>
+      </div>
+      <div class="setup-group">
+        <div class="sg-title">业务线价值 <span class="sg-tip">单选 · 默认待定；与「价值评估（金额）」是两套字段，不混淆</span></div>
+        <div class="tag-opts" data-group="valueLevel" data-single="1"></div>
+      </div>
+      <div class="setup-group">
+        <div class="sg-title">协同 <span class="sg-tip">多选 · 可 @ 同事</span></div>
+        <div class="tag-opts" data-group="coopTags"></div>
+        <input class="input" style="width:160px;margin-top:8px" placeholder="@同事，如 @李娜">
+      </div>
+      <div class="setup-group" style="margin-bottom:0">
+        <div class="sg-title">风险 <span class="sg-tip">系统自动打标，只读；鼠标悬停看触发规则</span></div>
+        <div class="tag-opts" data-group="riskTags"></div>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" data-close>取消</button>
+      <button class="btn btn-primary" id="d18Save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// V2.5：业务关系详情 —— 6 步进度条 / D18 跟进设置 / 公司画像与联系人特质
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  // V2.5 数据层：支持 ?id=R1001 定位关系（列表"详情"跳转带参），无参/未命中回退第一条
+  var qid = (location.search.match(/[?&]id=([^&]+)/) || [])[1];
+  var REL = null;
+  for (var ri = 0; ri < D.relations.length; ri++) {
+    if (D.relations[ri].id === qid) { REL = D.relations[ri]; break; }
+  }
+  if (!REL) REL = D.relations[0]; // 杭州云启科技有限公司 · 短视频推广（R1001）
+
+  /* ---------- 跟单时间轴（来自 CRM.data.follows，按当前关系过滤） ---------- */
+  (function renderFollowTl() {
+    var box = document.getElementById('relFollowTl');
+    var cnt = document.getElementById('relFollowCount');
+    if (!box) return;
+    var list = D.follows.filter(function (f) { return f.relationId === REL.id; });
+    if (!list.length) list = D.follows.filter(function (f) { return f.companyName.indexOf(REL.shortName) >= 0; });
+    if (!list.length) list = D.follows.slice(0, 4);
+    var attMap = { positive: '积极', neutral: '中性', negative: '消极' };
+    var progMap = { forward: '推进', flat: '持平', back: '后退' };
+    var attCls = { positive: 'tag-green', neutral: 'tag-orange', negative: 'tag-red' };
+    var icon = { phone: '☎️ 电话', wechat: '💬 微信', visit: '🚗 陌拜', onsite: '🚗 上门拜访', email: '📧 邮件' };
+    var html = list.map(function (f) {
+      return '<div class="tl-item">' +
+        '<div class="tl-time">' + H.esc(f.followAt) + ' ｜ ' + (icon[f.method] || '') + ' ｜ ' + H.esc(f.creatorName || REL.ownerName) + '</div>' +
+        '<div class="tl-body"><div>' + H.esc(f.summary) + '</div>' +
+        (f.nextAction ? '<div class="mt8"><span class="tag tag-blue">下一步：' + H.esc(f.nextAction) + '</span></div>' : '') +
+        '<div class="flex gap8 mt8">' +
+        '<span class="tag ' + (attCls[f.attitude] || 'tag-orange') + ' tag-dot">态度：' + (attMap[f.attitude] || '—') + '</span>' +
+        '<span class="tag tag-blue tag-dot">进展：' + (progMap[f.progress] || '—') + '</span>' +
+        '</div></div></div>';
+    }).join('');
+    box.innerHTML = html || '<div class="text-sub" style="padding:12px">暂无跟单记录</div>';
+    if (cnt) cnt.textContent = '共 ' + list.length + ' 条';
+  })();
+
+  function stageById(id) {
+    for (var i = 0; i < D.stages.length; i++) { if (D.stages[i].id === id) return D.stages[i]; }
+    return null;
+  }
+
+  /* ---------- 顶部信息卡：紧迫档 chip + 元信息 + 标签区 ---------- */
+  document.getElementById('relUrgencyChip').innerHTML = H.urgencyChip(REL.urgency);
+  document.getElementById('relMetaLine').innerHTML =
+    '主对接：' + H.esc(REL.ownerName) + ' ｜ 维护人：' + H.esc(REL.maintainerName) +
+    ' ｜ 下次跟进：' + H.esc(REL.nextFollowAt || '—') +
+    ' ｜ 价值评估（金额）：<span class="bold num" style="color:var(--text-main)">' + H.money(REL.valueEstimate) + '</span>';
+  document.getElementById('relTagArea').innerHTML =
+    '<span class="text-sub fs12">业务线价值</span>' + H.valueChip(REL.valueLevel) +
+    H.coopChips(REL.coopTags) + H.riskChips(REL.riskTags) +
+    '<button class="follow-plus" id="btnFollowSetup" title="打开跟进设置 D18">＋</button>';
+
+  /* ---------- 6 步进度条（顶部 + 工作流 Tab）：可点，跳级/回退均留痕提示 ---------- */
+  function bindSteps(box, tipEl) {
+    box.innerHTML = H.stageSteps(REL.stageId, true);
+    box.addEventListener('click', function (e) {
+      var step = e.target.closest ? e.target.closest('.wf-step') : null;
+      if (!step) return;
+      var id = Number(step.getAttribute('data-stage-id'));
+      if (!id) return;
+      var s = stageById(id);
+      var txt;
+      if (id === REL.stageId) txt = '当前阶段「' + s.name + '」：' + s.desc;
+      else if (id > REL.stageId) txt = '跳级到「' + s.name + '」将留痕：写入跟单流水 + 通知上级，需补充说明';
+      else txt = '回退到「' + s.name + '」将留痕：写入跟单流水 + 通知上级，需说明回退原因';
+      tipEl.style.display = 'block';
+      tipEl.innerHTML = '<div class="suggest-tip">' + H.esc(txt) +
+        '<span class="st-actions"><a class="btn-text" data-tip-close>知道了</a></span></div>';
+    });
+    tipEl.addEventListener('click', function (e) {
+      if (e.target && e.target.getAttribute && e.target.getAttribute('data-tip-close') !== null) {
+        tipEl.style.display = 'none';
+      }
+    });
+  }
+  bindSteps(document.getElementById('relStageSteps'), document.getElementById('stageTip'));
+  bindSteps(document.getElementById('wfTabSteps'), document.getElementById('wfTabTip'));
+
+  /* ---------- 工作流 Tab：6 步阶段说明 + 异议无解双出路 ---------- */
+  document.getElementById('wfStageList').innerHTML = D.stages.map(function (s) {
+    return '<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border-lighter)">' +
+      '<span class="fs13' + (s.id === REL.stageId ? ' bold' : '') + '">' + s.id + '. ' + H.esc(s.name) + '</span>' +
+      '<span class="text-sub fs12">' + H.esc(s.desc) + '</span></div>';
+  }).join('');
+
+  var cur = stageById(REL.stageId);
+  var objText = REL.stageId === 4
+    ? '异议无解两种出路 —— <span class="st-strong">回落长期跟</span> 或 <span class="st-strong">判流失</span>'
+    : '阶段推进 / 回落均需留痕';
+  document.getElementById('wfObjTip').innerHTML = '<div class="suggest-tip">当前阶段「' + H.esc(cur.name) + '」：' +
+    objText +
+    '<span class="st-actions"><button class="btn" id="btnBackLong">回落长期跟</button>' +
+    '<button class="btn" id="btnMarkLost">判流失</button></span></div>';
+  document.getElementById('btnBackLong').onclick = function () {
+    alert('已回落「长期跟」：紧迫档改为长期跟，写入跟单流水并留痕');
+  };
+  document.getElementById('btnMarkLost').onclick = function () {
+    alert('已判流失：进入流失审批，需填写流失原因，写操作留痕');
+  };
+
+  /* ---------- 公司画像 + 联系人谈判特质（G09 / G11） ---------- */
+  function labelOf(list, code) { var x = H.byCode(list, code); return x ? x.label : code; }
+  function chips(codes, list, cls) {
+    if (!codes || !codes.length) return '<span class="text-sub">—</span>';
+    return codes.map(function (c) { return '<span class="tag ' + (cls || '') + '">' + H.esc(labelOf(list, c)) + '</span>'; }).join(' ');
+  }
+  var P = D.companyProfile;
+  var ph = '';
+  ph += '<div class="fs13 bold mb8">公司画像 · ' + H.esc(P.companyName) + '</div>';
+  ph += '<div class="text-sub fs12">身份标签（全公司共享，建档勾一次）</div>' +
+    '<div class="mt8" style="display:flex;gap:6px;flex-wrap:wrap">' + chips(P.identityTags, D.companyIdentityTags, 'tag-blue') + '</div>';
+  ph += '<div class="text-sub fs12 mt8">制度标签</div>' +
+    '<div class="mt8" style="display:flex;gap:6px;flex-wrap:wrap">' + chips(P.policyTags, D.companyPolicyTags, 'tag-orange') + '</div>';
+  ph += '<div class="text-sub fs12 mt8">决策链（单选）</div>' +
+    '<div class="mt8" style="display:flex;gap:6px;flex-wrap:wrap">' + chips([P.decisionChain], D.decisionChain, '') + '</div>';
+  ph += '<div class="text-sub fs12 mt8">打标人：' + H.esc(P.markedBy) + ' 于 ' + H.esc(P.markedAt) + ' 标记</div>';
+  ph += '<div class="fs13 bold mt16 mb8">联系人谈判特质（≤3，跟着人走，换公司保留）</div>';
+  D.contacts.forEach(function (c) {
+    ph += '<div style="padding:8px 0;border-top:1px solid var(--border-lighter)">' +
+      '<div class="flex-between"><span class="fs13">' + H.esc(c.name) +
+      ' <span class="text-sub">' + H.esc(c.title) + '</span></span>' +
+      '<span class="text-sub fs12">' + (c.decisionRole === 'decision' ? '决策人' : '执行人') + '</span></div>' +
+      '<div class="mt8" style="display:flex;gap:6px;flex-wrap:wrap">' + chips(c.traits, D.contactTraits, 'tag-blue') + '</div>' +
+      '<div class="text-sub fs12 mt8">' + H.esc(c.markedBy) + ' 于 ' + H.esc(c.markedAt) + ' 标记</div></div>';
+  });
+  document.getElementById('profileCard').innerHTML = ph;
+
+  /* ---------- D18 跟进设置弹窗 ---------- */
+  var mask = document.getElementById('dialog-follow-setup');
+
+  function optHtml(list, cls, titleKey) {
+    return list.map(function (x) {
+      var title = titleKey ? ' title="系统自动规则：' + H.esc(x[titleKey]) + '"' : '';
+      return '<span class="tag-opt' + (cls ? ' ' + cls : '') + '" data-code="' + x.code + '"' + title + '>' +
+        H.esc(x.name) + '</span>';
+    }).join('');
+  }
+  document.querySelector('[data-group="urgency"]').innerHTML = optHtml(D.urgency);
+  document.querySelector('[data-group="valueLevel"]').innerHTML = optHtml(D.valueLevel);
+  document.querySelector('[data-group="coopTags"]').innerHTML = optHtml(D.coopTags);
+  document.querySelector('[data-group="riskTags"]').innerHTML = optHtml(D.riskTags, 'is-auto', 'rule');
+
+  function setSel(group, codes) {
+    var g = document.querySelector('[data-group="' + group + '"]');
+    Array.prototype.forEach.call(g.querySelectorAll('.tag-opt'), function (o) {
+      if (codes.indexOf(o.getAttribute('data-code')) >= 0) o.classList.add('sel');
+      else o.classList.remove('sel');
+    });
+  }
+  function openSetup() {
+    document.getElementById('d18RelName').textContent = REL.shortName + ' · ' + REL.productLineName;
+    setSel('urgency', [REL.urgency]);
+    setSel('valueLevel', [REL.valueLevel || 'pending']);
+    setSel('coopTags', REL.coopTags || []);
+    setSel('riskTags', REL.riskTags || []); // 风险为自动项，仅展示
+    mask.style.display = 'flex';
+  }
+  document.getElementById('btnFollowSetup').addEventListener('click', openSetup);
+
+  mask.addEventListener('click', function (e) {
+    var opt = e.target.closest ? e.target.closest('.tag-opt') : null;
+    if (!opt || opt.classList.contains('is-auto')) return; // 风险自动项只读
+    var group = opt.parentNode;
+    if (group.getAttribute('data-single')) {
+      Array.prototype.forEach.call(group.querySelectorAll('.tag-opt'), function (o) { o.classList.remove('sel'); });
+      opt.classList.add('sel');
+    } else {
+      opt.classList.toggle('sel');
+    }
+  });
+
+  document.getElementById('d18Save').addEventListener('click', function () {
+    alert('已保存：紧迫档 / 业务线价值 / 协同 变更将写入跟单流水并留痕（风险为系统自动打标，不可改）');
+    mask.style.display = 'none';
+  });
+
+  /* ---------- Tab 切换（仅跟单记录 / 工作流 两个面板） ---------- */
+  var tabs = document.querySelectorAll('.tab');
+  Array.prototype.forEach.call(tabs, function (t) {
+    t.addEventListener('click', function () {
+      var pane = t.getAttribute('data-pane');
+      if (!pane) return; // 其余 Tab 本轮未做面板
+      Array.prototype.forEach.call(tabs, function (x) { if (x.getAttribute('data-pane')) x.classList.remove('active'); });
+      Array.prototype.forEach.call(document.querySelectorAll('.tab-pane'), function (p) { p.classList.remove('show'); });
+      t.classList.add('active');
+      document.getElementById(pane).classList.add('show');
+    });
+  });
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

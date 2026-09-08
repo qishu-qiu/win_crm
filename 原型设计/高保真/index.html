@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>销售 CRM 高保真设计稿 · 总览</title>
+<link rel="stylesheet" href="./assets/style.css">
+<style>
+  body { background: var(--bg-page); }
+  .hero {
+    background: linear-gradient(135deg, #001529 0%, #003a8c 100%);
+    color: #fff; padding: 56px 48px 48px; border-radius: 0 0 24px 24px;
+  }
+  .hero h1 { font-size: 28px; font-weight: 700; }
+  .hero p { margin-top: 12px; color: rgba(255,255,255,.75); max-width: 760px; line-height: 1.8; }
+  .hero .badges { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .hero .hb {
+    padding: 6px 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 20px; font-size: 12px;
+    color: rgba(255,255,255,.85);
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
+  .sec-title { font-size: 17px; font-weight: 600; margin: 28px 0 14px; display: flex; align-items: center; gap: 10px; }
+  .sec-title::before { content: ""; width: 4px; height: 18px; background: var(--primary); border-radius: 2px; }
+  .sec-title .cnt { font-size: 12px; color: var(--text-secondary); font-weight: 400; }
+  .page-card { display: block; color: var(--text-main); transition: all .2s; }
+  .page-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+  .page-card .p-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .page-card .p-route { font-size: 12px; color: var(--text-secondary); font-family: "Courier New", monospace; margin-top: 4px; }
+  .page-card .p-desc { font-size: 13px; color: var(--text-regular); margin-top: 10px; line-height: 1.7; }
+  .page-card .p-open { margin-top: 12px; font-size: 13px; color: var(--primary); }
+  .principle { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .principle .big { font-size: 22px; }
+  .principle .t { font-weight: 600; margin: 8px 0 6px; }
+  .principle .d { font-size: 13px; color: var(--text-regular); line-height: 1.7; }
+  .meta-table td { padding: 8px 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>销售 CRM · 高保真 UI 设计稿</h1>
+  <p>基于《前端页面开发需求文档 V2.2》产出。设计哲学：<b>工作台管"做"，列表管"查"，审批管"流转"</b>。视觉基准 Element Plus（主色 #409EFF），31 个页面共用同一套设计令牌，侧边栏已全量互通——从任意页面可跳转至任意页面，评审体验等同真实系统。</p>
+  <div class="badges">
+    <span class="hb">V2.0 · 2026-09-05</span>
+    <span class="hb">31 个页面全覆盖</span>
+    <span class="hb">Element Plus 风格</span>
+    <span class="hb">含移动端（工作台）</span>
+    <span class="hb">页面间可互相跳转</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="sec-title">设计三原则</div>
+  <div class="principle">
+    <div class="card"><div class="big">🧰</div><div class="t">工作台管"做"</div><div class="d">写跟进、新增预约、外出登记、录入客户——销售一天的高频动作一页聚齐，今日跟单与今日预约即时可见。</div></div>
+    <div class="card"><div class="big">🔍</div><div class="t">列表管"查"</div><div class="d">业务关系快捷视图（跟进中/已合作/已流失）、预约四 Tab、公海卡片流——查询入口唯一，消灭双入口困惑。</div></div>
+    <div class="card"><div class="big">✅</div><div class="t">审批管"流转"</div><div class="d">转交、协同、手机号变更、报销统一进审批中心，经理待办一处清，申请人进度可追踪。</div></div>
+  </div>
+
+  <div class="sec-title">入口</div>
+  <div class="grid grid-4">
+    <a class="card page-card" href="pages/login.html">
+      <div class="p-name">🔐 登录页</div>
+      <div class="p-route">/login</div>
+      <div class="p-desc">左品牌区"客户资产，公司所有"+ 右表单；5 次错误锁定 10 分钟。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+      <a class="card page-card" href="pages/notice.html">
+      <div class="p-name">🔔 消息通知中心</div>
+      <div class="p-route">/notice</div>
+      <div class="p-desc">铃铛入口；待办/审批/系统分栏；未读红点；channel 预留微信/企微（V2）。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/profile.html">
+      <div class="p-name">⚙️ 个人中心 · 快捷入口</div>
+      <div class="p-route">/profile</div>
+      <div class="p-desc">顶部快捷入口个性化：最多 6 个、角色模板下发、可拖排序/移除；通知偏好设置。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/error.html">
+      <div class="p-name">🚧 异常页 403 / 404 / 500</div>
+      <div class="p-route">/403 /404 /500</div>
+      <div class="p-desc">三个错误状态切换演示：文案 + 返回上一页/回工作台/联系管理员。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+</div>
+
+  <div class="sec-title">销售动线 <span class="cnt">每天 80% 时间在这 4 页</span></div>
+  <div class="grid grid-4">
+    <a class="card page-card" href="pages/dashboard.html">
+      <div class="p-name">📊 数据看板</div>
+      <div class="p-route">/dashboard</div>
+      <div class="p-desc">KPI + 今日待跟进 + 状态环形图 + 活跃预警（掉公海呼吸红标）。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/workbench.html">
+      <div class="p-name">🧰 工作台（PC）</div>
+      <div class="p-route">/workbench</div>
+      <div class="p-desc">4 快捷入口 + 今日跟单时间轴（🚗 外出标记）+ 今日新建预约；含 D1 弹窗。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/appointment.html">
+      <div class="p-name">📅 预约管理</div>
+      <div class="p-route">/appointment/:tab</div>
+      <div class="p-desc">今日/未来/过期(红)/未预约四 Tab；掉公海倒计时；完成预约强制留跟进。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/entry.html">
+      <div class="p-name">➕ 录入</div>
+      <div class="p-route">/entry/new</div>
+      <div class="p-desc">三步分步表单；手机号查重；含 D9 公司相似匹配阻断弹窗演示。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+  </div>
+
+  <div class="sec-title">移动端</div>
+  <div class="grid grid-4">
+    <a class="card page-card" href="pages/workbench-mobile.html">
+      <div class="p-name">📱 工作台（移动端 H5）</div>
+      <div class="p-route">/workbench · 375px+</div>
+      <div class="p-desc">V1 移动端仅此一页：2×2 宫格快捷入口 + 今日跟单 + 底部 Tab Bar。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+  </div>
+
+  <div class="sec-title">客户资产与公海</div>
+  <div class="grid grid-4">
+    <a class="card page-card" href="pages/relation-list.html">
+      <div class="p-name">🤝 业务关系列表</div>
+      <div class="p-route">/relation/list</div>
+      <div class="p-desc">快捷视图替代客户资产菜单；9 列表格；逾期/掉公海/竞争徽标。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/relation-detail.html">
+      <div class="p-name">📇 业务关系详情</div>
+      <div class="p-route">/relation/detail/:id</div>
+      <div class="p-desc">工作流进度条 + 6 Tab；跟单时间轴含 🚗 标记；同公司脱敏卡。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/sea.html">
+      <div class="p-name">🌊 系统公海</div>
+      <div class="p-route">/sea/company</div>
+      <div class="p-desc">卡片流 + 进入原因标签 + 倒计时；含 D5 领取到私海弹窗演示。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/advanced-search.html">
+      <div class="p-name">🔍 高级搜索</div>
+      <div class="p-route">/search/advanced</div>
+      <div class="p-desc">经理透视镜：管辖部门默认单部门、可筛选展开；不支持导出。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+      <a class="card page-card" href="pages/sea-department.html">
+      <div class="p-name">🌊 部门公海</div>
+      <div class="p-route">/sea/department</div>
+      <div class="p-desc">仅本部门可见；超时未领升级系统公海；领取直进本人名下。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+</div>
+
+  <div class="sec-title">客户档案</div>
+  <div class="grid grid-4">
+    <a class="card page-card" href="pages/company-list.html">
+      <div class="p-name">🏢 公司档案列表</div>
+      <div class="p-route">/company/list</div>
+      <div class="p-desc">相似公司提示；经理视角含价值评估列（普通角色隐藏）。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/company-detail.html">
+      <div class="p-name">🏬 公司档案详情</div>
+      <div class="p-route">/company/detail/:id</div>
+      <div class="p-desc">三档完善度进度条 + 4 Tab（业务关系/联系人/业务线/跟单聚合）。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/company-edit.html">
+      <div class="p-name">📝 公司档案补全</div>
+      <div class="p-route">/company/edit/:id</div>
+      <div class="p-desc">三档分组表单；成交后强制项缺失红框；保存后回跳合同创建。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/contact-list.html">
+      <div class="p-name">👥 联系人档案列表</div>
+      <div class="p-route">/contact/list</div>
+      <div class="p-desc">双列卡片；在职/离职徽标、决策权标签、手机号脱敏。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/contact-detail.html">
+      <div class="p-name">👤 联系人详情</div>
+      <div class="p-route">/contact/detail/:id</div>
+      <div class="p-desc">就职历史时间轴 + 变更留痕；手机号变更走 D14 经理审核。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+  </div>
+
+  <div class="sec-title">交易与交付</div>
+  <div class="grid grid-4">
+    <a class="card page-card" href="pages/contract-list.html">
+      <div class="p-name">📄 合同列表</div>
+      <div class="p-route">/contract/list</div>
+      <div class="p-desc">回款率进度条、到期预警；跨部门合同金额 *** 脱敏。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/contract-create.html">
+      <div class="p-name">🖊 合同创建</div>
+      <div class="p-route">/contract/create</div>
+      <div class="p-desc">完善度校验前置；续约提醒 30/60/90 天；附件 ≤20MB×5。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/contract-detail.html">
+      <div class="p-name">📑 合同详情</div>
+      <div class="p-route">/contract/detail/:id</div>
+      <div class="p-desc">回款率环 + 付款流水 + 续约预警时间轴；全页水印防泄露。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/workorder-list.html">
+      <div class="p-name">🎫 工单列表</div>
+      <div class="p-route">/workorder/list</div>
+      <div class="p-desc">售后/商机双分类；P0-P3 优先级；SLA &lt;20% 红色倒计时。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/workorder-detail.html">
+      <div class="p-name">🎟 工单详情</div>
+      <div class="p-route">/workorder/detail/:id</div>
+      <div class="p-desc">5 阶段进度条 + 流转时间轴；售后↔商机双向升级留痕互链。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/ledger.html">
+      <div class="p-name">📦 客户台账</div>
+      <div class="p-route">/delivery/ledger</div>
+      <div class="p-desc">产品线 Tab；通用 8 列 + 字段模板驱动扩展列；已停用字段置灰。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/approval.html">
+      <div class="p-name">✅ 审批中心</div>
+      <div class="p-route">/approval/center</div>
+      <div class="p-desc">待我审批/我发起的；四类型流转；含 D13 手机号变更审批弹窗。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/report.html">
+      <div class="p-name">📈 报表分析</div>
+      <div class="p-route">/report/analysis</div>
+      <div class="p-desc">5 Tab：综合概览/流转漏斗/公海/续约/SLA；数据按管辖部门过滤。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+  </div>
+
+  <div class="sec-title">管理与配置 <span class="cnt">经理+</span></div>
+  <div class="grid grid-4">
+    <a class="card page-card" href="pages/org-employee.html">
+      <div class="p-name">🧑‍💼 员工管理</div>
+      <div class="p-route">/org/employee</div>
+      <div class="p-desc">多角色标签、主兼部门、关联产品线；停用员工灰显。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/org-department.html">
+      <div class="p-name">🏛 部门管理</div>
+      <div class="p-route">/org/department</div>
+      <div class="p-desc">卡片式；启用客服开关、多经理；虚线新增卡。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/product-line.html">
+      <div class="p-name">🏭 产品线管理</div>
+      <div class="p-route">/org/product-line</div>
+      <div class="p-desc">公海规则默认值 + 台账字段模板编辑器（先登记后写入）。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/org-role.html">
+      <div class="p-name">🎭 角色管理</div>
+      <div class="p-route">/org/role</div>
+      <div class="p-desc">V1 仅内置 6 角色不可删；自定义角色 V2 开放。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/org-permission.html">
+      <div class="p-name">🔐 权限管理</div>
+      <div class="p-route">/org/permission</div>
+      <div class="p-desc">权限项 × 角色矩阵；✅/🔒/❌ 三态点击切换即时保存。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/setting-sea-rule.html">
+      <div class="p-name">🌊 公海规则</div>
+      <div class="p-route">/setting/sea-rule</div>
+      <div class="p-desc">L1→L4 四层覆盖关系 + 规则命中解析演示。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/setting-workflow.html">
+      <div class="p-name">🔀 工作流阶段</div>
+      <div class="p-route">/setting/workflow</div>
+      <div class="p-desc">部门×产品线自定义阶段；被引用阶段不可删。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+    <a class="card page-card" href="pages/setting-dict.html">
+      <div class="p-name">📚 数据字典</div>
+      <div class="p-route">/setting/dict</div>
+      <div class="p-desc">内置枚举不可删可停用；修改即时生效 + 日志留痕。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+      <a class="card page-card" href="pages/setting-tag.html">
+      <div class="p-name">🏷 客户标签配置</div>
+      <div class="p-route">/setting/tags</div>
+      <div class="p-desc">四维标签字典（注意力/打法/风险/协同）+ 自动打标规则；标签挂业务关系不挂公司。</div>
+      <div class="p-open">查看设计稿 →</div>
+    </a>
+</div>
+
+  <div class="sec-title">文档与说明</div>
+  <div class="card">
+    <table class="meta-table" style="width:100%">
+      <tr><td style="width:140px" class="text-sub">设计依据</td><td>《前端页面开发需求文档.md》V2.4（页面结构、交互、枚举以它为准）</td></tr>
+      <tr><td class="text-sub">视觉基准</td><td>Element Plus · 主色 #409EFF · 共享样式 assets/style.css（31 页唯一样式来源）</td></tr>
+      <tr><td class="text-sub">覆盖范围</td><td>需求文档第四章 27 个页面全部覆盖：登录/看板/工作台/预约/业务关系/录入/高级搜索/公海×2/档案×5/合同×3/工单×2/台账/审批/报表/组织×5/设置×4/通知中心/个人中心/异常页，另含移动端工作台，共 36 个 HTML</td></tr>
+      <tr><td class="text-sub">配色约定</td><td>业绩涨跌：涨红跌绿（中国市场习惯）；状态五色：资料灰/意向蓝/客户绿/续约橙/流失浅灰；头像色按姓名哈希 12 色（可在个人中心自定义）；产品线固定配色、部门色在部门管理配置</td></tr>
+      <tr><td class="text-sub">使用方式</td><td>浏览器直接打开；侧边栏 36 页互通跳转（子菜单可折叠，默认只展开当前分组）；顶部居中快捷入口（⚙ 在 profile.html 配置）；弹窗/抽屉演示层在页面内点击触发或默认展示；每页底部 HTML 注释含设计说明供开发对照</td></tr>
+    </table>
+  </div>
+
+</div>
+
+</body>
+</html>

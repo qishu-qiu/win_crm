@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>角色管理 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="org-role.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item active" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">角色管理</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <div class="card mb16" style="background:var(--primary-light);border:1px solid var(--primary-border);color:var(--primary);font-size:13px;padding:12px 16px">
+        ℹ V1 仅内置 6 个角色，不可新增、不可删除；自定义角色将于 V2 开放（列表页已预留入口，当前隐藏）
+      </div>
+      <div class="card">
+        <div class="flex-between mb16">
+          <!-- V2.5 数据层：角色数/分配人次按 roles + employees 动态计算 -->
+          <span class="text-sub" id="role-summary">共 0 个内置角色 · 0 人次已分配 · 员工可拥有多个角色</span>
+          <button class="btn btn-primary" disabled title="V2 开放">＋ 新增角色（V2）</button>
+        </div>
+        <!-- V2.5 数据层：角色行来自 CRM.data.roles；成员数/权限数由 employees/permissionMatrix 统计 -->
+        <table class="table">
+          <thead>
+            <tr><th>角色名</th><th>成员数</th><th>权限数</th><th>说明</th><th>类型</th><th>操作</th></tr>
+          </thead>
+          <tbody id="tb-roles"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 24 组织架构 - 角色管理 /org/role」。
+     要点：V1 仅内置 6 角色（销售/客服/交付/行政/部门经理/总经理），不可删不可新增，新增按钮禁用占位 V2；
+     「查看权限」跳转权限矩阵页并按该角色高亮列；人数为已分配该角色的员工数（一人可多角色）。 -->
+<script src="../assets/app.js"></script>
+<script>
+/* ============================================================
+ * V2.5 数据层：角色列表 = CRM.data.roles
+ * 成员数 = employees.roleCodes 出现次数；权限数 = permissionMatrix 中授予 visible/masked 的键数。
+ * 角色 icon 与说明为产品文案（DB.roles 无该字段），按 code 静态映射保留。
+ * ============================================================ */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  if (!C || !C.data) return;
+  var roles = C.data.roles || [];
+  var emps = C.data.employees || [];
+  var matrix = C.data.permissionMatrix || {};
+
+  var META = {
+    sale:         { icon: '💼', desc: '私海客户跟进、预约、录入、合同创建；仅见本人业务关系' },
+    service:      { icon: '🎧', desc: '售后工单处理、客户回访；可协同跟进已合作客户' },
+    delivery:     { icon: '🛠', desc: '客户台账维护、交付执行；无工作台入口' },
+    admin:        { icon: '📋', desc: '台账与合同只读、回款登记辅助；无客户跟进权限' },
+    dept_manager: { icon: '🧭', desc: '本部门/管辖部门管理、审批、公海规则与工作流配置、高级搜索' },
+    gm:           { icon: '🏆', desc: '全公司数据范围、权限矩阵配置、全局公海规则' }
+  };
+
+  function esc(s) { return String(s === null || s === undefined ? '' : s); }
+
+  function memberCount(code) {
+    var n = 0;
+    emps.forEach(function (e) {
+      if ((e.roleCodes || []).indexOf(code) >= 0) n++;
+    });
+    return n;
+  }
+  function permCount(code) {
+    var n = 0;
+    for (var k in matrix) {
+      if (!matrix.hasOwnProperty(k)) continue;
+      var lv = matrix[k][code];
+      if (lv === 'visible' || lv === 'masked') n++;
+    }
+    return n;
+  }
+
+  function rowHtml(r) {
+    var meta = META[r.code] || { icon: '•', desc: '' };
+    var typeHtml = r.isBuiltin ? '<span class="tag">内置不可删</span>' : '<span class="tag tag-blue">自定义</span>';
+    return '<tr>' +
+      '<td class="cell-main">' + meta.icon + ' ' + esc(r.name) + '</td>' +
+      '<td class="num">' + memberCount(r.code) + '</td>' +
+      '<td class="num">' + permCount(r.code) + '</td>' +
+      '<td class="text-sub">' + esc(meta.desc) + '</td>' +
+      '<td>' + typeHtml + '</td>' +
+      '<td><button class="btn-text" data-jump="org-permission.html">查看权限</button></td>' +
+      '</tr>';
+  }
+
+  var tb = document.getElementById('tb-roles');
+  if (!tb) return;
+  tb.innerHTML = roles.length ? roles.map(rowHtml).join('') : '<tr><td colspan="6" class="text-sub" style="text-align:center;padding:24px 0">暂无数据</td></tr>';
+
+  var summary = document.getElementById('role-summary');
+  if (summary) {
+    var assigned = 0;
+    roles.forEach(function (r) { assigned += memberCount(r.code); });
+    summary.textContent = '共 ' + roles.length + ' 个内置角色 · ' + assigned + ' 人次已分配 · 员工可拥有多个角色';
+  }
+})();
+</script>
+</body>
+</html>

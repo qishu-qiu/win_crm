@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>报表分析 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* 销售 TOP5 横向条形 */
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px}
+  .bar-row .b-name{width:64px;color:var(--text-regular)}
+  .bar-row .b-track{flex:1;height:18px;background:var(--info-light);border-radius:3px;overflow:hidden}
+  .bar-row .b-fill{height:100%;background:var(--primary);border-radius:3px}
+  .bar-row .b-val{width:96px;text-align:right;font-variant-numeric:tabular-nums}
+  /* 漏斗 */
+  .funnel{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .f-stage{height:44px;display:flex;align-items:center;justify-content:center;gap:12px;color:#fff;border-radius:var(--radius);font-size:13px}
+  .f-conv{font-size:12px;color:var(--text-secondary)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-list.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item active" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">报表分析</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <div class="flex-between">
+          <div class="tabs" style="margin-bottom:0;border-bottom:none">
+            <span class="tab active" data-t="p1" onclick="go(this)">综合概览</span>
+            <span class="tab" data-t="p2" onclick="go(this)">业务流转漏斗</span>
+            <span class="tab" data-t="p3" onclick="go(this)">公海报表</span>
+            <span class="tab" data-t="p4" onclick="go(this)">续约预警</span>
+            <span class="tab" data-t="p5" onclick="go(this)">SLA 报表</span>
+          </div>
+          <div class="flex gap8">
+            <select class="select" style="width:140px"><option selected>本月（2026-09）</option><option>上月</option><option>本季度</option><option>本年</option></select>
+            <button class="btn" disabled title="V2 接审批后开放">导 Excel</button>
+          </div>
+        </div>
+        <!-- 数据范围均按当前用户管辖部门过滤；图表导 PNG；明细导 Excel（V2 接审批） -->
+        <div class="form-tip mt12">数据范围：您管辖的 1 个部门（线上营销一部）；图表支持导出 PNG，明细导 Excel 需 V2 审批流。</div>
+      </div>
+
+      <!-- Tab 1：综合概览 -->
+      <div id="p1">
+        <div class="grid grid-4 mt16">
+          <div class="card kpi"><div class="k-label">新增业务关系</div><div class="k-value">86 <span class="unit">条</span></div><div class="k-foot">环比 <span class="up">+12.4% ↑</span></div></div>
+          <div class="card kpi"><div class="k-label">签约单数</div><div class="k-value">23 <span class="unit">单</span></div><div class="k-foot">环比 <span class="up">+4.5% ↑</span></div></div>
+          <div class="card kpi"><div class="k-label">签约金额</div><div class="k-value" style="font-size:26px">¥1,286,500</div><div class="k-foot">环比 <span class="up">+8.2% ↑</span></div></div>
+          <div class="card kpi"><div class="k-label">掉公海</div><div class="k-value">12 <span class="unit">条</span></div><div class="k-foot">环比 <span class="down">-3 条 ↓</span></div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">业务线对比（本月）</div>
+          <table class="table">
+            <thead><tr><th>产品线</th><th>新增业务关系</th><th>签约单数</th><th>签约金额</th><th>转化率</th></tr></thead>
+            <tbody>
+              <tr><td class="cell-main">网站建设</td><td class="num">18</td><td class="num">6</td><td class="num">¥486,000</td><td><span class="num">33.3%</span><div class="progress mt8" style="width:100px"><i style="width:33.3%"></i></div></td></tr>
+              <tr><td class="cell-main">短视频推广</td><td class="num">22</td><td class="num">7</td><td class="num">¥392,500</td><td><span class="num">31.8%</span><div class="progress mt8" style="width:100px"><i style="width:31.8%"></i></div></td></tr>
+              <tr><td class="cell-main">GEO 优化</td><td class="num">14</td><td class="num">4</td><td class="num">¥218,000</td><td><span class="num">28.6%</span><div class="progress mt8" style="width:100px"><i style="width:28.6%"></i></div></td></tr>
+              <tr><td class="cell-main">财税</td><td class="num">12</td><td class="num">3</td><td class="num">¥96,000</td><td><span class="num">25.0%</span><div class="progress mt8" style="width:100px"><i style="width:25%"></i></div></td></tr>
+              <tr><td class="cell-main">招牌网</td><td class="num">9</td><td class="num">2</td><td class="num">¥42,000</td><td><span class="num">22.2%</span><div class="progress mt8" style="width:100px"><i style="width:22.2%"></i></div></td></tr>
+              <tr><td class="cell-main">房产网</td><td class="num">7</td><td class="num">1</td><td class="num">¥36,000</td><td><span class="num">14.3%</span><div class="progress mt8" style="width:100px"><i style="width:14.3%"></i></div></td></tr>
+              <tr><td class="cell-main">法律咨询</td><td class="num">4</td><td class="num">0</td><td class="num">¥16,000</td><td><span class="num">0%</span><div class="progress mt8" style="width:100px"><i style="width:2%"></i></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- V2.5 紧迫分布：5 档数量卡（数据源 CRM.data.urgencyStats，配色取 CRM.data.urgency.color） -->
+        <div class="card mt16">
+          <div class="card-title">紧迫分布</div>
+          <div class="urg-dist" id="urgDist"></div>
+          <div class="form-tip mt8">口径：业务关系「紧迫档」5 档周重点/月重点/季度跟/长期跟/灰度（新建档默认灰度），由销售手动维护，系统不自动降级。</div>
+        </div>
+
+        <!-- V2.5 灰度预警清单：命中部门规则 N/M 的关系（数据源 CRM.data.grayAlerts） -->
+        <div class="card mt16">
+          <div class="card-title">灰度预警清单 <span class="tag tag-red" id="grayReleaseCount">0 条待释放</span></div>
+          <table class="table">
+            <thead><tr><th>公司</th><th>负责人</th><th>部门</th><th>灰度天数</th><th>预警级别</th><th>命中阈值（提醒/释放）</th><th>建议动作</th></tr></thead>
+            <tbody id="grayAlertBody"></tbody>
+          </table>
+          <div class="form-tip mt8">灰度阈值取自部门规则 N/M（N 天未定性→提醒，再 M 天→公海释放候选），释放需部门经理确认；口径与「部门管理 · 部门规则」一致。</div>
+        </div>
+
+        <div class="grid grid-2 mt16">
+          <div class="card">
+            <div class="card-title">销售 TOP5（签约金额）</div>
+            <div id="salesTop5"><!-- V2.5 数据层：由 CRM.data.dashboard.salesTop 渲染 --></div>
+          </div>
+          <div class="card">
+            <div class="card-title">近 12 月签约趋势（万元）</div>
+            <!-- 静态示意：正式实现用 ECharts 5 折线图 -->
+            <svg viewBox="0 0 560 220" style="width:100%;height:auto">
+              <line x1="40" y1="180" x2="540" y2="180" stroke="#E4E7ED"/>
+              <line x1="40" y1="135" x2="540" y2="135" stroke="#F2F3F5"/>
+              <line x1="40" y1="90" x2="540" y2="90" stroke="#F2F3F5"/>
+              <line x1="40" y1="45" x2="540" y2="45" stroke="#F2F3F5"/>
+              <polyline points="60,160 105,148 150,152 195,130 240,138 285,116 330,122 375,100 420,92 465,72 510,60 530,52"
+                fill="none" stroke="#409EFF" stroke-width="2.5"/>
+              <g fill="#409EFF">
+                <circle cx="60" cy="160" r="3"/><circle cx="240" cy="138" r="3"/><circle cx="420" cy="92" r="3"/><circle cx="530" cy="52" r="4"/>
+              </g>
+              <g font-size="11" fill="#909399" text-anchor="middle">
+                <text x="60" y="200">10月</text><text x="150" y="200">12月</text><text x="240" y="200">2月</text>
+                <text x="330" y="200">4月</text><text x="420" y="200">6月</text><text x="510" y="200">8月</text>
+                <text x="530" y="42">128.7</text>
+              </g>
+            </svg>
+            <div class="form-tip">近 12 月持续增长，9 月签约额 128.7 万创年内新高。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2：业务流转漏斗（经理+可见，支持按部门/产品线下钻） -->
+      <div id="p2" style="display:none">
+        <div class="card mt16">
+          <div class="card-title">业务流转漏斗（本月 · 线上营销一部）
+            <span class="more">部门：线上营销一部 ▾ ｜ 产品线：全部 ▾</span>
+          </div>
+          <!-- V2.5 漏斗改 6 步口径（数据源：CRM.data.funnel），每层横向条 + 数量 + 相对上一层转化率 -->
+          <div class="funnel-6" id="funnel6"></div>
+          <div class="form-tip mt16" style="text-align:center" id="funnelOverall"></div>
+        </div>
+      </div>
+
+      <!-- Tab 3：公海报表（经理+） -->
+      <div id="p3" style="display:none">
+        <div class="grid grid-3 mt16">
+          <div class="card kpi"><div class="k-label">公海存量</div><div class="k-value">342 <span class="unit">条</span></div><div class="k-foot">系统公海 128 / 部门公海 214</div></div>
+          <div class="card kpi"><div class="k-label">本月掉入</div><div class="k-value">12 <span class="unit">条</span></div><div class="k-foot">环比 <span class="down">-3 条 ↓</span></div></div>
+          <div class="card kpi"><div class="k-label">本月领取转化</div><div class="k-value">5 <span class="unit">单</span></div><div class="k-foot">领取 48 条 · 转化率 10.4%</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">7 条业务线公海存量分布</div>
+          <div class="bar-row"><span class="b-name">网站建设</span><div class="b-track"><div class="b-fill" style="width:88%"></div></div><span class="b-val">88 条</span></div>
+          <div class="bar-row"><span class="b-name">短视频推广</span><div class="b-track"><div class="b-fill" style="width:76%"></div></div><span class="b-val">76 条</span></div>
+          <div class="bar-row"><span class="b-name">GEO 优化</span><div class="b-track"><div class="b-fill" style="width:54%"></div></div><span class="b-val">54 条</span></div>
+          <div class="bar-row"><span class="b-name">财税</span><div class="b-track"><div class="b-fill" style="width:42%"></div></div><span class="b-val">42 条</span></div>
+          <div class="bar-row"><span class="b-name">招牌网</span><div class="b-track"><div class="b-fill" style="width:35%"></div></div><span class="b-val">35 条</span></div>
+          <div class="bar-row"><span class="b-name">房产网</span><div class="b-track"><div class="b-fill" style="width:28%"></div></div><span class="b-val">28 条</span></div>
+          <div class="bar-row"><span class="b-name">法律咨询</span><div class="b-track"><div class="b-fill" style="width:19%"></div></div><span class="b-val">19 条</span></div>
+          <div class="form-tip mt8">流失原因分布：跟进超时 46% ｜ 成单超时 28% ｜ 进展停滞 18% ｜ 主动释放 8%</div>
+        </div>
+      </div>
+
+      <!-- Tab 4：续约预警（销售=自己客户，经理=管辖部门） -->
+      <div id="p4" style="display:none">
+        <div class="grid grid-3 mt16">
+          <div class="card kpi"><div class="k-label">30 天内到期</div><div class="k-value text-danger"><span id="renew30">0</span> <span class="unit">单</span></div><div class="k-foot">涉及金额 <span id="renew30Amt">¥0</span></div></div>
+          <div class="card kpi"><div class="k-label">60 天内到期</div><div class="k-value text-warning"><span id="renew60">0</span> <span class="unit">单</span></div><div class="k-foot">涉及金额 <span id="renew60Amt">¥0</span></div></div>
+          <div class="card kpi"><div class="k-label">90 天内到期</div><div class="k-value"><span id="renew90">0</span> <span class="unit">单</span></div><div class="k-foot">涉及金额 <span id="renew90Amt">¥0</span></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">到期清单（90 天内 · V2.5 数据层由 CRM.data.contracts 按服务截止推算）</div>
+          <table class="table">
+            <thead><tr><th>合同编号</th><th>公司</th><th>产品线</th><th>服务截止</th><th>剩余天数</th><th>签单人</th></tr></thead>
+            <tbody id="renewBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 5：SLA 报表（经理+） -->
+      <div id="p5" style="display:none">
+        <div class="grid grid-4 mt16">
+          <div class="card kpi"><div class="k-label">本月工单量</div><div class="k-value">64 <span class="unit">件</span></div><div class="k-foot">售后 41 / 商机 23</div></div>
+          <div class="card kpi"><div class="k-label">平均响应时长</div><div class="k-value">0.8 <span class="unit">h</span></div><div class="k-foot">环比 <span class="down">-0.2h ↓</span></div></div>
+          <div class="card kpi"><div class="k-label">SLA 整体达标率</div><div class="k-value">93.8<span class="unit">%</span></div><div class="k-foot">超时 4 件</div></div>
+          <div class="card kpi"><div class="k-label">超时自动升级</div><div class="k-value text-danger">2 <span class="unit">件</span></div><div class="k-foot">均已推送部门经理</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">P0-P3 达标率</div>
+          <div class="bar-row"><span class="b-name">P0（4h）</span><div class="b-track"><div class="b-fill" style="width:100%;background:var(--danger)"></div></div><span class="b-val">100%（6/6）</span></div>
+          <div class="bar-row"><span class="b-name">P1（8h）</span><div class="b-track"><div class="b-fill" style="width:92%;background:var(--warning)"></div></div><span class="b-val">92.3%（12/13）</span></div>
+          <div class="bar-row"><span class="b-name">P2（24h）</span><div class="b-track"><div class="b-fill" style="width:94%"></div></div><span class="b-val">94.1%（16/17）</span></div>
+          <div class="bar-row"><span class="b-name">P3（72h）</span><div class="b-track"><div class="b-fill" style="width:80%;background:var(--info)"></div></div><span class="b-val">80.0%（4/5）</span></div>
+          <div class="form-tip mt8">P3 达标率偏低：2 件跨周末工单未及时流转，建议启用节假日 SLA 顺延规则。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+function go(el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['p1','p2','p3','p4','p5'].forEach(id=>document.getElementById(id).style.display = id===el.dataset.t ? '' : 'none');
+}
+</script>
+
+<script>
+/* V2.5 报表增强（数据源：../assets/mock-data.js）
+   R1 业务流转漏斗：旧 5 层 → 6 步口径（CRM.data.funnel）
+   R2 紧迫分布：5 档数量卡（CRM.data.urgencyStats + CRM.data.urgency.color）
+   R3 灰度预警清单：命中部门规则 N/M 的关系（CRM.data.grayAlerts） */
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+
+  /* ---- R1 6 步漏斗 ---- */
+  function renderFunnel() {
+    var box = document.getElementById('funnel6');
+    if (!box) return;
+    var list = D.funnel || [], html = '', max = 0, prev = null, worst = null;
+    for (var i = 0; i < list.length; i++) { if (list[i].count > max) max = list[i].count; }
+    for (var j = 0; j < list.length; j++) {
+      var s = list[j];
+      var width = max ? (s.count / max * 100).toFixed(1) : 0;
+      if (prev) {
+        var rate = prev.count ? (s.count / prev.count * 100) : 0;
+        if (!worst || rate < worst.rate) worst = { rate: rate, from: prev.name, to: s.name };
+      }
+      html += '<div class="fn-row">' +
+        '<div class="fn-name">' + H.esc(s.name) + '</div>' +
+        '<div class="fn-bar"><i style="width:' + width + '%"></i><span>' + s.count +
+          (s.stageId === 6 ? ' 单' : ' 条') + '</span></div>' +
+        '<div class="fn-rate">' + (prev ? '↓ ' + (prev.count ? (s.count / prev.count * 100).toFixed(1) : '0.0') + '%' : '—') + '</div>' +
+      '</div>';
+      prev = s;
+    }
+    box.innerHTML = html;
+
+    var first = list[0], last = list[list.length - 1];
+    var tip = document.getElementById('funnelOverall');
+    if (tip && first && last) {
+      tip.textContent = '整体成交率 ' + (last.count / first.count * 100).toFixed(1) + '%（' + last.count + '/' + first.count +
+        '，首末两步计算）；' + (worst ? '「' + worst.from + '→' + worst.to + '」为最大流失层级，转化率仅 ' + worst.rate.toFixed(1) + '%。' : '');
+    }
+  }
+
+  /* ---- R2 紧迫分布 ---- */
+  function renderUrgency() {
+    var box = document.getElementById('urgDist');
+    if (!box) return;
+    var list = D.urgencyStats || [], html = '';
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      var u = H.byCode(D.urgency, s.code);
+      var color = u ? u.color : '#409EFF';
+      html += '<div class="ud-item" style="border-top:2px solid ' + color + '">' +
+        '<div class="ud-num" style="color:' + color + '">' + s.count + '</div>' +
+        '<div class="ud-name">' + H.esc(s.name) + '</div>' +
+      '</div>';
+    }
+    box.innerHTML = html;
+  }
+
+  /* ---- R3 灰度预警清单 ---- */
+  function renderGrayAlerts() {
+    var tb = document.getElementById('grayAlertBody');
+    if (!tb) return;
+    var list = D.grayAlerts || [], html = '', releaseCount = 0;
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      var isRelease = a.level === 'release';
+      if (isRelease) releaseCount++;
+      html += '<tr' + (isRelease ? ' class="row-danger"' : '') + '>' +
+        '<td class="cell-main">' + H.esc(a.companyName) + '<div class="cell-sub">' + H.esc(a.relationId) + '</div></td>' +
+        '<td>' + H.esc(a.ownerName) + '</td>' +
+        '<td>' + H.esc(a.deptName) + '</td>' +
+        '<td class="num bold">' + a.grayDays + ' 天</td>' +
+        '<td>' + (isRelease ? '<span class="tag tag-red">待释放</span>' : '<span class="tag tag-orange">已提醒</span>') + '</td>' +
+        '<td class="num">' + a.remindDays + ' 天 / ' + a.releaseDays + ' 天</td>' +
+        '<td>' + H.esc(a.action) + '</td>' +
+      '</tr>';
+    }
+    tb.innerHTML = html;
+    var cnt = document.getElementById('grayReleaseCount');
+    if (cnt) cnt.textContent = releaseCount + ' 条待释放';
+  }
+
+  /* ---- R4 销售 TOP5（签约金额，来自 dashboard.salesTop） ---- */
+  function renderSalesTop() {
+    var box = document.getElementById('salesTop5');
+    if (!box) return;
+    var list = (D.dashboard && D.dashboard.salesTop) || [];
+    var max = 0, i, html = '';
+    for (i = 0; i < list.length; i++) { if (list[i].amount > max) max = list[i].amount; }
+    for (i = 0; i < list.length; i++) {
+      var p = list[i];
+      var w = max ? Math.round(p.amount / max * 100) : 0;
+      html += '<div class="bar-row"><span class="b-name">' + H.esc(p.name) + '</span>' +
+        '<div class="b-track"><div class="b-fill" style="width:' + w + '%"></div></div>' +
+        '<span class="b-val">' + H.money(p.amount) + '</span></div>';
+    }
+    box.innerHTML = html || '<div class="text-sub">暂无数据</div>';
+  }
+
+  /* ---- R5 续约预警（contracts 按服务截止推算） ---- */
+  function renderRenew() {
+    var tb = document.getElementById('renewBody');
+    var now = new Date('2026-09-07');
+    var list = (D.contracts || []).filter(function (c) {
+      return c.serviceEnd && new Date(c.serviceEnd) >= now;
+    }).map(function (c) {
+      var days = Math.round((new Date(c.serviceEnd) - now) / 86400000);
+      return { c: c, days: days };
+    }).filter(function (x) { return x.days <= 90; }).sort(function (a, b) { return a.days - b.days; });
+
+    var n30 = 0, n60 = 0, n90 = 0, a30 = 0, a60 = 0, a90 = 0;
+    list.forEach(function (x) {
+      if (x.days <= 30) { n30++; a30 += x.c.amount; } else if (x.days <= 60) { n60++; a60 += x.c.amount; }
+      else { n90++; a90 += x.c.amount; }
+    });
+    function set(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+    set('renew30', n30); set('renew60', n60); set('renew90', n90);
+    set('renew30Amt', H.money(a30)); set('renew60Amt', H.money(a60)); set('renew90Amt', H.money(a90));
+
+    if (tb) {
+      tb.innerHTML = list.length ? list.map(function (x) {
+        var c = x.c, danger = x.days <= 30;
+        return '<tr' + (danger ? ' class="row-danger"' : '') + '>' +
+          '<td>' + H.esc(c.contractNo) + '</td>' +
+          '<td class="cell-main">' + H.esc(c.companyName) + '</td>' +
+          '<td>' + H.esc(c.productLineName) + '</td>' +
+          '<td class="' + (danger ? 'text-warning' : '') + ' bold">' + H.esc(c.serviceEnd) + '</td>' +
+          '<td class="text-danger bold">' + x.days + ' 天</td>' +
+          '<td>' + H.personChip(c.signerName, H.empAv(c.signerId), 'r-sales', '销售') + '</td>' +
+          '</tr>';
+      }).join('') : '<tr><td colspan="6" class="text-sub" style="text-align:center;padding:20px">90 天内无到期合同</td></tr>';
+    }
+  }
+
+  renderFunnel();
+  renderUrgency();
+  renderGrayAlerts();
+  renderSalesTop();
+  renderRenew();
+})();
+</script>
+
+<!-- 设计说明：对应需求文档「页面 23 报表分析 /report/analysis」。
+     要点：5 Tab 按角色显隐（综合概览全员/漏斗·公海·SLA 经理+/续约预警销售看自己）+ 时间选择器（本月）；
+     综合概览：4 KPI（签约额环比 +8.2% 红涨、掉公海绿跌）+ 7 条业务线对比表 + 销售 TOP5 纯 CSS 横向条形 + 近 12 月 SVG 折线示意（正式用 ECharts 5）；
+     漏斗：V2.5 起为 6 步口径（初步建联→需求确认→面访产品讲解→异议与卡点→逼单→已合作），横向条+各级转化率，支持部门/产品线下钻；
+     公海/续约/SLA Tab 各 3-4 KPI + 条形/清单示意；数据范围按管辖部门过滤；明细导 Excel 需 V2 审批流（按钮禁用演示）。
+     综合概览新增（V2.5）：紧迫分布 5 档卡 + 灰度预警清单表（命中部门规则 N/M，释放需经理确认）。 -->
+<script src="../assets/app.js"></script>
+</body>
+</html>

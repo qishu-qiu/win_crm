@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统公海 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .switch-demo{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--text-regular)}
+  .switch-demo i{width:36px;height:20px;border-radius:10px;background:var(--primary);position:relative}
+  .switch-demo i::after{content:"";position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item active" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">系统公海</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <div class="tabs">
+          <span class="tab active">系统公海</span>
+          <a class="tab" href="sea-department.html">部门公海</a>
+        </div>
+        <!-- V2.5 数据层：产品线/进入原因下拉由 CRM.data.seaList 去重生成（关键字/搜索绑定真过滤） -->
+        <div class="filter-bar">
+          <select class="select" id="seaPl"><option value="">全部产品线</option></select>
+          <select class="select" id="seaReason"><option value="">全部进入原因</option></select>
+          <input class="input" type="text" placeholder="进入时间：2026-08-01 ~ 2026-09-05（静态演示）">
+          <input class="input search" id="seaKw" type="text" placeholder="🔍 搜索公司名">
+          <button class="btn btn-primary" id="seaBtnQ">搜索</button>
+          <button class="btn" id="seaBtnR">重置</button>
+        </div>
+      </div>
+
+      <!-- V2.5 数据层：卡片流由 CRM.data.seaList 渲染 -->
+      <div class="grid grid-3 mt16" id="seaGrid">
+        <div class="text-sub">加载中…</div>
+      </div>
+
+      <div class="pagination">
+        <span id="seaTotal">共 0 条</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">6</span><span class="pg">›</span>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- D5 领取弹窗（演示层，默认隐藏，点"领取到私海"打开） -->
+<div class="dialog-mask" id="d5" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="dialog">
+    <div class="dialog-head">领取到私海<span class="close" onclick="document.getElementById('d5').style.display='none'">×</span></div>
+    <div class="dialog-body">
+      <div class="form-item mb16"><span class="form-label">目标部门</span>
+        <select class="select"><option>线上营销一部（默认本部门）</option><option>线上营销二部</option><option>短视频部</option></select>
+      </div>
+      <div class="form-item mb16"><span class="form-label">是否立即激活业务线</span>
+        <span class="switch-demo"><i></i>立即激活</span>
+      </div>
+      <div class="form-item"><span class="form-label"><span class="req">*</span>激活产品线</span>
+        <select class="select"><option>网站建设</option><option>短视频推广</option><option>GEO 优化</option><option>财税</option></select>
+        <span class="form-tip">唯一性校验通过，无在途冲突，可直接领取</span>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" onclick="document.getElementById('d5').style.display='none'">取消</button>
+      <button class="btn btn-primary" onclick="document.getElementById('d5').style.display='none'">确认领取</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 9/10 系统公海/部门公海」与 D5 领取弹窗。
+     要点：卡片流 3 列（每页 24）；联系人姓氏+** 脱敏；进入原因四色 tag（跟进超时红/成单超时橙/进展停滞蓝/主动释放灰）；
+     部门公海卡带"剩余 X 天掉系统公海"角标（本页以第 3 张卡演示）；D5：目标部门→立即激活开关→选产品线，冲突时按钮变"申请协同/申请转交"。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：系统公海卡片流由 CRM.data.seaList 渲染（公司/地区·规模·行业/脱敏联系人/进入时间/进入原因/业务线标签）
+// dropDaysLeft 字段为升级倒计时，系统公海口径不展示（留待部门公海页）；详情优先链到 relation-detail（存在同 id 关系时）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var state = { pl: '', reason: '', kw: '' };
+  var REASON_C = { '跟进超时': 'tag-red', '成单超时': 'tag-orange', '进展停滞': 'tag-blue', '主动释放': 'tag' };
+  function esc(v) { return H.esc(v); }
+  function uniq(list) { var seen = {}, out = []; list.forEach(function (v) { if (v && !seen[v]) { seen[v] = 1; out.push(v); } }); return out; }
+  function lineCls(name) {
+    var m = { '短视频推广': 'l-video', '网站建设': 'l-website', 'GEO': 'l-geo', '财税咨询': 'l-tax', '法律咨询': 'l-law', '房产网': 'l-house', '招牌网': 'l-sign' };
+    return m[name] || 'line';
+  }
+  function lineTag(name) { return '<span class="entity-tag line ' + lineCls(name) + '"><i class="et-icon">🧩</i>' + esc(name) + '</span>'; }
+  function relLink(item) {
+    for (var i = 0; i < D.relations.length; i++) if (String(D.relations[i].id) === String(item.id)) return D.relations[i];
+    return null;
+  }
+  function cardHtml(item) {
+    var metaLine = '📍 ' + [item.region, item.scale, item.industry].filter(Boolean).join(' · ');
+    var reasonCls = REASON_C[item.enterReason] || 'tag';
+    var detail = relLink(item)
+      ? '<a data-jump="relation-detail.html?id=' + esc(item.id) + '">查看详情</a>'
+      : '<a data-toast="演示环境：公海客户详情（档案未在演示数据层）" href="javascript:void(0)">查看详情</a>';
+    return '<div class="bcard">' +
+      '<div class="b-title">' + esc(item.companyName) + '</div>' +
+      '<div class="b-meta">' +
+      '<span>' + metaLine + '</span>' +
+      '<span>👤 联系人：' + esc(item.contactNameMasked || '—') + '</span>' +
+      '<span>🕒 进入公海：' + esc(item.enteredAt || '—') + '</span>' +
+      '<span class="flex gap8"><span class="tag ' + reasonCls + ' tag-dot">' + esc(item.enterReason || '—') + '</span>' +
+      (item.lineTags || []).map(lineTag).join('') + '</span>' +
+      '</div>' +
+      '<div class="b-foot">' + detail +
+      '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\'d5\').style.display=\'flex\'">领取到私海</button></div>' +
+      '</div>';
+  }
+  function matched() {
+    return D.seaList.filter(function (item) {
+      if (state.pl && !(item.lineTags || []).some(function (t) { return t === state.pl; })) return false;
+      if (state.reason && item.enterReason !== state.reason) return false;
+      if (state.kw && (item.companyName + (item.contactNameMasked || '')).indexOf(state.kw) < 0) return false;
+      return true;
+    });
+  }
+  function render() {
+    var rows = matched();
+    var g = document.getElementById('seaGrid');
+    g.innerHTML = rows.length
+      ? rows.map(cardHtml).join('')
+      : '<div class="text-sub" style="grid-column:1/-1;text-align:center;padding:32px">暂无公海客户</div>';
+    var pt = document.getElementById('seaTotal');
+    if (pt) pt.textContent = '共 ' + rows.length + ' 条';
+  }
+  function fillSels() {
+    var pls = uniq([]);
+    D.seaList.forEach(function (item) { (item.lineTags || []).forEach(function (t) { if (pls.indexOf(t) < 0) pls.push(t); }); });
+    var pl = document.getElementById('seaPl');
+    if (pl) pl.innerHTML = '<option value="">全部产品线</option>' + pls.map(function (v) { return '<option value="' + esc(v) + '">' + esc(v) + '</option>'; }).join('');
+    var rs = uniq(D.seaList.map(function (item) { return item.enterReason; }));
+    var rSel = document.getElementById('seaReason');
+    if (rSel) rSel.innerHTML = '<option value="">全部进入原因</option>' + rs.map(function (v) { return '<option value="' + esc(v) + '">' + esc(v) + '</option>'; }).join('');
+  }
+  document.getElementById('seaBtnQ').addEventListener('click', function () {
+    state.pl = document.getElementById('seaPl').value;
+    state.reason = document.getElementById('seaReason').value;
+    state.kw = (document.getElementById('seaKw').value || '').trim();
+    render();
+  });
+  document.getElementById('seaBtnR').addEventListener('click', function () {
+    document.getElementById('seaPl').value = '';
+    document.getElementById('seaReason').value = '';
+    document.getElementById('seaKw').value = '';
+    state.pl = state.reason = state.kw = '';
+    render();
+  });
+  fillSels();
+  render();
+})();
+</script>
+</body>
+</html>

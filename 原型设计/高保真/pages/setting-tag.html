@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客户标签配置 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .notice-bar{background:var(--primary-light);border:1px solid var(--primary-border);color:var(--text-regular);border-radius:var(--radius);padding:10px 14px;font-size:13px}
+  .switch-dot{width:30px;height:18px;border-radius:9px;background:var(--primary);position:relative;display:inline-block;vertical-align:middle;cursor:pointer}
+  .switch-dot::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+  .switch-dot.off{background:var(--border)} .switch-dot.off::after{right:auto;left:2px}
+  .rule{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px dashed var(--border-lighter);font-size:13px}
+  .rule:last-child{border-bottom:none}
+  .rule .r-cond{flex:1;color:var(--text-regular)}
+  .rule .r-arrow{color:var(--text-placeholder)}
+  /* V2.5：表格里的标签名是"彩色预览"，不需要可点光标 */
+  .tag-opt.preview{cursor:default}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea-department.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+          <a class="menu-item active" href="setting-tag.html">客户标签</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">客户标签</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- V2.5：三层归属原则提示条（替换旧"标签挂业务关系"口径） -->
+      <div class="notice-bar mb16">
+        🏷 <b>三层归属原则：判断属于谁，标签就挂谁身上</b> —— ① <b>公司背景挂公司</b>（身份标签 / 制度标签 / 决策链，全公司共享，建档勾一次）；② <b>人的谈判风格挂联系人</b>（谈判特质，跟人走，换公司保留）；③ <b>业务线判断挂业务关系</b>（紧迫档 / 业务线价值 / 协同 / 风险，同一公司不同业务线可各打各的）。
+      </div>
+
+      <!-- V2.5 ① 公司档案：身份标签（多选）/ 制度标签（多选）/ 决策链（单选） -->
+      <div class="card">
+        <div class="card-title">① 公司档案 <span class="tag tag-blue">company · 全公司共享</span> <span class="tag">挂公司，不挂业务关系</span>
+          <span class="more">＋ 新增标签</span>
+        </div>
+        <div class="text-sub mb12">描述公司本身的客观背景与采购制度，同一公司下所有业务线共用；由建档人勾选一次，记录标记人与标记时间。</div>
+
+        <div class="setup-group">
+          <div class="sg-title">身份标签 <span class="tag tag-blue">多选</span> <span class="sg-tip">公司客观身份，可自定义增删；预设项不可删，只可停用（保留历史）</span></div>
+          <div id="box-identity"></div>
+        </div>
+
+        <div class="setup-group">
+          <div class="sg-title">制度标签 <span class="tag tag-blue">多选</span> <span class="sg-tip">采购/招投标制度，影响打法；停用后不再可选，历史标记保留</span></div>
+          <div id="box-policy"></div>
+        </div>
+
+        <div class="setup-group" style="margin-bottom:0">
+          <div class="sg-title">决策链 <span class="tag tag-red">单选 · 三选一</span> <span class="sg-tip">互斥单选：选了新的，旧的自动摘除并留痕</span></div>
+          <div id="box-chain"></div>
+        </div>
+      </div>
+
+      <!-- V2.5 ② 联系人档案：谈判特质（≤3，可自定义）+ 个人自由标签并存 -->
+      <div class="card">
+        <div class="card-title">② 联系人档案 <span class="tag tag-orange">contact · 跟人走</span> <span class="tag">换公司保留</span>
+          <span class="more">＋ 新增标签</span>
+        </div>
+        <div class="text-sub mb12">描述<b>这个人</b>的谈判风格，挂在联系人上；最多 <b>3 个</b>，由对接销售判断，标记写留痕。</div>
+
+        <div class="setup-group" style="margin-bottom:0">
+          <div class="sg-title">谈判特质 <span class="tag tag-orange">≤3 个 · 多选</span> <span class="sg-tip">预设项不可删只可停用；可自定义新增</span></div>
+          <div id="box-traits"></div>
+          <div class="text-sub mt8">💡 <b>个人自由标签在此并存</b>：如「爱喝茶」「老板亲戚」，销售在联系人页自由输入即可，<b>不进入本页选项管理</b>。</div>
+        </div>
+      </div>
+
+      <!-- V2.5 ③ 业务关系：紧迫档 / 业务线价值 / 协同 / 风险（自动只读） -->
+      <div class="card">
+        <div class="card-title">③ 业务关系 <span class="tag tag-orange">relation · 按业务线独立</span> <span class="tag">同一公司不同业务线可不同</span>
+          <span class="more">＋ 新增标签</span>
+        </div>
+        <div class="text-sub mb12">描述「这家公司 + 这条业务线」的判断与计划；变更写留痕，业务关系转交时提示是否重置（默认保留）。</div>
+
+        <div class="setup-group">
+          <div class="sg-title">紧迫档 <span class="tag">5 档固定枚举</span> <span class="sg-tip">纯手动：销售自己改，系统不自动升降；默认「灰度」；枚举固定，不支持自定义增删</span></div>
+          <div class="tag-opts" id="opts-urgency"></div>
+        </div>
+
+        <div class="setup-group">
+          <div class="sg-title">业务线价值 <span class="tag">4 档</span> <span class="sg-tip">单选，默认「待定」，愿意标才标；与「价值评估（金额）」是两套字段，不混淆</span></div>
+          <div class="tag-opts" id="opts-value"></div>
+        </div>
+
+        <div class="setup-group">
+          <div class="sg-title">协同 <span class="tag tag-blue">多选 · 可 @ 同事</span> <span class="sg-tip">打标时可 @ 指定同事（经理 / 售前 / 交付），被 @ 人收到站内通知</span></div>
+          <div id="box-coop"></div>
+        </div>
+
+        <div class="setup-group" style="margin-bottom:0">
+          <div class="sg-title">风险 <span class="tag">⚙ 系统自动 · 只读</span> <span class="sg-tip">由下方「风险自动规则」命中即打标、条件消失即摘除；不可手改（人工补风险走业务关系层 D18）</span></div>
+          <div id="box-risk"></div>
+        </div>
+      </div>
+
+      <!-- V2.5 风险自动规则（迁移原「自动标签规则」，4 条来自 CRM.data.riskTags.rule） -->
+      <div class="card">
+        <div class="card-title">风险自动规则 <span class="tag tag-blue">O16 · <span id="rule-on-count">4</span> 条生效</span> <span class="more">＋ 新增规则</span></div>
+        <div id="rule-list"></div>
+        <div class="text-sub mt12">规则每日 02:00 批量重算；命中即打标、条件消失即自动摘除，全过程写入留痕，可在业务关系「跟单记录」中查看。超管可启停，人工补风险入口在业务关系层。</div>
+      </div>
+
+      <div class="text-sub mt12" style="line-height:1.8">
+        ⚠ 标签按<b>三层归属</b>管理，避免标签通胀：<b>系统可推导的信息（阶段、状态、客户等级）不设为标签</b>，只保留需要销售主观判断或跨角色协同的信息。<br>
+        公司/联系人层标签跟随主体；业务关系层标签在转交时提示"是否重置"，默认保留并留痕。
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：V2.5 三层归属标签体系（S1~S7）。
+     要点：顶部提示条讲三层归属原则（公司背景挂公司 / 人的风格挂联系人 / 业务线判断挂业务关系）；
+     三张卡片分区：①公司档案（身份多选·制度多选·决策链单选三选一）②联系人档案（谈判特质≤3 + 个人自由标签并存说明）③业务关系（紧迫档 5 档只读枚举·业务线价值 4 档·协同可@人·风险⚙只读）；
+     标签行结构沿用：标签名（.tag-opt 彩色预览）+ 编码 + 排序 + 使用次数 + 状态（启用/已停用）+ 操作（编辑·停用；非预设多一个删除）；builtin:true 预设项不可删只可停用；
+     风险自动规则 4 条取自 CRM.data.riskTags 的 rule 字段（流失信号/回款风险/交付风险/对接人变动，末条演示停用），带启用开关与编辑按钮；
+     数据全部来自 assets/mock-data.js，改数据全站生效。 -->
+<script>
+// V2.5：标签设置改为数据驱动渲染（数据源 CRM.data）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+
+  // 使用次数：数据层自带 usageCount 优先；协同 / 风险未提供该字段，按 relations 命中数统计
+  function hitCount(field, code) {
+    var n = 0;
+    D.relations.forEach(function (r) {
+      var arr = r[field] || [];
+      if (arr.indexOf(code) >= 0) n++;
+    });
+    return n;
+  }
+  function usageOf(t, hitField) {
+    if (t && typeof t.usageCount === 'number') return t.usageCount;
+    if (hitField) return hitCount(hitField, t.code);
+    return null;
+  }
+
+  // 通用标签表：标签名（彩色预览）/ 编码 / 排序 / 使用次数 / 状态 / 操作
+  function tableHtml(list, opt) {
+    opt = opt || {};
+    var rows = list.map(function (t, i) {
+      var label = H.esc(t.label || t.name);
+      var disabled = t.status === 'disabled';
+      var builtin = t.builtin !== false; // 数据层未标 builtin 的按预设处理
+      var preview = opt.auto
+        ? '<span class="tag-opt is-auto">' + label + '</span>'
+        : '<span class="tag-opt sel preview ' + (opt.tone || '') + '">' + label + '</span>';
+      var ops;
+      if (opt.auto) {
+        ops = '<span class="text-sub">系统自动 · 只读</span>';
+      } else {
+        ops = '<button class="btn-text">编辑</button>';
+        ops += disabled
+          ? '<button class="btn-text">启用</button>'
+          : '<button class="btn-text danger">停用</button>';
+        if (!builtin) ops += '<button class="btn-text danger">删除</button>';
+      }
+      var u = usageOf(t, opt.hitField);
+      return '<tr>' +
+        '<td>' + preview + (t.rule ? '<div class="cell-sub">触发规则：' + H.esc(t.rule) + '</div>' : '') + '</td>' +
+        '<td class="masked">' + H.esc(t.code) + '</td>' +
+        '<td class="num">' + (i + 1) + '</td>' +
+        '<td class="num">' + (u === null ? '<span class="text-sub">—</span>' : u) + '</td>' +
+        '<td>' + (disabled ? '<span class="tag">已停用</span>' : '<span class="tag tag-green">启用</span>') + '</td>' +
+        '<td>' + ops + '</td></tr>';
+    }).join('');
+    return '<table class="table"><thead><tr>' +
+      '<th>标签名</th><th>编码</th><th>排序</th><th>使用次数</th><th>状态</th><th>操作</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  // ① 公司档案
+  document.getElementById('box-identity').innerHTML = tableHtml(D.companyIdentityTags, { tone: 'coop' });
+  document.getElementById('box-policy').innerHTML = tableHtml(D.companyPolicyTags, { tone: 'play' });
+  document.getElementById('box-chain').innerHTML = tableHtml(D.decisionChain, { tone: 'focus' });
+  // ② 联系人档案
+  document.getElementById('box-traits').innerHTML = tableHtml(D.contactTraits, { tone: 'play' });
+  // ③ 业务关系
+  document.getElementById('opts-urgency').innerHTML = D.urgency.map(function (u) {
+    return H.urgencyChip(u.code);
+  }).join('');
+  document.getElementById('opts-value').innerHTML = D.valueLevel.map(function (v) {
+    return H.valueChip(v.code);
+  }).join('');
+  document.getElementById('box-coop').innerHTML = tableHtml(D.coopTags, { tone: 'coop', hitField: 'coopTags' });
+  document.getElementById('box-risk').innerHTML = tableHtml(D.riskTags, { auto: true, hitField: 'riskTags' });
+
+  // 风险自动规则：4 条来自 riskTags.rule（"对接人变动"演示停用，用于展示启停开关两种态）
+  var OFF_RULES = ['contact_changed'];
+  var NUM = ['①', '②', '③', '④'];
+  document.getElementById('rule-list').innerHTML = D.riskTags.map(function (t, i) {
+    var off = OFF_RULES.indexOf(t.code) >= 0;
+    return '<div class="rule">' +
+      '<span class="tag">' + (NUM[i] || (i + 1)) + '</span>' +
+      '<span class="r-cond">' + H.esc(t.rule) + '</span>' +
+      '<span class="r-arrow">→</span>' +
+      '<span class="tag-opt is-auto">' + H.esc(t.name) + '</span>' +
+      '<span class="switch-dot' + (off ? ' off' : '') + '"></span>' +
+      '<button class="btn-text">编辑</button></div>';
+  }).join('');
+  document.getElementById('rule-on-count').textContent =
+    D.riskTags.filter(function (t) { return OFF_RULES.indexOf(t.code) < 0; }).length;
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

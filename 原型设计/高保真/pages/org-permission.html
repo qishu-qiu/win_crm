@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>权限管理 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .perm-cell{text-align:center;font-size:16px;cursor:pointer;user-select:none;width:110px}
+  .perm-cell:hover{background:var(--primary-light)}
+  .perm-head{text-align:center !important}
+  .group-row td{background:var(--info-light);font-weight:600;color:var(--text-regular);font-size:12px}
+  .toast{position:fixed;top:72px;right:24px;z-index:300;background:var(--success-light);color:var(--success);
+    border:1px solid #C2E7B0;border-radius:var(--radius);padding:10px 18px;font-size:13px;
+    box-shadow:var(--shadow-hover);display:flex;align-items:center;gap:6px}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="org-permission.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item active" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">权限管理</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <div class="card mb16" style="background:var(--warning-light);border:1px solid #F5DAB1;color:var(--warning);font-size:13px;padding:12px 16px">
+        👑 总经理专属 · 单元格点击循环切换：✅ 可见 / 🔒 脱敏 / ❌ 禁止；修改即时保存（演示默认，不落库）
+      </div>
+
+      <!-- 保存成功气泡演示（点击单元格后 1.2s 自动隐藏） -->
+      <div class="toast" id="toast">✓ 保存成功</div>
+
+      <div class="card">
+        <div class="card-title">权限矩阵 · 权限项 × 角色</div>
+        <!-- V2.5 数据层：行列由 permissionMatrix × roles 动态生成 -->
+        <table class="table" id="perm-table">
+          <thead id="perm-head"></thead>
+          <tbody id="perm-body"></tbody>
+        </table>
+        <div class="text-sub mt12">✅ 可见 = 明文展示；🔒 脱敏 = 字段以 *** 展示（如合同金额）；❌ 禁止 = 不展示。未在矩阵显式配置的角色默认禁止；矩阵为演示默认，点击切换仅前端演示，不落库。</div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- V2.5 数据层：矩阵渲染与三态切换逻辑已并入页面底部脚本 -->
+
+<!-- 设计说明：对应需求文档「页面 24 组织架构 - 权限管理 /org/permission」。
+     要点：总经理专属页面；权限项 × 6 角色矩阵，按模块分组行；单元格三态（✅可见/🔒脱敏/❌不可见）点击循环切换、即时保存；
+     「权限矩阵配置」行仅总经理 ✅，其余角色固定 ❌（实际产品中该行对非总经理角色不可编辑）。 -->
+<script src="../assets/app.js"></script>
+<script>
+/* ============================================================
+ * V2.5 数据层：权限矩阵 = permissionMatrix(权限键) × roles(列)
+ * 行中文名按权限键映射；三态 visible/masked/denied → ✅可见/🔒脱敏/❌禁止。
+ * 单元格点击循环切换仅前端演示（class/文本/颜色），不写回 DB。
+ * ============================================================ */
+(function () {
+  'use strict';
+  var C = window.CRM;
+  if (!C || !C.data) return;
+  var matrix = C.data.permissionMatrix || {};
+  var roles = C.data.roles || [];
+
+  var PERM = {
+    cross_dept_private:  '跨部门私海查看',
+    contract_amount:     '合同金额可见',
+    company_total_value: '公司总价值可见',
+    cross_line_amount:   '跨业务线金额'
+  };
+  var ROLE_ICON = {
+    sale: '💼', service: '🎧', delivery: '🛠',
+    dept_manager: '🧭', gm: '🏆', admin: '📋'
+  };
+  var STATES = {
+    visible: { txt: '✅', color: '#67C23A', label: '可见' },
+    masked:  { txt: '🔒', color: '#E6A23C', label: '脱敏' },
+    denied:  { txt: '❌', color: '#C0C4CC', label: '禁止' }
+  };
+  var ORDER = ['visible', 'masked', 'denied'];
+
+  function esc(s) { return String(s === null || s === undefined ? '' : s); }
+
+  var head = document.getElementById('perm-head');
+  var body = document.getElementById('perm-body');
+  if (!head || !body) return;
+
+  // 表头：权限项 + 每角色一列
+  var headHtml = '<tr><th style="width:200px">权限项</th>';
+  roles.forEach(function (r) {
+    headHtml += '<th class="perm-head">' + (ROLE_ICON[r.code] || '•') + ' ' + esc(r.name) + '</th>';
+  });
+  headHtml += '</tr>';
+  head.innerHTML = headHtml;
+
+  // 表体：每权限键一行；未显式授权的角色按 denied 处理
+  var keys = Object.keys(matrix);
+  var bodyHtml = '';
+  keys.forEach(function (k) {
+    bodyHtml += '<tr><td class="cell-main">' + esc(PERM[k] || k) + '</td>';
+    roles.forEach(function (r) {
+      var lv = matrix[k][r.code];
+      if (!lv || !STATES[lv]) lv = 'denied';
+      var s = STATES[lv];
+      var tip = lv === 'denied' && !matrix[k][r.code] ? '未显式授权，默认禁止' : s.label;
+      bodyHtml += '<td class="perm-cell" data-state="' + lv + '" data-role="' + esc(r.code) + '" ' +
+        'title="' + esc(tip) + '" style="color:' + s.color + '">' + s.txt + '</td>';
+    });
+    bodyHtml += '</tr>';
+  });
+  body.innerHTML = bodyHtml || '<tr><td colspan="' + (roles.length + 1) + '" class="text-sub" style="text-align:center;padding:24px 0">暂无数据</td></tr>';
+
+  // 三态循环切换（仅前端演示），并弹保存成功气泡
+  function showToast() {
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.style.display = 'flex';
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(function () { t.style.display = 'none'; }, 1200);
+  }
+  Array.prototype.forEach.call(body.querySelectorAll('.perm-cell'), function (cell) {
+    cell.addEventListener('click', function () {
+      var cur = cell.getAttribute('data-state') || 'denied';
+      var next = ORDER[(ORDER.indexOf(cur) + 1) % ORDER.length];
+      var s = STATES[next];
+      cell.setAttribute('data-state', next);
+      cell.textContent = s.txt;
+      cell.style.color = s.color;
+      cell.title = s.label;
+      showToast();
+    });
+  });
+})();
+</script>
+</body>
+</html>

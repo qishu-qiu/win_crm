@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>部门管理 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .switch-dot{width:30px;height:18px;border-radius:9px;background:var(--primary);position:relative;display:inline-block;vertical-align:middle;cursor:pointer}
+  .switch-dot::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+  .switch-dot.off{background:var(--border)}
+  .switch-dot.off::after{right:auto;left:2px}
+  .avatar-sm{width:26px;height:26px;font-size:11px}
+  .add-card{border:1.5px dashed var(--border);box-shadow:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-secondary);cursor:pointer;min-height:190px}
+  .add-card:hover{border-color:var(--primary);color:var(--primary)}
+  .add-card .plus{font-size:30px;line-height:1}
+  /* V2.5：部门卡上的规则摘要小字 */
+  .rule-sum{font-size:12px;padding-top:6px;border-top:1px dashed var(--border-lighter)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub active" href="org-department.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item active" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">部门管理</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总经理</span>
+    </header>
+    <main class="content">
+      <!-- V2.5：补充部门规则说明 -->
+      <div class="flex-between mb16">
+        <span class="text-sub">共 <b id="dept-count">6</b> 个部门 · 「启用客服」开启后该部门业务关系可创建售后工单并进入客服工单池 · <b>部门规则</b>（客户等级金额档位 + 灰度寿命）由该部门经理配置，当前登录人赵总经理可代配</span>
+      </div>
+      <!-- V2.5：部门卡由 CRM.data.depts 渲染 -->
+      <div class="grid grid-3" id="dept-grid"></div>
+    </main>
+  </div>
+</div>
+
+<!-- V2.5：N12 部门规则弹窗（560px；关闭由 app.js 的 data-close 接管，打开由本页脚本事件委托） -->
+<div class="dialog-mask" id="dialog-dept-rule" style="display:none">
+  <div class="dialog" style="width:560px">
+    <div class="dialog-head">⚙ 部门规则 · <span id="n12DeptName">—</span> <span class="close" data-close>✕</span></div>
+    <div class="dialog-body">
+      <div class="setup-group">
+        <div class="sg-title">客户等级金额档位 <span class="sg-tip">按回款金额自动计算客户等级，每部门自定</span></div>
+        <div class="rule-tiers" id="n12-tiers"></div>
+      </div>
+      <div class="setup-group" style="margin-bottom:0">
+        <div class="sg-title">灰度寿命 <span class="sg-tip">仅作用于紧迫档 = 灰度的业务关系</span></div>
+        <div class="gray-life">
+          <span class="fs13">灰度 <input class="input" id="n12Remind" type="number" min="1" style="width:80px" placeholder="—"> 天未定性 → 提醒销售下结论</span>
+        </div>
+        <div class="gray-life mt8">
+          <span class="fs13">再 <input class="input" id="n12Release" type="number" min="1" style="width:80px" placeholder="—"> 天未动 → 列为公海释放候选（经理确认后释放）</span>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <span class="text-sub" style="margin-right:auto">仅该部门经理可配置；等级档位驱动客户等级自动计算</span>
+      <button class="btn" data-close>取消</button>
+      <button class="btn btn-primary" id="n12Save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 24 组织架构 - 部门管理 /org/department」+ V2.5 N12 部门规则（O1~O3）。
+     要点：卡片式呈现（部门名/上级/关联产品线/启用客服开关/部门经理/规则摘要），数据来自 assets/mock-data.js 的 CRM.data.depts；
+     每卡底部除「编辑」外新增「部门规则」入口，rule 为 null 的部门（法律咨询部）按钮文案为「配置规则」并用主色强调，卡片摘要显示"未配置规则"灰字；
+     N12 弹窗上半客户等级金额档位 A/B/C/D（.rule-tiers / .rt-level / .rt-input，值来自 rule.levelTiers），下半灰度寿命（grayRemindDays / grayReleaseDays）；
+     保存仅写回内存数据并重渲染卡片摘要（原型演示，不落库）；部门增编弹窗按 O3 说明本轮未做。 -->
+<script>
+// V2.5：部门卡 + N12 部门规则弹窗（数据源 CRM.data.depts）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var grid = document.getElementById('dept-grid');
+  var mask = document.getElementById('dialog-dept-rule');
+  var curId = null;
+  // 未配置规则时的空档位（演示空态：输入框留空 + placeholder）
+  var EMPTY_TIERS = ['A', 'B', 'C', 'D'].map(function (lv) { return { level: lv, minAmount: '' }; });
+
+  function ruleSummary(d) {
+    if (!d.rule) return '<span class="text-sub">⚠ 未配置规则</span>';
+    return '<span class="text-sub">✓ 等级档位已配置 · 灰度 ' +
+      H.esc(d.rule.grayRemindDays) + '/' + H.esc(d.rule.grayReleaseDays) + ' 天</span>';
+  }
+
+  function cardHtml(d) {
+    var lines = '<span>上级部门：' + H.esc(d.parentName) + '</span>' +
+      '<span class="flex gap8" style="flex-wrap:wrap">关联产品线：' +
+        d.productLines.map(function (p) { return '<span class="tag tag-blue">' + H.esc(p) + '</span>'; }).join('') +
+      '</span>' +
+      '<span class="flex gap8">启用客服：<span class="switch-dot' + (d.serviceEnabled ? '' : ' off') + '"></span> ' +
+        '<span class="' + (d.serviceEnabled ? 'text-success' : 'text-sub') + '">' + (d.serviceEnabled ? '已开启' : '未开启') + '</span></span>' +
+      '<span class="flex gap8">部门经理：<span class="person-chip">' +
+        '<i class="pc-avatar ' + H.esc(d.manager.av) + '">' + H.esc(d.manager.name.charAt(0)) + '</i>' +
+        '<span class="pc-name">' + H.esc(d.manager.name) + '</span>' +
+        '<span class="pc-role r-manager">部门经理</span></span></span>' +
+      '<span class="rule-sum">' + ruleSummary(d) + '</span>';
+
+    return '<div class="card" data-dept="' + d.id + '">' +
+      '<div class="card-title">' + H.esc(d.name) + ' <span class="tag tag-green tag-dot">' +
+        (d.status === 'active' ? '启用' : '停用') + '</span></div>' +
+      '<div class="b-meta" style="font-size:12px;color:var(--text-secondary);display:flex;flex-direction:column;gap:8px">' + lines + '</div>' +
+      '<div class="mt12 flex gap8"><button class="btn btn-sm">编辑</button>' +
+        '<button class="btn btn-sm' + (d.rule ? '' : ' btn-primary') + '" data-action="dept-rule" data-dept-id="' + d.id + '">' +
+        (d.rule ? '部门规则' : '配置规则') + '</button></div>' +
+      '</div>';
+  }
+
+  function renderGrid() {
+    grid.innerHTML = D.depts.map(cardHtml).join('') +
+      '<div class="card add-card"><span class="plus">＋</span><span>新增部门</span>' +
+      '<span class="fs12">设置上级 / 关联产品线 / 部门经理</span></div>';
+    document.getElementById('dept-count').textContent = D.depts.length;
+  }
+  renderGrid();
+
+  function findDept(id) {
+    return D.depts.filter(function (x) { return x.id === id; })[0];
+  }
+
+  // 打开 N12 部门规则弹窗
+  grid.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-action="dept-rule"]') : null;
+    if (!btn) return;
+    var d = findDept(+btn.getAttribute('data-dept-id'));
+    if (!d) return;
+    curId = d.id;
+    document.getElementById('n12DeptName').textContent = d.name;
+
+    var tiers = (d.rule && d.rule.levelTiers) ? d.rule.levelTiers : EMPTY_TIERS;
+    document.getElementById('n12-tiers').innerHTML = tiers.map(function (t) {
+      return '<div class="rule-tier">' +
+        '<i class="rt-level ' + t.level + '">' + t.level + '</i>' +
+        '<span class="fs13" style="width:76px">回款金额 ≥</span>' +
+        '<input class="input rt-input" type="number" min="0" data-level="' + t.level + '" value="' + H.esc(t.minAmount) + '" placeholder="未配置">' +
+        '<span class="text-sub">元</span></div>';
+    }).join('');
+
+    document.getElementById('n12Remind').value = d.rule ? d.rule.grayRemindDays : '';
+    document.getElementById('n12Release').value = d.rule ? d.rule.grayReleaseDays : '';
+    mask.style.display = 'flex';
+  });
+
+  // 保存：写回内存数据并重渲染卡片摘要（原型演示，不落库）
+  document.getElementById('n12Save').addEventListener('click', function () {
+    var d = findDept(curId);
+    if (!d) return;
+    var tiers = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#n12-tiers input'), function (inp) {
+      var v = inp.value.trim();
+      tiers.push({ level: inp.getAttribute('data-level'), minAmount: v === '' ? 0 : +v });
+    });
+    d.rule = {
+      levelTiers: tiers,
+      grayRemindDays: +(document.getElementById('n12Remind').value || 0),
+      grayReleaseDays: +(document.getElementById('n12Release').value || 0)
+    };
+    renderGrid();
+    mask.style.display = 'none';
+  });
+})();
+</script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

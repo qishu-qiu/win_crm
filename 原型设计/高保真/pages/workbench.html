@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作台 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* 页面级微调：快捷大卡 hover 放大 + 分栏 */
+  .quick-card {
+    border: 1px solid var(--primary-border); background: #fff; border-radius: var(--radius-lg);
+    padding: 24px 20px; cursor: pointer; text-align: center;
+    transition: transform .2s, box-shadow .2s;
+  }
+  .quick-card:hover { transform: scale(1.02); box-shadow: var(--shadow-hover); border-color: var(--primary); }
+  .quick-card .q-icon { font-size: 34px; }
+  .quick-card .q-title { font-size: 15px; font-weight: 600; margin-top: 10px; }
+  .quick-card .q-desc { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+  .wb-mid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; }
+  .appt-item { padding: 12px 8px; border-bottom: 1px solid var(--border-lighter); cursor: pointer; border-radius: var(--radius); }
+  .appt-item:hover { background: #F5F7FA; }
+  .appt-item:last-child { border-bottom: none; }
+  .radio-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .radio-chip {
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 16px; font-size: 13px;
+    cursor: pointer; color: var(--text-regular); background: #fff;
+  }
+  .radio-chip.on { border-color: var(--primary); color: var(--primary); background: var(--primary-light); font-weight: 600; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item active" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">工作台</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+
+      <!-- ① 快捷操作区 -->
+      <div class="grid grid-4">
+        <div class="quick-card" onclick="openD1()">
+          <div class="q-icon">📝</div>
+          <div class="q-title">填写跟单记录</div>
+          <div class="q-desc">30 秒记下关键信息</div>
+        </div>
+        <div class="quick-card" onclick="(window.__quickAction?window.__quickAction('appt'):(location.href='appointment.html'))">
+          <div class="q-icon">📅</div>
+          <div class="q-title">新增预约</div>
+          <div class="q-desc">定好下一次，客户不掉公海</div>
+        </div>
+        <div class="quick-card" onclick="(window.__quickAction?window.__quickAction('outing'):alert('外出登记'))">
+          <div class="q-icon">🚗</div>
+          <div class="q-title">外出登记</div>
+          <div class="q-desc">外勤打卡，关联报销</div>
+        </div>
+        <div class="quick-card" onclick="location.href='entry.html'">
+          <div class="q-icon">➕</div>
+          <div class="q-title">录入客户</div>
+          <div class="q-desc">陌拜回来，立即入库</div>
+        </div>
+      </div>
+
+      <!-- ②③ 左右分栏 -->
+      <div class="wb-mid">
+        <!-- 今日跟单记录 -->
+        <div class="card">
+          <div class="card-title">📝 今日跟单记录 <span class="tag tag-blue" id="wbFollowCount">0 条</span><span class="more">全部 ›</span></div>
+          <!-- V2.5 今日跟单记录：统一由 ../assets/mock-data.js（CRM.data.todayFollows）渲染，带 6 步阶段名 + 紧迫档 -->
+          <div class="timeline" id="wbFollowList"></div>
+        </div>
+
+        <!-- 今日新建预约 -->
+        <div class="card">
+          <div class="card-title">📅 今日新建预约 <span class="tag tag-blue" id="wbApptCount">0 条</span><span class="more">全部 ›</span></div>
+          <!-- V2.5 今日新建预约：统一由 ../assets/mock-data.js（CRM.data.todayAppointments）渲染，带阶段名 + 紧迫档 + 掉公海倒计时 -->
+          <div id="wbApptList"></div>
+          <div class="empty" style="padding: 20px 0;">
+            <div class="fs12 text-sub">完成预约将自动打开写跟进弹窗，形成跟进闭环</div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- D1 写跟进弹窗（演示层，默认隐藏） -->
+<div class="dialog-mask" id="d1" style="display:none;">
+  <div class="dialog" style="width:720px;">
+    <div class="dialog-head">📝 填写跟单记录 <span class="close" onclick="closeD1()">✕</span></div>
+    <div class="dialog-body">
+      <div class="form-row">
+        <div class="form-item">
+          <span class="form-label"><span class="req">*</span>业务关系</span>
+          <input class="input" placeholder="🔍 搜索公司名 / 联系人，如：杭州云启科技" value="杭州云启科技有限公司 · 网站建设 · 王建国">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <span class="form-label"><span class="req">*</span>跟进方式</span>
+          <!-- V2.5 跟进方式：data-method 与 CRM.data.suggestRules.method 一一对应（电话/到访/异议/报价） -->
+          <div class="radio-row" id="methodRow">
+            <span class="radio-chip on" data-method="电话">📞 电话</span>
+            <span class="radio-chip" data-method="微信">💬 微信</span>
+            <span class="radio-chip" data-method="陌拜">🚗 陌拜</span>
+            <span class="radio-chip" data-method="到访">🏢 到访</span>
+            <span class="radio-chip" data-method="邮件">📧 邮件</span>
+            <span class="radio-chip" data-method="异议">⚠ 异议</span>
+            <span class="radio-chip" data-method="报价">💰 报价</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <span class="form-label"><span class="req">*</span>跟单摘要</span>
+          <textarea class="textarea" placeholder="记录沟通要点、客户反馈、待办事项……">王总确认首页设计稿，产品模块需增加视频位；约定下周一上门演示报价方案。</textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <span class="form-label"><span class="req">*</span>客户态度</span>
+          <select class="select"><option>😊 积极</option><option>😐 中立</option><option>🙁 消极</option></select>
+        </div>
+        <div class="form-item">
+          <span class="form-label"><span class="req">*</span>意向进展</span>
+          <select class="select"><option>↑ 推进</option><option>→ 持平</option><option>↓ 后退</option></select>
+        </div>
+        <div class="form-item">
+          <span class="form-label">下次跟进时间</span>
+          <input class="input" value="2026-09-07 10:00">
+        </div>
+      </div>
+      <div class="form-tip">💡 提交后将同步刷新该业务关系的"下次跟进时间"，避免掉入公海</div>
+      <!-- V2.5 建议阶段提示条：按「跟进方式」匹配 CRM.data.suggestRules 给出建议阶段，可 [确认]/[修改] -->
+      <div class="suggest-tip" id="suggestTip"></div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" onclick="closeD1()">取 消</button>
+      <button class="btn btn-primary" onclick="closeD1()">提交跟进</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openD1(){ document.getElementById('d1').style.display = 'flex'; }
+  function closeD1(){ document.getElementById('d1').style.display = 'none'; }
+  document.getElementById('d1').addEventListener('click', function(e){ if(e.target === this) closeD1(); });
+</script>
+
+<script>
+/* V2.5 工作台增强（数据源：../assets/mock-data.js）
+   ① 今日跟单记录时间轴：6 步阶段名 + 紧迫档 chip（todayFollows.suggestedStageId / urgency）
+   ② 今日新建预约：阶段名 + 紧迫档 chip + 距掉公海天数（todayAppointments.stageId / urgency / dropDaysLeft）
+   ③ D1 写跟单弹窗：按「跟进方式」匹配 suggestRules → 建议阶段提示条（确认留痕 / 修改走 6 步下拉） */
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+
+  /* ---- 枚举映射（数据层只给 code，展示文案在本页维护） ---- */
+  var METHOD_ICON = { '电话': '📞', '到访': '🚗', '微信': '💬', '异议': '⚠', '报价': '💰', '陌拜': '🚗', '邮件': '📧' };
+  var ATTITUDE = {
+    positive: { text: '态度积极', cls: 'tag tag-green tag-dot' },
+    neutral:  { text: '态度中立', cls: 'tag tag-dot' },
+    negative: { text: '态度消极', cls: 'tag tag-red tag-dot' }
+  };
+  var PROGRESS = {
+    forward: { text: '意向推进 ↑', cls: 'tag tag-green' },
+    flat:    { text: '意向持平 →', cls: 'tag' },
+    back:    { text: '意向后退 ↓', cls: 'tag tag-red' }
+  };
+  function stageTag(id) { return '<span class="tag">🔰 ' + H.esc(H.stageName(id)) + '</span>'; }
+
+  /* ---- ① 今日跟单记录 ---- */
+  function renderFollows() {
+    var box = document.getElementById('wbFollowList');
+    if (!box) return;
+    var list = D.todayFollows || [], html = '';
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      var att = ATTITUDE[f.attitude] || ATTITUDE.neutral;
+      var prg = PROGRESS[f.progress] || PROGRESS.flat;
+      html += '<div class="tl-item' + (f.urgency === 'weekly' ? ' warn' : '') + '">' +
+        '<div class="tl-time">' + H.esc(f.followAt) + ' · ' + (METHOD_ICON[f.method] || '📌') + ' ' + H.esc(f.method) +
+          ' · ' + H.esc(f.companyName) + ' · ' + H.esc(f.contactName) + '</div>' +
+        '<div class="tl-body">' +
+          '<div class="flex gap8 mb8">' +
+            '<span class="' + att.cls + '">' + att.text + '</span>' +
+            '<span class="' + prg.cls + '">' + prg.text + '</span>' +
+            stageTag(f.suggestedStageId) + H.urgencyChip(f.urgency) +
+          '</div>' +
+          '<div class="fs13">' + H.esc(f.summary) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    box.innerHTML = html;
+    var cnt = document.getElementById('wbFollowCount');
+    if (cnt) cnt.textContent = list.length + ' 条';
+  }
+
+  /* ---- ② 今日新建预约 ---- */
+  function renderAppointments() {
+    var box = document.getElementById('wbApptList');
+    if (!box) return;
+    var list = D.todayAppointments || [], html = '';
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      html += '<div class="appt-item">' +
+        '<div class="flex-between">' +
+          '<span class="bold fs13">' + H.esc(a.companyName) + '</span>' +
+          '<span class="tag tag-blue">未来</span>' +
+        '</div>' +
+        '<div class="text-sub mt8">📅 ' + H.esc(a.appointmentAt) + ' · ' + H.esc(a.note) + '（' + H.esc(a.contactName) + '）</div>' +
+        '<div class="flex gap8 mt8">' +
+          stageTag(a.stageId) + H.urgencyChip(a.urgency) +
+          (a.dropDaysLeft ? '<span class="tag tag-red">距掉公海 ' + a.dropDaysLeft + ' 天</span>' : '') +
+        '</div>' +
+      '</div>';
+    }
+    box.innerHTML = html;
+    var cnt = document.getElementById('wbApptCount');
+    if (cnt) cnt.textContent = list.length + ' 条';
+  }
+
+  /* ---- ③ D1 建议阶段提示条 ---- */
+  var TIP_RESET_HTML =
+    '<span>💡 建议阶段：<span class="st-strong" id="suggestStageName"></span></span>' +
+    '<span class="st-actions">' +
+      '<select class="select" id="suggestStageSel" style="width:120px;height:28px;padding:0 6px;display:none"></select>' +
+      '<button type="button" class="btn btn-sm" id="suggestConfirm">确认</button>' +
+      '<button type="button" class="btn btn-sm" id="suggestModify">修改</button>' +
+    '</span>';
+
+  function ruleOf(method) {
+    var rs = D.suggestRules || [];
+    for (var i = 0; i < rs.length; i++) { if (rs[i].method === method) return rs[i]; }
+    return null;
+  }
+  function stageOptionHTML(selectedId) {
+    var html = '', st = D.stages || [];
+    for (var i = 0; i < st.length; i++) {
+      html += '<option value="' + st[i].id + '"' + (String(st[i].id) === String(selectedId) ? ' selected' : '') + '>' +
+        H.esc(st[i].name) + '</option>';
+    }
+    return html;
+  }
+  function bindTipActions() {
+    var sel = document.getElementById('suggestStageSel');
+    var mdf = document.getElementById('suggestModify');
+    var cfm = document.getElementById('suggestConfirm');
+    if (mdf) mdf.addEventListener('click', function () {
+      sel.style.display = '';
+      sel.focus();
+    });
+    if (sel) sel.addEventListener('change', function () {
+      var st = D.stages || [];
+      for (var i = 0; i < st.length; i++) {
+        if (String(st[i].id) === String(sel.value)) {
+          document.getElementById('suggestStageName').textContent = st[i].name;
+          break;
+        }
+      }
+    });
+    if (cfm) cfm.addEventListener('click', function () {
+      var name = document.getElementById('suggestStageName').textContent;
+      var tip = document.getElementById('suggestTip');
+      tip.innerHTML = '';
+      var left = document.createElement('span');
+      var strong = document.createElement('span');
+      strong.className = 'st-strong';
+      strong.textContent = '已按建议推进阶段（留痕）：' + name;
+      left.textContent = '✅ ';
+      left.appendChild(strong);
+      var right = document.createElement('span');
+      right.className = 'st-actions text-sub';
+      right.textContent = '阶段变更已写入跟进流水';
+      tip.appendChild(left);
+      tip.appendChild(right);
+    });
+  }
+  function renderSuggest(method) {
+    var tip = document.getElementById('suggestTip');
+    if (!tip) return;
+    var rule = ruleOf(method);
+    tip.innerHTML = TIP_RESET_HTML;
+    document.getElementById('suggestStageSel').innerHTML = stageOptionHTML(rule ? rule.suggestedStageId : 1);
+    document.getElementById('suggestStageName').textContent = rule ? rule.suggestedStageName : '暂无建议（该方式未配置规则）';
+    if (!rule) document.getElementById('suggestConfirm').style.display = 'none';
+    bindTipActions();
+  }
+  function initSuggest() {
+    var chips = document.querySelectorAll('#methodRow .radio-chip');
+    Array.prototype.forEach.call(chips, function (chip) {
+      chip.addEventListener('click', function () {
+        Array.prototype.forEach.call(chips, function (c) { c.classList.remove('on'); });
+        chip.classList.add('on');
+        renderSuggest(chip.getAttribute('data-method'));
+      });
+    });
+    renderSuggest('电话');
+    // 每次打开弹窗重置提示条，避免上次「已留痕」状态残留
+    var originOpen = window.openD1;
+    window.openD1 = function () {
+      if (typeof originOpen === 'function') originOpen();
+      renderSuggest('电话');
+      Array.prototype.forEach.call(chips, function (c, i) { c.classList.toggle('on', i === 0); });
+    };
+  }
+
+  renderFollows();
+  renderAppointments();
+  initSuggest();
+})();
+</script>
+
+<!--
+  设计说明（对照需求文档）：
+  - 对应章节：5.3 页面 3 工作台；六、交互需求 1/4/7；七、UI 视觉规范（快捷卡主色描边）
+  - 关键交互：快捷卡 hover 放大 1.02（过渡 200ms）；📝 卡点击打开 D1 写跟进弹窗（720px）
+  - V2.5：时间轴改为数据源渲染（todayFollows），紧迫档=周重点的条目沿用 tl-item.warn 红点；今日预约条目带「距掉公海 X 天」
+  - 写跟进成功后时间轴即时插入新记录（乐观更新，失败回滚+提示）；仅本人当天记录可编辑
+  - V2.5：今日跟单记录 / 今日新建预约改由 data/mock-data.js 渲染（6 步阶段名 + 紧迫档 chip + 距掉公海天数）
+  - V2.5：D1 弹窗底部新增「建议阶段」提示条（suggestRules 匹配 → 确认留痕 / 修改走 6 步下拉，走 E06）
+-->
+<script src="../assets/app.js"></script>
+</body>
+</html>

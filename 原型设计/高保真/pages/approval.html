@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>审批中心 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .phone-compare{display:flex;align-items:center;gap:14px;background:var(--info-light);border-radius:var(--radius);padding:12px 16px;font-size:15px;font-weight:600}
+  .phone-compare .arrow{color:var(--text-secondary)}
+  .phone-compare .new{color:var(--primary)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item active" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">审批中心</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <!-- V2.5 数据层：审批两 Tab 由 CRM.data.approvals 渲染。
+             口径：DB 无"发起/待审按当前登录人=赵总"的记录，故原型按状态分区——
+             待我审批=status pending、我发起的=status approved，计数随数据变化。 -->
+        <div class="tabs" id="apTabs">
+          <span class="tab active" data-tab="todo">待我审批<span class="count red">0</span></span>
+          <span class="tab" data-tab="mine">我发起的<span class="count">0</span></span>
+        </div>
+        <div class="filter-bar">
+          <select class="select" id="apType"><option value="">全部类型</option></select>
+          <input class="input" type="text" placeholder="申请时间：2026-08-01 ~ 2026-09-05（静态演示）">
+          <button class="btn btn-primary" id="apBtnQ">筛选</button>
+          <button class="btn" id="apBtnR">重置</button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr><th>类型</th><th>申请人</th><th>审批对象</th><th>申请理由</th><th>申请时间</th><th>等待时长</th><th>操作</th></tr>
+          </thead>
+          <!-- V2.5 数据层：行由 approvals 渲染 -->
+          <tbody id="apTbody">
+            <tr><td colspan="7" class="text-sub" style="text-align:center;padding:24px">加载中…</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span id="apTotal">共 0 条</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">›</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- D13 审批弹窗（演示层，默认显示；V2.5 数据层：内容由 AP002 手机号变更单回填） -->
+<div class="dialog-mask" onclick="if(event.target===this)this.style.display='none'">
+  <div class="dialog">
+    <div class="dialog-head" id="d13Head">审批 · 联系人手机号变更<span class="close" onclick="this.closest('.dialog-mask').style.display='none'">×</span></div>
+    <div class="dialog-body">
+      <div class="desc desc-2 mb16">
+        <div class="d-item"><div class="d-label">申请人</div><div class="d-value" id="d13App">…</div></div>
+        <div class="d-item"><div class="d-label">申请时间</div><div class="d-value" id="d13Time">…</div></div>
+        <div class="d-item"><div class="d-label">关联联系人</div><div class="d-value" id="d13Contact">…</div></div>
+        <div class="d-item"><div class="d-label">审批人</div><div class="d-value" id="d13Approver">…</div></div>
+      </div>
+      <div class="form-label mb8">新旧号码对比</div>
+      <div class="phone-compare mb16">
+        <span class="masked" style="font-size:15px" id="d13Old">…</span>
+        <span class="arrow">→</span>
+        <span class="new masked" style="font-size:15px" id="d13New">…</span>
+      </div>
+      <!-- 申请理由：DB 该类型 payload 无 reason 字段，保留静态通用文案（V2.5 数据层 注释） -->
+      <div class="form-tip mb16">通过后新号码即时生效并写入变更历史；审核期间原号码冻结 24 小时。</div>
+      <div class="form-item"><span class="form-label">审批意见</span>
+        <textarea class="textarea" placeholder="驳回时必填原因"></textarea>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn btn-danger-plain" onclick="this.closest('.dialog-mask').style.display='none'">驳回</button>
+      <button class="btn btn-success" onclick="this.closest('.dialog-mask').style.display='none'">通过</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 22 审批中心」与 D13 审批弹窗。
+     要点：待我审批(经理+可见，count 红色)/我发起的两 Tab；等待时长 >24h 标黄；类型图标+文字；
+     D13：手机号变更展示新旧号码对比（脱敏），申请详情回显，驳回必填审批意见，通过后站内通知并即时生效。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：审批中心两 Tab 由 CRM.data.approvals 渲染
+// - 待我审批=pending，我发起的=approved（DB 无按"当前登录人=赵总"的匹配记录，原型按状态分区，注释见 HTML）
+// - 审批页演示锚点 NOW='2026-09-08 10:00'（晚于 DB 申请时间，使等待时长为正值；与其它页锚点不同，故独立注释）
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var NOW = '2026-09-08 10:00';
+  var cur = 'todo';
+  var typeFilter = '';
+  var ICON = { transfer: '🔄', collaborate: '🤝', phone_change: '📱', reimburse: '💰' };
+  function esc(v) { return H.esc(v); }
+  function typeName(code) {
+    for (var i = 0; i < D.approvalType.length; i++) if (D.approvalType[i].code === code) return D.approvalType[i].name;
+    return code;
+  }
+  function empByName(name) {
+    if (!name) return null;
+    for (var i = 0; i < D.employees.length; i++) if (D.employees[i].name === name) return D.employees[i];
+    return null;
+  }
+  function roleInfo(e) {
+    if (!e) return null;
+    if (e.roleCodes.indexOf('sale') >= 0) return { cls: 'r-sales', label: '销售' };
+    if (e.roleCodes.indexOf('service') >= 0) return { cls: 'r-service', label: '客服' };
+    if (e.roleCodes.indexOf('delivery') >= 0) return { cls: 'r-delivery', label: '交付' };
+    if (e.roleCodes.indexOf('dept_manager') >= 0) return { cls: 'r-manager', label: '部门经理' };
+    return null;
+  }
+  function appChip(name) {
+    var e = empByName(name);
+    if (!e) return esc(name || '—');
+    var r = roleInfo(e);
+    return H.personChip(e.name, e.av, r ? r.cls : '', r ? r.label : '');
+  }
+  function subjectOf(a) {
+    var s = String(a.title || '').split('：');
+    return s.length > 1 ? s.slice(1).join('：') : (a.title || '—');
+  }
+  function waitText(createdAt) {
+    var t = createdAt ? new Date(createdAt.replace(/-/g, '/')) : null;
+    var n = new Date(NOW);
+    if (!t) return '—';
+    var h = Math.max(0, Math.round((n - t) / 3600000));
+    if (h < 1) return '不足 1 小时';
+    return h + ' 小时';
+  }
+  function list() {
+    var rows = D.approvals.filter(function (a) {
+      var ok = cur === 'todo' ? a.status === 'pending' : a.status === 'approved';
+      if (typeFilter && a.type !== typeFilter) ok = false;
+      return ok;
+    });
+    return rows;
+  }
+  function rowHtml(a) {
+    var w = waitText(a.createdAt);
+    var pending = a.status === 'pending';
+    var op = pending
+      ? '<button class="btn btn-primary btn-sm">通过</button> <button class="btn btn-danger-plain btn-sm">驳回</button>'
+      : '<span class="tag tag-green">已通过</span>';
+    return '<tr>' +
+      '<td class="cell-main">' + (ICON[a.type] || '📄') + ' ' + esc(typeName(a.type)) + '</td>' +
+      '<td>' + appChip(a.applicantName) + '</td>' +
+      '<td>' + esc(subjectOf(a)) + '</td>' +
+      '<td class="text-sub">' + esc((a.payload && a.payload.reason) || '—') + '</td>' +
+      '<td>' + esc(a.createdAt || '—') + '</td>' +
+      '<td' + (pending && waitText(a.createdAt).indexOf('小时') >= 0 && parseInt(waitText(a.createdAt), 10) >= 24 ? ' class="text-warning bold"' : '') + '>' + w + '</td>' +
+      '<td>' + op + '</td>' +
+      '</tr>';
+  }
+  function render() {
+    var rows = list();
+    var tb = document.getElementById('apTbody');
+    tb.innerHTML = rows.length
+      ? rows.map(rowHtml).join('')
+      : '<tr><td colspan="7" class="text-sub" style="text-align:center;padding:24px">暂无数据</td></tr>';
+    var pt = document.getElementById('apTotal');
+    if (pt) pt.textContent = '共 ' + rows.length + ' 条';
+    // 计数随数据
+    var tabs = document.getElementById('apTabs');
+    if (tabs) {
+      var cs = tabs.querySelectorAll('.tab');
+      for (var i = 0; i < cs.length; i++) {
+        var isTodo = cs[i].getAttribute('data-tab') === 'todo';
+        var cnt = cs[i].querySelector('.count');
+        if (cnt) {
+          cnt.textContent = D.approvals.filter(function (a) { return isTodo ? a.status === 'pending' : a.status === 'approved'; }).length;
+          cnt.className = 'count' + (isTodo ? ' red' : '');
+        }
+        cs[i].className = 'tab' + (cs[i].getAttribute('data-tab') === cur ? ' active' : '');
+      }
+    }
+  }
+  function fillTypeSel() {
+    var s = document.getElementById('apType');
+    if (!s) return;
+    s.innerHTML = '<option value="">全部类型</option>' + D.approvalType.map(function (t) {
+      return '<option value="' + esc(t.code) + '">' + esc(t.name) + '</option>';
+    }).join('');
+  }
+  // V2.5 数据层：Tab 切换
+  var tabs = document.getElementById('apTabs');
+  if (tabs) {
+    var ts = tabs.querySelectorAll('.tab');
+    for (var i = 0; i < ts.length; i++) {
+      ts[i].addEventListener('click', function () {
+        cur = this.getAttribute('data-tab');
+        typeFilter = '';
+        var sel = document.getElementById('apType');
+        if (sel) sel.value = '';
+        render();
+      });
+    }
+  }
+  document.getElementById('apBtnQ').addEventListener('click', function () {
+    typeFilter = document.getElementById('apType').value;
+    render();
+  });
+  document.getElementById('apBtnR').addEventListener('click', function () {
+    typeFilter = '';
+    document.getElementById('apType').value = '';
+    render();
+  });
+
+  // V2.5 数据层：D13 弹窗回填 AP002（联系人手机号变更）真实数据
+  (function fillD13() {
+    var ap = null;
+    for (var i = 0; i < D.approvals.length; i++) {
+      if (D.approvals[i].type === 'phone_change') { ap = D.approvals[i]; break; }
+    }
+    if (!ap) return;
+    var contactName = subjectOf(ap); // "周敏"
+    var contact = null;
+    for (var j = 0; j < D.contacts.length; j++) if (D.contacts[j].name === contactName) { contact = D.contacts[j]; break; }
+    var comp = null;
+    if (contact) {
+      for (var k = 0; k < D.companies.length; k++) if (String(D.companies[k].id) === String(contact.companyId)) { comp = D.companies[k]; break; }
+    }
+    var appEl = document.getElementById('d13App');
+    if (appEl) appEl.textContent = ap.applicantName || '—';
+    var timeEl = document.getElementById('d13Time');
+    if (timeEl) timeEl.textContent = ap.createdAt || '—';
+    var contactEl = document.getElementById('d13Contact');
+    if (contactEl) contactEl.textContent = contactName + (comp ? ' · ' + (comp.shortName || comp.fullName) : '');
+    var apprEl = document.getElementById('d13Approver');
+    if (apprEl) apprEl.textContent = ap.approverName || '—';
+    var oldEl = document.getElementById('d13Old');
+    if (oldEl) oldEl.textContent = (contact && contact.phoneMasked) || '—';
+    var newEl = document.getElementById('d13New');
+    if (newEl) newEl.textContent = (ap.payload && ap.payload.newPhone) || '—';
+  })();
+
+  fillTypeSel();
+  render();
+})();
+</script>
+</body>
+</html>

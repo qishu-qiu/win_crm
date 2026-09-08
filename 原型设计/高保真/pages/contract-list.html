@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>合同列表 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .pay-cell .progress{width:90px;margin-top:4px}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item active" href="contract-list.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">合同管理</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <div class="filter-bar">
+          <!-- V2.5 数据层：状态/产品线/签单人下拉由下方脚本按 CRM.data 生成；关键字按合同号/公司名匹配 -->
+          <select class="select" id="fSt">
+            <option value="">全部状态</option>
+          </select>
+          <select class="select" id="fPl">
+            <option value="">全部产品线</option>
+          </select>
+          <select class="select" id="fSg">
+            <option value="">全部签单人</option>
+          </select>
+          <input class="input search" id="fKw" placeholder="搜索合同编号 / 公司名">
+          <button class="btn btn-primary" id="btnQuery">查询</button>
+          <button class="btn" id="btnReset">重置</button>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn btn-primary" onclick="location.href='contract-create.html'">＋ 创建合同</button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>合同编号</th><th>公司</th><th>产品线</th><th>签单人</th>
+              <th>合同金额</th><th>已收款 / 回款率</th><th>签约日期</th><th>服务截止</th><th>状态</th>
+            </tr>
+          </thead>
+          <!-- V2.5 数据层：行由 CRM.data.contracts 渲染，详情经 data-jump 携带 id -->
+          <tbody id="ctTbody">
+            <tr><td colspan="9" class="text-sub" style="text-align:center;padding:24px">加载中…</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <!-- V2.5 数据层：条数随筛选结果刷新；页码/每页条数为演示常量 -->
+          <span id="ctTotal">共 0 条</span>
+          <span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span>
+          <span class="pg">4</span><span class="pg">›</span>
+          <span class="text-sub">20 条/页</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 16~18 合同管理 - 列表 /contract/list」。
+     要点：筛选（状态/产品线/签单人）+编号/公司名搜索；金额 ¥ 千分位；已收款列内嵌回款率小进度条；
+     服务截止 30 天内橙字预警（HT-2026-0845）；状态五色 tag（待付款黄/部分回款蓝/执行中绿/已完成灰/已终止红）；
+     HT-2026-0719 为跨部门合同，金额与已收款 *** 脱敏；行点击跳合同详情。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：合同列表改为 CRM.data.contracts 驱动渲染
+// 状态/签单人来自 DB 字段；DB 无合同状态字典，页内建映射：unpaid 待付款 / running 执行中 / terminated 已终止
+// 演示日期锚点 ANCHOR='2026/09/07'（与已改造页面口径一致），用于计算服务到期预警
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var ANCHOR = '2026/09/07';
+  var state = { st: '', pl: '', sg: '', kw: '' };
+  var ST = { unpaid: { t: '待付款', c: 'tag-orange' }, running: { t: '执行中', c: 'tag-green' }, terminated: { t: '已终止', c: 'tag-red' } };
+
+  function esc(v) { return H.esc(v); }
+  function lineCls(name) {
+    var m = { '短视频推广': 'l-video', '网站建设': 'l-website', 'GEO': 'l-geo', '财税咨询': 'l-tax', '法律咨询': 'l-law', '房产网': 'l-house', '招牌网': 'l-sign' };
+    return m[name] || 'line';
+  }
+  function lineTag(name) {
+    return '<span class="entity-tag line ' + lineCls(name) + '"><i class="et-icon">🧩</i>' + esc(name) + '</span>';
+  }
+  function empById(id) {
+    if (id === null || id === undefined) return null;
+    for (var i = 0; i < D.employees.length; i++) if (String(D.employees[i].id) === String(id)) return D.employees[i];
+    return null;
+  }
+  function signerChip(ct) {
+    var e = empById(ct.signerId);
+    var av = (e && e.av) || 'av0';
+    return H.personChip(ct.signerName, av, 'r-sales', '销售');
+  }
+  function daysLeft(endStr) {
+    var t = endStr ? new Date(endStr.slice(0, 10).replace(/-/g, '/')) : null;
+    var n = new Date(ANCHOR);
+    return t ? Math.round((t - n) / 86400000) : null;
+  }
+  // V2.5 数据层：服务到期预警 —— 已过/30 天/60 天/90 天分别标红/橙，与需求一致
+  function endCell(endStr) {
+    var d = daysLeft(endStr);
+    if (d === null) return '<td>—</td>';
+    if (d < 0) return '<td class="text-danger bold">' + esc(endStr) + '（已到期）</td>';
+    if (d <= 30) return '<td class="text-danger bold">' + esc(endStr) + '</td>';
+    if (d <= 60) return '<td class="text-warning bold">' + esc(endStr) + '</td>';
+    if (d <= 90) return '<td class="text-warning">' + esc(endStr) + '</td>';
+    return '<td>' + esc(endStr) + '</td>';
+  }
+  function payCell(ct) {
+    var ratio = Math.max(0, Number(ct.paidRatio) || 0);
+    var cls = ratio >= 100 ? 'success' : (ratio > 0 ? (ratio < 50 ? 'danger' : 'warn') : '');
+    var w = Math.min(ratio, 100);
+    return '<td class="pay-cell"><span class="num">' + H.money(ct.paidAmount) + '</span> <span class="text-sub">' + esc(ratio) + '%</span>' +
+      '<div class="progress ' + cls + '"><i style="width:' + w + '%"></i></div></td>';
+  }
+  function stTag(code) {
+    var s = ST[code];
+    if (!s) return '<span class="tag">' + esc(code) + '</span>';
+    return '<span class="tag ' + s.c + '">' + s.t + '</span>';
+  }
+  function rowHtml(ct) {
+    return '<tr>' +
+      '<td class="cell-main"><a data-jump="contract-detail.html?id=' + esc(ct.id) + '">' + esc(ct.contractNo) + '</a></td>' +
+      '<td>' + esc(ct.companyName) + '</td>' +
+      '<td>' + lineTag(ct.productLineName) + '</td>' +
+      '<td>' + signerChip(ct) + '</td>' +
+      '<td class="num">' + H.money(ct.amount) + '</td>' +
+      payCell(ct) +
+      '<td>' + esc(ct.signDate || '—') + '</td>' +
+      endCell(ct.serviceEnd) +
+      '<td>' + stTag(ct.status) + '</td>' +
+      '</tr>';
+  }
+  function matched() {
+    return D.contracts.filter(function (c) {
+      if (state.st && c.status !== state.st) return false;
+      if (state.pl && c.productLineName !== state.pl) return false;
+      if (state.sg && c.signerName !== state.sg) return false;
+      if (state.kw && (c.contractNo + c.companyName).indexOf(state.kw) < 0) return false;
+      return true;
+    });
+  }
+  function render() {
+    var rows = matched();
+    var tb = document.getElementById('ctTbody');
+    tb.innerHTML = rows.length
+      ? rows.map(rowHtml).join('')
+      : '<tr><td colspan="9" class="text-sub" style="text-align:center;padding:24px">暂无符合条件的数据</td></tr>';
+    var pt = document.getElementById('ctTotal');
+    if (pt) pt.textContent = '共 ' + rows.length + ' 条';
+  }
+  function fillSelect(id, opts) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = opts.map(function (o) {
+      return '<option value="' + esc(o.v) + '">' + esc(o.t) + '</option>';
+    }).join('');
+  }
+  // V2.5 数据层：填充筛选下拉（全部项置首）
+  fillSelect('fSt', [{ v: '', t: '全部状态' }].concat(Object.keys(ST).map(function (k) { return { v: k, t: ST[k].t }; })));
+  fillSelect('fPl', [{ v: '', t: '全部产品线' }].concat(D.productLines.map(function (p) { return { v: p.name, t: p.name }; })));
+  var sales = D.employees.filter(function (e) { return e.roleCodes && e.roleCodes.indexOf('sale') >= 0; });
+  fillSelect('fSg', [{ v: '', t: '全部签单人' }].concat(sales.map(function (e) { return { v: e.name, t: e.name }; })));
+
+  document.getElementById('btnQuery').addEventListener('click', function () {
+    state.st = document.getElementById('fSt').value;
+    state.pl = document.getElementById('fPl').value;
+    state.sg = document.getElementById('fSg').value;
+    state.kw = (document.getElementById('fKw').value || '').trim();
+    render();
+  });
+  document.getElementById('btnReset').addEventListener('click', function () {
+    document.getElementById('fSt').value = '';
+    document.getElementById('fPl').value = '';
+    document.getElementById('fSg').value = '';
+    document.getElementById('fKw').value = '';
+    state.st = state.pl = state.sg = state.kw = '';
+    render();
+  });
+  render();
+})();
+</script>
+</body>
+</html>

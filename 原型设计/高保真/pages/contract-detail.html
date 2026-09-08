@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>合同详情 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .ring{width:64px;height:64px;border-radius:50%;background:conic-gradient(var(--primary) 0 66.7%,var(--border-lighter) 66.7% 100%);display:flex;align-items:center;justify-content:center}
+  .ring i{width:46px;height:46px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;font-style:normal;color:var(--primary)}
+  .renew-steps{display:flex;align-items:center;margin:8px 0 4px}
+  .renew-node{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);min-width:88px}
+  .renew-node b{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);background:#fff}
+  .renew-node.done{color:var(--success)} .renew-node.done b{border-color:var(--success);background:var(--success)}
+  .renew-node.now{color:var(--warning);font-weight:600} .renew-node.now b{border-color:var(--warning);background:var(--warning);box-shadow:0 0 0 4px var(--warning-light)}
+  .renew-line{flex:1;height:2px;background:var(--border);margin:0 4px 20px}
+  .renew-line.done{background:var(--success)}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item active" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar no-print">
+      <span class="page-title">合同详情</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <!-- V2.5 数据层：整页值由 contract 数据填充。原 <main class="content watermark-demo"> 的水印文字是
+         style.css 写死的演示占位名（assets 不可改），与本数据层版本人名冲突，故移除该 class -->
+    <main class="content">
+      <div class="card">
+        <div class="flex-between">
+          <div class="flex gap12">
+            <span class="fs16 bold" id="cdHead">合同编号：…</span>
+            <span class="tag tag-dot" id="cdStatus">…</span>
+            <span id="cdPlTag"></span>
+          </div>
+          <div class="flex gap8 no-print">
+            <button class="btn">🖨 打印</button>
+            <button class="btn btn-primary">⬇ 导出 PDF</button>
+          </div>
+        </div>
+        <div class="text-sub mt8" id="cdMeta">…</div>
+      </div>
+
+      <div class="grid grid-4 mt16">
+        <div class="card kpi"><div class="k-label">合同总额</div><div class="k-value"><span class="unit">¥</span><span id="kTotalV">—</span></div><div class="k-foot" id="kTotalFoot">—</div></div>
+        <div class="card kpi"><div class="flex gap16"><div><div class="k-label">已收款</div><div class="k-value"><span class="unit">¥</span><span id="kPaidV">—</span></div><div class="k-foot" id="kPaidFoot">—</div></div><div class="ring" id="kRing"><i id="kRingI">—</i></div></div></div>
+        <div class="card kpi"><div class="k-label">签单人</div><div class="k-value" id="kSignerV" style="font-size:24px">—</div><div class="k-foot" id="kSignerFoot">—</div></div>
+        <div class="card kpi"><div class="k-label">剩余服务时间</div><div class="k-value"><span id="kLeftV">—</span> <span class="unit">天</span></div><div class="k-foot" id="kLeftFoot">—</div></div>
+      </div>
+
+      <div class="grid grid-2 mt16">
+        <div class="card">
+          <div class="card-title">付款流水<span class="more btn-text">＋ 添加回款</span></div>
+          <!-- V2.5 数据层：按当前合同 contractNo 过滤 CRM.data.payments 渲染 -->
+          <div class="timeline" id="payStream"><div class="text-sub">加载中…</div></div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-title">合同归属</div>
+            <div class="desc desc-2">
+              <div class="d-item"><div class="d-label">签单人（归属人）</div><div class="d-value" id="dSigner">—</div></div>
+              <div class="d-item"><div class="d-label">维护人</div><div class="d-value" id="dMaintainer">—</div></div>
+            </div>
+            <div class="form-tip mt12">维护人变更需二次确认并留痕；签单人锁定保障提成归属。</div>
+          </div>
+          <div class="card">
+            <div class="card-title">跨业务线合同（同公司）</div>
+            <div class="flex gap8" style="font-size:13px" id="cdCross">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt16">
+        <div class="card-title" id="renewTitle">续约预警</div>
+        <!-- V2.5 数据层：里程碑按 serviceEnd 推 90/60/30 天前，进度以演示锚点落位 -->
+        <div id="renewWrap">…</div>
+        <div class="form-tip mt8" id="renewTip"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 设计说明：对应需求文档「页面 16~18 合同管理 - 详情」。
+     要点：整页当前用户水印（watermark-demo）；4 KPI（总额/已收款含回款率环/签单人/剩余服务时间）；付款流水+添加回款（回款后金额>0 自动变执行中）；
+     归属卡签单人锁定、维护人可变更需确认；续约预警 90/60/30/到期四级时间轴；跨业务线合同仅显示"已合作+签约日期"，金额 *** 脱敏；支持打印/导出 PDF。 -->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：合同详情改为 CRM.data.contracts + payments 驱动
+// - 无 ?id= 默认第一条；回款流水按当前合同 contractNo 过滤 CRM.data.payments
+// - DB 无合同状态字典，页内建映射；演示日期锚点 ANCHOR='2026/09/07' 用于计算剩余服务时间与续约里程碑
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+  var ANCHOR = '2026/09/07';
+  var ST = { unpaid: { t: '待付款', c: 'tag-orange' }, running: { t: '执行中', c: 'tag-green' }, terminated: { t: '已终止', c: 'tag-red' } };
+  var PAY = { once: '一次性', installment: '分期', monthly: '月付', yearly: '年付' };
+  function esc(v) { return H.esc(v); }
+  function fmt(n) { return String(n == null ? 0 : n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function lineCls(name) {
+    var m = { '短视频推广': 'l-video', '网站建设': 'l-website', 'GEO': 'l-geo', '财税咨询': 'l-tax', '法律咨询': 'l-law', '房产网': 'l-house', '招牌网': 'l-sign' };
+    return m[name] || 'line';
+  }
+  function lineTag(name) { return '<span class="entity-tag line ' + lineCls(name) + '"><i class="et-icon">🧩</i>' + esc(name) + '</span>'; }
+  function empById(id) {
+    if (id === null || id === undefined) return null;
+    for (var i = 0; i < D.employees.length; i++) if (String(D.employees[i].id) === String(id)) return D.employees[i];
+    return null;
+  }
+  function empByName(name) {
+    if (!name) return null;
+    for (var i = 0; i < D.employees.length; i++) if (D.employees[i].name === name) return D.employees[i];
+    return null;
+  }
+  function deptNameOf(id) { for (var i = 0; i < D.depts.length; i++) if (String(D.depts[i].id) === String(id)) return D.depts[i].name; return '—'; }
+  function parseDate(s) { return s ? new Date(s.slice(0, 10).replace(/-/g, '/')) : null; }
+  function daysLeft(endStr) {
+    var t = parseDate(endStr); var n = new Date(ANCHOR);
+    return t ? Math.round((t - n) / 86400000) : null;
+  }
+  function addDays(date, n) {
+    var d = new Date(date.getTime()); d.setDate(d.getDate() + n); return d;
+  }
+  function ymd(date) {
+    var p = function (x) { return x < 10 ? '0' + x : '' + x; };
+    return date.getFullYear() + '-' + p(date.getMonth() + 1) + '-' + p(date.getDate());
+  }
+  function relById(id) {
+    for (var i = 0; i < D.relations.length; i++) if (String(D.relations[i].id) === String(id)) return D.relations[i];
+    return null;
+  }
+
+  // 定位合同
+  var m = /[?&]id=([^&]+)/.exec(location.search);
+  var want = m ? decodeURIComponent(m[1]) : '';
+  var ct = null;
+  for (var i = 0; i < D.contracts.length; i++) if (String(D.contracts[i].id) === want) { ct = D.contracts[i]; break; }
+  if (!ct && D.contracts.length) ct = D.contracts[0];
+  if (!ct) { return; }
+
+  var s = ST[ct.status] || { t: ct.status, c: 'tag' };
+  document.getElementById('cdHead').textContent = '合同编号：' + ct.contractNo;
+  var stEl = document.getElementById('cdStatus');
+  stEl.className = 'tag tag-dot ' + s.c;
+  stEl.textContent = s.t;
+  document.getElementById('cdPlTag').innerHTML = lineTag(ct.productLineName);
+  document.getElementById('cdMeta').textContent = '签约公司：' + ct.companyName + ' ｜ 签约日期：' + (ct.signDate || '—') + ' ｜ 服务截止：' + (ct.serviceEnd || '—');
+
+  // 4 KPI
+  document.getElementById('kTotalV').textContent = fmt(ct.amount);
+  document.getElementById('kTotalFoot').textContent = (PAY[ct.payType] || ct.payType || '—') + '签约';
+  var ratio = Math.max(0, Number(ct.paidRatio) || 0);
+  document.getElementById('kPaidV').textContent = fmt(ct.paidAmount);
+  document.getElementById('kPaidFoot').textContent = '待收 ¥' + fmt(Math.max(0, (ct.amount || 0) - (ct.paidAmount || 0)));
+  var ring = document.getElementById('kRing');
+  ring.style.background = 'conic-gradient(var(--primary) 0 ' + ratio + '%, var(--border-lighter) ' + ratio + '% 100%)';
+  document.getElementById('kRingI').textContent = ratio + '%';
+  var signerEmp = empById(ct.signerId) || empByName(ct.signerName);
+  document.getElementById('kSignerV').textContent = ct.signerName || '—';
+  document.getElementById('kSignerFoot').textContent = signerEmp ? (deptNameOf(signerEmp.deptId) + ' · 工号 ' + signerEmp.workNo) : '—';
+  var dLeft = daysLeft(ct.serviceEnd);
+  var leftV = document.getElementById('kLeftV');
+  var leftUnit = leftV.parentNode ? leftV.parentNode.querySelector('.unit') : null;
+  if (dLeft === null) { leftV.textContent = '—'; }
+  else if (dLeft < 0) { leftV.textContent = '已到期'; if (leftUnit) leftUnit.style.display = 'none'; }
+  else { leftV.textContent = '' + dLeft; }
+  document.getElementById('kLeftFoot').textContent = '服务截止 ' + (ct.serviceEnd || '—');
+
+  // 付款流水（按合同号过滤）
+  var pays = D.payments.filter(function (p) { return p.contractNo === ct.contractNo; });
+  var stream = document.getElementById('payStream');
+  stream.innerHTML = pays.length
+    ? pays.map(function (p, idx) {
+      return '<div class="tl-item"><div class="tl-time">' + esc(p.paidAt || '—') + ' · 第' + (idx + 1) + '笔</div>' +
+        '<div class="tl-body"><span class="bold">' + H.money(p.amount) + '</span> <span class="tag tag-blue">' + esc(p.method || '—') + '</span>' +
+        ' <span class="text-sub">记收：' + esc(p.creatorName || '—') + '</span></div></div>';
+    }).join('')
+    : '<div class="tl-item"><div class="tl-body"><span class="text-sub">暂无回款记录</span></div></div>';
+
+  // 归属
+  document.getElementById('dSigner').innerHTML = esc(ct.signerName || '—') + ' <span class="tag">🔒 锁定不可变更</span>';
+  document.getElementById('dMaintainer').innerHTML = esc(ct.maintainerName || '—') + ' <button class="btn-text">变更</button>';
+
+  // 跨业务线合同（同公司）：取所属关系的 crossLineTags，为近似口径
+  var rel = relById(ct.relationId);
+  var cross = rel && rel.crossLineTags && rel.crossLineTags.length ? rel.crossLineTags : [];
+  var crossEl = document.getElementById('cdCross');
+  crossEl.innerHTML = cross.length
+    ? cross.map(function (t) { return '<span class="tag tag-green tag-dot">' + esc(t) + '</span>'; }).join('') +
+      '<span class="text-sub">同公司其它业务线 · 金额按权限 <span class="masked">***</span>（跨业务线脱敏，静态口径）</span>'
+    : '<span class="text-sub">暂无跨业务线合同</span>';
+
+  // 续约预警里程碑（按 serviceEnd 推 90/60/30 天前；进度以演示锚点落位）
+  var renewTitle = document.getElementById('renewTitle');
+  var renewWrap = document.getElementById('renewWrap');
+  var renewTip = document.getElementById('renewTip');
+  if (dLeft === null) {
+    renewTitle.textContent = '续约预警（未设置服务截止）';
+    renewTip.textContent = '该合同无服务截止日期，无法推算续约里程碑（演示口径）。';
+    renewWrap.innerHTML = '<div class="text-sub">—</div>';
+  } else if (dLeft < 0) {
+    renewTitle.textContent = '续约预警（合同已到期）';
+    renewTip.textContent = '合同服务已结束，不再发起续约提醒（演示口径）。';
+    renewWrap.innerHTML = '<div class="text-sub">—</div>';
+  } else {
+    renewTitle.textContent = (ct.autoRenew ? '续约预警（距到期 ' : '到期预警 · 非自动续约（距到期 ') + dLeft + ' 天' + (ct.autoRenew ? '时启动提醒）' : '）');
+    var endD = parseDate(ct.serviceEnd);
+    var nodes = [
+      { label: '90 天前', d: addDays(endD, -90) },
+      { label: '60 天前', d: addDays(endD, -60) },
+      { label: '30 天前', d: addDays(endD, -30) },
+      { label: '到期', d: endD }
+    ];
+    var html = '<div class="renew-steps">';
+    for (var k = 0; k < nodes.length; k++) {
+      if (k) {
+        var lineDone = nodes[k - 1].d.getTime() <= new Date(ANCHOR).getTime() && nodes[k].d.getTime() <= new Date(ANCHOR).getTime();
+        html += '<div class="renew-line' + (lineDone ? ' done' : '') + '"></div>';
+      }
+      var done = nodes[k].d.getTime() <= new Date(ANCHOR).getTime();
+      var now = !done && (k === 0 || nodes[k - 1].d.getTime() <= new Date(ANCHOR).getTime());
+      var cls = done ? 'done' : (now ? 'now' : '');
+      html += '<div class="renew-node ' + cls + '"><b></b>' + nodes[k].label + '<br><span class="text-sub">' + ymd(nodes[k].d) + '</span></div>';
+    }
+    html += '</div>';
+    renewWrap.innerHTML = html;
+    var tipParts = [];
+    nodes.forEach(function (n) { tipParts.push(n.label + ' (' + ymd(n.d) + ')'); });
+    renewTip.textContent = '里程碑：' + tipParts.join(' / ') + '（演示口径：当前进度高亮，提醒将推送签单人与维护人）';
+  }
+})();
+</script>
+</body>
+</html>

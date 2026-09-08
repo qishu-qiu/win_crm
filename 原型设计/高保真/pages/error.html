@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>异常页 403 / 404 / 500 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .err-panel{text-align:center;padding:56px 24px 40px}
+  .err-emoji{font-size:88px;line-height:1}
+  .err-title{font-size:22px;font-weight:600;margin-top:18px}
+  .err-desc{font-size:14px;color:var(--text-regular);margin-top:10px;max-width:520px;margin-left:auto;margin-right:auto;line-height:1.7}
+  .err-actions{margin-top:24px;display:flex;gap:12px;justify-content:center}
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea-department.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group collapsed">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">异常页</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <!-- V2.5 数据层：顶栏登录人静态回退与 DB currentUser 一致（app.js 运行后再统一渲染） -->
+      <span class="user"><span class="avatar">赵</span>赵总·总经理</span>
+    </header>
+    <main class="content">
+      <div class="card">
+        <div class="flex-between mb16">
+          <div class="seg" id="eseg">
+            <span class="seg-item active" data-k="403">403 无权访问</span>
+            <span class="seg-item" data-k="404">404 页面不存在</span>
+            <span class="seg-item" data-k="500">500 服务异常</span>
+          </div>
+          <span class="text-sub">原型演示：点击切换三种异常状态</span>
+        </div>
+
+        <!-- 403 -->
+        <div class="err-panel" id="p403">
+          <div class="err-emoji">🔒</div>
+          <div class="err-title">无权访问</div>
+          <div class="err-desc">你没有访问该页面的权限，如需访问请联系管理员或你的部门经理。</div>
+          <div class="err-actions">
+            <button class="btn" onclick="history.back()">返回上一页</button>
+            <a class="btn btn-primary" href="dashboard.html">回工作台</a>
+          </div>
+          <div class="text-sub mt24">触发场景：越权访问他人私海 / 他人业务关系详情 / 仅经理可见的部门报表（数据权限未覆盖）。</div>
+        </div>
+
+        <!-- 404 -->
+        <div class="err-panel" id="p404" style="display:none">
+          <div class="err-emoji">🧭</div>
+          <div class="err-title">页面走丢了</div>
+          <div class="err-desc">你访问的页面不存在或已被移除，请检查链接是否正确。</div>
+          <div class="err-actions">
+            <button class="btn" onclick="history.back()">返回上一页</button>
+            <a class="btn btn-primary" href="dashboard.html">回工作台</a>
+          </div>
+          <div class="text-sub mt24">触发场景：路由不存在 / 收藏夹旧链接 / 业务对象已被删除（如业务关系已转交且撤回升权）。</div>
+        </div>
+
+        <!-- 500 -->
+        <div class="err-panel" id="p500" style="display:none">
+          <div class="err-emoji">🔧</div>
+          <div class="err-title">服务开小差了</div>
+          <div class="err-desc">系统出现异常，请稍后重试；若持续出现请联系技术支持。</div>
+          <div class="err-actions">
+            <button class="btn" onclick="location.reload()">重试</button>
+            <a class="btn btn-primary" href="dashboard.html">回工作台</a>
+          </div>
+          <div class="text-sub mt16">Request-ID: <span class="masked">req-20260905-7f3a91c4</span></div>
+          <div class="text-sub mt8">触发场景：接口连续失败（如公海规则重算超时）/ 服务端异常。Request-ID 用于技术支持排查日志。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+document.getElementById('eseg').addEventListener('click', function (e) {
+  var k = e.target.getAttribute('data-k'); if (!k) return;
+  [].forEach.call(this.children, function (c) { c.classList.toggle('active', c === e.target); });
+  ['403', '404', '500'].forEach(function (n) { document.getElementById('p' + n).style.display = (n === k ? '' : 'none'); });
+});
+</script>
+
+<!-- 设计说明：对应需求文档「异常页 403 / 404 / 500（V3.0 补齐）」。
+     要点：Seg 控件切换三态（JS 6 行，非当前面板 display:none）；403 越权访问他人私海等数据权限外资源 → 返回上一页 / 回工作台；
+     404 路由不存在或对象已删除；500 接口连续失败或服务端异常 → 重试 / 回工作台，并展示灰字 Request-ID 占位供技术支持排查。 -->
+<script src="../assets/app.js"></script>
+</body>
+</html>

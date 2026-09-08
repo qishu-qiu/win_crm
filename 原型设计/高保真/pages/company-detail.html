@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公司档案详情 - 销售CRM</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .comp-hd { display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+  .comp-hd .hd-main { flex: 1; min-width: 320px; }
+  .lv-box { width: 360px; display: flex; flex-direction: column; gap: 10px; }
+  .lv-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .lv-row .lv-name { width: 88px; color: var(--text-regular); }
+  .lv-row .progress { flex: 1; }
+  .lv-row .lv-val { width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+  .dec-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 3px;
+    font-size: 11px; background: var(--warning-light); color: var(--warning); }
+  .dt-boss { background: var(--warning-light); color: var(--warning); }
+  .dt-inf { background: var(--primary-light); color: var(--primary); }
+  .dt-exec { background: var(--info-light); color: var(--info); }
+  .cp-block { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0; }
+  .cp-block .cp-label { width: 92px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); padding-top: 3px; }
+</style>
+<script src="../assets/db/01-dict.js"></script>
+<script src="../assets/db/02-org.js"></script>
+<script src="../assets/db/03-customer.js"></script>
+<script src="../assets/db/04-relation.js"></script>
+<script src="../assets/db/05-trade.js"></script>
+<script src="../assets/mock-data.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-badge">CRM</span>销售 CRM</div>
+    <nav class="menu">
+      <a class="menu-item" href="dashboard.html"><span class="m-icon">📊</span>数据看板</a>
+      <a class="menu-item" href="workbench.html"><span class="m-icon">🧰</span>工作台</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="appointment.html"><span class="m-icon">📅</span>预约管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="appointment.html">今日预约</a>
+          <a class="menu-item" href="appointment.html">未来预约</a>
+          <a class="menu-item" href="appointment.html">过期预约</a>
+          <a class="menu-item" href="appointment.html">未预约</a>
+        </div>
+      </div>
+      <a class="menu-item" href="relation-list.html"><span class="m-icon">🤝</span>业务关系</a>
+      <a class="menu-item" href="entry.html"><span class="m-icon">➕</span>录入</a>
+      <a class="menu-item" href="advanced-search.html"><span class="m-icon">🔍</span>高级搜索</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="sea.html"><span class="m-icon">🌊</span>客户管理</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="sea.html">系统公海</a>
+          <a class="menu-item" href="sea.html">部门公海</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="company-list.html"><span class="m-icon">🗂</span>客户档案</a>
+        <div class="menu-sub">
+          <a class="menu-item active" href="company-list.html">公司档案</a>
+          <a class="menu-item" href="contact-list.html">联系人档案</a>
+        </div>
+      </div>
+      <a class="menu-item" href="contract-detail.html"><span class="m-icon">📄</span>合同管理</a>
+      <a class="menu-item" href="workorder-list.html"><span class="m-icon">🎫</span>工单管理</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="ledger.html"><span class="m-icon">📦</span>交付管理</a>
+        <div class="menu-sub"><a class="menu-item" href="ledger.html">客户台账</a></div>
+      </div>
+      <a class="menu-item" href="approval.html"><span class="m-icon">✅</span>审批中心</a>
+      <a class="menu-item" href="report.html"><span class="m-icon">📈</span>报表分析</a>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="product-line.html"><span class="m-icon">🏢</span>组织架构</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="org-employee.html">员工管理</a>
+          <a class="menu-item" href="org-department.html">部门管理</a>
+          <a class="menu-item" href="product-line.html">产品线管理</a>
+          <a class="menu-item" href="org-role.html">角色管理</a>
+          <a class="menu-item" href="org-permission.html">权限管理</a>
+        </div>
+      </div>
+      <div class="menu-group">
+        <a class="menu-item has-sub" href="setting-sea-rule.html"><span class="m-icon">⚙️</span>系统设置</a>
+        <div class="menu-sub">
+          <a class="menu-item" href="setting-sea-rule.html">公海规则</a>
+          <a class="menu-item" href="setting-workflow.html">工作流阶段</a>
+          <a class="menu-item" href="setting-dict.html">数据字典</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">公司档案详情</span>
+      <div class="quick-bar"></div>
+      <span class="spacer"></span>
+      <span class="text-sub">2026-09-05 星期五</span>
+      <span class="bell">🔔<span class="dot">5</span></span>
+      <span class="user"><span class="avatar">赵</span>赵总</span>
+    </header>
+    <main class="content">
+      <!-- V2.5 数据层：顶部公司概要 + 三档完善度（CRM.data.companies / ?id=） -->
+      <div class="card mb16">
+        <div class="comp-hd">
+          <div class="hd-main">
+            <div class="flex gap12 mb12">
+              <span class="fs16 bold" id="cdTitle" style="font-size:18px">—</span>
+              <span id="cdTitleTag"></span>
+            </div>
+            <div class="desc" id="cdMainDesc"></div>
+          </div>
+          <div class="lv-box">
+            <div class="card-title" style="margin-bottom:0">档案完善度</div>
+            <div class="lv-row"><span class="lv-name">必填信息</span><div class="progress success"><i id="lv1Bar" style="width:0%"></i></div><span class="lv-val text-success" id="lv1Val">—</span></div>
+            <div class="lv-row"><span class="lv-name">成交前必填</span><div class="progress"><i id="lv2Bar" style="width:0%"></i></div><span class="lv-val text-primary" id="lv2Val">—</span></div>
+            <div class="lv-row"><span class="lv-name">成交后强制</span><div class="progress warn"><i id="lv3Bar" style="width:0%"></i></div><span class="lv-val text-warning" id="lv3Val">—</span></div>
+            <div class="fs12" id="cdMissing"></div>
+            <a class="btn btn-primary btn-sm" href="company-edit.html?id=C2001" id="cdGoEdit" style="width:fit-content">去补全</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2.5 数据层：公司画像（身份/制度/决策链标签 + 打标人留痕） -->
+      <div class="card mb16">
+        <div class="card-title">公司画像</div>
+        <div id="cpBody" style="padding-top:4px"></div>
+      </div>
+
+      <!-- 4 Tab -->
+      <div class="card">
+        <div class="tabs">
+          <span class="tab active" data-t="p-rel">业务关系<span class="count" id="cntRel">0</span></span>
+          <span class="tab" data-t="p-contact">联系人<span class="count" id="cntContact">0</span></span>
+          <span class="tab" data-t="p-line">业务线<span class="count" id="cntLine">0</span></span>
+          <span class="tab" data-t="p-feed">跟单聚合</span>
+        </div>
+
+        <!-- Tab1 业务关系 -->
+        <div class="tab-pane" id="p-rel">
+          <table class="table">
+            <thead>
+              <tr><th>部门</th><th>产品线</th><th>状态</th><th>主对接</th><th>维护人</th><th>当前阶段</th><th>价值评估</th><th>操作</th></tr>
+            </thead>
+            <!-- V2.5 数据层：relations 按 companyId 过滤渲染 -->
+            <tbody id="cdRelBody">
+              <tr><td colspan="8" class="text-sub" style="text-align:center;padding:24px">加载中…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tab2 联系人 -->
+        <div class="tab-pane" id="p-contact" style="display:none">
+          <!-- V2.5 数据层：contacts 按 companyId 过滤渲染 -->
+          <div class="grid grid-3" id="cdContactBody"></div>
+        </div>
+
+        <!-- Tab3 业务线 -->
+        <div class="tab-pane" id="p-line" style="display:none">
+          <!-- V2.5 数据层：由该公司 relations 派生 -->
+          <div id="cdLineBody"></div>
+        </div>
+
+        <!-- Tab4 跟单聚合 -->
+        <div class="tab-pane" id="p-feed" style="display:none">
+          <!-- V2.5 数据层：follows 经 relationId 链到该公司 -->
+          <div class="timeline" id="cdFeedBody"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+// Tab 切换（极简演示）
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(x=>x.style.display='none');
+  t.classList.add('active');
+  document.getElementById(t.dataset.t).style.display='block';
+});
+</script>
+<!--
+设计说明（company-detail.html）
+对应需求：第五章 页面 12 公司档案详情 /company/detail/:id（经理+）
+关键交互点：
+1. 顶部：公司概要 + 三档完善度进度条（必填/成交前必填/成交后强制），缺失强制项红色列出 + "去补全"跳 company-edit.html。
+2. 公司画像卡：身份/制度标签 + 决策链（dict 翻译 label）+ 打标人留痕（profileMarks）。
+3. Tab1 业务关系：每部门每产品线一条（部门/产品线/状态/主对接/维护人/当前阶段/价值/操作）。
+4. Tab2 联系人（N:M）卡片：姓名/决策权 tag/手机脱敏/在职状态；Tab3 业务线；Tab4 跟单聚合时间轴。
+5. V2.5 数据层：本页全部区块由 CRM.data 渲染，支持 ?id=Cxxxx（缺省回退 C2001）；链接 relation-detail.html 不带参，与全局交互现状保持一致。
+-->
+<script src="../assets/app.js"></script>
+<script>
+// V2.5 数据层：公司档案详情改为 CRM.data.companies / contacts / relations / follows 驱动
+(function () {
+  'use strict';
+  var D = CRM.data, H = CRM.h;
+
+  function qp(n) {
+    var m = new RegExp('[?&]' + n + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  var COMP = H.byId(D.companies, qp('id')) || D.companies[0];
+
+  var MISS_LABEL = {
+    bank_name: '开户行', invoice_title: '发票抬头', tax_no: '税号', credit_code: '统一社会信用代码'
+  };
+  function missName(code) { return MISS_LABEL[code] || code; }
+  function labelOf(list, code) { var x = H.byCode(list, code); return x ? (x.label || x.name) : code; }
+  function decRoleName(code) { var x = H.byCode(D.decisionRole, code); return x ? x.name : '—'; }
+  function relsOfCompany() { return D.relations.filter(function (r) { return r.companyId === COMP.id; }); }
+  function contactsOfCompany() { return D.contacts.filter(function (c) { return c.companyId === COMP.id; }); }
+  function productChips(texts, cls) {
+    if (!texts || !texts.length) return '<span class="text-sub">—</span>';
+    return texts.map(function (t) {
+      return '<span class="tag ' + (cls || '') + '">' + H.esc(t) + '</span>';
+    }).join(' ');
+  }
+  function statusTagOfRelation(status) {
+    if (status === 'customer' || status === 'renew') return '<span class="tag tag-green">已合作</span>';
+    if (status === 'data' || status === 'intent') return '<span class="tag tag-blue">跟进中</span>';
+    if (status === 'lost') return '<span class="tag">已流失</span>';
+    return '<span class="tag">' + H.esc(status || '—') + '</span>';
+  }
+  function contactCardHtml(c) {
+    var roleCls = c.decisionRole === 'decision' ? 'dt-boss' : (c.decisionRole === 'influence' ? 'dt-inf' : 'dt-exec');
+    var statusTag = c.status === 'active'
+      ? '<span class="tag tag-green">在职</span>'
+      : '<span class="tag">已离职</span>';
+    return '<div class="bcard">' +
+      '<div class="b-title">' + H.esc(c.name) + ' ' + statusTag +
+        ' <span class="dec-tag ' + roleCls + '">' + H.esc(decRoleName(c.decisionRole)) + '</span></div>' +
+      '<div class="b-meta">' +
+        '<span>决策权：<span class="dec-tag ' + roleCls + '">' + H.esc(decRoleName(c.decisionRole)) + '</span></span>' +
+        '<span>手机：<span class="masked">' + H.esc(c.phoneMasked) + '</span></span>' +
+        '<span>职务：' + H.esc(c.title || '—') + '</span>' +
+      '</div></div>';
+  }
+
+  /* ---------- 顶部概要 ---------- */
+  var signed = !!COMP.firstSignAt;
+  document.getElementById('cdTitle').textContent = COMP.fullName;
+  document.getElementById('cdTitleTag').innerHTML = signed
+    ? '<span class="tag tag-green">已合作客户</span>'
+    : '<span class="tag">未签约</span>';
+
+  function dItem(label, val) {
+    return '<div class="d-item"><div class="d-label">' + H.esc(label) + '</div><div class="d-value">' + val + '</div></div>';
+  }
+  var indTxt = (COMP.industryL1 ? COMP.industryL1 + ' / ' : '') + (COMP.industryL2 || '');
+  document.getElementById('cdMainDesc').innerHTML =
+    dItem('统一社会信用代码', H.esc(COMP.creditCode || '—')) +
+    dItem('行业', H.esc(indTxt)) +
+    dItem('地区', H.esc((COMP.province || '') + ' ' + (COMP.city || ''))) +
+    dItem('规模', H.esc(COMP.scale || '—')) +
+    dItem('官网', H.esc(COMP.website || '—')) +
+    dItem('联系地址', H.esc(COMP.address || '—')) +
+    dItem('总价值评估', '<span class="num">' + H.money(COMP.totalValue) + '</span>') +
+    dItem('首次签约', H.esc(COMP.firstSignAt || '—'));
+
+  /* ---------- 三档完善度 ---------- */
+  var cp = COMP.completeness || {};
+  var lvs = [
+    { idBar: 'lv1Bar', idVal: 'lv1Val', v: cp.c1 },
+    { idBar: 'lv2Bar', idVal: 'lv2Val', v: cp.c2 },
+    { idBar: 'lv3Bar', idVal: 'lv3Val', v: cp.c3 }
+  ];
+  lvs.forEach(function (x) {
+    var el = document.getElementById(x.idBar);
+    if (el) el.style.width = (x.v == null ? 0 : x.v) + '%';
+    var tv = document.getElementById(x.idVal);
+    if (tv) tv.textContent = (x.v == null ? '—' : x.v + '%');
+  });
+  var mf = COMP.missingFields || [];
+  var missEl = document.getElementById('cdMissing');
+  if (mf.length) {
+    missEl.className = 'fs12 text-danger';
+    missEl.innerHTML = '缺失 ' + mf.length + ' 项：' + mf.map(missName).join('、');
+    document.getElementById('cdGoEdit').style.display = 'inline-flex';
+  } else {
+    missEl.className = 'fs12 text-success';
+    missEl.innerHTML = '档案完备，无缺失项';
+    document.getElementById('cdGoEdit').style.display = 'none';
+  }
+  document.getElementById('cdGoEdit').href = 'company-edit.html?id=' + COMP.id;
+
+  /* ---------- 公司画像 ---------- */
+  var marks = (D.profileMarks || {})[COMP.id] || [];
+  function chipList(codes, list, cls) {
+    if (!codes || !codes.length) return '<span class="text-sub">—</span>';
+    return codes.map(function (code) {
+      return '<span class="tag ' + (cls || '') + '">' + H.esc(labelOf(list, code)) + '</span>';
+    }).join(' ');
+  }
+  var markName = marks.length ? marks[0].markedByName : '—';
+  var markAt = marks.length ? marks[0].markedAt : '—';
+  document.getElementById('cpBody').innerHTML =
+    '<div class="cp-block"><span class="cp-label">身份标签</span><div class="flex gap8" style="flex-wrap:wrap">' + chipList(COMP.identityTagCodes, D.companyIdentityTags, 'tag-blue') + '</div></div>' +
+    '<div class="cp-block"><span class="cp-label">制度标签</span><div class="flex gap8" style="flex-wrap:wrap">' + chipList(COMP.policyTagCodes, D.companyPolicyTags, 'tag-orange') + '</div></div>' +
+    '<div class="cp-block"><span class="cp-label">决策链</span><div class="flex gap8" style="flex-wrap:wrap">' + chipList([COMP.decisionChain], D.decisionChain, '') + '</div></div>' +
+    '<div class="cp-block"><span class="cp-label">打标留痕</span><span class="fs12 text-sub">' + H.esc(markName) + ' 于 ' + H.esc(markAt) + ' 打标（画像标签全公司共享）</span></div>';
+
+  /* ---------- Tab1 业务关系 ---------- */
+  var rels = relsOfCompany();
+  document.getElementById('cntRel').textContent = rels.length;
+  document.getElementById('cdRelBody').innerHTML = rels.length ? rels.map(function (r) {
+    return '<tr>' +
+      '<td><span class="entity-tag dept"><i class="et-icon">🏢</i>' + H.esc(r.deptName) + '</span></td>' +
+      '<td><span class="entity-tag line"><i class="et-icon">🧩</i>' + H.esc(r.productLineName) + '</span></td>' +
+      '<td>' + H.statusDot(r.status) + '</td>' +
+      '<td>' + H.personChip(r.ownerName, r.ownerAv, 'r-sales', '销售') + '</td>' +
+      '<td>' + H.personChip(r.maintainerName, r.maintainerAv, 'r-service', '客服') + '</td>' +
+      '<td>' + H.esc(H.stageName(r.stageId)) + '</td>' +
+      '<td class="num">' + H.money(r.valueEstimate) + '</td>' +
+      '<td><a class="btn-text" href="relation-detail.html">详情</a></td>' +
+      '</tr>';
+  }).join('') : '<tr><td colspan="8" class="text-sub" style="text-align:center;padding:24px">暂无业务关系</td></tr>';
+
+  /* ---------- Tab2 联系人 ---------- */
+  var cts = contactsOfCompany();
+  document.getElementById('cntContact').textContent = cts.length;
+  document.getElementById('cdContactBody').innerHTML = cts.length
+    ? cts.map(contactCardHtml).join('')
+    : '<div class="card" style="grid-column:1/-1"><div class="empty" style="padding:24px 0">暂无联系人</div></div>';
+
+  /* ---------- Tab3 业务线 ---------- */
+  document.getElementById('cntLine').textContent = rels.length;
+  document.getElementById('cdLineBody').innerHTML = rels.length ? rels.map(function (r) {
+    return '<div class="card" style="box-shadow:none;border:1px solid var(--border-lighter)">' +
+      '<div class="flex-between"><span class="bold">' + H.esc(r.productLineName) + ' ' + statusTagOfRelation(r.status) + '</span>' +
+      '<span class="text-sub">当前阶段：' + H.esc(H.stageName(r.stageId)) +
+        ' · 主对接 ' + H.esc(r.ownerName || '—') +
+        ' · 价值评估 ' + H.money(r.valueEstimate) + '</span></div></div>';
+  }).join('') : '<div class="card" style="box-shadow:none;border:1px solid var(--border-lighter)"><div class="text-sub" style="text-align:center;padding:16px">暂无业务线</div></div>';
+
+  /* ---------- Tab4 跟单聚合 ---------- */
+  var relMap = {};
+  rels.forEach(function (r) { relMap[r.id] = r; });
+  var relIds = Object.keys(relMap);
+  var feeds = D.follows.filter(function (f) { return relIds.indexOf(f.relationId) >= 0; })
+    .slice().sort(function (a, b) { return b.followAt < a.followAt ? -1 : (b.followAt > a.followAt ? 1 : 0); });
+  document.getElementById('cdFeedBody').innerHTML = feeds.length ? feeds.map(function (f) {
+    var rel = relMap[f.relationId] || {};
+    return '<div class="tl-item">' +
+      '<div class="tl-time">' + H.esc(f.followAt) + ' · ' + H.esc(f.creatorName) +
+        ' · ' + H.esc(rel.productLineName || '') + '</div>' +
+      '<div class="tl-body">' + H.esc(f.summary || '—') + '</div></div>';
+  }).join('') : '<div class="empty" style="padding:24px 0">暂无跟单记录</div>';
+})();
+</script>
+</body>
+</html>

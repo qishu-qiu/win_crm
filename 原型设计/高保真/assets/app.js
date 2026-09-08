@@ -144,6 +144,104 @@
     });
   }
 
+  /* ---------- 通用列表筛选（查询/重置，覆盖多数列表页） ---------- */
+  function filterTable(mode) {
+    var bar = document.querySelector('.filter-bar') || document.querySelector('.toolbar');
+    var scope = document.querySelector('.table');
+    var isCard = false;
+    if (!scope) { scope = document.querySelector('.card-list'); isCard = !!scope; }
+    if (!scope) { toast('演示环境：' + (mode === 'reset' ? '已重置' : '查询') + '（本页无列表，原型演示）'); return; }
+    if (mode === 'reset') {
+      if (bar) Array.prototype.forEach.call(bar.querySelectorAll('input,select'), function (el) { el.value = ''; });
+      var all = scope.querySelectorAll(isCard ? '.card' : 'tbody tr');
+      Array.prototype.forEach.call(all, function (n) { n.style.display = ''; });
+      toast('已重置筛选，显示全部 ' + all.length + ' 条');
+      return;
+    }
+    var conds = [];
+    if (bar) Array.prototype.forEach.call(bar.querySelectorAll('input,select'), function (el) {
+      var v = (el.value || '').trim(); if (v) conds.push(v.toLowerCase());
+    });
+    var nodes = scope.querySelectorAll(isCard ? '.card' : 'tbody tr');
+    var shown = 0;
+    Array.prototype.forEach.call(nodes, function (n) {
+      if (isCard && !n.textContent.trim()) return;
+      var text = n.textContent.toLowerCase();
+      var ok = conds.every(function (c) { return text.indexOf(c) >= 0; });
+      n.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    toast('查询完成：命中 ' + shown + ' / ' + nodes.length + ' 条');
+  }
+
+  /* ---------- 导出当前表格为 CSV（合同/工单/台账等） ---------- */
+  function exportTable() {
+    var table = document.querySelector('.table');
+    if (!table) { toast('演示环境：导出（本页无表格）'); return; }
+    var csv = '';
+    Array.prototype.forEach.call(table.querySelectorAll('tr'), function (tr) {
+      if (tr.style.display === 'none') return;
+      var cells = tr.querySelectorAll('th,td');
+      var line = Array.prototype.map.call(cells, function (c) {
+        var t = (c.textContent || '').replace(/\s+/g, ' ').trim().replace(/"/g, '""');
+        return '"' + t + '"';
+      }).join(',');
+      csv += line + '\n';
+    });
+    try {
+      var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (document.title || 'export') + '.csv';
+      a.click();
+      toast('✓ 已导出当前表格（' + table.querySelectorAll('tbody tr').length + ' 行）');
+    } catch (e) { toast('演示环境：导出（浏览器限制，原型演示）'); }
+  }
+
+  /* ---------- 通用表单弹窗（新增/编辑/补全/申请变更） ---------- */
+  function openGenericForm(act, relName) {
+    var map = { '新增': '🆕 新增', '新建': '🆕 新建', '添加': '➕ 添加', '编辑': '✏️ 编辑',
+                '补全': '📝 补全', '去补全': '📝 补全', '申请变更': '🔄 申请变更' };
+    var title = '演示表单';
+    for (var k in map) { if (act.indexOf(k) >= 0) { title = map[k]; break; } }
+    var name = relName || '';
+    var body = '';
+    if (name) body += '<div class="form-item"><label>对象</label><div class="text-sub">' + esc(name) + '</div></div>';
+    body += '<div class="form-item"><label>名称</label><input class="input" id="gf-name" value="' + esc(name) + '" style="flex:1" placeholder="请输入名称"></div>';
+    body += '<div class="form-item"><label>备注</label><textarea class="input" id="gf-note" rows="3" style="flex:1" placeholder="补充信息…"></textarea></div>';
+    body += '<div class="text-sub fs12 mt8">提示：提交后演示写入（不落库）；真实系统将走对应接口与审批流。</div>';
+    modal('g-dialog-generic', title, body, '保 存', function () {
+      toast('✓ ' + title.replace(/[🆕➕✏️📝🔄\s]/g, '') + ' 已提交（演示）');
+    });
+  }
+
+  /* ---------- 侧边栏按角色收起（销售视角减负；管理员看全） ---------- */
+  function applyRoleMenu() {
+    var C = window.CRM; if (!C || !C.data || !C.data.currentUser) return;
+    var rc = C.data.currentUser.roleCodes || [];
+    var ADMIN_ROLES = ['gm', 'admin', 'dept_manager', 'manager', 'boss'];
+    var isAdmin = rc.some(function (r) { return ADMIN_ROLES.indexOf(r) >= 0; });
+    if (isAdmin) return; // 管理员/经理看全部菜单
+    var ADMIN = ['org-employee', 'org-department', 'org-role', 'org-permission', 'product-line',
+                 'setting-sea-rule', 'setting-workflow', 'setting-dict', 'setting-tag',
+                 'ledger', 'report', 'advanced-search', 'data-center'];
+    Array.prototype.forEach.call(document.querySelectorAll('.menu-item'), function (a) {
+      var h = a.getAttribute('href') || '';
+      var base = h.split('/').pop();
+      if (ADMIN.indexOf(base) >= 0) a.style.display = 'none';
+    });
+    // 收起变空的子菜单组
+    Array.prototype.forEach.call(document.querySelectorAll('.menu-group'), function (g) {
+      var items = g.querySelectorAll('.menu-item');
+      var visible = Array.prototype.filter.call(items, function (i) { return i.style.display !== 'none'; });
+      if (items.length && visible.length === 0) {
+        var head = g.querySelector('.menu-item.has-sub') || g.querySelector('.menu-item');
+        if (head) head.style.display = 'none';
+        g.style.display = 'none';
+      }
+    });
+  }
+
   /* ---------- 快捷动作分发：同一动作在不同页面行为一致 ---------- */
   function quickAction(act, item) {
     if (act === 'follow') {
@@ -304,6 +402,13 @@
     var firstCell = tr ? (tr.querySelector('td,th') ? tr.querySelector('td,th').textContent.trim() : '') : '';
     var relName = firstCell && firstCell.length < 30 ? firstCell : '';
 
+    // 4.7a 取消按钮：关闭最近弹窗（兜底未标 data-close 的情况）
+    if (txt === '取消' || txt === '取 消') {
+      var dmCancel = el.closest('.dialog-mask');
+      if (dmCancel && dmCancel.id !== 'dialog-block') { dmCancel.style.display = 'none'; return; }
+      toast('已取消'); return;
+    }
+
     if (txt.indexOf('写跟进') >= 0 || txt === '跟进') {
       // 页面有 D1 弹窗 → 打开；否则跳工作台
       if (document.getElementById('d1')) { openDialog('d1'); }
@@ -352,6 +457,42 @@
       return;
     }
     if (txt.indexOf('删除') >= 0 || txt.indexOf('停用') >= 0) { toast('演示环境：该操作需二次确认（原型演示未执行）'); return; }
+    // 4.8 列表/表单类通用动作（把"弱响应"升级为真动作）
+    if (txt.indexOf('查询') >= 0 || txt.indexOf('筛选') >= 0 || txt.indexOf('搜索') >= 0) { filterTable('query'); return; }
+    if (txt.indexOf('重置') >= 0) { filterTable('reset'); return; }
+    if (txt.indexOf('打印') >= 0) { window.print(); toast('已调用打印（演示）'); return; }
+    if (txt.indexOf('导出') >= 0 || txt.indexOf('导 Excel') >= 0) { exportTable(); return; }
+    if (txt.indexOf('恢复默认') >= 0) {
+      try { localStorage.removeItem('crm_quick_v1'); } catch (e) {}
+      toast('已恢复默认快捷入口'); setTimeout(function () { location.reload(); }, 800); return;
+    }
+    if (txt.indexOf('解析规则') >= 0) {
+      modal('g-dialog-parse', '⚙ 规则解析', '<div class="text-sub">演示：当前公海规则表达式已解析为「掉公海天数 = N，释放阈值 = M」，真实系统将据此自动计算并触发预警。</div>', '知道了');
+      return;
+    }
+    if (txt.indexOf('开始处理') >= 0 || txt.indexOf('处理工单') >= 0) {
+      modal('g-dialog-wo', '▶ 开始处理工单',
+        '<div class="form-item"><label>处理说明</label><textarea class="input" id="wo-note" rows="3" style="flex:1" placeholder="填写处理动作与预计完成时间…"></textarea></div>' +
+        '<div class="text-sub fs12 mt8">提交后工单状态变更为「处理中」，并通知发起人。</div>',
+        '开始处理', function () { toast('✓ 工单已开始处理（演示）'); });
+      return;
+    }
+    if (txt.indexOf('升级为商机') >= 0) {
+      modal('g-dialog-up', '⬆ 升级为商机工单',
+        '<div class="text-sub">演示：当前工单将升级为「商机工单」并转交对应业务线负责人跟进；真实系统按规则路由。</div>',
+        '确认升级', function () { toast('✓ 已升级为商机工单（演示）'); });
+      return;
+    }
+    if (txt.indexOf('关闭工单') >= 0) {
+      modal('g-dialog-close', '✕ 关闭工单',
+        '<div class="form-item"><label>关闭原因</label><textarea class="input" id="wo-close" rows="3" style="flex:1" placeholder="填写关闭原因（如已解决 / 转其他）…"></textarea></div>' +
+        '<div class="text-sub fs12 mt8">关闭后工单归档，可再次打开查看。</div>',
+        '确认关闭', function () { toast('✓ 工单已关闭（演示）'); });
+      return;
+    }
+    if (txt.indexOf('新增') >= 0 || txt.indexOf('新建') >= 0 || txt.indexOf('添加') >= 0 ||
+        txt.indexOf('编辑') >= 0 || txt.indexOf('补全') >= 0 || txt.indexOf('去补全') >= 0 ||
+        txt.indexOf('申请变更') >= 0) { openGenericForm(txt, relName); return; }
     // 兜底
     toast('演示环境：' + (txt || '该操作') + ' 已响应');
   });
@@ -412,8 +553,9 @@
     });
   }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', renderTopbarUser);
+    document.addEventListener('DOMContentLoaded', function () { renderTopbarUser(); applyRoleMenu(); });
   } else {
     renderTopbarUser();
+    applyRoleMenu();
   }
 })();

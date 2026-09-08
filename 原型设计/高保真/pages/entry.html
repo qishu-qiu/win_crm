@@ -105,6 +105,7 @@
           <div class="step"><span class="s-num">3</span>确认</div>
         </div>
 
+        <div class="step-pane" data-step="1">
         <!-- 第一步：联系人 -->
         <div class="form-row">
           <div class="form-item">
@@ -170,8 +171,51 @@
         <div class="flex-between mt20">
           <button class="btn">保存草稿<span class="text-sub fs12">（24h 内可恢复）</span></button>
           <div class="flex gap8">
-            <button class="btn" disabled>上一步</button>
-            <button class="btn btn-primary btn-lg" onclick="document.getElementById('d9').style.display='flex'">下一步：公司信息 →</button>
+            <button class="btn" id="btn-prev" disabled onclick="goStep((window.__entryStep||1)-1)">← 上一步</button>
+            <button class="btn btn-primary btn-lg" id="btn-next" onclick="entryNext()">下一步：公司信息 →</button>
+          </div>
+        </div>
+        </div><!-- /step-pane 1 -->
+        <div class="step-pane" data-step="2" style="display:none">
+          <!-- 第二步：公司信息（可跳过） -->
+          <div class="form-row">
+            <div class="form-item"><label class="form-label"><span class="req">*</span>公司全称</label><input class="input" value="杭州云启科技有限公司"></div>
+            <div class="form-item"><label class="form-label">统一社会信用代码</label><input class="input" placeholder="选填，强匹配将并入已有档案"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label class="form-label">地区</label><input class="input" value="浙江·杭州"></div>
+            <div class="form-item"><label class="form-label">规模</label><select class="select"><option>1-20人</option><option selected>21-100人</option><option>101-500人</option><option>500人以上</option></select></div>
+            <div class="form-item"><label class="form-label">行业</label><select class="select"><option>互联网/科技</option><option selected>制造业</option><option>服务业</option><option>贸易</option><option>其他</option></select></div>
+          </div>
+          <div class="form-row">
+            <div class="form-item"><label class="form-label">落入公海</label>
+              <div class="radio-row">
+                <label><input type="radio" name="sea" checked> 员工私海（默认）</label>
+                <label><input type="radio" name="sea"> 部门公海</label>
+              </div>
+            </div>
+          </div>
+          <div class="flex-between mt20">
+            <button class="btn" onclick="goStep(1)">← 上一步</button>
+            <button class="btn btn-primary btn-lg" onclick="entryNext()">下一步：确认 →</button>
+          </div>
+        </div>
+        <div class="step-pane" data-step="3" style="display:none">
+          <!-- 第三步：确认（摘要回显 + 完善度预览） -->
+          <div style="font-weight:600;margin:4px 0 10px">录入摘要</div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #eee"><span class="text-sub">联系人</span><b>陈志强 · 138 5712 6645</b></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #eee"><span class="text-sub">公司</span><b>杭州云启科技有限公司（浙江·杭州 · 21-100人 · 制造业）</b></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #eee"><span class="text-sub">落入</span><b>员工私海</b></div>
+          <div style="font-weight:600;margin:16px 0 10px">完善度预览</div>
+          <div style="height:8px;background:#eef0f3;border-radius:4px;overflow:hidden"><div style="height:100%;width:85%;background:#67c23a"></div></div>
+          <div class="text-sub mt8">联系人/公司核心字段已填，完善度 85%（建议补全统一信用代码以提升档案质量）</div>
+          <div class="flex-between mt20">
+            <button class="btn" onclick="goStep(2)">← 上一步</button>
+            <div class="flex gap8">
+              <button class="btn" onclick="if(window.__toast)window.__toast('继续录入（演示）')">继续录入</button>
+              <button class="btn" onclick="if(window.__toast)window.__toast('立即激活业务关系（演示）')">激活关系</button>
+              <button class="btn btn-primary btn-lg" onclick="entryNext()">完成录入 ✓</button>
+            </div>
           </div>
         </div>
       </div>
@@ -195,7 +239,7 @@
           <div class="text-sub mt8">已有 1 条业务关系（短视频推广，跨线已合作 GEO）｜ 归属：张伟 ｜ 建档：2026-03-18</div>
         </div>
         <span class="tag tag-red">相似度 96%</span>
-        <button class="btn btn-primary btn-sm" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('✓ 已选择已有公司档案，继续录入联系人');">使用已有</button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('✓ 已选择已有公司档案，继续录入联系人');goStep(2);">使用已有</button>
       </div>
       <div class="match-item">
         <!-- V2.5 数据层：候选为按名称字符重合检索的次优结果（C2006 启明装饰 · R1006 王芳） -->
@@ -204,7 +248,7 @@
           <div class="text-sub mt8">已有 1 条业务关系（GEO）｜ 归属：王芳 ｜ 最近跟进：2026-08-15</div>
         </div>
         <span class="tag tag-orange">相似度 88%</span>
-        <button class="btn btn-primary btn-sm" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('✓ 已选择已有公司档案，继续录入联系人');">使用已有</button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('✓ 已选择已有公司档案，继续录入联系人');goStep(2);">使用已有</button>
       </div>
       <!-- V2.5 数据层：演示口径说明——候选为按输入关键词从 CRM.data 检索的真实档案，非虚构样例 -->
       <div class="text-sub mt16">演示口径：上述候选由系统按名称字符重合度从公司档案（CRM.data.companies）检索得出，含低于阻断阈值一并列出的次优结果。</div>
@@ -212,7 +256,7 @@
     </div>
     <div class="dialog-foot" style="justify-content:space-between">
       <span class="text-danger fs12" style="align-self:center">新建将产生新公司档案，可能造成客户数据重复</span>
-      <button class="btn btn-danger-plain" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('⚠️ 已确认新建公司档案（将产生独立档案，可能重复）');">确认新建公司</button>
+      <button class="btn btn-danger-plain" onclick="document.getElementById('d9').style.display='none';if(window.__toast)window.__toast('⚠️ 已确认新建公司档案（将产生独立档案，可能重复）');goStep(2);">确认新建公司</button>
     </div>
   </div>
 </div>
@@ -227,5 +271,30 @@
 5. 成功后三选：继续录入 / 立即激活业务关系 / 查看档案；离开未提交触发路由守卫确认。
 -->
 <script src="../assets/app.js"></script>
+<script>
+  /* 录入三步向导：步骤条高亮 + 面板切换 + 上一步/下一步 */
+  window.__entryStep = 1;
+  function goStep(n) {
+    n = Math.max(1, Math.min(3, n));
+    window.__entryStep = n;
+    var steps = document.querySelectorAll('.steps .step');
+    Array.prototype.forEach.call(steps, function (s, i) { s.classList.toggle('active', i === n - 1); });
+    Array.prototype.forEach.call(document.querySelectorAll('.step-pane'), function (p) {
+      p.style.display = (p.getAttribute('data-step') == n) ? '' : 'none';
+    });
+    var prev = document.getElementById('btn-prev');
+    if (prev) prev.disabled = (n === 1);
+    var next = document.getElementById('btn-next');
+    if (next) next.textContent = (n === 3) ? '完成录入 ✓' : (n === 2 ? '下一步：确认 →' : '下一步：公司信息 →');
+  }
+  function entryNext() {
+    var n = window.__entryStep || 1;
+    if (n === 1) { document.getElementById('d9').style.display = 'flex'; return; } // 先查重再进公司信息
+    if (n === 2) { goStep(3); return; }
+    if (n === 3) { if (window.__toast) window.__toast('✓ 录入完成（演示）· 可继续录入 / 激活关系 / 查看档案'); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { goStep(1); });
+  else goStep(1);
+</script>
 </body>
 </html>

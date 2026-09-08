@@ -1,4 +1,4 @@
-# 销售 CRM 系统 —— 前后端接口 API 文档（V1.3）
+# 销售 CRM 系统 —— 前后端接口 API 文档（V1.4）
 
 ---
 
@@ -7,11 +7,11 @@
 | 项目 | 内容 |
 |---|---|
 | 文档名称 | 销售 CRM 前后端接口 API 文档 |
-| 版本 / 日期 | **V1.3** / 2026-09-07 |
+| 版本 / 日期 | **V1.4** / 2026-09-08 |
 | 编写人 / 审核人 | 产品组 / 前后端负责人（联调评审会签） |
 | 受众 | 前端工程师、后端工程师、测试工程师 |
-| 上游文档 | 《前端页面开发需求文档.md **V2.5**》（调用清单 + 页面×操作×接口映射）、《数据库设计文档.md **V1.1**》（字段与表）、《销售CRM开发需求.md V2.0》（业务规则） |
-| 一致性承诺 | 本文档是**前后端唯一契约**：路径、字段名、类型、枚举、错误码以本文档为准；三方文档冲突时的优先级为 **业务规则 V2.0 > 本文档 > 前端需求文档 > 数据库文档** |
+| 上游文档 | 《前端页面开发需求文档.md **V2.6**》（调用清单 + 页面×操作×接口映射）、《数据库设计文档.md **V1.2**》（字段与表）、《销售CRM开发需求.md V2.1》（业务规则） |
+| 一致性承诺 | 本文档是**前后端唯一契约**：路径、字段名、类型、枚举、错误码以本文档为准；三方文档冲突时的优先级为 **业务规则 V2.1 > 本文档 > 前端需求文档 > 数据库文档** |
 
 ### 修改记录
 
@@ -21,6 +21,7 @@
 | V1.1 | 2026-09-05 | **全页面操作对齐补漏**：① 新增 P 组「通用与支撑」（下拉数据源/操作日志/导出/埋点）、外出记录列表、当前外出中状态、录入预览、关系联系人、合同维护人变更、联系人删除、工作流阶段排序等端点；② 补齐 20 处缺失入参出参（`relationId` `companyId` `expiring` `stageList` 等，详见 4.3 缺口修复清单）；③ 消除字段模板**双真相源**（统一为 K03~K06，`/org/product-lines` 不再返回模板）；④ 字典类型清单补全；⑤ 新增 4.2 节「页面 × 操作 × 接口」反向索引，并新增 4.3 节缺口修复清单。**计数口径变更**：V1.0 标称 70 为路径合并口径，本版拆开合并行、改为**端点编号口径，总表共 99 个端点**，便于逐条追溯与联调打勾 | 产品组 |
 | V1.2 | 2026-09-05 | **框架与标签体系补漏（+9，共 108）**：① 新增 P07/P08 消息通知（列表含未读数、标记已读，`channel` 预留微信/企微）、P09/P10 个人快捷入口读写（≤6，`action` 支持 `dialog:` 直接开弹窗）；② 新增 **E09/E10 客户标签读写**（`source=manual/auto`，自动标签不回传，focus 单选、`play`≤2 服务端校验）；③ 新增 O14~O16 标签字典与自动标签规则；④ 新增业务子码 `20401`（注意力非单选）、`20402`（打法特征超 2 个）；⑤ 明确"本周重点"降级由服务端定时任务执行，前端不做本地修正 | 产品组 |
 | V1.3 | 2026-09-07 | **意向跟进体系（七轮定稿）对齐**：① E09/E10 语义重定义——从四维标签改为**跟进设置**（紧迫档单选 + 业务线价值 + 协同；风险=自动为主+人工可补，自动项只读），业务子码 `20401`（紧迫缺失/非单选）、`20402`（谈判特质超 3 个）随新语义重定义；② E06 阶段接口扩展**跳级/回退/异议无解双出路**（回退或判流失留痕）；③ 新增 G09/G10 **公司档案标签**（身份/制度/决策链，建档勾一次全公司共享，留痕打标人）、G11/G12 **联系人谈判特质**（价格敏感/关系型/方案型…，跟着人走换公司保留）；④ 新增 N12 **部门规则**（客户等级金额档位 A/B/C/D 阈值、灰度寿命 N/M 提醒与公海释放），部门经理级配置；⑤ 字典类型清单补充（urgency/value_level/company_identity_tag/company_policy_tag/decision_chain/contact_trait）。**总表端点计数校正**：历史记录行的 99/108 沿用路径合并口径、未含全部 CRUD 拆分行；本版按编号逐行实数为 **119**（本版新增 G09~G12、N12 共 +5） | 产品组 |
+| V1.4 | 2026-09-08 | **协同共同跟进 + 跟单可见性 + 手机号解锁对齐（七叔裁决，对上游 V2.1/DB V1.2/前端 V2.6）**：① **协同语义升级**——E05 申请协同落成 `collaborator`（共同跟进，可共同写跟单，非只读），E02 返回关系成员列表增 `collaborators[]`（含有效截止）；② C02/B05 出参增 **`createdByName`/`contactName`**（跟单记录显示填单人+联系人）；③ C02 增加 `viewScope=overview`：公海客户仅返回"近 30 天跟进 N 次"概览而非全文；④ 新增 **`approval.type=phone_unlock`**（审批五型）与 **L05** 端点，用于非归属部门联系人"一键申请解锁"全号；⑤ E02 增 `phoneViewable`/`canCollaborate`。**总表端点计数**：119 → **120**（本版 +L05） | 产品组 |
 
 ---
 
@@ -118,9 +119,9 @@
 
 ---
 
-## 四、接口清单总表（119 个端点）
+## 四、接口清单总表（120 个端点）
 
-> 计数口径：一个「方法 + 路径」= 1 个端点，按编号逐行计数（A01~P10，含 V1.2/V1.3 新增行），联调按本表打勾。N/O 组的 CRUD 按端点拆分，便于逐条追溯。
+> 计数口径：一个「方法 + 路径」= 1 个端点，按编号逐行计数（A01~P10，含 V1.2/V1.3/V1.4 新增行），联调按本表打勾。N/O 组的 CRUD 按端点拆分，便于逐条追溯。
 
 | 编号 | 方法 | 路径 | 说明 |
 |---|---|---|---|
@@ -198,6 +199,7 @@
 | L02 | GET | /approval/mine | 我发起的 |
 | L03 | POST | /approval/handle | 审批处理 |
 | L04 | POST | /approval/reimburse | 报销登记 |
+| L05 | POST | /approval/phone-unlock | 申请解锁联系人全号（V1.4） |
 | M01 | GET | /report/overview | 综合概览 |
 | M02 | GET | /report/funnel | 业务流转漏斗 |
 | M03 | GET | /report/sea | 公海报表 |
@@ -512,7 +514,7 @@
 | `sea_reason` | 掉公海原因：follow_timeout/deal_timeout/stagnant/release | 公海卡片 |
 | `lost_reason` | 流失原因 | 标记流失 D12 |
 | `pay_type` | 付款方式：once/installment/monthly/yearly | 合同创建 |
-| `approval_type` | 审批类型：transfer/collaborate/phone_change/reimburse | 审批中心 |
+| `approval_type` | 审批类型：transfer/collaborate/phone_change/phone_unlock/reimburse（V1.4 增 phone_unlock） | 审批中心 |
 | `reimburse_type` | 报销类型：transport/meal/other | 报销登记 D15 |
 | `visit_purpose` | 外出事由 | 外出登记 D3 |
 | `control_type` | 台账控件类型：text/number/date/select/multi_select/link | 字段模板编辑器 |
@@ -532,7 +534,7 @@
 **B02 GET /dashboard/today-follow** — 出参 `list[{relationId,companyName,productLineName,appointmentAt,overdueHours}]`，逾期置顶；点击"写跟进"用 `relationId` 调 C01
 **B03 GET /dashboard/distribution** — 出参 `items[{status,count}]`（data/intent/customer/renew/lost）+ `insight`(string)
 **B04 GET /dashboard/alerts** — 出参 `expiringContracts{count30,count60,count90}` `droppingSoon[{relationId,companyName,hoursLeft}]` `newOpportunity{count}`；三卡点击分别跳 `/contract/list?expiring=30`、`/relation/list?view=overdue`、**`/workorder/list?type=opportunity&createdRange=7d`**
-**B05 GET /workbench/today-records** — 出参 `list[{id,followAt,companyName,contactName,method,summary,attitude,progress,visitLogId,visitNo,editable}]`；`visitLogId` 非空即渲染 🚗 外出标记；`editable`=仅本人当日记录为 true
+**B05 GET /workbench/today-records** — 出参 `list[{id,followAt,companyName,contactName,contactId,createdByName,method,summary,attitude,progress,visitLogId,visitNo,editable}]`；`visitLogId` 非空即渲染 🚗 外出标记；`editable`=仅本人当日记录为 true；`contactId/createdByName` 为 V1.4 补充（跟单记录显示跟进联系人 + 填单人）
 **B06 GET /workbench/today-appointments** — 出参 `list[{id,relationId,appointmentAt,note,companyName,status}]`；**`relationId` 为 V1.1 补充**——点击跳业务关系详情必需
 **B07 GET /visit/current**（外出中状态条）— 出参 `visitLogId? visitNo? departAt expectReturnAt`（无外出中记录返回 `null`）；工作台据此显示"外出中"状态条与"外出归来"按钮
 
@@ -544,7 +546,9 @@
 - 异常：`20201` 关系已被他人激活；`410` 关系已掉公海
 - 幂等：`Idempotency-Key`，落库写入 `follow_record.idempotency_key` 唯一索引
 
-**C02 GET /follow/list** — 入参 `relationId companyId page pageSize`（`relationId` 与 `companyId` 二选一：业务关系详情传前者，公司档案"跟单聚合"Tab 传后者即可跨关系聚合）；滚动分页 20 条/次；出参含 `visitLogId`
+**C02 GET /follow/list** — 入参 `relationId companyId viewScope(page/overview) page pageSize`（`relationId` 与 `companyId` 二选一：业务关系详情传前者，公司档案"跟单聚合"Tab 传后者即可跨关系聚合）；滚动分页 20 条/次；出参含 `visitLogId`
+- **出参每条增**：`createdBy/createdByName`（谁填的）、`contactId/contactName`（跟的联系人，可点悬浮卡）——V1.4
+- **`viewScope=overview`（公司公海/部门公海概览，V1.4）**：对非本人关系只返回 `{relationId, companyName, followCount30}`（**近 30 天跟进次数**），不返回逐条全文，用于公海卡片"值不值得领"判断；`viewScope=page`（默认）= 本人关系/协同关系的全文分页
 **C03 PUT /follow/{id}** — 仅本人当日记录可改，隔天返回 `403`
 **C04 GET /appointment/list**
 - 入参：`tab*(today/future/expired/none) memberId page pageSize`
@@ -583,15 +587,18 @@
 - **`companyId` 为 V1.1 补充**：公司档案详情"业务关系"Tab 按公司过滤；`lostReason` 补充给"已流失"快捷视图展示流失原因列
 **E02 GET /relation/detail/{id}**
 - 出参：
-  - `base{}`（公司/产品线/主对接/维护人/当前阶段/下次跟进/价值评估）
-  - `permissions{canFollow,canTransfer,canContract,canWorkorder,canActivate,canLost}`
+  - `base{}`（公司/产品线/主对接/维护人/共同跟进人/当前阶段/下次跟进/价值评估）
+  - `collaborators[{userId,name,deptName,validUntil?}]`（**V1.4**：共同跟进人列表，来自 `relation_member.member_type=collaborator`；前端在人员区展示，协同人可全文看跟单）
+  - `phoneViewable{boolean}`（**V1.4**：当前用户对该关系联系人是否可见全号——归属本人/协同/已申请解锁= true，否则仅后 4 位）
+  - `permissions{canFollow,canTransfer,canContract,canWorkorder,canActivate,canLost,canCollaborate}`
   - `company{completeness1/2/3,missingFields[]}`
   - `sameCompanyOthers[{productLineName,ownerName,amountMasked,followCount30d}]`
   - **`stageList[{stageId,stageName,sort,isCurrent,isTerminal}]`**（V1.1 补充，工作流 Tab 直接渲染，无需二次调用 O05）
   - **`currentVisit{visitLogId,visitNo}?`**（V1.1 补充：若该关系归属人正在外出中，写跟单时自动带 `visitLogId`）
 **E03 POST /relation/activate** — 入参 `companyId* deptId* productLineId*`；**冲突返回 409 + `data.ownerName`**（DB 层 `active_key` 唯一索引兜底）
 **E04 POST /relation/transfer** — 入参 `relationId* toUserId* reason*`；生成审批单 `approval.type=transfer`
-**E05 POST /relation/collaborate-apply** — 同上，`type=collaborate`
+**E05 POST /relation/collaborate-apply** — 入参 `relationId* toUserId* reason* validUntil?`；生成审批单 `approval.type=collaborate`
+- **V1.4 协同语义 = 共同跟进**：审批通过后，服务端将申请人写入 `relation_member.member_type=collaborator`（可带 `validUntil` 有效期，到期自动解除其跟单可见/写权），**非只读**——协同人可共同写跟单（C01）并全文查看（C02 page）
 **E06 PUT /relation/{id}/stage** — 入参 `stageId* note?`；写 `workflow_stage` 推进记录
 - **V1.3 扩展**：允许**跳级**（如 2→5）与**回退**（如 5→2，须填 `note*` 理由）；每次变动留痕 `{operatorId,fromStage,toStage,reason,createdAt}`（前端进度条可点任意阶段格发起）
 - **异议无解双出路**：阶段 4（异议与卡点）处服务端返回可选项 `resolveOptions[{code:rollback_to_longterm（回落"长期跟"档 + 阶段回 2）,code:judge_lost（判流失，转 E07）}]`，人工选择其一后由 E06 或 E07 完成落地；两路均写留痕
@@ -706,10 +713,12 @@
   - `transfer`：`{relationId,companyName,fromOwner,toOwner,toDept}`
   - `collaborate`：`{relationId,companyName,ownerName,applicantName}`
   - `phone_change`：`{contactId,contactName,oldPhone,newPhone,frozenUntil}`（新旧号码对比）
+  - `phone_unlock`：`{contactId,contactName,companyName,phoneMasked,reason}`（V1.4：申请查看非归属部门联系人全号）
   - `reimburse`：`{visitNo,totalAmount,items[{type,amount,occurredAt,fileName}]}`
 **L02 GET /approval/mine**（全员）— 入参同上；出参增加 `status(pending/approved/rejected)`、`approverName`、`rejectReason`
-**L03 POST /approval/handle** — 入参 `approvalId* action*(approve/reject) comment*（驳回必填）`；后置：写站内通知；转交/协同即时变更归属；手机号变更写 `contact_change_log`；禁止自审（服务端拦截返回 `403`）
+**L03 POST /approval/handle** — 入参 `approvalId* action*(approve/reject) comment*（驳回必填）`；后置：写站内通知；转交/协同即时变更归属（协同写入 `relation_member.collaborator` 并写 `validUntil`）；手机号变更写 `contact_change_log`；**phone_unlock 通过则对该联系人开通限时全号可见（`unlockedUntil`，如 24h），留痕写 `operation_log` 防批量捞号**；禁止自审（服务端拦截返回 `403`）
 **L04 POST /approval/reimburse** — 入参 `visitLogId? items[{type,amount,occurredAt,fileId}]* totalAmount* remark`；生成 `approval.type=reimburse`；前端触发点=审批中心"报销登记"按钮（D15）或外出归来后的"发起报销"快捷入口（关联 C10 记录）
+**L05 POST /approval/phone-unlock** — 入参 `contactId* relationId* reason*`（V1.4 新增）；生成 `approval.type=phone_unlock`；前端触发点=公司抽屉/联系人悬浮卡/联系人列表 `****{后4位}` 旁的「申请解锁」按钮（见前端 V2.6 §4.3）
 
 ### 5.13 报表（M）
 

@@ -88,39 +88,105 @@
   }
   window.__modal = modal;
 
-  /* ---------- D1 写跟进（全局版：页面无自带弹窗时使用） ---------- */
+  /* ---------- D1 写跟进（全局版：与工作台 D1 同规格，页面无自带 D1 时使用） ----------
+     结构对齐 pages/workbench.html #d1：720px / 跟进方式片 / 建议阶段提示条 / 摘要必填 */
+  var FOLLOW_METHODS = [
+    { code: 'phone', name: '📞 电话' }, { code: 'wechat', name: '💬 微信' },
+    { code: 'canvass', name: '🚗 陌拜' }, { code: 'onsite', name: '🏢 到访' },
+    { code: 'email', name: '📧 邮件' }, { code: 'objection', name: '⚠ 异议' },
+    { code: 'quote', name: '💰 报价' }
+  ];
+  function suggestByMethod(code) {
+    var D = (window.CRM && window.CRM.data) || {};
+    var rules = D.suggestRules || [];
+    for (var i = 0; i < rules.length; i++) if (rules[i].method === code) return rules[i];
+    return null;
+  }
+  function renderSuggestTip(box, code) {
+    if (!box) return;
+    var r = suggestByMethod(code);
+    if (!r) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    box.innerHTML = '<span>💡 建议阶段：<b class="st-strong">' + esc(r.suggestedStageName || '') + '</b>' +
+      '<span class="text-sub">（依据跟进方式「' + esc(r.hintText || '') + '」自动匹配）</span></span>' +
+      '<span class="st-actions"><a class="btn-text" data-sg="ok">确认</a><a class="btn-text" data-sg="edit">修改</a></span>';
+  }
   function openFollowDialog(rel) {
     var D = (window.CRM && window.CRM.data) || {};
     var rels = D.relations || [];
-    var methods = D.followMethods || D.methods || [
-      { code: 'phone', name: '电话' }, { code: 'wechat', name: '微信' },
-      { code: 'visit', name: '上门拜访' }, { code: 'online', name: '线上会议' }
-    ];
-    var attitudes = D.attitudes || [
-      { code: 'positive', name: '积极' }, { code: 'neutral', name: '中性' }, { code: 'wait', name: '观望' }
-    ];
-    var progresses = D.progresses || [
-      { code: 'contact', name: '初步接触' }, { code: 'sent', name: '资料已送达' },
-      { code: 'confirmed', name: '需求已确认' }, { code: 'price', name: '价格谈判中' }
-    ];
+    var relText = rel ? (rel.companyName + ' · ' + (rel.productLineName || '') +
+      (rel.contactName ? ' · ' + rel.contactName : '')) : '';
+    var opts = rels.map(function (r) {
+      return '<option value="' + esc(r.id) + '"' + (rel && rel.id === r.id ? ' selected' : '') + '>' +
+        esc(r.companyName) + ' · ' + esc(r.productLineName || '') + '</option>';
+    }).join('');
     var body = '' +
-      '<div class="form-item"><label>业务关系</label><select class="input" id="fd-rel" style="flex:1">' +
-      rels.map(function (r) {
-        return '<option value="' + esc(r.id) + '"' + (rel && rel.id === r.id ? ' selected' : '') + '>' +
-          esc(r.companyName) + ' · ' + esc(r.productLineName || '') + '</option>';
-      }).join('') + '</select></div>' +
-      '<div class="form-item"><label>跟进方式</label><select class="input" id="fd-method" style="flex:1">' + optHtml(methods) + '</select></div>' +
-      '<div class="form-item"><label>跟进内容</label><textarea class="input" id="fd-summary" rows="3" style="flex:1" placeholder="本次沟通要点…"></textarea></div>' +
-      '<div class="form-item"><label>客户态度</label><select class="input" id="fd-att" style="flex:1">' + optHtml(attitudes) + '</select></div>' +
-      '<div class="form-item"><label>跟进进展</label><select class="input" id="fd-prog" style="flex:1">' + optHtml(progresses) + '</select></div>' +
-      '<div class="form-item"><label>下次跟进</label><input class="input" type="date" id="fd-next" style="flex:1"></div>' +
-      '<div class="text-sub fs12 mt8">提示：提交后系统按「跟进方式 → 建议阶段」规则给出建议阶段，确认即推进（留痕）。</div>';
-    modal('g-dialog-follow', '📝 填写跟单记录', body, '提交跟进', function (m) {
-      var s = m.querySelector('#fd-summary');
-      if (!s || !s.value.trim()) { toast('请填写跟进内容'); return true; }
-      toast('✓ 跟进记录已提交（演示）· 建议阶段已生成，可在详情页确认');
+      '<div class="form-row"><div class="form-item">' +
+        '<span class="form-label"><span class="req">*</span>业务关系</span>' +
+        (rels.length
+          ? '<select class="select" id="fd-rel">' + opts + '</select>'
+          : '<input class="input" id="fd-rel-t" value="' + esc(relText) + '" placeholder="🔍 搜索公司名 / 联系人">') +
+      '</div></div>' +
+      '<div class="form-row"><div class="form-item">' +
+        '<span class="form-label"><span class="req">*</span>跟进方式</span>' +
+        '<div class="radio-row" id="fd-method-row">' +
+        FOLLOW_METHODS.map(function (m, i) {
+          return '<span class="radio-chip' + (i === 0 ? ' on' : '') + '" data-method="' + esc(m.code) + '">' + m.name + '</span>';
+        }).join('') +
+        '</div>' +
+      '</div></div>' +
+      '<div class="form-row"><div class="form-item">' +
+        '<span class="form-label"><span class="req">*</span>跟单摘要</span>' +
+        '<textarea class="textarea" id="fd-summary" rows="3" placeholder="记录沟通要点、客户反馈、待办事项……"></textarea>' +
+      '</div></div>' +
+      '<div class="form-row">' +
+        '<div class="form-item"><span class="form-label"><span class="req">*</span>客户态度</span>' +
+          '<select class="select" id="fd-att"><option value="positive">😊 积极</option><option value="neutral" selected>😐 中立</option><option value="negative">🙁 消极</option></select></div>' +
+        '<div class="form-item"><span class="form-label"><span class="req">*</span>意向进展</span>' +
+          '<select class="select" id="fd-prog"><option value="forward">↑ 推进</option><option value="flat" selected>→ 持平</option><option value="back">↓ 后退</option></select></div>' +
+        '<div class="form-item"><span class="form-label">下次跟进时间</span>' +
+          '<input class="input" id="fd-next" placeholder="如：2026-09-10 10:00"></div>' +
+      '</div>' +
+      '<div class="form-tip">💡 提交后将同步刷新该业务关系的「下次跟进时间」，避免掉入公海</div>' +
+      '<div class="suggest-tip" id="fd-suggest"></div>';
+
+    var m = modal('g-dialog-follow', '📝 填写跟单记录', body, '提交跟进', function (mm) {
+      var s = mm.querySelector('#fd-summary');
+      if (!s || !s.value.trim()) { toast('请填写跟单摘要（跟进内容不能为空）'); if (s) s.focus(); return true; }
+      var sg = suggestByMethod(currentFollowMethod);
+      toast('✓ 跟进记录已提交（演示）' + (sg ? '· 建议阶段「' + sg.suggestedStageName + '」已生成，可在详情页确认' : ''));
     });
+    var dlg = m.querySelector('.dialog'); if (dlg) dlg.style.width = '720px';
+
+    var currentFollowMethod = 'phone';
+    var row = m.querySelector('#fd-method-row');
+    var tip = m.querySelector('#fd-suggest');
+    renderSuggestTip(tip, currentFollowMethod);
+    if (row) {
+      row.addEventListener('click', function (ev) {
+        var chip = ev.target && ev.target.closest ? ev.target.closest('.radio-chip') : null;
+        if (!chip || !row.contains(chip)) return;
+        Array.prototype.forEach.call(row.querySelectorAll('.radio-chip'), function (c) { c.classList.remove('on'); });
+        chip.classList.add('on');
+        currentFollowMethod = chip.getAttribute('data-method') || 'phone';
+        renderSuggestTip(tip, currentFollowMethod);
+      });
+    }
+    if (tip) {
+      tip.addEventListener('click', function (ev) {
+        var a = ev.target && ev.target.closest ? ev.target.closest('[data-sg]') : null;
+        if (!a) return;
+        var sg = suggestByMethod(currentFollowMethod);
+        if (a.getAttribute('data-sg') === 'ok') {
+          toast('✓ 已确认阶段：' + (sg ? sg.suggestedStageName : '—') + '（留痕）');
+        } else {
+          toast('演示环境：可手动选择 6 步阶段（初步建联→需求确认→面访产品讲解→异议与卡点→逼单→已合作）');
+        }
+      });
+    }
+    var first = m.querySelector('#fd-summary'); if (first) setTimeout(function () { first.focus(); }, 30);
   }
+  window.__openFollowDialog = openFollowDialog;
 
   /* ---------- 外出登记（全局版） ---------- */
   function openOutingDialog() {
@@ -309,11 +375,42 @@
   function matchRelByText(text) {
     var C = window.CRM;
     if (!C || !C.data || !C.data.relations) return null;
+    if (!text) return null;
+    var long = text.length > 40;   // 整行/整卡文本（宽松度不同的防误匹配）
     var hit = null;
     C.data.relations.forEach(function (r) {
-      if (!hit && text && r.companyName && r.companyName.indexOf(text) >= 0) hit = r;
+      if (hit) return;
+      // 正向：上下文文本里出现公司全称
+      if (r.companyName && text.indexOf(r.companyName) >= 0) { hit = r; return; }
+      // 正向：出现公司简称（长文本时要求简称≥3字，防误命中）
+      if (r.shortName && r.shortName.length >= (long ? 3 : 2) && text.indexOf(r.shortName) >= 0) { hit = r; return; }
+      // 反向：上下文文本本身是公司名的一段（如单元格只写了简称）
+      if (!long && text.length >= 2 && r.companyName && r.companyName.indexOf(text) >= 0) hit = r;
     });
     return hit;
+  }
+  /* 从按钮所在行/卡片推断上下文客户：整行文本兜底，避免弹窗默认第一条 */
+  function matchRelByEl(el) {
+    if (!el) return null;
+    var tr = el.closest('tr');
+    if (tr) {
+      var c0 = tr.querySelector('td,th');
+      var t0 = c0 ? c0.textContent.trim() : '';
+      var r0 = matchRelByText(t0);
+      if (r0) return r0;
+      return matchRelByText((tr.textContent || '').trim());
+    }
+    var box = el.closest('.follow-item, .list-item, .card-item, .appt-item, .card');
+    var r = box ? matchRelByText((box.textContent || '').trim()) : null;
+    // 最后兜底：详情页 URL 上的 ?id=
+    if (!r) {
+      var m = /[?&]id=([^&#]+)/.exec(location.search || '');
+      if (m) {
+        var rs = (window.CRM && window.CRM.data && window.CRM.data.relations) || [];
+        for (var i = 0; i < rs.length; i++) { if (String(rs[i].id) === decodeURIComponent(m[1])) { r = rs[i]; break; } }
+      }
+    }
+    return r;
   }
 
   /* ============ 1. 侧边栏折叠（保留原逻辑） ============ */
@@ -403,6 +500,10 @@
     var el = e.target && e.target.closest ? e.target.closest('a,button,.btn,[data-dialog],[data-jump],[data-toast],[data-close],[data-action]') : null;
     if (!el) return;
 
+    // 4.0 app.js 自建弹窗（g-dialog-*）内的按钮由弹窗自身处理，避免二次响应覆盖真实提示
+    var gm = el.closest ? el.closest('.dialog-mask') : null;
+    if (gm && (gm.id.indexOf('g-dialog-') === 0 || el.hasAttribute('data-mok') || el.hasAttribute('data-mclose'))) return;
+
     // 4.1 弹窗关闭按钮优先
     if (el.hasAttribute('data-close')) {
       var m1 = el.closest('.dialog-mask');
@@ -435,6 +536,8 @@
       if (act === 'dept-rule') { e.preventDefault(); return; } // org-department 页自己接管
       return; // 其它 data-action 留给页面脚本
     }
+    // 4.5b 页面已用 onclick 自行接管 → 不再走全局兜底，避免一次点击两次响应
+    if (el.hasAttribute('onclick')) return;
 
     // 4.6 有 href 的真实链接（非 #）→ 不拦截
     var href = el.getAttribute && el.getAttribute('href');
@@ -454,11 +557,12 @@
       toast('已取消'); return;
     }
 
-    if (txt.indexOf('写跟进') >= 0 || txt === '跟进') {
-      // 页面有 D1 弹窗 → 打开；否则跳工作台
+    // 写跟进：一律「就地弹出填写跟进内容」，不再跳转工作台
+    if (txt.indexOf('写跟进') >= 0 || txt.indexOf('记跟进') >= 0 || txt === '跟进') {
+      var rFollow = matchRelByEl(el);
       if (document.getElementById('d1')) { openDialog('d1'); }
       else if (document.getElementById('dialog-follow')) { openDialog('dialog-follow'); }
-      else { goto('workbench.html'); }
+      else { openFollowDialog(rFollow); }
       return;
     }
     if (txt.indexOf('新增预约') >= 0 || txt === '预约' || txt.indexOf('快捷预约') >= 0) {
@@ -474,8 +578,11 @@
       return;
     }
     if (txt.indexOf('完成预约') >= 0 || txt.indexOf('完成') >= 0) {
-      toast('演示环境：完成预约成功 → 自动打开写跟进弹窗形成闭环');
-      if (document.getElementById('d1')) setTimeout(function () { openDialog('d1'); }, 600);
+      // 完成预约必须留跟单记录：就地打开 D1 写跟进（页面无自带 D1 时用全局版）
+      toast('演示环境：完成预约成功 → 已自动打开写跟进弹窗，留跟单记录后闭环');
+      var rDone = matchRelByEl(el);
+      if (document.getElementById('d1')) { setTimeout(function () { openDialog('d1'); }, 600); }
+      else { setTimeout(function () { openFollowDialog(rDone); }, 600); }
       return;
     }
     if (txt.indexOf('详情') >= 0 || txt.indexOf('查看') >= 0) {

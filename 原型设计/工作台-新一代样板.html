@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作台（新一代样板） - 销售CRM</title>
+<!--
+  设计说明：新一代设计样板——工作台（销售的一天）。
+  本轮设计目标（七叔重审需求 2026-09-09）：
+  ① 去 AI 味：全站零 emoji，图标统一细线条线性图标（stroke 1.6）；
+  ② 高端大气：大留白、浅色底、一屏一主次、颜色克制；
+  ③ 操作链路短：侧栏砍到销售日常 6 项+管理收进"更多"；工作台=今天所有动作的唯一入口；
+  ④ 业务呈现顺：时间轴置顶红色逾期、本周重点客户给"去跟进"直达按钮；
+  ⑤ 本页即"换肤默认皮肤"，换肤=在此皮肤上叠加白天/夜间×风格皮肤（能力另见换肤能力演示页）。
+  业务逻辑与信息架构依据《前端页面开发需求文档 V2.6》与《原型推翻重做-保留清单》，仅换视觉层。
+-->
+<style>
+:root {
+  /* ---- 设计令牌（默认皮肤 = 换肤体系的"白天·A"，后续换肤只换这里） ---- */
+  --bg:#F6F7F9; --card:#FFFFFF; --hover:#F2F3F6;
+  --t1:#16181D; --t2:#5A6172; --t3:#9AA1B0;
+  --line:#ECEEF2; --line-strong:#DFE2E9;
+  --primary:#3D4FE0; --primary-deep:#3243C4; --primary-bg:#EEF0FE; --primary-line:#D5DAF8;
+  --danger:#E5484D; --danger-bg:#FDECEC;
+  --ok:#12B76A;
+  --sb-w:218px; --tb-h:60px;
+  --r:10px; --r-sm:8px;
+  --font:"Inter","PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  --shadow-lg:0 10px 30px rgba(16,24,40,.10);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body{height:100%;}
+body{font-family:var(--font);font-size:14px;color:var(--t1);background:var(--bg);-webkit-font-smoothing:antialiased;}
+a{color:inherit;text-decoration:none;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;}
+svg{stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+
+/* ---------- 布局骨架 ---------- */
+.layout{display:flex;min-height:100vh;}
+.sidebar{width:var(--sb-w);flex:none;background:var(--card);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:20px 14px;}
+.logo{display:flex;align-items:center;gap:10px;padding:2px 8px 22px;}
+.logo-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#3D4FE0,#6C7BFF);display:flex;align-items:center;justify-content:center;color:#fff;}
+.logo-mark svg{stroke:#fff;stroke-width:2.2;width:17px;height:17px;}
+.logo-name{font-size:15px;font-weight:650;letter-spacing:.2px;}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1;}
+.nav-group-t{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.6px;padding:16px 10px 8px;}
+.nav-item{display:flex;align-items:center;gap:11px;height:38px;padding:0 10px;border-radius:var(--r-sm);font-size:13.5px;color:var(--t2);transition:.12s;}
+.nav-item svg{width:17px;height:17px;color:var(--t3);flex:none;}
+.nav-item:hover{background:var(--hover);color:var(--t1);}
+.nav-item:hover svg{color:var(--t2);}
+.nav-item.on{background:var(--primary-bg);color:var(--primary-deep);font-weight:600;}
+.nav-item.on svg{color:var(--primary);}
+.nav-item .bdg{margin-left:auto;font-size:11px;background:var(--danger);color:#fff;border-radius:20px;padding:0 7px;height:17px;line-height:17px;font-weight:600;}
+.nav-sub{padding-left:12px;display:flex;flex-direction:column;gap:1px;}
+.nav-sub .nav-item{height:32px;font-size:13px;}
+.sidebar-foot{border-top:1px solid var(--line);padding-top:10px;}
+
+/* ---------- 主区 ---------- */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.topbar{height:var(--tb-h);flex:none;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.8);backdrop-filter:blur(8px);position:sticky;top:0;z-index:50;}
+.page-title{font-size:15px;font-weight:650;}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.search{display:flex;align-items:center;gap:8px;width:260px;height:34px;border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:0 12px;color:var(--t3);background:#fff;font-size:13px;}
+.search svg{width:15px;height:15px;}
+.icon-btn{width:34px;height:34px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:var(--t2);position:relative;}
+.icon-btn:hover{background:var(--hover);color:var(--t1);}
+.icon-btn svg{width:18px;height:18px;}
+.icon-btn .dot{position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:1.5px solid #fff;}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#F59E0B,#EF4444);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;}
+
+.content{padding:24px 28px 40px;max-width:1240px;width:100%;margin:0 auto;}
+
+/* ---------- 问候 + 今日概览 ---------- */
+.greet{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:6px;}
+.greet h2{font-size:22px;font-weight:700;letter-spacing:.2px;}
+.greet .date{font-size:13px;color:var(--t3);margin-top:4px;}
+.greet .act{margin-left:auto;}
+.stats{display:flex;gap:12px;margin:16px 0 20px;}
+.stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow);}
+.stat .num{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;}
+.stat .num small{font-size:13px;font-weight:500;color:var(--t3);}
+.stat .lbl{font-size:12.5px;color:var(--t2);margin-top:6px;display:flex;align-items:center;gap:6px;}
+.stat .lbl svg{width:14px;height:14px;}
+.stat.danger .num{color:var(--danger);}
+.stat.ok .num{color:var(--ok);}
+
+/* ---------- 快捷动作条 ---------- */
+.actionbar{display:flex;gap:10px;margin-bottom:20px;}
+.act-btn{display:flex;align-items:center;gap:9px;height:40px;padding:0 18px;border-radius:var(--r-sm);font-size:13.5px;font-weight:600;transition:.12s;}
+.act-btn svg{width:16px;height:16px;}
+.act-btn.primary{background:var(--primary);color:#fff;box-shadow:0 1px 2px rgba(61,79,224,.4);}
+.act-btn.primary:hover{background:var(--primary-deep);}
+.act-btn.ghost{background:#fff;border:1px solid var(--line-strong);color:var(--t2);}
+.act-btn.ghost:hover{border-color:var(--primary);color:var(--primary);}
+
+/* ---------- 主区两栏 ---------- */
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start;}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;}
+.panel-head{display:flex;align-items:center;padding:16px 20px 0;}
+.panel-title{font-size:14.5px;font-weight:650;display:flex;align-items:center;gap:8px;}
+.panel-title .ico{width:26px;height:26px;border-radius:7px;background:var(--primary-bg);color:var(--primary);display:flex;align-items:center;justify-content:center;}
+.panel-title .ico svg{width:14px;height:14px;}
+.panel-more{margin-left:auto;font-size:12.5px;color:var(--t3);display:flex;align-items:center;gap:4px;}
+.panel-more:hover{color:var(--primary);}
+.panel-more svg{width:13px;height:13px;}
+.panel-body{padding:12px 20px 16px;}
+
+/* 时间轴（今日安排） */
+.timeline{position:relative;padding-left:22px;margin-top:6px;}
+.timeline:before{content:"";position:absolute;left:6px;top:10px;bottom:10px;width:2px;background:var(--line-strong);border-radius:2px;}
+.t-item{position:relative;padding:10px 0 12px;}
+.t-item:before{content:"";position:absolute;left:-22px;top:17px;width:12px;height:12px;border-radius:50%;background:#fff;border:2.5px solid var(--primary);}
+.t-item.over:before{border-color:var(--danger);}
+.t-item.over .t-time{color:var(--danger);}
+.t-main{display:flex;align-items:flex-start;gap:12px;}
+.t-time{width:44px;font-size:13.5px;font-weight:650;font-variant-numeric:tabular-nums;padding-top:1px;}
+.t-info{flex:1;min-width:0;}
+.t-what{font-size:13.5px;font-weight:600;}
+.t-detail{font-size:12.5px;color:var(--t2);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.pill{font-size:11px;font-weight:600;padding:1.5px 8px;border-radius:20px;white-space:nowrap;}
+.pill.line{background:var(--primary-bg);color:var(--primary);}
+.pill.wk{background:var(--danger-bg);color:var(--danger);}
+.pill.out{background:#EAF7F0;color:var(--ok);}
+.pill.gray{background:#F0F1F4;color:var(--t3);}
+.t-over-bar{background:var(--danger-bg);color:var(--danger);font-size:12px;font-weight:600;padding:6px 10px;border-radius:6px;margin-bottom:4px;display:inline-flex;align-items:center;gap:5px;}
+.t-over-bar svg{width:13px;height:13px;}
+.t-actions{display:flex;gap:8px;margin-top:7px;}
+.mini-btn{font-size:12.5px;font-weight:600;color:var(--primary);padding:4px 2px;}
+.mini-btn:hover{text-decoration:underline;}
+.mini-btn.danger{color:var(--danger);}
+
+/* 本周重点 */
+.focus-list{display:flex;flex-direction:column;}
+.focus-item{padding:13px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;}
+.focus-item:last-child{border-bottom:none;}
+.focus-body{flex:1;min-width:0;}
+.focus-co{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px;}
+.focus-co .pill{font-size:10.5px;}
+.focus-sub{font-size:12px;color:var(--t3);margin-top:3px;}
+.focus-go{flex:none;display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:7px;background:var(--primary-bg);color:var(--primary-deep);font-size:12.5px;font-weight:600;}
+.focus-go:hover{background:var(--primary);color:#fff;}
+.focus-go svg{width:13px;height:13px;}
+.empty-tip{font-size:13px;color:var(--t3);padding:22px 4px;text-align:center;}
+
+/* 备注条 */
+.design-note{max-width:1240px;margin:26px auto 0;width:100%;padding:0 28px 8px;font-size:12px;color:var(--t3);line-height:1.9;}
+.design-note b{color:var(--t2);}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- ======== 侧边栏（销售动线，只留日常 6 项，管理收进"更多"） ======== -->
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/></svg></span>
+      <span class="logo-name">云策 · CRM</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-item on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>工作台</div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/><path d="M12 12.5l2 2-2 2M15.5 15h-3.5"/></svg>预约<span class="bdg">3</span></div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.9M15.5 3.2a4 4 0 010 7.6"/></svg>业务关系</div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M3 21V8.5L12 3l9 5.5V21"/><path d="M9 21v-6h6v6"/></svg>客户管理</div>
+      <div class="nav-sub">
+        <div class="nav-item">公海客户</div>
+        <div class="nav-item">公司档案</div>
+        <div class="nav-item">联系人</div>
+      </div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M14 2H7a2 2 0 00-2 2v16a2 2 0 002 2h10a2 2 0 002-2V7l-5-5z"/><path d="M14 2v5h5"/><path d="M9 13l2 2 4-4"/></svg>合同</div>
+      <div class="nav-group-t">更多</div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M12 20a8 8 0 100-16 8 8 0 000 16z"/><path d="M12 7v5l3 3"/></svg>数据看板</div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>审批</div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>报表</div>
+      <div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h.01a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>设置</div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</div>
+    </div>
+  </aside>
+
+  <!-- ======== 主区 ======== -->
+  <div class="main">
+    <header class="topbar">
+      <span class="page-title">工作台</span>
+      <div class="top-actions">
+        <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>搜索客户 / 公司 / 手机号</div>
+        <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span class="dot"></span></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" opacity="0"/><path d="M14 3H8a2 2 0 00-2 2v14a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2z"/><path d="M10 18h4"/></svg></button>
+        <span class="avatar">张</span>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- 问候 -->
+      <div class="greet">
+        <div>
+          <h2>早上好，张销售</h2>
+          <div class="date">今天是 9 月 9 日 星期三 · 距离本月结束还有 21 天</div>
+        </div>
+      </div>
+
+      <!-- 今日概览（四个数，一眼看清今天） -->
+      <div class="stats">
+        <div class="stat danger">
+          <div class="num">1</div>
+          <div class="lbl"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>逾期待办 · 需处理</div>
+        </div>
+        <div class="stat">
+          <div class="num">3</div>
+          <div class="lbl"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/></svg>今日预约</div>
+        </div>
+        <div class="stat ok">
+          <div class="num">2</div>
+          <div class="lbl"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8L12 2z"/></svg>本周重点</div>
+        </div>
+        <div class="stat">
+          <div class="num">5</div>
+          <div class="lbl"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.4 8.5 8.5 0 01-3.9-.9L3 21l2-5.5a8.4 8.4 0 01-.9-4A8.5 8.5 0 0112.6 3a8.4 8.4 0 018.4 8.5z"/></svg>今日已跟进</div>
+        </div>
+      </div>
+
+      <!-- 今天要做的动作：一条直通 -->
+      <div class="actionbar">
+        <button class="act-btn primary"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>写跟进</button>
+        <button class="act-btn ghost"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/><path d="M12 12v6M9 15h6"/></svg>新增预约</button>
+        <button class="act-btn ghost"><svg viewBox="0 0 24 24"><path d="M3 13l1.5-4.5A2 2 0 016.4 7h11.2a2 2 0 011.9 1.5L21 13v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/><path d="M7.5 15.5a1 1 0 100-2 1 1 0 000 2zM16.5 15.5a1 1 0 100-2 1 1 0 000 2z"/></svg>外出登记</button>
+        <button class="act-btn ghost"><svg viewBox="0 0 24 24"><circle cx="9.5" cy="8.5" r="4"/><path d="M2.5 21a7 7 0 0114 0"/><path d="M17.5 4.5v6M14.5 7.5h6"/></svg>录入客户</button>
+        <button class="act-btn ghost" style="margin-left:auto"><svg viewBox="0 0 24 24"><path d="M19 21l-7-4-7 4V5a2 2 0 012-2h10a2 2 0 012 2v16z"/></svg>保存的搜索</button>
+      </div>
+
+      <!-- 两栏：左=今日安排时间轴；右=本周重点 -->
+      <div class="grid2">
+        <!-- 今日安排 -->
+        <section class="panel">
+          <div class="panel-head">
+            <div class="panel-title"><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/></svg></span>今日安排</div>
+            <span class="panel-more">日历视图<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+          </div>
+          <div class="panel-body">
+            <div class="timeline">
+              <div class="t-item over">
+                <div class="t-main">
+                  <div class="t-time">09-05<br><span style="font-weight:600">过期</span></div>
+                  <div class="t-info">
+                    <span class="t-over-bar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>绿城装饰 · 复访已逾期 4 天，未补跟单</span>
+                    <div class="t-what">跟进：网站建设 · 陈经理</div>
+                    <div class="t-detail">差一步就可能掉公海，尽快补一条记录</div>
+                    <div class="t-actions"><button class="mini-btn">补写跟单</button><button class="mini-btn danger">改期预约</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="t-item">
+                <div class="t-main">
+                  <div class="t-time">10:00</div>
+                  <div class="t-info">
+                    <div class="t-what">面访 · 杭州云启科技 <span class="pill wk">本周重点</span></div>
+                    <div class="t-detail"><span class="pill line">财税</span>对接人 王总 · 议题：报价与方案细节 · 客户公司</div>
+                    <div class="t-actions"><button class="mini-btn">写跟进</button><button class="mini-btn">导航</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="t-item">
+                <div class="t-main">
+                  <div class="t-time">14:00</div>
+                  <div class="t-info">
+                    <div class="t-what">产品演示 · 滨江教育集团</div>
+                    <div class="t-detail"><span class="pill line">GEO 优化</span>对接人 李校长 · 议题：效果演示 · 线上会议</div>
+                    <div class="t-actions"><button class="mini-btn">写跟进</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="t-item">
+                <div class="t-main">
+                  <div class="t-time">16:30</div>
+                  <div class="t-info">
+                    <div class="t-what">外出 · 陌拜名单整理 <span class="pill out">外出关联</span></div>
+                    <div class="t-detail">目的地：城西科创园 · 已登记外出</div>
+                    <div class="t-actions"><button class="mini-btn">查看外出单</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 本周重点 -->
+        <section class="panel">
+          <div class="panel-head">
+            <div class="panel-title"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8L12 2z"/></svg></span>本周重点客户</div>
+            <span class="panel-more">全部 2 家</span>
+          </div>
+          <div class="panel-body" style="padding-top:4px">
+            <div class="focus-list">
+              <div class="focus-item">
+                <div class="focus-body">
+                  <div class="focus-co">杭州云启科技 <span class="pill wk">周重点</span></div>
+                  <div class="focus-sub">财税 · 阶段：异议与卡点 · 今日 10:00 面访</div>
+                </div>
+                <button class="focus-go"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>去跟进</button>
+              </div>
+              <div class="focus-item">
+                <div class="focus-body">
+                  <div class="focus-co">滨江教育集团 <span class="pill wk">周重点</span></div>
+                  <div class="focus-sub">GEO 优化 · 阶段：面访讲解 · 今日 14:00 演示</div>
+                </div>
+                <button class="focus-go"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>去跟进</button>
+              </div>
+              <div class="focus-item">
+                <div class="focus-body">
+                  <div class="focus-co">中恒律所 <span class="pill gray">月重点</span></div>
+                  <div class="focus-sub">法律服务 · 阶段：需求确认 · 上次跟进 3 天前</div>
+                </div>
+                <button class="focus-go"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>去跟进</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 下半：今日已跟进简报 -->
+          <div class="panel-head" style="padding-top:14px;border-top:1px solid var(--line)">
+            <div class="panel-title"><span class="ico"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.4 8.5 8.5 0 01-3.9-.9L3 21l2-5.5a8.4 8.4 0 01-.9-4A8.5 8.5 0 0112.6 3a8.4 8.4 0 018.4 8.5z"/></svg></span>今日已跟进（5）</div>
+          </div>
+          <div class="panel-body" style="padding-top:8px">
+            <div class="t-detail" style="padding:6px 2px;border-bottom:1px solid var(--line)">
+              <span style="font-size:13px;font-weight:600;color:var(--t1)">09:30</span>&nbsp; 电话 · 杭州云启（王总）· 确认面访时间
+            </div>
+            <div class="t-detail" style="padding:6px 2px;border-bottom:1px solid var(--line)">
+              <span style="font-size:13px;font-weight:600;color:var(--t1)">09:50</span>&nbsp; 微信 · 鑫隆商贸（刘总）· 发资料
+            </div>
+            <div class="t-detail" style="padding:6px 2px">
+              <span style="font-size:13px;font-weight:600;color:var(--t1)">10:40</span>&nbsp; 电话 · 华庭地产（吴经理）· 未接，稍后回访
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="design-note">
+  <b>本页演示的新设计标准（对应你 5 条要求）：</b>
+  ① 零 emoji，全部线性图标；② 大留白 + 一屏一主次，主色只在可点按钮上；
+  ③ 侧栏砍到销售日常 6 项，管理进"更多"；④ 红色只给"逾期/风险"，今天该干嘛 5 秒看懂；
+  ⑤ 本页即换肤默认皮肤，换肤 = 在此之上叠白天/夜间 × A/B/C（引擎见《换肤能力演示-工作台.html》）。
+  业务逻辑与《保留清单》完全一致：周重点承诺、逾期补单防掉公海、写跟进直达、产品线彩色标签、人员头像。
+</div>
+</body>
+</html>

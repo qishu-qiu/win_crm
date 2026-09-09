@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>换肤演示 - 白天/夜间 × 风格皮肤（工作台） - 销售CRM</title>
+<!--
+  设计说明：真·全局换肤能力演示（工作台页面）。
+  核心：全站共用同一套 DOM 骨架 + 一套 CSS 变量（design token）。
+  皮肤 = 变量组合：亮度维度(light/dark) × 风格维度(brand-1年轻/2沉稳/3极简)。
+  换肤面板放右上角，点击即切（白天/夜间 3 组按钮 + A/B/C 三套品牌风格），
+  选择存 localStorage（真实系统存用户账号），刷新保持。
+  业务逻辑/信息架构与《前端页面开发需求文档 V2.6》一致，仅换视觉层。
+-->
+<style>
+/* ============ 设计令牌（Design Token）— 皮肤真正的"配方表" ============ */
+:root {
+  /* 布局常量（所有皮肤共用，不随皮肤变） */
+  --sb-w: 220px; --tb-h: 56px; --radius: 6px; --radius-lg: 10px;
+  --font: "PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+}
+/* 亮度：白天（默认） */
+:root, [data-mode="light"] {
+  --bg-page:#F5F7FA; --bg-card:#FFFFFF; --bg-hover:#F0F2F5;
+  --text-1:#1D2129; --text-2:#4E5969; --text-3:#86909C;
+  --border:#E5E6EB; --border-l:#F2F3F5;
+  --shadow:0 2px 8px rgba(29,33,41,.06);
+  --sb-bg:#001529; --sb-text:rgba(255,255,255,.72); --sb-active:rgba(255,255,255,.14);
+  --tb-bg:#FFFFFF; --tag-bg:#F2F3F5; --tag-text:#4E5969;
+  --danger:#F53F3F; --danger-bg:#FFECE8; --ok:#00B42A;
+  --today-line:#E5E6EB;
+}
+/* 亮度：夜间 */
+[data-mode="dark"] {
+  --bg-page:#101216; --bg-card:#1A1D23; --bg-hover:#262A32;
+  --text-1:#E8EAEF; --text-2:#B6BCC7; --text-3:#6E7582;
+  --border:#2C313A; --border-l:#23272F;
+  --shadow:0 2px 10px rgba(0,0,0,.35);
+  --sb-bg:#0B0D11; --sb-text:rgba(255,255,255,.6); --sb-active:rgba(255,255,255,.1);
+  --tb-bg:#1A1D23; --tag-bg:#2C313A; --tag-text:#B6BCC7;
+  --danger:#F76965; --danger-bg:rgba(245,63,63,.16); --ok:#4CD263;
+  --today-line:#2C313A;
+}
+/* 风格：A 年轻品牌感（紫蓝渐变） */
+[data-skin="A"] {
+  --primary:#5B4EE6; --primary-deep:#4B3FD4; --primary-grad:linear-gradient(135deg,#6C5CFF,#9F7BFF);
+  --primary-bg:#F0EEFF; --primary-bd:#D6D1FF;
+  --line-1:#5B4EE6; --line-1bg:#F0EEFF;   /* 产品线标签 财税 */
+  --line-2:#C77700; --line-2bg:#FFF4E8;   /* GEO */
+  --line-3:#3D6DE0; --line-3bg:#F0F4FF;   /* 网站 */
+  --line-4:#0F6E56; --line-4bg:#E1F5EE;   /* 法律 */
+}
+/* 风格：B 沉稳专业感（深藏青+金） */
+[data-skin="B"] {
+  --primary:#1E4FA3; --primary-deep:#163D80; --primary-grad:linear-gradient(135deg,#1E4FA3,#2E6BC7);
+  --primary-bg:#EAF0FA; --primary-bd:#D3DEF0;
+  --line-1:#8A6D1F; --line-1bg:#F5EEDA;   /* 财税 */
+  --line-2:#1E4FA3; --line-2bg:#EAF0FA;   /* GEO */
+  --line-3:#0F766E; --line-3bg:#E2F3F1;   /* 网站 */
+  --line-4:#7A5C00; --line-4bg:#FBF3DF;   /* 法律 */
+}
+/* 风格：C 极简数据感（青色） */
+[data-skin="C"] {
+  --primary:#0FC6C2; --primary-deep:#0AA8A5; --primary-grad:linear-gradient(135deg,#0FC6C2,#22D3EE);
+  --primary-bg:rgba(15,198,194,.12); --primary-bd:rgba(15,198,194,.35);
+  --line-1:#0FC6C2; --line-1bg:rgba(15,198,194,.13);
+  --line-2:#E3B341; --line-2bg:rgba(227,179,65,.14);
+  --line-3:#79C0FF; --line-3bg:rgba(121,192,255,.13);
+  --line-4:#FF7B72; --line-4bg:rgba(255,123,114,.13);
+}
+
+/* ============ 布局骨架（所有皮肤共用同一套，只在换肤面板下缩放预览） ============ */
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:var(--font); font-size:14px; background:#EDEFF3; color:var(--text-1); }
+.demo-wrap { max-width:1500px; margin:0 auto; padding:20px; }
+.demo-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.demo-top h1 { font-size:20px; font-weight:700; color:#1D2129; }
+.demo-top .sub { font-size:13px; color:#6E7582; }
+.demo-tip { font-size:12.5px; color:#6E7582; margin-top:2px; }
+.demo-frame {
+  border-radius:14px; overflow:hidden; box-shadow:0 12px 36px rgba(31,41,66,.16);
+  border:1px solid #E3E7EF; background:var(--bg-page);
+}
+
+/* ---- 换肤面板（全局固定在右上角） ---- */
+.skin-panel {
+  position:fixed; top:16px; right:16px; z-index:999;
+  background:#fff; border:1px solid #E3E7EF; border-radius:14px;
+  box-shadow:0 8px 30px rgba(31,41,66,.18); padding:14px 16px; width:248px;
+}
+.skin-panel .sp-t { font-size:13px; font-weight:700; color:#1D2129; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; }
+.skin-panel .sp-t .close { cursor:pointer; font-size:12px; color:#86909C; background:#F2F3F5; border:none; border-radius:6px; padding:2px 8px; }
+.skin-panel .sp-t .close:hover { background:#E5E6EB; }
+.skin-panel .sp-hide { display:none; }
+.skin-panel .sp-open { position:fixed; top:16px; right:16px; background:#fff; border:1px solid #E3E7EF; border-radius:12px; box-shadow:0 6px 20px rgba(31,41,66,.16); width:248px; padding:12px 16px; font-size:13px; font-weight:700; color:#1D2129; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+.skin-panel .group { margin-top:10px; }
+.skin-panel .g-t { font-size:11px; color:#86909C; margin-bottom:6px; }
+.skin-panel .row { display:flex; gap:6px; }
+.skin-panel .opt { flex:1; border:1px solid #E5E6EB; background:#fff; border-radius:8px; padding:6px 4px; cursor:pointer; text-align:center; font-size:11.5px; color:#4E5969; transition:.12s; }
+.skin-panel .opt:hover { border-color:#B9BDC7; }
+.skin-panel .opt.on { border-color:var(--primary,#5B4EE6); color:var(--primary,#5B4EE6); font-weight:700; background:var(--primary-bg,#F0EEFF); }
+.skin-panel .opt .sw { display:flex; justify-content:center; gap:3px; margin-bottom:4px; }
+.skin-panel .opt .sw i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+.skin-panel .note { margin-top:12px; font-size:11px; color:#A9AEB8; line-height:1.6; border-top:1px dashed #E5E6EB; padding-top:8px; }
+.skin-panel .foot { display:flex; justify-content:flex-end; margin-top:8px; }
+
+/* 应用内换肤拉手（模拟真实系统右上角的切换入口，可点开面板） */
+.app-skin-handle { display:flex; align-items:center; gap:6px; cursor:pointer; padding:4px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-2); font-size:12px; }
+
+/* ---- 应用骨架（与真实原型一致，全部颜色走变量） ---- */
+.app { display:flex; height:auto; min-height:calc(100vh - 130px); background:var(--bg-page); }
+.sb { width:var(--sb-w); flex:none; background:var(--sb-bg); color:var(--sb-text); display:flex; flex-direction:column; padding:0 0 16px; }
+.sb .logo { display:flex; align-items:center; gap:10px; padding:16px 20px; color:#fff; font-weight:600; font-size:16px; border-bottom:1px solid rgba(255,255,255,.07); }
+.sb .logo .lb { width:26px; height:26px; border-radius:7px; background:var(--primary-grad); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.sb nav { padding:10px 0; display:flex; flex-direction:column; }
+.sb .mi { display:flex; align-items:center; gap:10px; padding:10px 20px; font-size:13.5px; color:var(--sb-text); border-left:3px solid transparent; cursor:default; }
+.sb .mi.on { background:var(--sb-active); color:#fff; border-left-color:var(--primary); }
+.sb .mi .ic { width:16px; text-align:center; font-style:normal; }
+.sb .grp { margin-top:6px; padding-left:20px; display:flex; flex-direction:column; }
+.sb .grp .mi { padding:8px 20px; font-size:12.5px; }
+.main { flex:1; display:flex; flex-direction:column; min-width:0; }
+.tb { height:var(--tb-h); flex:none; display:flex; align-items:center; gap:14px; padding:0 24px; background:var(--tb-bg); border-bottom:1px solid var(--border-l); }
+.tb .t { font-size:16px; font-weight:600; color:var(--text-1); }
+.tb .sp { flex:1; }
+.tb .date { font-size:13px; color:var(--text-3); }
+.tb .av { width:30px; height:30px; border-radius:50%; background:var(--primary-grad); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; }
+.ct { flex:1; padding:20px 24px; display:flex; flex-direction:column; gap:16px; }
+.row2 { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; align-items:start; }
+.q4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.qk { background:var(--bg-card); border:1px solid var(--border-l); border-radius:var(--radius-lg); padding:18px 10px 14px; text-align:center; box-shadow:var(--shadow); cursor:default; transition:.15s; }
+.qk:hover { transform:translateY(-2px); border-color:var(--primary); }
+.qk .q-ic { width:40px; height:40px; margin:0 auto; border-radius:10px; background:var(--primary-bg); display:flex; align-items:center; justify-content:center; }
+.qk .q-ic svg { width:22px; height:22px; stroke:var(--primary); }
+.qk .q-t { font-size:13.5px; font-weight:600; color:var(--text-1); margin-top:10px; }
+.qk .q-d { font-size:11px; color:var(--text-3); margin-top:3px; }
+.panel { background:var(--bg-card); border:1px solid var(--border-l); border-radius:var(--radius-lg); box-shadow:var(--shadow); }
+.panel .ph { display:flex; align-items:center; gap:8px; padding:14px 16px 10px; font-size:14px; font-weight:600; color:var(--text-1); }
+.panel .ph .cnt { font-size:11px; background:var(--primary-bg); color:var(--primary); border-radius:9px; padding:1px 7px; font-weight:600; }
+.panel .ph .sp { flex:1; }
+.panel .ph .more { font-size:12px; color:var(--text-3); font-weight:400; cursor:pointer; }
+.panel .ph .more:hover { color:var(--primary); }
+.panel .pb { padding:2px 16px 10px; }
+.tl { position:relative; padding-left:16px; }
+.tl:before { content:""; position:absolute; left:5px; top:10px; bottom:10px; width:2px; background:var(--today-line); }
+.tli { position:relative; padding:10px 0 12px; border-bottom:1px dashed var(--border-l); }
+.tli:last-child { border-bottom:none; }
+.tli:before { content:""; position:absolute; left:-16px; top:16px; width:10px; height:10px; border-radius:50%; background:var(--bg-card); border:2px solid var(--primary); }
+.tli .r1 { display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--text-1); }
+.tli .r1 .tm { font-size:11.5px; font-weight:500; color:var(--text-3); font-variant-numeric:tabular-nums; }
+.tli .r2 { font-size:12px; color:var(--text-2); margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.ltag { font-size:10.5px; padding:1px 7px; border-radius:4px; white-space:nowrap; }
+.ltag.l1 { background:var(--line-1bg); color:var(--line-1); }
+.ltag.l2 { background:var(--line-2bg); color:var(--line-2); }
+.ltag.l3 { background:var(--line-3bg); color:var(--line-3); }
+.ltag.l4 { background:var(--line-4bg); color:var(--line-4); }
+.ltag.wk { background:var(--danger-bg); color:var(--danger); font-weight:600; }
+.ltag.out { background:var(--primary-bg); color:var(--primary); }
+.ap { display:flex; align-items:flex-start; gap:10px; padding:9px 4px; border-radius:8px; }
+.ap:hover { background:var(--bg-hover); }
+.ap .dt { flex:none; width:48px; text-align:center; border-radius:8px; background:var(--bg-hover); padding:5px 0; }
+.ap .dt .d1 { font-size:10px; color:var(--text-3); }
+.ap .dt .d2 { font-size:14px; font-weight:700; color:var(--primary); font-variant-numeric:tabular-nums; }
+.ap .bd .a1 { font-size:12.5px; font-weight:600; color:var(--text-1); }
+.ap .bd .a2 { font-size:11px; color:var(--text-3); margin-top:2px; line-height:1.5; }
+.ap.over { background:var(--danger-bg); }
+.ap.over .dt { background:transparent; }
+.ap.over .dt .d2 { color:var(--danger); }
+</style>
+</head>
+<body>
+
+<!-- 全局换肤面板（可收起） -->
+<div class="skin-panel" id="skinPanel">
+  <div class="sp-t">换肤开关 <button class="close" onclick="document.getElementById('skinPanel').classList.add('sp-hide')">收起</button></div>
+  <div class="group">
+    <div class="g-t">亮度（白天 / 夜间）</div>
+    <div class="row">
+      <div class="opt" data-k="mode" data-v="light"><div class="sw"><i style="background:#F5F7FA;border:1px solid #ddd"></i></div>白天</div>
+      <div class="opt" data-k="mode" data-v="dark"><div class="sw"><i style="background:#101216;border:1px solid #333"></i></div>夜间</div>
+    </div>
+  </div>
+  <div class="group">
+    <div class="g-t">风格皮肤（公司默认 A，可切换预览）</div>
+    <div class="row">
+      <div class="opt" data-k="skin" data-v="A"><div class="sw"><i style="background:#6C5CFF"></i><i style="background:#9F7BFF"></i></div>A 年轻</div>
+      <div class="opt" data-k="skin" data-v="B"><div class="sw"><i style="background:#0F2540"></i><i style="background:#C9A34A"></i></div>B 沉稳</div>
+      <div class="opt" data-k="skin" data-v="C"><div class="sw"><i style="background:#0FC6C2"></i><i style="background:#22D3EE"></i></div>C 极简</div>
+    </div>
+  </div>
+  <div class="group">
+    <div class="g-t">组合预览（右上角小拉手在真实系统里就是"我的-外观"）</div>
+  </div>
+  <div class="note">选择会记住（演示存浏览器，真实系统存个人账号，换设备也跟着）。</div>
+</div>
+
+<div class="demo-wrap">
+  <div class="demo-top">
+    <h1>换肤能力演示 · 工作台</h1>
+    <div class="sub">骨架 100% 相同，只换"配方表"——这就是你要的"皮肤写成全局"</div>
+  </div>
+  <div class="demo-tip">👆 点右上角 <b>换肤开关</b> 玩：先切 <b>白天/夜间</b>，再切 <b>A/B/C 风格</b>，六种组合随意看。选完关掉面板，页面无一处"穿帮"。</div>
+
+  <div class="demo-frame">
+    <div class="app" id="app">
+      <!-- 侧边栏 -->
+      <aside class="sb">
+        <div class="logo"><span class="lb">销</span>销售 CRM</div>
+        <nav>
+          <div class="mi"><i class="ic">📊</i>数据看板</div>
+          <div class="mi on"><i class="ic">🧰</i>工作台</div>
+          <div class="mi"><i class="ic">📅</i>预约管理</div>
+          <div class="mi"><i class="ic">🤝</i>业务关系</div>
+          <div class="mi"><i class="ic">➕</i>录入</div>
+          <div class="mi"><i class="ic">🔍</i>高级搜索</div>
+          <div class="grp">
+            <div class="mi"><i class="ic">🌊</i>客户管理</div>
+            <div class="mi"><i class="ic">🗂</i>客户档案</div>
+            <div class="mi"><i class="ic">📄</i>合同管理</div>
+            <div class="mi"><i class="ic">✅</i>审批中心</div>
+          </div>
+        </nav>
+      </aside>
+      <!-- 主区 -->
+      <div class="main">
+        <div class="tb">
+          <span class="t">工作台</span>
+          <span class="sp"></span>
+          <span class="app-skin-handle" onclick="togglePanel()">🎨 外观 <span id="skinLabel">白天·A</span></span>
+          <span class="date">2026-09-09 星期三</span>
+          <span class="av">张</span>
+        </div>
+        <div class="ct">
+          <!-- 快捷动作 4 卡 -->
+          <div class="q4">
+            <div class="qk"><div class="q-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/><path d="M13 6l3 3"/></svg></div><div class="q-t">写跟进</div><div class="q-d">记录一次沟通</div></div>
+            <div class="qk"><div class="q-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></div><div class="q-t">新增预约</div><div class="q-d">安排拜访/来电</div></div>
+            <div class="qk"><div class="q-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2-5a2 2 0 012-1.5h10A2 2 0 0119 8l2 5v5h-3M6 18H3v-5"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></svg></div><div class="q-t">外出登记</div><div class="q-d">出门办事留痕</div></div>
+            <div class="qk"><div class="q-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M18 6v6M15 9h6"/></svg></div><div class="q-t">录入客户</div><div class="q-d">新增公司/联系人</div></div>
+          </div>
+          <!-- 中部：今日跟单 + 今日预约 -->
+          <div class="row2">
+            <div class="panel">
+              <div class="ph">今日跟单记录 <span class="cnt">4</span><span class="sp"></span><span class="more">查看全部 ›</span></div>
+              <div class="pb"><div class="tl">
+                <div class="tli">
+                  <div class="r1"><span class="tm">09:30</span>电话跟进 · 杭州云启科技</div>
+                  <div class="r2"><span class="ltag l1">财税</span>王总 · 确认下周面访时间 <span class="ltag wk">本周重点</span></div>
+                </div>
+                <div class="tli">
+                  <div class="r1"><span class="tm">11:15</span>上门拜访 · 滨江教育集团</div>
+                  <div class="r2"><span class="ltag l2">GEO 优化</span>李校长 · 已带产品方案 <span class="ltag out">🚗 外出关联</span></div>
+                </div>
+                <div class="tli">
+                  <div class="r1"><span class="tm">14:02</span>微信跟进 · 绿城装饰</div>
+                  <div class="r2"><span class="ltag l3">网站建设</span>陈经理 · 等报价反馈，已约周四复访</div>
+                </div>
+                <div class="tli">
+                  <div class="r1"><span class="tm">16:40</span>面访产品讲解 · 中恒律所</div>
+                  <div class="r2"><span class="ltag l4">法律服务</span>周主任 · 进入异议与卡点，报价犹豫</div>
+                </div>
+              </div></div>
+            </div>
+            <div class="panel">
+              <div class="ph">今日新建预约 <span class="cnt">3</span><span class="sp"></span><span class="more">预约管理 ›</span></div>
+              <div class="pb">
+                <div class="ap">
+                  <div class="dt"><div class="d1">明天</div><div class="d2">10:00</div></div>
+                  <div class="bd"><div class="a1">面访 · 杭州云启科技</div><div class="a2">王总 · 财税产品讲解 · 客户公司</div></div>
+                </div>
+                <div class="ap">
+                  <div class="dt"><div class="d1">周四</div><div class="d2">14:00</div></div>
+                  <div class="bd"><div class="a1">产品演示 · 滨江教育集团</div><div class="a2">李校长 · GEO 优化方案演示</div></div>
+                </div>
+                <div class="ap over">
+                  <div class="dt"><div class="d1">09-05</div><div class="d2">15:00</div></div>
+                  <div class="bd"><div class="a1">复访 · 绿城装饰（已过期）</div><div class="a2">陈经理 · 请补跟单记录或改期</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ 换肤引擎：一行 JS，全站生效 ============ */
+function applySkin() {
+  var mode = localStorage.getItem('crm_demo_mode') || 'light';
+  var skin = localStorage.getItem('crm_demo_skin') || 'A';
+  document.documentElement.setAttribute('data-mode', mode);
+  document.documentElement.setAttribute('data-skin', skin);
+  var label = (mode === 'dark' ? '夜间' : '白天') + '·' + skin;
+  var el = document.getElementById('skinLabel');
+  if (el) el.textContent = label;
+  var opts = document.querySelectorAll('.skin-panel .opt');
+  for (var i = 0; i < opts.length; i++) {
+    var o = opts[i];
+    var on = (o.getAttribute('data-k') === 'mode' && o.getAttribute('data-v') === mode) ||
+             (o.getAttribute('data-k') === 'skin' && o.getAttribute('data-v') === skin);
+    if (on) o.classList.add('on'); else o.classList.remove('on');
+  }
+}
+function togglePanel() {
+  var p = document.getElementById('skinPanel');
+  p.classList.toggle('sp-hide');
+  if (!p.classList.contains('sp-hide')) applySkin();
+}
+document.addEventListener('DOMContentLoaded', applySkin);
+document.querySelectorAll('.skin-panel .opt').forEach(function (o) {
+  o.addEventListener('click', function () {
+    var k = o.getAttribute('data-k'), v = o.getAttribute('data-v');
+    localStorage.setItem('crm_demo_' + k, v);
+    applySkin();
+  });
+});
+</script>
+</body>
+</html>

@@ -632,6 +632,16 @@ ul, ol { list-style: none; }
 .suggest-tip .st-strong { color: var(--primary); font-weight: 600; }
 .suggest-tip .st-actions { margin-left: auto; display: flex; gap: 6px; }
 
+/* D1 写跟单：跟进方式片（原为 workbench 页内样式，上提为全局，供全站 D1 复用） */
+.radio-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.radio-chip {
+  padding: 4px 12px; border: 1px solid var(--border); border-radius: 14px;
+  font-size: 12px; color: var(--text-regular); cursor: pointer; user-select: none;
+  background: #fff; transition: all .15s;
+}
+.radio-chip:hover { border-color: var(--primary); color: var(--primary); }
+.radio-chip.on { border-color: var(--primary); color: var(--primary); background: var(--primary-light); font-weight: 600; }
+
 /* 报表：6 步漏斗 + 紧迫分布 + 灰度预警 */
 .funnel-6 .fn-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .funnel-6 .fn-name { width: 96px; font-size: 12px; color: var(--text-regular); text-align: right; }

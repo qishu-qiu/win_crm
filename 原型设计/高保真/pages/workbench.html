@@ -168,7 +168,7 @@
       <div class="form-row">
         <div class="form-item">
           <span class="form-label"><span class="req">*</span>跟进方式</span>
-          <!-- V2.5 跟进方式：data-method 与 CRM.data.suggestRules.method 一一对应（电话/到访/异议/报价） -->
+          <!-- V2.5 跟进方式：data-method 为中文展示名，由 METHOD_CODE 映射到 CRM.data.suggestRules.method（phone/onsite/objection/quote） -->
           <div class="radio-row" id="methodRow">
             <span class="radio-chip on" data-method="电话">📞 电话</span>
             <span class="radio-chip" data-method="微信">💬 微信</span>
@@ -300,9 +300,15 @@
       '<button type="button" class="btn btn-sm" id="suggestModify">修改</button>' +
     '</span>';
 
+  /* 中文展示名 → 数据层 method code（数据层只认 code，见 assets/db/04-relation.js suggestRules） */
+  var METHOD_CODE = {
+    '电话': 'phone', '微信': 'wechat', '陌拜': 'canvass',
+    '到访': 'onsite', '邮件': 'email', '异议': 'objection', '报价': 'quote'
+  };
   function ruleOf(method) {
     var rs = D.suggestRules || [];
-    for (var i = 0; i < rs.length; i++) { if (rs[i].method === method) return rs[i]; }
+    var code = METHOD_CODE[method] || method;
+    for (var i = 0; i < rs.length; i++) { if (rs[i].method === code || rs[i].method === method) return rs[i]; }
     return null;
   }
   function stageOptionHTML(selectedId) {

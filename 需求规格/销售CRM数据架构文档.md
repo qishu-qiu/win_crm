@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.0（现行有效）
+# 销售 CRM 数据架构文档 V1.2（现行有效）
 
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
@@ -10,8 +10,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.0（现行有效）** / 2026-09-09 |
-| 上游 | 《销售CRM业务需求文档》V1.0（业务规则唯一来源） |
+| 版本 / 日期 | **V1.2（现行有效）** / 2026-09-09 |
+| 上游 | 《销售CRM业务需求文档》V1.1（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》（待建）、《销售CRM前端页面与交互文档》（待建） |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
@@ -179,7 +179,7 @@ operation_log（操作留痕）｜ visit_log（外出登记：纯行政考勤）
 | customer_level | S/A/B/C/D（回款到账事务内按 dept_rule 自动算，**不手填**） |
 | competition | **竞品态势快照**（可空=未知）：none/in_use/comparing。**录入不在此表**——写事件(D2)时顺手标记并回写；列表/推导读本字段 |
 | competitor_id 可空 | 关联 `competitor` 名册（最近一次标记对象），由事件回写 |
-| sea_status | private/dept_sea/company_sea |
+| sea_status | `private` 私海（有 owner）/ `company_sea` **公司公海（唯一无主池）**。**部门公海不是独立状态**：= `company_sea` 中归口本部门（dept_id=本部门）的无主关系的映射视图，**无"部门→公司"自动掉落**（`→需求§6.3`） |
 | gray_release_at | 灰度寿命释放候选时间戳 |
 | last_event_at | 最近一次事件时间，INDEX 供预警扫描 |
 | next_action_hint | 可空：一句话"上次说好下次干嘛"（从最近承诺/事件冗余） |
@@ -199,6 +199,7 @@ operation_log（操作留痕）｜ visit_log（外出登记：纯行政考勤）
 - **正式协同**：owner 或经理发起、审批通过（source=collaborate）
 - **@求助（ask_help）= 轻量临时协同**（`→需求§3` 术语）：owner 写事件 @ 同事即时授予**与正式协同相同**的权限；默认 7 天自动收回（dept_rule.ask_help_days 可配）、owner 可随时撤销、全量留痕、**免审批**。想长期共同跟进必须走正式协同审批
 - **主责变更**（`→需求§5.2`）：换人=transfer 审批；短期=带期限 collaborator；**离职=管理员批量转交**（payload 支持清单）
+- **索引**：`uk(relation_id, employee_id, member_type)` 防重复授予；`idx(employee_id, member_type, valid_until)` 供"我协同 / @我"列表与有效期扫描（§十七 A.3）；`idx(relation_id)` 供关系内成员查询
 
 ### C3 relation_stage_log 阶段推进留痕
 `relation_id + from_stage/to_stage + action(normal/jump/rollback/lost) + reason + operator_id`
@@ -252,7 +253,7 @@ operation_log（操作留痕）｜ visit_log（外出登记：纯行政考勤）
 | competition 可空 | 本次跟单竞品态势 none/in_use/comparing，事务回写 C1 快照。**UI 口径：折叠成一行，默认"无"跳过** |
 | competitor_id / competition_note 可空 | 本次标记的竞品 / 一句话情况（≤100 字） |
 | duration_min 可空 | 本次投入分钟（算单位时间价值） |
-| mentioned_user_ids JSON | @求助的同事；**@ 即授予临时协同**（见 C2） |
+| mentioned_user_ids JSON | @求助的同事；**@ 即授予临时协同**（见 C2）。**仅用于跟单卡片展示"本条 @了谁"（正向读）；权限与可见性已由 C2 relation_member 承担，不拆关联表、禁止在该列做反向 `JSON_CONTAINS` 全表扫描**（详见 §十七 A.2） |
 | source | manual / auto / import |
 | visit_log_id / appointment_id 可空 | 关联外出/预约 |
 | idempotency_key UNIQUE | 防重复提交 |
@@ -329,9 +330,11 @@ operation_log（操作留痕）｜ visit_log（外出登记：纯行政考勤）
 
 ### F1 sea_rule 公海规则（L1-L4）
 `level`(1=全局 2=产品线 3=部门 4=部门×产品线) + `dept_id/product_line_id`(按层可空) + `follow_freq_days` + `deal_cycle_days` + `stay_days` + `no_progress_max` + `status`；命中解析 L4→L1 取第一条，应用层缓存、变更失效
+> 池模型（`→需求§6.3`）：`sea_status` 只有 `private/company_sea`，**部门公海是公司公海的映射视图，无独立状态、无"部门→公司"自动掉落**。`stay_days` 两类用途：① 私海掉落倒计时（自动触发）；② **公海停留超期 → 生成经理决策待办**（不自动删除、不自动流转）。
 
 ### F2 sea_record 入公海历史
-`relation_id + from_sea/to_sea + reason`(follow_timeout/deal_timeout/stagnant/manual/gray_release) + `dropped_at + claimed_by + claimed_at`
+`relation_id + from_sea/to_sea` + `reason`(follow_timeout/deal_timeout/stagnant/manual/gray_release/dept_manager_delete) + `dropped_at + claimed_by + claimed_at`
+> 私海掉落回公海、经理"删除关系"（reason=dept_manager_delete，逻辑删除）均写本表留痕；`to_sea` 仅 `company_sea`（公司公海）。
 
 ---
 
@@ -379,7 +382,7 @@ operation_log（操作留痕）｜ visit_log（外出登记：纯行政考勤）
 | 公海卡片/列表 | 脱敏 `xxx****xxxx` | 仅「近 30 天 N 次」概览 |
 | 跨业务线金额 | 完全脱敏 | 仅"N 个工单进行中"概览 |
 
-- 数据范围：销售=本人私海(owner/collaborator)+公海；经理=dept_manager 管辖部门；总经理=全部；他人私海不可见（除非协同/@求助授权）
+- 数据范围：销售可见客户全集 = **本人 owner 私海 ∪ 我作为 collaborator 的关系（含正式协同 collaborate 与 @求助 ask_help，valid_until 未过期）∪ 公海**；经理=dept_manager 管辖部门；总经理=全部；他人私海不可见（除非协同/@求助授权）。客户列表提供"@我 / 我协同 / 全部关联"筛选视图，底层即 relation_member 中 employee_id=当前用户 的 collaborator 集合，与 owner 私海取并集后按筛选裁剪（口径见 §十七 A.3）
 - 赢单弹药库（review published）：**默认本部门可见**；gm 经 system_config(ammo_scope=company) 改全公司；未收录的（open/dismissed）仅本人+直属经理可见
 - 坐标属公司档案基础信息（非敏感）；将来做地图时必须走同一套权限过滤
 - 协同/转交走审批；解锁/变更走审批且留痕；合同水印、操作日志为应用层责任
@@ -393,7 +396,8 @@ operation_log（操作留痕）｜ visit_log（外出登记：纯行政考勤）
 | 组装今日动线 | 每日 05:00 | 承诺到期/逾期 + 预约 + cadence 命中 + 掉海倒计时 → 写 daily_agenda |
 | 承诺提醒 | 到点/每日 | remind_at 到 → notification；逾期未办 → 次日动线置顶红（>3 天收进逾期抽屉） |
 | 节奏提醒 | 每日 | cadence_rule 逐条命中（新客 48h / S 级客情 / 灰度定性 / 周重点周五清点） |
-| 掉海预警 | 每小时 | 按 sea_rule：≤3 天进动线；到期前 24h 推销售；6h 标红+推经理；超期落 sea_record 转公海 |
+| 掉海预警（私海→公海） | 每小时 | 按 sea_rule：≤3 天进动线；到期前 24h 推销售；6h 标红+推经理；超期落 sea_record 转**公司公海**（部门映射保留，仍显示于部门公海） |
+| 公海停留超期（经理决策） | 每日 | 扫描 `company_sea` 中归口本部门、停留超期的无主关系 → 生成**经理决策待办**（保留 / 删除关系）；**不自动删除、不自动流转**（`→需求§6.3`） |
 | 灰度寿命 | 每日 | urgency=gray 超 remind_days → 提醒下结论；再超 release_days → 置 gray_release_at |
 | 协同到期 | 每日 | relation_member.collaborator.valid_until 到期 → 自动失效并通知双方 |
 | 判死教训缓写提醒 | 每日 | loss review 已 closed 但 detail 空 → 次日动线提醒补写 |
@@ -468,6 +472,37 @@ operation_log（操作留痕）｜ visit_log（外出登记：纯行政考勤）
 | 版本 | 日期 | 修改内容 |
 |---|---|---|
 | V1.0 | 2026-09-09 | 首版：从《数据库设计文档-助理版》V1.0.7 拆出**纯数据层**（表/字段/索引/字典/权限/任务），业务规则全部改为指针 `→需求§X` 指向新《销售CRM业务需求文档》，杜绝两处定义同一事实（L1）。新增 §十四 需求追溯索引，供 L0 变更联动对账。原助理版 V1.0.7 同步归档。 |
+| V1.1 | 2026-09-09 | 新增 §十七 设计问答与常见陷阱：明确字段归类判据（事件级/关系级回写/实时派生）；`mentioned_user_ids` 维持 JSON 不拆表（权限已由 C2 relation_member 覆盖）；客户列表"@我 + 我协同"并集查询口径拍板；C2 补 relation_member 索引、§十一 数据范围明确并集与筛选视图。 |
+| V1.2 | 2026-09-09 | 公海池模型修正（L0 联动需求 V1.1，`→需求§6.3`）：`sea_status` 收敛为 `private/company_sea` 两态（删除 `dept_sea` 状态字面量），**部门公海 = 公司公海中归口本部门无主关系的映射视图**；F1/F2 补"公海停留超期→经理决策待办（保留/删除关系，reason=dept_manager_delete 留痕），不自动流转"；掉海定时任务拆分：私海→公海（每小时自动）与 公海超期经理决策（每日扫描）。 |
+
+---
+
+## 十七、设计问答与常见陷阱（FAQ）
+
+> 本节沉淀评审中反复被问到的"为什么这么存"与边界拍板，便于后续开发与审计对齐，正文不再重复展开。
+
+### A.1 字段归类判据（事件级 vs 关系级）
+每张行动表字段先问一句：**"这是这次跟进发生的事，还是客户现在的状态？"**
+- **事件级（只存 action_event）**：action_type / summary / duration_min / attachments / outcome / visit_log_id / appointment_id / source——无"客户当前状态"语义，天然不扫全表。
+- **关系级·高频回写**：competition / competitor_id（写事件时事务回写 C1 快照）；stage（由 stage_forward 建议、确认后落 relation_stage_log 与 business_relation.stage）。当前值直接读 business_relation，不碰 action_event。
+- **关系级·低频实时派生**：当前主卡点 pain_point 不落库，查询时按 `idx(relation_id, event_at)` 取最新一条带卡点事件派生（D4 铁律：自动风险信号不落库）。
+- **多对多且需反向查**：见 A.2 / A.3。
+
+### A.2 mentioned_user_ids 为何保留 JSON、不拆关联表
+早期曾考虑拆 `action_event_mention(event_id, user_id)` 关联表承载"@谁"。评审拍板后明确：
+- **@求助的权限与可见性已由 C2 relation_member 实现**：owner 写事件 @ 同事，即时在 relation_member 插入 collaborator 行（source=ask_help，valid_until 默认 7 天），授予与正式协同相同的读写权（§五 C2）。
+- 因此 `action_event.mentioned_user_ids` JSON **仅用于跟单卡片展示"本条 @了谁"**（正向读，无反向索引需求），不必为它建表、加索引。
+- 若未来需按单条事件审计"是谁 @ 的"，可从 relation_member（source=ask_help + 事件时间窗）推导，无需事件级冗余表。
+- **结论**：mentioned_user_ids 维持 JSON，不拆表；严禁在该列做反向 `JSON_CONTAINS` 全表扫描查询。
+
+### A.3 客户列表"@我 + 我协同"并集查询口径（2026-09-09 拍板）
+销售需一处列表查看所有"@我"和"我协同"的客户。实现口径：
+- **销售可见客户全集** = 本人 owner 私海（business_relation + relation_member owner）
+                    ∪ 我作为 collaborator 的关系（relation_member WHERE employee_id=当前用户 AND member_type=collaborator，含 source=collaborate 正式协同 与 source=ask_help @求助，valid_until 未过期）
+                    ∪ 公海（§十一）。
+- 列表提供筛选视图：**"@我"**（source=ask_help）/ **"我协同"**（source=collaborate）/ **"全部关联"**，底层即 relation_member 中 employee_id=当前用户 的 collaborator 集合，与 owner 私海取并集后按筛选条件裁剪。
+- **权限**：协同人（含 @求助有效期内）对关系内跟单全文可读写、全号可见（§十一）；valid_until 过期自动失效（定时任务 §十二 协同到期）。
+- **性能**：不涉及 action_event 反查，走 relation_member 索引 `idx(employee_id, member_type, valid_until)`（C2 已补），毫秒级。
 
 ---
 

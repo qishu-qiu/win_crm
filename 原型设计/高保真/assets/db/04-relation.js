@@ -66,7 +66,14 @@ window.DB.relation = {
       status: 'intent', stageId: 1, urgency: 'gray', valueLevel: 'pending', riskTags: [], coopTags: [],
       ownerId: 0, ownerName: null, ownerAv: null, maintainerId: 0, maintainerName: null, maintainerAv: null,
       nextFollowAt: null, lastFollowAt: '2026-07-10 11:00', valueEstimate: 34000, customerLevel: 'D',
-      competitorFlag: false, seaStatus: 'to_release', crossLineTags: [], dropDaysLeft: 2, grayDays: 59 }
+      competitorFlag: false, seaStatus: 'to_release', crossLineTags: [], dropDaysLeft: 2, grayDays: 59 },
+    /* 撞码合并演示：误录公司「云启网络」的关系，与 R1001 同部门同产品线碰撞 → 子合并为分支（mergedInto→R1001，active_key 排除被并分支） */
+    { id: 'R1099', companyId: 'C2099', companyName: '杭州云启网络科技有限公司', shortName: '云启网络', productLineId: 1, productLineName: '短视频推广', deptId: 1, deptName: '线上营销一部',
+      status: 'intent', stageId: 3, urgency: 'monthly', valueLevel: 'medium', riskTags: [], coopTags: [],
+      ownerId: 202, ownerName: '王芳', ownerAv: 'av4', maintainerId: 301, maintainerName: '李娜', maintainerAv: 'av2',
+      nextFollowAt: null, lastFollowAt: '2026-08-20 14:30', valueEstimate: 40000, customerLevel: 'C',
+      competitorFlag: false, seaStatus: 'private', crossLineTags: [], grayDays: 0,
+      mergedInto: 'R1001', mergedAt: '2026-09-10 14:30', mergedFromCompany: '杭州云启网络科技有限公司', mergedOldOwner: '王芳' }
   ],
 
   /* 跟单记录（时间轴 / 工作台今日记录 / 详情聚合） */
@@ -82,7 +89,14 @@ window.DB.relation = {
     { id: 'F005', relationId: 'R1008', companyName: '美家家居', contactName: '孙经理', method: 'phone', followAt: '2026-09-05 17:00',
       summary: '催收回款，客户承诺本周内安排 10 万回款', attitude: 'neutral', progress: 'forward', nextAction: '跟踪回款到账', creatorName: '林峰' },
     { id: 'F006', relationId: 'R1005', companyName: '华远进出口', contactName: '王总', method: 'phone', followAt: '2026-08-20 14:00',
-      summary: '初次沟通财税咨询需求，客户表示近期忙、月底再约', attitude: 'neutral', progress: 'flat', nextAction: '月底再次联系', creatorName: '陈昊' }
+      summary: '初次沟通财税咨询需求，客户表示近期忙、月底再约', attitude: 'neutral', progress: 'flat', nextAction: '月底再次联系', creatorName: '陈昊' },
+    /* 以下为「他人在本客户下跟的单」，用于演示跟单聚合的树杈显示（决策 #30） */
+    { id: 'F009', relationId: 'R1099', companyName: '云启网络', contactName: '周敏', method: 'phone', followAt: '2026-08-12 11:00',
+      summary: '误录入「云启网络」期间的电话沟通，客户咨询短视频投放预算', attitude: 'neutral', progress: 'flat', nextAction: '待补录信用代码', creatorName: '王芳' },
+    { id: 'F010', relationId: 'R1099', companyName: '云启网络', contactName: '周敏', method: 'wechat', followAt: '2026-08-20 14:30',
+      summary: '发送案例素材；后补录统一信用代码与「云启科技」撞码，触发合并', attitude: 'neutral', progress: 'flat', nextAction: '已并入云启科技', creatorName: '王芳' },
+    { id: 'F011', relationId: 'R1001', companyName: '云启科技', contactName: '周敏', method: 'wechat', followAt: '2026-09-06 10:15',
+      summary: '协同跟进：补充发送技术接口方案，客户对对接细节有疑问', attitude: 'neutral', progress: 'flat', nextAction: '技术同事答疑', creatorName: '李娜' }
   ],
 
   /* 预约（预约管理 4 Tab：today/future/expired/unbooked 由 status 派生） */

@@ -160,9 +160,16 @@
           <div id="cdLineBody"></div>
         </div>
 
-        <!-- Tab4 跟单聚合 -->
+        <!-- Tab4 跟单聚合（默认近 1 个月 · 以本人分界：本人主线 / 他人树杈） -->
         <div class="tab-pane" id="p-feed" style="display:none">
-          <!-- V2.5 数据层：follows 经 relationId 链到该公司 -->
+          <!-- 决策 #30：默认近 1 个月；本人跟的走主线、他人跟的走树杈，不混 -->
+          <div class="feed-toolbar">
+            <div class="feed-legend" id="cdFeedLegend"></div>
+            <div class="feed-range seg" id="cdFeedRange">
+              <span class="seg-item active" data-range="month">近 1 个月</span>
+              <span class="seg-item" data-range="all">全部</span>
+            </div>
+          </div>
           <div class="timeline" id="cdFeedBody"></div>
         </div>
       </div>
@@ -185,7 +192,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 1. 顶部：公司概要 + 三档完善度进度条（必填/成交前必填/成交后强制），缺失强制项红色列出 + "去补全"跳 company-edit.html。
 2. 公司档案卡：身份/制度标签 + 决策链（dict 翻译 label）+ 打标人留痕（profileMarks）。
 3. Tab1 业务关系：每部门每产品线一条（部门/产品线/状态/主对接/维护人/当前阶段/价值/操作）。
-4. Tab2 联系人（N:M）卡片：姓名/决策权 tag/手机脱敏/在职状态；Tab3 业务线；Tab4 跟单聚合时间轴。
+4. Tab2 联系人（N:M）卡片：姓名/决策权 tag/手机脱敏/在职状态；Tab3 业务线；Tab4 跟单聚合（**默认近 1 个月 + 以本人分界**：本人跟的走主线、他人跟的走树杈，不混，见 §跟单聚合）。
 5. V2.5 数据层：本页全部区块由 CRM.data 渲染，支持 ?id=Cxxxx（缺省回退 C2001）；链接 relation-detail.html 不带参，与全局交互现状保持一致。
 -->
 <script src="../assets/app.js"></script>
@@ -332,19 +339,43 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
         ' · 价值评估 ' + H.money(r.valueEstimate) + '</span></div></div>';
   }).join('') : '<div class="card" style="box-shadow:none;border:1px solid var(--border-lighter)"><div class="text-sub" style="text-align:center;padding:16px">暂无业务线</div></div>';
 
-  /* ---------- Tab4 跟单聚合 ---------- */
+  /* ---------- Tab4 跟单聚合（默认近 1 个月 · 以本人分界：本人主线 / 他人树杈） ---------- */
+  var ME = '张伟';               // 当前登录人（演示）
+  var FEED_RANGE = 'month';      // month=近1个月 | all=全部
+  var MONTH_FROM = '2026-08-11'; // 近 1 个月基准（演示：今天 2026-09-10 往前 30 天）
   var relMap = {};
   rels.forEach(function (r) { relMap[r.id] = r; });
-  var relIds = Object.keys(relMap);
-  var feeds = D.follows.filter(function (f) { return relIds.indexOf(f.relationId) >= 0; })
-    .slice().sort(function (a, b) { return b.followAt < a.followAt ? -1 : (b.followAt > a.followAt ? 1 : 0); });
-  document.getElementById('cdFeedBody').innerHTML = feeds.length ? feeds.map(function (f) {
-    var rel = relMap[f.relationId] || {};
-    return '<div class="tl-item">' +
-      '<div class="tl-time">' + H.esc(f.followAt) + ' · ' + H.esc(f.creatorName) +
-        ' · ' + H.esc(rel.productLineName || '') + '</div>' +
-      '<div class="tl-body">' + H.esc(f.summary || '—') + '</div></div>';
-  }).join('') : '<div class="empty" style="padding:24px 0">暂无跟单记录</div>';
+  var mainIds = {}; rels.forEach(function (r) { if (!r.mergedInto) mainIds[r.id] = true; });
+  var branchRels = D.relations.filter(function (r) { return r.mergedInto && mainIds[r.mergedInto]; });
+  var branchMap = {}; branchRels.forEach(function (r) { branchMap[r.id] = r; });
+  var relIds = rels.concat(branchRels).map(function (r) { return r.id; });
+  function relOf(id) { return relMap[id] || branchMap[id] || {}; }
+  function renderFeed() {
+    var feeds = D.follows.filter(function (f) {
+      return relIds.indexOf(f.relationId) >= 0 && (FEED_RANGE === 'all' || f.followAt >= MONTH_FROM);
+    }).slice().sort(function (a, b) { return b.followAt < a.followAt ? -1 : (b.followAt > a.followAt ? 1 : 0); });
+    document.getElementById('cdFeedLegend').innerHTML = feeds.length
+      ? '<span class="lg-item"><i class="lg-dot lg-main"></i>我（' + H.esc(ME) + '）跟进的</span>' +
+        '<span class="lg-item"><i class="lg-dot lg-branch"></i>其他人跟进的（树杈）</span>'
+      : '';
+    document.getElementById('cdFeedBody').innerHTML = feeds.length ? feeds.map(function (f) {
+      var mine = f.creatorName === ME;
+      var badge = mine ? '' : '<span class="tl-branch-badge">他人 · ' + H.esc(f.creatorName) + '</span>';
+      return '<div class="' + (mine ? 'tl-item' : 'tl-item tl-branch') + '">' +
+        '<div class="tl-time">' + H.esc(f.followAt) + ' · ' + H.esc(f.creatorName) +
+          ' · ' + H.esc(relOf(f.relationId).productLineName || '') + ' ' + badge + '</div>' +
+        '<div class="tl-body">' + H.esc(f.summary || '—') + '</div></div>';
+    }).join('') : '<div class="empty" style="padding:24px 0">近 1 个月暂无跟单记录</div>';
+  }
+  renderFeed();
+  document.querySelectorAll('#cdFeedRange .seg-item').forEach(function (el) {
+    el.onclick = function () {
+      document.querySelectorAll('#cdFeedRange .seg-item').forEach(function (x) { x.classList.remove('active'); });
+      el.classList.add('active');
+      FEED_RANGE = el.getAttribute('data-range');
+      renderFeed();
+    };
+  });
 })();
 </script>
 </body>

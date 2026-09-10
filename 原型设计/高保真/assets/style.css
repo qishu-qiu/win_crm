@@ -252,6 +252,30 @@ ul, ol { list-style: none; }
 .tl-time { font-size: 12px; color: var(--text-secondary); }
 .tl-body { margin-top: 4px; }
 
+/* 跟单聚合（决策 #30：默认近 1 个月，以本人分界——本人主线 / 他人树杈） */
+.feed-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.feed-range { flex-shrink: 0; }
+.feed-legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text-secondary); }
+.lg-item { display: inline-flex; align-items: center; gap: 6px; }
+.lg-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.lg-dot.lg-main { background: var(--primary); }
+.lg-dot.lg-branch { background: #fff; border: 2px dashed var(--text-secondary); }
+.merge-node {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; margin-bottom: 16px;
+  background: var(--warning-light, #FFF7E6); border: 1px solid var(--warning, #FAAD14); border-left-width: 3px;
+  border-radius: var(--radius, 6px);
+}
+.mn-icon { font-size: 16px; line-height: 1.4; flex-shrink: 0; }
+.mn-title { font-size: 13px; font-weight: 600; color: var(--text-regular); }
+.mn-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.tl-item.tl-branch { padding-left: 12px; border-left: 2px dashed var(--border); background: var(--fill-light, #FAFAFA); border-radius: 0 4px 4px 0; }
+.tl-item.tl-branch::before { border-style: dashed; border-color: var(--text-secondary); }
+.tl-branch-badge { display: inline-block; margin-left: 6px; padding: 0 6px; height: 18px; line-height: 18px; font-size: 11px;
+  color: var(--text-secondary); background: var(--fill-light, #F5F5F5); border: 1px solid var(--border-lighter); border-radius: 3px; vertical-align: middle; }
+.tl-foot { margin-top: 6px; }
+.tl-jump { font-size: 12px; color: var(--primary); text-decoration: none; }
+.tl-jump:hover { text-decoration: underline; }
+
 /* 列表卡片（公海/联系人） */
 .bcard {
   background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-card);

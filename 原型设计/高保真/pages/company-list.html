@@ -191,6 +191,7 @@
 
   function matched() {
     return D.companies.filter(function (c) {
+      if (c.mergedInto) return false; // 撞码合并后的墓碑公司不列入档案列表（详见业务需求文档决策 #27）
       if (state.ind && indText(c) !== state.ind) return false;
       if (state.reg && regText(c) !== state.reg) return false;
       if (state.scale && c.scale !== state.scale) return false;

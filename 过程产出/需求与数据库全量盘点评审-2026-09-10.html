@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>销售CRM 全量盘点与评审建议 · 2026-09-10</title>
+<style>
+:root{
+  --bg:#f7f8fa; --card:#ffffff; --ink:#1f2329; --ink2:#4e5969; --ink3:#86909c;
+  --line:#e5e6eb; --line2:#f0f1f3;
+  --red:#c8341f; --redbg:#fdeceb; --orange:#d97706; --orangebg:#fef3e6;
+  --blue:#1668dc; --bluebg:#eaf2fd; --green:#1a9f5c; --greenbg:#e8f6ef;
+  --purple:#6b4eff; --purplebg:#f0edff;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  font-size:15px;line-height:1.75;}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
+header{background:linear-gradient(135deg,#2b3a55,#1f2b3f);color:#fff;border-radius:14px;padding:30px 34px;margin-bottom:26px;}
+header h1{margin:0 0 8px;font-size:26px;letter-spacing:.5px;}
+header .sub{opacity:.85;font-size:14px;}
+header .meta{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;}
+header .meta span{background:rgba(255,255,255,.13);padding:4px 12px;border-radius:20px;font-size:12.5px;}
+.notice{background:var(--bluebg);border-left:4px solid var(--blue);padding:14px 18px;border-radius:8px;margin-bottom:26px;font-size:14px;color:var(--ink2);}
+h2{font-size:21px;margin:44px 0 16px;padding-left:12px;border-left:5px solid var(--ink);letter-spacing:.5px;}
+h3{font-size:17px;margin:28px 0 12px;color:var(--ink);}
+h4{font-size:15.5px;margin:20px 0 8px;color:var(--ink2);}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:18px;}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.6px;background:#fff;}
+th{background:#f2f3f5;text-align:left;padding:10px 12px;font-weight:600;color:var(--ink2);border-bottom:1px solid var(--line);white-space:nowrap;}
+td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:top;color:var(--ink2);}
+tr:last-child td{border-bottom:none;}
+td strong,th strong{color:var(--ink);}
+.tag{display:inline-block;padding:2px 9px;border-radius:5px;font-size:12px;font-weight:600;white-space:nowrap;}
+.t-red{background:var(--redbg);color:var(--red);}
+.t-org{background:var(--orangebg);color:var(--orange);}
+.t-blue{background:var(--bluebg);color:var(--blue);}
+.t-green{background:var(--greenbg);color:var(--green);}
+.t-gray{background:#f2f3f5;color:var(--ink3);}
+.t-purple{background:var(--purplebg);color:var(--purple);}
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:14px;margin:18px 0;}
+.sc{background:#fff;border:1px solid var(--line);border-radius:11px;padding:16px 18px;}
+.sc .k{font-size:13px;color:var(--ink3);margin-bottom:6px;}
+.sc .v{font-size:30px;font-weight:700;line-height:1.1;}
+.sc .d{font-size:12.5px;color:var(--ink3);margin-top:6px;}
+.bar{height:6px;background:#eef0f2;border-radius:4px;margin-top:9px;overflow:hidden;}
+.bar i{display:block;height:100%;border-radius:4px;}
+.b-red{background:var(--red);} .b-org{background:var(--orange);} .b-blue{background:var(--blue);} .b-green{background:var(--green);}
+.box{border-radius:10px;padding:14px 18px;margin:14px 0;font-size:14px;}
+.box .bt{font-weight:700;margin-bottom:6px;display:block;}
+.bx-red{background:var(--redbg);border:1px solid #f7c9c2;}
+.bx-org{background:var(--orangebg);border:1px solid #f7dfb8;}
+.bx-blue{background:var(--bluebg);border:1px solid #c3daf5;}
+.bx-green{background:var(--greenbg);border:1px solid #bfe5d2;}
+.bx-gray{background:#f4f5f7;border:1px solid var(--line);}
+.bx-red .bt{color:var(--red);} .bx-org .bt{color:var(--orange);}
+.bx-blue .bt{color:var(--blue);} .bx-green .bt{color:var(--green);} .bx-gray .bt{color:var(--ink2);}
+ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
+code{background:#f2f3f5;padding:1px 6px;border-radius:4px;font-size:12.7px;font-family:"SFMono-Regular",Consolas,monospace;color:#b4345e;}
+.mono{font-family:"SFMono-Regular",Consolas,monospace;font-size:12.6px;}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:900px){.two{grid-template-columns:1fr;}}
+.anchor{font-size:12.5px;color:var(--ink3);}
+.idx{font-size:12px;color:#fff;background:var(--ink2);border-radius:4px;padding:1px 7px;margin-right:6px;font-weight:600;}
+.pill{display:inline-block;background:#f2f3f5;border-radius:14px;padding:2px 11px;font-size:12.3px;color:var(--ink2);margin:2px 4px 2px 0;}
+.foot{margin-top:50px;padding-top:20px;border-top:1px solid var(--line);font-size:12.8px;color:var(--ink3);}
+.tree{font-family:"SFMono-Regular",Consolas,monospace;font-size:12.6px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:14px 18px;overflow-x:auto;line-height:1.65;white-space:pre;}
+.small{font-size:13px;color:var(--ink3);}
+hr{border:none;border-top:1px dashed var(--line);margin:26px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>销售 CRM · 全量盘点与评审建议</h1>
+  <div class="sub">需求业务逻辑 × 数据库关系 × 性能前瞻 × 漏洞排查 × 三角色价值</div>
+  <div class="meta">
+    <span>盘点日期：2026-09-10</span>
+    <span>性质：只评不改</span>
+    <span>依据：需求 V1.8 / 数据架构 V1.11</span>
+    <span>代码：历史骨架已废弃 · 0 落地</span>
+    <span>原型：高保真 37 页</span>
+  </div>
+</header>
+
+<div class="notice">
+  <strong>本报告立场：</strong>不修改任何现行规格文档，只输出盘点结论、评价与建议，供七叔拍板后决定是否吸收。
+  盘点范围＝《销售CRM业务需求文档》V1.8 全部章节 ＋《销售CRM数据架构文档》V1.11 全部 42 张表 ＋ 后端已实现代码 ＋ 前端/原型落地情况。
+</div>
+
+<!-- ============ 〇 结论 ============ -->
+<h2>〇、一页纸结论（先说人话）</h2>
+
+<div class="score">
+  <div class="sc"><div class="k">业务设计</div><div class="v" style="color:var(--green)">85</div><div class="d">顶层设计清醒，懂销售</div><div class="bar"><i class="b-green" style="width:85%"></i></div></div>
+  <div class="sc"><div class="k">数据库设计</div><div class="v" style="color:var(--blue)">78</div><div class="d">骨架健康，有硬伤</div><div class="bar"><i class="b-blue" style="width:78%"></i></div></div>
+  <div class="sc"><div class="k">性能前瞻</div><div class="v" style="color:var(--orange)">62</div><div class="d">补了一层，还差一半</div><div class="bar"><i class="b-org" style="width:62%"></i></div></div>
+  <div class="sc"><div class="k">逻辑自洽性</div><div class="v" style="color:var(--orange)">60</div><div class="d">有冲突与断点</div><div class="bar"><i class="b-org" style="width:60%"></i></div></div>
+  <div class="sc"><div class="k">代码落地度</div><div class="v" style="color:var(--ink3)">—</div><div class="d">历史骨架已废弃，不计分</div><div class="bar"><i style="display:block;height:100%;width:4%;background:#c9cdd4;border-radius:4px;"></i></div></div>
+</div>
+
+<div class="box bx-green">
+  <span class="bt">值钱的三个设计（别动，这是本项目的资产）</span>
+  <ol style="margin-bottom:0">
+    <li><strong>T1 加规则=加行不加列</strong>：主表永不膨胀，判断全进配置表。这条纪律值千金，是这套设计里最值钱的一条。</li>
+    <li><strong>三出口（销售吃"我说的"／经理吃"我留下的"／客户吃"承诺节点"）</strong>：抓住了 CRM 失败的根因——让销售为报表打工。T3"只吃留下的"是对的。</li>
+    <li><strong>DB 约束兜底</strong>：唯一索引挡撞单、生成列挡重复激活、422 强制留事件——把"靠自觉"变成"数据库不让"。</li>
+  </ol>
+</div>
+
+<div class="box bx-red">
+  <span class="bt">必须先知道的三件事</span>
+  <ol style="margin-bottom:0">
+    <li><strong>需求还没锁定，现在开工等于白写。</strong>需求文档 24 小时内迭代了 8 版（V1.0→V1.8）、数据架构 11 版，其中"合并"相关的 4 个重大决策（#27/#28/#29/#30）全是 09-10 一天内拍的。七叔已明确：<span class="mono">backend/</span> 现有 22 个文件（583 行）是历史遗留、将<strong>整体废弃</strong>，等需求定稿后从零重开。<strong>因此本报告不评代码、不计落地分，全部火力放在"需求锁定"上</strong>——这也是下一份文档《需求拍板清单》要做的事。</li>
+    <li><strong>有一个落库时才会炸的硬伤</strong>：MySQL 规定"分区表的每个唯一索引必须包含分区键"。<code>action_event</code> 要按 <span class="mono">event_at</span> 月分区，但它的 <span class="mono">uk_idem(idempotency_key)</span> 不含 event_at → 建表直接报错 ERROR 1503。详见 §三-3.1。</li>
+    <li><strong>老板最想要的东西，系统里没有。</strong>没有目标、没有配额、没有"这个月能不能完成、还差多少"。死因看板、弹药库都做了，但"9 月能不能超 8 月"这个真问题，目前的报表回答不了。详见 §六-3。</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h4 style="margin-top:0">本次共盘出待决问题 46 条</h4>
+  <div>
+    <span class="tag t-red">P0 落库前必修 8 条</span>
+    <span class="tag t-org">P1 V1 内应补 17 条</span>
+    <span class="tag t-blue">P2 后续优化 21 条</span>
+  </div>
+  <p class="small" style="margin-top:12px">其中 <strong>业务规则冲突 9 条</strong>、<strong>规则缺失（流程走不通）12 条</strong>、<strong>性能隐患 8 条</strong>、<strong>交互体验 9 条</strong>、<strong>文档自洽 8 条</strong>。</p>
+</div>
+
+<!-- ============ 一、业务逻辑盘点 ============ -->
+<h2>一、需求业务逻辑全量盘点</h2>
+<p class="small">逐章核对《业务需求文档》V1.8（§一～§十七）。状态标记：<span class="tag t-green">清晰</span> 可直接开发 ｜ <span class="tag t-org">待补</span> 有缺口需拍板 ｜ <span class="tag t-red">冲突</span> 与其他规则打架。</p>
+
+<h3>1.1 核心模型与流程（§二、§五、§六）</h3>
+<table>
+<tr><th style="width:20%">业务点</th><th style="width:44%">规则摘要</th><th style="width:16%">状态</th><th>评价与疑问</th></tr>
+<tr><td><strong>三层客户模型</strong></td><td>公司档案（唯一）→ 公司公海（唯一无主池）→ 部门公海（映射视图）→ 员工私海 → 业务关系（公司×部门×产品线×人）</td><td><span class="tag t-green">清晰</span></td><td>分层干净，"最小业务单元=业务关系"这个抽象是正确的核心。但见下条。</td></tr>
+<tr><td><strong>部门公海＝映射视图</strong></td><td>公司公海按 <span class="mono">dept_id=本部门</span> 过滤呈现，不是独立容器，无二级掉落</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #01</strong>：需求同时说"部门把有价值的客户<em>认领/映射</em>到本部门"，但 <span class="mono">dept_id</span> 是关系固有属性（三元组之一），<strong>"映射"这个动作没有数据落点</strong>。一个从公海新建的无主关系，它的 dept_id 是什么？空则三元组与 <span class="mono">uk_active_rel</span> 生成列失效；不空则天然属于某部门，根本不需要"认领"。</td></tr>
+<tr><td><strong>掉落触发</strong></td><td>三选一：跟进频次未达标 / 成单周期超时 / 推进停滞</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #02</strong>：<span class="mono">sea_rule</span> 有 follow_freq_days / deal_cycle_days / no_progress_max 三个字段 ✓，但<strong>"连续 N 次无推进"如何从事件流算出来，需求侧没定义判定口径</strong>（什么算"无推进"？outcome≠advanced 连续 N 条？还是 N 天内阶段没变？）。不定义清楚，重新开工时无从下手。（注：历史代码 <span class="mono">sea.service.ts</span> 只实现了第一条，已随骨架整体废弃，不作为依据。）</td></tr>
+<tr><td><strong>掉落方向</strong></td><td>私海 → 公司公海，只有一步；原部门映射保留</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #03</strong>：掉回公海后 <span class="mono">dept_id</span> 保留。别的部门销售来领，改不改 dept_id？改＝历史归属断层＋允许同公司两部门各一条活跃关系（客户数翻倍）；不改＝新人领了却挂在老部门名下，统计归属错乱。<strong>文档未定义。</strong></td></tr>
+<tr><td><strong>公海超期</strong></td><td>→ 经理决策待办（保留／删除关系），不自动流转</td><td><span class="tag t-green">清晰</span></td><td>好设计，避免了"客户在池子间漂流"。但见 §五-漏洞 #21（待办堆积）。</td></tr>
+<tr><td><strong>掉海预警三级</strong></td><td>≤3天进动线 / 前24h推销售 / 前6h标红推经理</td><td><span class="tag t-green">清晰</span></td><td>硬约束置顶合理。</td></tr>
+<tr><td><strong>规则四层覆盖</strong></td><td>L1全局→L2产品线→L3部门→L4部门×产品线，命中 L4→L1 取第一条</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #04（运营大雷）</strong>：规则变更后，已在倒计时中的关系要不要重算？若 N 从 30 天改成 15 天，<strong>一批客户会在改配置的第二天集体掉海</strong>。缺"规则变更的存量保护"（如：变更只对新增/变更后的关系生效，或给一个 7 天缓冲）。</td></tr>
+<tr><td><strong>生命周期 6 环节</strong></td><td>线索→建关系→跟单→档案补全→签约→交付续约</td><td><span class="tag t-green">清晰</span></td><td>允许"只有手机号"建档，成交后才强制补全——这个取舍非常务实。</td></tr>
+</table>
+
+<h3>1.2 归属与撞单（§5.1、§5.2、§十二）</h3>
+<table>
+<tr><th style="width:20%">业务点</th><th style="width:44%">规则摘要</th><th style="width:16%">状态</th><th>评价与疑问</th></tr>
+<tr><td><strong>唯一 owner</strong></td><td>业务关系主责唯一；签单人锁业绩终身不变；换人走转交审批</td><td><span class="tag t-green">清晰</span></td><td>"签单人锁业绩 / owner 管维护"两层分离，取消了"维护人"这个易打架的第三概念——决策漂亮。生成列 <span class="mono">owner_flag</span> 唯一索引兜底 ✓。</td></tr>
+<tr><td><strong>跨部门同产品线</strong></td><td>竞争并行：都能跟、都能见客户，跟单互不可见，谁先签约谁得</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #05（最严重的安全雷）</strong>：与"@求助"直接打架。@求助是 owner 免审批即时授予<strong>与正式协同相同的权限</strong>（全文跟单＋全号）。文档<strong>没有限制 @ 求助不能跨部门</strong> → 销售 A（法律线）一个 @ 就能让财税线的 B 看到全部跟单和全号，<strong>"防策略泄露"的设计被一个 @ 击穿</strong>。</td></tr>
+<tr><td><strong>跨部门竞争 · 签约闭环</strong></td><td>谁先签约谁得</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #06</strong>：A 签约后，B 那条关系怎么办？自动判死？留着？若自动判死，死因字典 <span class="mono">review_loss_reason</span> 里<strong>没有"输给同事/内部撞单"这个选项</strong>；若留着，B 的关系会继续跑掉海扫描，最后流回公海被第三人捡走，而客户早已是别部门的签约客户。</td></tr>
+<tr><td><strong>离职批量转交</strong></td><td>管理员发起，私海转指定人或回公海；业绩仍归原签单人</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #07</strong>：离职后报表口径缺失。<span class="mono">contract.signer_id</span> 指向 resigned 员工——"Top 销售"要不要显示离职人员？离职人员的业绩算不算进部门产能？要不要算进人均（分母变不变）？<strong>口径未定义，报表必然打架。</strong></td></tr>
+<tr><td><strong>介绍费 10%</strong></td><td>跨部门转介绍成交，介绍人拿 10% 提成</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #08</strong>：需求写了，但<strong>数据架构 42 张表里没有任何字段承载介绍费</strong>（合同表无 referral 字段、无分成表），且 V1 范围也没列。属于"写在需求里的悬空需求"。</td></tr>
+<tr><td><strong>客户要求换销售</strong></td><td>主责人确认 / 部门经理重分</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #09</strong>：客户这个诉求在系统里<strong>没有入口</strong>（工单？审批？口头？）。流程落点缺失。</td></tr>
+<tr><td><strong>撞码合并（决策 #27/#28）</strong></td><td>墓碑合并，子表零改动，关系走分支</td><td><span class="tag t-org">待补</span></td><td>设计精巧（物理不删、永远可审计）。但 <strong>漏洞 #10</strong>：若 B 并入 A、后来 C 又并入 B，<span class="mono">merged_into</span> 形成链/树，"查公司 A 全部跟单"＝主干 ∪ 递归所有分支——<strong>需要递归 CTE，文档未提，性能与深度上限未定义</strong>。</td></tr>
+</table>
+
+<div class="box bx-org">
+  <span class="bt">这一节的判断</span>
+  归属设计（owner/signer 两层）是全场最清醒的部分。但<strong>跨部门这条线是重灾区</strong>：既要"竞争并行保密"，又开了"@求助免审批授予全文"的口子；既要"谁先签谁得"，又没定义输的那条关系怎么收尸。这两条如果不在落库前定死，上线后一定出事。
+</div>
+
+<h3>1.3 意向跟进体系（§八、§九）</h3>
+<table>
+<tr><th style="width:20%">业务点</th><th style="width:44%">规则摘要</th><th style="width:16%">状态</th><th>评价与疑问</th></tr>
+<tr><td><strong>进度 6 阶段</strong></td><td>客观事实；建议态+一键确认；限频≥3天或跨里程碑；允许跳退留痕</td><td><span class="tag t-green">清晰</span></td><td>T4"推导只建议"落实到位。限频防骚扰想得很细。</td></tr>
+<tr><td><strong>紧迫 5 档</strong></td><td>周/月/季度/长期/灰度（默认），纯手动无自动降级</td><td><span class="tag t-org">待补</span></td><td>见下条（周重点）。</td></tr>
+<tr><td><strong>周重点</strong></td><td>"本周判生死——<em>标记即承诺本周推进或放弃</em>"；不自动生成承诺；周五清点</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #11（管理抓手落空）</strong>：说是"标记即承诺"，实际既无承诺动作、无自动降级、无超时处理。一个客户挂周重点挂 8 周没人动，系统只是每周五提醒一次，销售可以一直忽略——<strong>而且绕过了动线的防逃逸机制</strong>（那条只对动线条目有效）。老板最关心的"本周判生死"，恰恰是最容易糊弄过去的一环。</td></tr>
+<tr><td><strong>灰度寿命</strong></td><td>N 天未定性提醒，再 M 天列公海释放候选</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #12（规则重叠）</strong>：灰度客户＝没下结论＝通常也没跟进 → <span class="mono">sea_rule.follow_freq_days</span> 几乎必然先命中把它掉走，<span class="mono">gray_release</span> 这条规则<strong>形同虚设</strong>。两套天数让经理重复配置、且结果不可预期。</td></tr>
+<tr><td><strong>客户等级 S/A/B/C/D</strong></td><td>回款贡献，系统自动算，部门自配档位，不可手填</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #13（口径缺失）</strong>：术语说"这客户<em>一年</em>给我多少钱"，但没定义时间窗（自然年？滚动12个月？累计？）、跨年是否清零、重算范围（本关系？本部门？全公司全产品线？）。一个客户法务线花 100 万、财税线花 1 万，两条关系各算什么等级？<strong>不定义清楚，老板看到的"S 级客户数"会变来变去、无法信任。</strong></td></tr>
+<tr><td><strong>开发价值</strong></td><td>高/中/低/待定（默认空），手动，愿标才标</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #14</strong>：T2/T3 的反面代价。"愿标才标"＝多数人不标 → 经理要的"客户盘子值不值得投"这个视图必然是空的。建议补：经理可代标／系统按客观数据（规模·行业·公司档案）给<em>建议值</em>（符合 T4 建议态）。</td></tr>
+<tr><td><strong>标签三层</strong></td><td>公司档案（身份/制度/决策链）·联系人（特质≤3，部门可配1~5）·业务关系（紧迫/价值/风险）</td><td><span class="tag t-green">清晰</span></td><td>"判断属于谁就挂谁身上"这条原则极好，杜绝了"人的特质打在公司上"的混乱。上限可配＋调小不追溯，细节到位。</td></tr>
+<tr><td><strong>自动风险信号</strong></td><td>流失/回款/交付/对接人变动，实时派生不落库</td><td><span class="tag t-green">清晰</span></td><td>T1 落实得好，不制造维护负担。</td></tr>
+</table>
+
+<h3>1.4 行动引擎（§十）—— 这是全系统的心脏</h3>
+<table>
+<tr><th style="width:20%">业务点</th><th style="width:44%">规则摘要</th><th style="width:16%">状态</th><th>评价与疑问</th></tr>
+<tr><td><strong>承诺三分</strong></td><td>me 催自己 / them 催客户 / verdict 给结论；豁免必填原因</td><td><span class="tag t-green">清晰</span></td><td>设计亮点。"我答应/他答应/我判定"三种语气区分得非常好，这是真正懂销售才会有的设计。</td></tr>
+<tr><td><strong>承诺录入</strong></td><td>写事件时内联三快选，10 秒完成，无独立录入页</td><td><span class="tag t-green">清晰</span></td><td>T2 的典范。</td></tr>
+<tr><td><strong>them 类承诺闭环</strong></td><td>客户答应我 → 到点催销售去问</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #15</strong>：销售问了、客户还是不给答复，这条承诺会<strong>一直逾期</strong>——进"逾期抽屉"后，销售只有"豁免（填原因）"或无限拖两条路。<strong>缺出口</strong>：催问 N 次无果 → 转为卡点/建议判死。</td></tr>
+<tr><td><strong>承诺与转交</strong></td><td>承诺挂 owner_id（人）</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #16</strong>：关系转交给别人后，历史承诺的 <span class="mono">owner_id</span> 还是旧人 → <strong>旧人会继续收到"你答应客户的"提醒，但客户已经不是他的了</strong>。转交时承诺要不要跟着转？文档未写。</td></tr>
+<tr><td><strong>事件流</strong></td><td>一句话结果＋最多两个点选；完成预约/拜访强制留事件（422）</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #17</strong>：预约过期（<span class="mono">expired_archived</span>）要不要也强制留事件？没说。若自动归档不强制，销售可用"让它过期"绕过 422。<br><strong>漏洞 #18（文档自洽）</strong>：§2.1 说"全系统仅此一处必填"，但 §15 速查 #18 自己承认是<strong>两处</strong>（完成预约＋判死死因）。文字打架，日后必生争论。</td></tr>
+<tr><td><strong>跟单显示</strong></td><td>默认近 1 个月；以"当前登录人"分界：本人主线 / 非本人树杈</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #19（角色视角缺失）</strong>：规则只考虑了销售。<strong>经理打开一个客户，他不是 owner，所以所有跟单都变成"树杈"、主线为空</strong>——经理看到的全是树杈。同理，协同人、老板也是。<strong>这条规则需要按角色重新定义</strong>（建议：owner 与协同人看"本人 vs 他人"；经理/老板看"本部门 vs 其他部门"或不分叉）。</td></tr>
+<tr><td><strong>外出登记</strong></td><td>纯行政考勤，不自动产生事件、不关联报销</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #20</strong>：销售外出拜访 3 家，<span class="mono">visit_log</span> 记了，回家还要<strong>分别写 3 条事件</strong>。行政与业务彻底割裂 → 典型"录两遍"，违背 T2 精神，也是"录入者≠受益者"。建议：外出登记页提供"一键转写跟单"。</td></tr>
+<tr><td><strong>今日动线降噪</strong></td><td>逾期≤3天置顶红 / >3天收抽屉 / 硬约束置顶 / 忽略7天不重复</td><td><span class="tag t-green">清晰</span></td><td>"宁可少推不可推错、宁可折叠不可铺满"——设计底线写得好。</td></tr>
+<tr><td><strong>防逃逸</strong></td><td>snoozed 上限 3 次 / ignored 必填原因且经理可见 / 长期停滞降权</td><td><span class="tag t-green">清晰</span></td><td>非常好，是这套系统里"管理抓手"的核心。<strong>但它只管动线，管不到周重点（见 #11）。</strong></td></tr>
+<tr><td><strong>节奏规则</strong></td><td>新客48h / S级客情45天 / 灰度定性 / 周五清点 / 掉海预警；软硬分级</td><td><span class="tag t-green">清晰</span></td><td>"软提醒可划掉、硬提醒不行"——分寸感好。性能问题见 §三-3.3。</td></tr>
+</table>
+
+<h3>1.5 竞品与出口复盘（§十一）</h3>
+<table>
+<tr><th style="width:20%">业务点</th><th style="width:44%">规则摘要</th><th style="width:16%">状态</th><th>评价与疑问</th></tr>
+<tr><td><strong>竞品三层</strong></td><td>跟单顺手标 / 名册（经理维护）/ 打赢才记</td><td><span class="tag t-green">清晰</span></td><td>"不建竞品档案库"的理由（录入者≠受益者必腐）说得极透。折叠成一行、默认"无"跳过——UI 口径想得很细。</td></tr>
+<tr><td><strong>不点名原则</strong></td><td>能说才填，不说不强求，按"有竞品（未点名）"归并</td><td><span class="tag t-green">清晰</span></td><td>务实，避免了假数据。</td></tr>
+<tr><td><strong>win 复盘</strong></td><td>转已合作自动建档；销售可填可不填；经理唯一收录人；S/A 必处理，B/C/D 超30天自动不收录</td><td><span class="tag t-green">清晰</span></td><td>"经验继承不是复盘作业"——挂在本来就要点的按钮后面，这个设计原则是对的。防经理积压的 30 天规则也补上了。</td></tr>
+<tr><td><strong>弹药库检索</strong></td><td>供同事搜"谁打过这仗"</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #21</strong>：<span class="mono">review</span> 只有 200 字正文＋主因码＋竞品 id，<strong>没有行业/规模/客户类型等结构化维度</strong>。销售想搜"打过制造业老板拍板这仗的"搜不到，只能全文匹配 200 字 → <strong>弹药库的实用性存疑</strong>。建议补：自动带上关系快照（行业/规模/决策链/阶段耗时）作为检索维度，销售零额外录入。</td></tr>
+<tr><td><strong>loss 判死</strong></td><td>死因点选必填（422）；文字次日缓写</td><td><span class="tag t-org">待补</span></td><td>唯一必填设计得克制。"次日缓写"很懂人性（输单当天逼出来全是甩锅）。但 <strong>漏洞 #22</strong>：若一天判死 10 单，次日动线会收到 10 条补写提醒 → <strong>违反"宁可少推"的设计底线，制造红墙</strong>。建议：判死教训补写<strong>合并成一条汇总提醒</strong>。<br><strong>漏洞 #23</strong>：判死后，这条关系还在不在？留着会继续跑掉海扫描→流回公海被别人捡；删掉历史怎么办？<strong>未定义。</strong></td></tr>
+<tr><td><strong>churn 流失</strong></td><td>统一出口；S/A 级经理必回访；B/C/D 填标签闭环</td><td><span class="tag t-green">清晰</span></td><td>"真话在客户嘴里"——S/A 强制回访的设计既防甩锅又是挽留机会，很实在。</td></tr>
+</table>
+
+<h3>1.6 公司档案与联系人（§7.2、§7.3）</h3>
+<table>
+<tr><th style="width:20%">业务点</th><th style="width:44%">规则摘要</th><th style="width:16%">状态</th><th>评价与疑问</th></tr>
+<tr><td><strong>公司查重</strong></td><td>两段式：标准化取核心词 → 全同判"疑似"／编辑距离≤1标"高度疑似"</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #24（性能＋准确性）</strong>：核心词是<em>计算后</em>的值，库里没有列、没有索引 → 每次录客户都要<strong>拉全表公司名到应用层算</strong>。文档把 FULLTEXT 推到"超过 N 千条再说"，但<strong>录入是每天都在做的高频动作</strong>。详见 §三-3.2（有零成本解法）。</td></tr>
+<tr><td><strong>完善度三档</strong></td><td>公司级 0-100；成交前必填行业/地区/联系人；成交后强制信用代码等</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #25</strong>：<span class="mono">completeness</span> 是<strong>公司级</strong>（全公司共享），但"成交前必填"是<strong>关系级</strong>校验。一个公司完善度 60%，但对本部门本产品线必填项已齐——能不能签约？<strong>两个口径混在一起了</strong>，需明确"签约校验按关系级必填清单走，完善度只作展示"。</td></tr>
+<tr><td><strong>一人多号</strong></td><td>主号（唯一·撞单）＋附加号（不撞单）；主号"同一时刻唯一"，换号/删除后释放</td><td><span class="tag t-green">清晰</span></td><td>生成列 <span class="mono">phone_active</span> 解法干净，软删与唯一性的经典冲突解决得好。</td></tr>
+<tr><td><strong>旧号回收提示</strong></td><td>曾属于他人 → 提示不拦截</td><td><span class="tag t-green">清晰</span></td><td>"运营商会回收号码"——真实世界的经验，判断准确。</td></tr>
+<tr><td><strong>跳槽换公司</strong></td><td>原就职保留，原公司标记"对接人已离职"，历史跟单可查</td><td><span class="tag t-green">清晰</span></td><td>好。但 <strong>漏洞 #26</strong>：联系人跳槽后，挂在他名下的<strong>未兑现承诺</strong>怎么办？他还是那个关系的 contact 吗？<span class="mono">commitment.contact_id</span> 指向一个已离职的人——提醒文案会变成"客户（已离职）答应你…"。<strong>需定义跳槽时的承诺处置。</strong></td></tr>
+<tr><td><strong>坐标</strong></td><td>两字段，人工拾取，非必填，GCJ-02</td><td><span class="tag t-green">清晰</span></td><td>克制。砍掉自动解析、砍掉 GPS 校准，都是对的（实战错配率高、易造假）。</td></tr>
+</table>
+
+<h3>1.7 合同/台账/工单/审批（§7.6～§7.9）</h3>
+<table>
+<tr><th style="width:20%">业务点</th><th style="width:44%">规则摘要</th><th style="width:16%">状态</th><th>评价与疑问</th></tr>
+<tr><td><strong>签单人锁业绩</strong></td><td><span class="mono">contract.signer_id</span> 终身不变；维护责任跟 owner</td><td><span class="tag t-green">清晰</span></td><td>好。但见漏洞 #07（离职报表口径）。</td></tr>
+<tr><td><strong>台账扩展字段</strong></td><td>字段模板登记（key/类型不可变）＋ JSON 存储，未登记拒收</td><td><span class="tag t-green">清晰</span></td><td>T1 的落地，设计好。<strong>但见 §三-3.4：高频统计 key 走生成列会打破"加规则不加列"</strong>。</td></tr>
+<tr><td><strong>台账 vs 合同重复列</strong></td><td>ledger 有 customer_level / sign_date / expire_date，contract 也有</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #27（违反 L1 单一事实源）</strong>：同一事实两处定义。若 ledger 的是"签约时快照"要写明；若是实时同步则要定同步机制。<strong>当前会导致对账不一致</strong>。09-09 那份评审已提（D5），V1.11 仍未处理。</td></tr>
+<tr><td><strong>工单双向流转</strong></td><td>售后↔商机互转，带工时估算</td><td><span class="tag t-green">清晰</span></td><td>工时估算→算"回款少事多"客户的投入产出比，这个用法很聪明。</td></tr>
+<tr><td><strong>审批四型</strong></td><td>转交/协同/换号/解锁；申请人≠审批人（DB CHECK）</td><td><span class="tag t-org">待补</span></td><td><strong>漏洞 #28</strong>：<strong>审批人路由规则未定义</strong>——approver_id 怎么来？直属经理？dept_manager？跨部门转交给谁批？总经理在哪一环？缺规则。<br><strong>漏洞 #29</strong>：手机号解锁只能一个个申请、一个个批。<strong>想捞 100 个号就申请 100 次</strong>，经理会麻木地点通过。缺批量申请＋额度上限＋异常告警（如单人单日解锁>20 次自动告警）。</td></tr>
+<tr><td><strong>已完成阶段终态</strong></td><td>阶段 6 已合作 = 终态（is_final）</td><td><span class="tag t-red">冲突</span></td><td><strong>漏洞 #30</strong>：客户流失（churn）之后，阶段还是"已合作"吗？若是，<strong>"已合作客户数"这个报表指标就会把流失客户算进去</strong>。状态机缺"已流失"终态，或需明确"已合作+有 churn review"＝已流失。</td></tr>
+</table>
+
+<!-- ============ 二、数据库盘点 ============ -->
+<h2>二、数据库全量盘点（42 张表 × 7 域）</h2>
+<p class="small">依据《数据架构文档》V1.11。已核对：表数量、域划分、主外键、唯一约束、索引清单、分区策略、字典种子。</p>
+
+<div class="tree">department ─┬─&lt; employee &gt;─┬─ employee_role ─ role ─ permission_matrix
+            │              └─ dept_manager（管辖 N:M）
+            └─ dept_rule（等级档位/灰度寿命/节奏默认，部门经理配）
+system_config（gm 级全局开关：弹药库可见范围等）
+product_line ─┬─&lt; field_template（台账扩展字段元数据）
+              └─&lt; sea_rule（公海规则 L1-L4）
+
+company ─┬─&lt; company_contact &gt;─ contact ─┬─ contact_change_log
+         │                              ├─ contact_trait（谈判特质·默认≤3）
+         │                              └─ extra_phones JSON（附加号，不撞单）
+         ├─ company_profile_tag（身份/制度/决策链，打标人留痕）
+         ├─ 地理信息（longitude / latitude，GCJ-02）
+         └─&lt; business_relation ─┬─ relation_member（owner / collaborator）
+                                 ├─ relation_stage_log（阶段推进留痕）
+                                 ├─ relation_label（风险等人补标注）
+                                 ├─&lt; appointment（预约）
+                                 ├─&lt; commitment（承诺 ★心脏）
+                                 ├─&lt; action_event（事件流 ★谁·何时·对谁·结果）
+                                 ├─&lt; contract ─&lt; payment_record
+                                 ├─&lt; workorder ─&lt; workorder_log
+                                 └─&lt; sea_record（入公海历史）
+
+commitment ─&lt; daily_agenda（今日动线，ref 承诺/预约/节奏）
+cadence_rule（节奏规则：经理配）      competitor（竞品名册：经理维护）
+review（出口复盘 win/loss/churn）    approval（转交/协同/换号/解锁 四型一单）
+notification ｜ dict_type ─&lt; dict_item
+action_event ─&lt; stat_daily（日级行为汇总·派生预聚合）
+operation_log（全局审计）｜ job_run_log（任务日志）｜ visit_log（外出考勤）</div>
+
+<h3>2.1 分域清点</h3>
+<table>
+<tr><th style="width:8%">域</th><th style="width:6%">表数</th><th style="width:30%">表清单</th><th>关系与完整性评价</th></tr>
+<tr><td><strong>A 组织权限</strong></td><td>14</td><td>department, employee, dept_manager, role, employee_role, permission_matrix, product_line, dept_rule, notification, operation_log, dict_type, dict_item, system_config, job_run_log</td><td>单向下挂、无环 ✓。多态引用（notification/operation_log）不建外键——有意折中，正确，但意味着<strong>引用完整性靠应用层＋定时对账</strong>，落库时必须写对账任务。</td></tr>
+<tr><td><strong>B 客户资产</strong></td><td>6</td><td>company, company_profile_tag, contact, contact_trait, company_contact, contact_change_log</td><td>三个 <span class="mono">merged_into</span> 自引用墓碑（company/contact/business_relation）设计精巧 ✓。<strong>疑点</strong>：<span class="mono">company_profile_tag.tag_id</span> 是否指向 <span class="mono">dict_item.id</span>？若指向，则 <span class="mono">tag_code</span> 是冗余；文档未明说，实现易错（见漏洞 #31）。</td></tr>
+<tr><td><strong>C 业务关系</strong></td><td>7</td><td>business_relation, relation_member, relation_stage_log, relation_label, appointment, visit_log, competitor</td><td>中枢表，被高频 join ✓。三个生成列约束（active_key / owner_flag）到位 ✓。</td></tr>
+<tr><td><strong>D 行动引擎</strong></td><td>6</td><td>commitment, action_event, cadence_rule, daily_agenda, review, stat_daily</td><td>卡点走字典不建表 ✓。<strong>stat_daily 是本次最重要的补充</strong>（09-09 评审 D4 已采纳）。</td></tr>
+<tr><td><strong>E 交易服务</strong></td><td>6</td><td>contract, payment_record, workorder, workorder_log, ledger, field_template</td><td><strong>ledger 与 contract 重复列未解决</strong>（漏洞 #27）。<span class="mono">payment_record.voucher_file_id</span> <strong>指向的文件表不存在</strong>——悬空外键（见漏洞 #32）。</td></tr>
+<tr><td><strong>F 公海</strong></td><td>2</td><td>sea_rule, sea_record</td><td>四层规则命中 L4→L1 ✓。见漏洞 #04（规则变更存量冲击）。</td></tr>
+<tr><td><strong>G 审批</strong></td><td>1</td><td>approval</td><td>四型一单 ✓，CHECK 兜底申请人≠审批人 ✓。缺审批路由（漏洞 #28）。</td></tr>
+</table>
+
+<h3>2.2 关键设计手法评价</h3>
+<div class="two">
+<div class="box bx-green">
+<span class="bt">做得对（保持）</span>
+<ul style="margin-bottom:0">
+<li><strong>生成列唯一索引</strong>：<span class="mono">active_key</span>、<span class="mono">owner_flag</span>、<span class="mono">phone_active</span>——用 MySQL"唯一索引忽略 NULL"的特性实现 partial unique，是这套库最漂亮的手法。</li>
+<li><strong>墓碑合并（物理不删）</strong>：company/contact/relation 三级合并都留痕，永远可审计，比物理删+备份强得多。</li>
+<li><strong>子表零改动</strong>：合并只动关系行本身，跟单/承诺/合同全部不动——避免了 cascading update 的数据风险。</li>
+<li><strong>operation_log 升级为全局审计</strong>：before/after 快照＋操作人快照＋req_id＋只增不改，专业。</li>
+<li><strong>T1 纪律落到了库上</strong>：主表确实没有乱加判断列（competition 是快照、last_event_at 是冗余，都合理）。</li>
+</ul>
+</div>
+<div class="box bx-org">
+<span class="bt">有风险（建议改）</span>
+<ul style="margin-bottom:0">
+<li><strong>分区 × 唯一索引冲突</strong>：<span class="mono">action_event</span> 按月分区 vs <span class="mono">uk_idem</span> → 建表报错（详见 §三-3.1）。<span class="tag t-red">P0</span></li>
+<li><strong>公司查重无索引</strong>：核心词是计算值、无列无索引 → 全表扫描（详见 §三-3.2）。<span class="tag t-red">P0</span></li>
+<li><strong>缺"存量快照"表</strong>：<span class="mono">stat_daily</span> 只汇总"动作"，但报表要的"新增/成交/掉海"是<strong>关系状态变化</strong>，不在动作里（详见 §三-3.3）。<span class="tag t-red">P0</span></li>
+<li><strong>ledger/contract 重复列</strong>：违反 L1。<span class="tag t-org">P1</span></li>
+<li><strong>voucher_file_id 悬空</strong>：无文件表。<span class="tag t-org">P1</span></li>
+<li><strong>多态引用 4 处无外键</strong>：需对账任务兜底。<span class="tag t-blue">P2</span></li>
+</ul>
+</div>
+</div>
+
+<!-- ============ 三、性能 ============ -->
+<h2>三、大数据量性能评估与更优方案</h2>
+
+<div class="box bx-blue">
+  <span class="bt">先说结论</span>
+  09-09 那份评审提的 11 项建议，<strong>已有 7 项被 V1.11 吸收</strong>（全表索引清单、owner_flag、phone_active、stat_daily 日级汇总、daily_agenda 结转+新增、抢单条件 UPDATE、operation_log 升级）——这是很大的进步，剩下的坑比之前浅了。<br>
+  但还有 <strong>4 个坑没填</strong>，其中 1 个是<strong>建表就会报错的硬伤</strong>，1 个是<strong>每天都在做的高频动作无索引</strong>。
+</div>
+
+<h3>3.1 <span class="tag t-red">P0</span> 硬伤：分区表 × 唯一索引（建表即报错）</h3>
+<div class="card">
+<p><strong>问题</strong>：MySQL 强制规定——<strong>分区表的每个唯一索引（含主键）都必须包含分区键</strong>。否则报错
+<code>ERROR 1503: A UNIQUE INDEX must include all columns in the table's partitioning function</code>。</p>
+<p>逐表核对 V1.11 的 5 张分区表：</p>
+<table>
+<tr><th>表</th><th>分区键</th><th>唯一索引</th><th>是否含分区键</th><th>结论</th></tr>
+<tr><td><strong>action_event</strong></td><td>event_at（月）</td><td><span class="mono">uk_idem(idempotency_key)</span></td><td><strong style="color:var(--red)">否</strong></td><td><span class="tag t-red">建表失败</span></td></tr>
+<tr><td>stat_daily</td><td>biz_date</td><td><span class="mono">uk_stat(biz_date, ...)</span></td><td>是</td><td><span class="tag t-green">OK</span></td></tr>
+<tr><td>daily_agenda</td><td>biz_date</td><td>无 uk（仅 idx）</td><td>—</td><td><span class="tag t-green">OK</span></td></tr>
+<tr><td>operation_log</td><td>occurred_at（月）</td><td>无 uk</td><td>—</td><td><span class="tag t-green">OK</span></td></tr>
+<tr><td>job_run_log</td><td>run_at（月）</td><td>无 uk</td><td>—</td><td><span class="tag t-green">OK</span></td></tr>
+</table>
+<p><strong>更优方案（三选一，推荐 ①）</strong>：</p>
+<ol>
+<li><strong>把分区键并入唯一索引</strong>：<span class="mono">uk_idem(event_at, idempotency_key)</span>。代价：幂等键只在同月内唯一（跨月重试不会误判，实际够用）。<span class="tag t-green">推荐</span></li>
+<li><strong>幂等上移到 Redis</strong>：写入前 <span class="mono">SETNX idem:{key}</span> 过期 24h，表上去掉 uk、只留普通索引。代价：多一个组件依赖，但 Redis 本来已在栈里。</li>
+<li><strong>action_event 不分区</strong>，靠 <span class="mono">idx(relation_id,event_at)</span> + 定期归档 DELETE。代价：归档大表删除慢（几百万行 DELETE 会锁表）。<span class="tag t-gray">不推荐</span></li>
+</ol>
+</div>
+
+<h3>3.2 <span class="tag t-red">P0</span> 公司名查重：每天高频动作，却没有索引</h3>
+<div class="card">
+<p><strong>问题</strong>：需求 §7.3 的查重是"先标准化取核心词 → 全同判疑似 / 编辑距离≤1 标高度疑似"。但<strong>核心词是运行时算出来的，库里既没有列也没有索引</strong>——要查重就得把全表 <span class="mono">full_name</span> 拉到应用层逐个算。文档把 FULLTEXT 推到"公司档案超过 N 千条再说"，但<strong>录入客户是每天几十上百次的高频动作</strong>，等不到 N 千条就会卡。</p>
+<p><strong>更优方案（零成本，立刻可用，不必等 FULLTEXT）</strong>：</p>
+<ol>
+<li>company 表加一列 <span class="mono">core_name</span>（标准化后的核心词），<strong>写入时算一次</strong>并落库，加普通索引 <span class="mono">idx_core(core_name)</span>。</li>
+<li>查重变成两步：<span class="mono">WHERE core_name = ?</span> 走索引取候选（毫秒级、候选通常 <10 条）→ 再对候选算编辑距离。</li>
+<li>这样"核心词全同"这一档从"全表扫描"变成"索引精确匹配"，<strong>零额外组件、零架构复杂度</strong>，且 FULLTEXT 以后想加也不冲突。</li>
+<li>es：可做成生成列或应用层写入时算，都行。注意：标准化规则（去掉"安徽/信息技术/有限公司"这类词）要抽成<strong>一个公共函数</strong>，写入和查重共用，否则两边规则漂移。</li>
+</ol>
+</div>
+
+<h3>3.3 <span class="tag t-red">P0</span> stat_daily 只解决了 1/4 的报表需求</h3>
+<div class="card">
+<p><strong>问题</strong>：<span class="mono">stat_daily</span> 汇总的是 <strong>action_event（动作）</strong>。但需求 §7.10 的报表要的是：</p>
+<table>
+<tr><th>报表</th><th>指标</th><th>stat_daily 能出吗</th></tr>
+<tr><td>我的日报</td><td>今日<strong>新增</strong>客户 / <strong>跟进</strong> / <strong>成交</strong> / <strong>掉公海</strong></td><td>只有"跟进"能出，其余 3 项 <span class="tag t-red">不能</span></td></tr>
+<tr><td>部门月报</td><td>转化率 / 成交金额 / <strong>公海数</strong> / 工单</td><td>转化率（需要分母＝关系数）<span class="tag t-red">不能</span></td></tr>
+<tr><td>公海报表</td><td>停留时长 / <strong>领取率</strong> / 流失原因</td><td><span class="tag t-red">不能</span></td></tr>
+</table>
+<p><strong>根因</strong>："新增客户 / 成交 / 掉公海 / 公海数"都是 <strong>business_relation 的状态变化</strong>，不是动作，无法从事件流聚合。</p>
+<p><strong>更优方案：补一张"关系日快照"表</strong>（这是本次最重要的架构建议）</p>
+<div class="tree">relation_daily_snapshot
+  biz_date            -- 分区键
+  relation_id
+  dept_id / product_line_id / owner_id / company_id   -- 维度冗余
+  stage_id / urgency / customer_level / value_tier    -- 当日状态快照
+  sea_status / in_sea_days                            -- 公海状态
+  is_new / is_won / is_lost / is_dropped              -- 当日发生的状态跃迁标记
+  uk(biz_date, relation_id)</div>
+<ul>
+<li><strong>写入</strong>：与 stat_daily 同批（每日 05:00），从 business_relation + 当日 stage_log/sea_record/contract 生成，可按 biz_date 覆盖重跑（幂等）。</li>
+<li><strong>效果</strong>：日报/月报/转化率/公海数/漏斗全部读这张表，<strong>从此报表不碰主表</strong>。</li>
+<li><strong>成本</strong>：10 万关系 × 365 天 = 年增 3650 万行——<span class="tag t-org">偏大</span>。<strong>优化</strong>：只存"发生变化的关系 + 每周一次全量快照"，或按周/月粒度存，日报另算。具体粒度建议按实际关系数量级定（若关系总数 <5 万，日快照完全可接受）。</li>
+</ul>
+</div>
+
+<h3>3.4 其他性能隐患（按优先级）</h3>
+<table>
+<tr><th style="width:5%">#</th><th style="width:22%">场景</th><th style="width:38%">问题</th><th>更优方案</th></tr>
+<tr><td>33</td><td><strong>节奏规则每日全量扫描</strong></td><td>cadence_rule 的 trigger 是 JSON，应用层逐条求值。规则 20 条 × 关系 10 万 = 每天 200 万次求值，且"新客 48h 无事件"需要"关系 × 最新事件"join</td><td><span class="tag t-org">P1</span> 改<strong>增量扫描</strong>：按 <span class="mono">last_event_at</span> 水位线只扫"上次扫描后有变化"的关系；规则求值改成"先按索引圈候选集（如 <span class="mono">WHERE last_event_at &lt; NOW()-48h AND created_at &gt; ...</span>）再对候选集套 JSON 规则"，把 N×M 降为 N。</td></tr>
+<tr><td>34</td><td><strong>公海列表按热度排序</strong></td><td>公海卡片要显示"近 30 天 N 次"。文档说走 <span class="mono">GROUP BY relation_id</span> 批量查——但若要<strong>按跟进次数排序</strong>（销售最爱用：捡软柿子），必须全量聚合后才能排序，批量查失效</td><td><span class="tag t-org">P1</span> 在 <span class="mono">business_relation</span> 加冗余计数列 <span class="mono">last30d_event_cnt</span>，由日任务批量回填（不是判断列，不违反 T1）。排序/展示都读它，毫秒级。</td></tr>
+<tr><td>35</td><td><strong>合并树的递归查询</strong></td><td>"查公司 A 全部跟单"= 主干 ∪ 递归所有 <span class="mono">merged_into</span> 分支。合并链可能多级</td><td><span class="tag t-blue">P2</span> 用 MySQL 8 CTE 递归；限制合并深度（如 ≤3 级）；或合并时把"根关系 id"冗余到每行（<span class="mono">root_relation_id</span>），查一次即全。</td></tr>
+<tr><td>36</td><td><strong>台账 JSON 高频统计键</strong></td><td>文档说"高频统计 Key 走生成列+索引（DBA 逐个评估)"。但加生成列＝ALTER TABLE，几百万行会锁表；且新增一个统计 key 就加一列——<strong>打破 T1"加规则不加列"</strong></td><td><span class="tag t-blue">P2</span> 接受"台账统计是低频离线需求"：台账统计走<strong>只读副本或定时导出</strong>，不在主库做实时聚合。若必须实时，限定生成列总数上限（如每条产品线 ≤5 个），并在低峰期 ALTER。</td></tr>
+<tr><td>37</td><td><strong>覆盖索引缺失</strong></td><td>时间轴高频查询 <span class="mono">idx(relation_id, event_at)</span> 需要回表取 action_type/summary/actor_id</td><td><span class="tag t-blue">P2</span> 加 <span class="mono">idx(relation_id, event_at, action_type, actor_id)</span>；summary 是长文本不进索引（回表取）。</td></tr>
+<tr><td>38</td><td><strong>operation_log 归档 vs 只增权限</strong></td><td>文档要求"DB 账号无 UPDATE/DELETE 权限"，但又要求"热存 12 个月 → 冷归档"。归档就要删</td><td><span class="tag t-blue">P2</span> 归档走<strong>独立运维账号 + DROP PARTITION</strong>（分区删除是 DDL 不是 DML）；业务账号保持只增。另需补：<strong>失败的敏感操作也要留痕</strong>（见漏洞 #39）。</td></tr>
+<tr><td>39</td><td><strong>stat_daily 组合膨胀</strong></td><td>维度 biz_date × dept × line × owner × action_type，加 <span class="mono">_total</span> 汇总行与部门级汇总行后行数翻倍</td><td><span class="tag t-blue">P2</span> 可接受（年增约百万级）。但需明确：汇总行与明细行<strong>不能混在一张表里被重复统计</strong>，建议用 <span class="mono">owner_id=0</span> 表示部门汇总行并写进文档。</td></tr>
+<tr><td>40</td><td><strong>读写分离</strong></td><td>—</td><td><span class="tag t-gray">暂不需要</span>。先上"日快照表 + 增量扫描 + core_name 索引"，这三样够撑到千万级。等主库 CPU 真被打满再引入只读副本，别提前加复杂度。</td></tr>
+</table>
+
+<div class="box bx-green">
+  <span class="bt">落库前必做的四件事（数据量小时零成本，量大时免重构）</span>
+  <ol style="margin-bottom:0">
+    <li>修 <span class="mono">action_event</span> 分区与 <span class="mono">uk_idem</span> 的冲突（改索引或幂等上移 Redis）。</li>
+    <li>company 加 <span class="mono">core_name</span> 列 + 索引。</li>
+    <li>补"关系日快照"表（或在 stat_daily 里扩展关系维度字段）。</li>
+    <li>节奏规则扫描改增量 + 公海热度计数冗余列。</li>
+  </ol>
+</div>
+
+<!-- ============ 四、漏洞清单 ============ -->
+<h2>四、漏洞与隐藏的雷（46 条分级清单）</h2>
+<p class="small">正文中已展开的编号在此汇总，便于指着编号拍板。分级：<span class="tag t-red">P0</span> 落库/上线前必修 ｜ <span class="tag t-org">P1</span> V1 内应补 ｜ <span class="tag t-blue">P2</span> 后续优化。</p>
+
+<h3>4.1 P0 · 落库前必修（8 条）</h3>
+<table>
+<tr><th style="width:5%">#</th><th style="width:24%">问题</th><th style="width:8%">类别</th><th>后果与建议</th></tr>
+<tr><td>01</td><td>部门公海"映射"无数据落点</td><td><span class="tag t-red">规则冲突</span></td><td>无主关系的部门归口无法表达。<strong>建议</strong>：明确 <span class="mono">dept_id</span> 恒定不可变（关系固有属性），"部门公海"就是 <span class="mono">company_sea AND dept_id=本部门</span> 的视图；<strong>取消"部门认领"这个不存在的动作</strong>，只保留"员工领取"。</td></tr>
+<tr><td>03</td><td>跨部门领取公海客户后 dept_id 归属</td><td><span class="tag t-red">规则缺失</span></td><td>改＝历史断层且客户数翻倍；不改＝统计错乱。<strong>建议</strong>：公海客户<strong>只允许本部门领取</strong>；若确需跨部门，走"部门经理之间转交"审批并留痕。</td></tr>
+<tr><td>05</td><td>@求助可跨部门授予全文权限，击穿保密</td><td><span class="tag t-red">规则冲突</span></td><td>"跨部门跟单互不可见"被一个 @ 绕过。<strong>建议</strong>：@求助<strong>限同部门（或同部门+同产品线）</strong>；跨部门必须走正式协同审批。这是本次最严重的安全漏洞。</td></tr>
+<tr><td>13</td><td>客户等级口径未定义</td><td><span class="tag t-red">规则缺失</span></td><td>S/A/B/C/D 会变来变去，老板不信任。<strong>建议</strong>：写死"滚动 12 个月回款额，按本关系（同部门同产品线）聚合，每日重算，跨年不清零"。</td></tr>
+<tr><td>19</td><td>跟单"以本人分界"未考虑经理/老板</td><td><span class="tag t-red">逻辑漏洞</span></td><td>经理登录看到的全是树杈、主线为空。<strong>建议</strong>：分界规则按角色——销售/协同人按"本人 vs 他人"；经理/老板<strong>不分叉</strong>，或按"本部门 vs 其他部门"分叉。</td></tr>
+<tr><td>25</td><td>完善度（公司级）与签约校验（关系级）混用</td><td><span class="tag t-red">规则冲突</span></td><td>该不该让签约说不清。<strong>建议</strong>：签约校验只看"本关系必填清单"，完善度仅作展示与治理抓手。</td></tr>
+<tr><td>41</td><td>action_event 分区 × uk_idem 冲突</td><td><span class="tag t-red">技术硬伤</span></td><td>建表直接报错 ERROR 1503。详见 §三-3.1。</td></tr>
+<tr><td>42</td><td>公司查重无索引（core_name 缺失）</td><td><span class="tag t-red">性能</span></td><td>录入客户每次全表扫描。详见 §三-3.2。</td></tr>
+</table>
+
+<h3>4.2 P1 · V1 内应补（17 条）</h3>
+<table>
+<tr><th style="width:5%">#</th><th style="width:28%">问题</th><th>建议</th></tr>
+<tr><td>02</td><td>掉海三个触发条件的判定口径未定义</td><td>补齐"成单周期超时""连续 N 次无推进"的判定定义（建议："无推进"＝连续 N 条事件 <span class="mono">outcome≠advanced</span>）。<strong>这是需求侧的缺口，重新开工前必须写进文档</strong>，否则开发无从下手。</td></tr>
+<tr><td>04</td><td>规则变更导致存量客户集体掉海</td><td>规则变更加"生效缓冲期"（默认 7 天）＋ 变更时预告"将影响 X 个客户"＋ 逐条提醒到销售。</td></tr>
+<tr><td>06</td><td>跨部门竞争中输的那条关系无处置</td><td>赢家签约 → 输家关系自动置"已流失（内部撞单）"，字典补一个 <span class="mono">lost_to_internal</span> 死因码。</td></tr>
+<tr><td>07</td><td>离职员工报表口径</td><td>明确：历史业绩保留显示、不计入当前人均分母、离职人员单独标注。</td></tr>
+<tr><td>08</td><td>介绍费 10% 无表承载</td><td>V1 若不做就在需求里明确标注"V2"；若做，<span class="mono">contract</span> 补 <span class="mono">referrer_id</span> + 分成比例。</td></tr>
+<tr><td>11</td><td>周重点无闭环，可无限糊弄</td><td>挂满 2 周未动 → 强制二选一（推进/降级为月重点/判死）＋ 经理可见"周重点僵尸榜"。<strong>把周重点纳入防逃逸机制。</strong></td></tr>
+<tr><td>12</td><td>灰度寿命与掉海规则重叠</td><td>二选一：要么删掉 gray_release（交给掉海规则），要么让 gray 客户<strong>豁免</strong>掉海规则、只走灰度路径。<strong>建议后者</strong>（灰度是"没判断"，不是"没跟进"，语义不同）。</td></tr>
+<tr><td>14</td><td>开发价值没人标 → 经理看不到盘子</td><td>系统按公司档案（规模/行业/决策链）给<strong>建议值</strong>（T4 建议态），销售一键确认；经理可代标。</td></tr>
+<tr><td>15</td><td>them 类承诺无出口</td><td>催问 3 次无果 → 自动建议"转卡点"或"判死"。</td></tr>
+<tr><td>16</td><td>转交后历史承诺仍属旧人</td><td>转交审批通过时，同步把未完成的 me/verdict 承诺转给新 owner；them 类跟随关系不跟人。</td></tr>
+<tr><td>17</td><td>预约过期绕过 422</td><td>明确：过期归档不强制留事件，但"过期前未处理"计入动线；或改为"取消预约须填一句结果"。</td></tr>
+<tr><td>20</td><td>外出登记与写跟单割裂（录两遍）</td><td>外出登记页加"一键转写跟单"，把当天拜访的客户批量生成事件草稿。</td></tr>
+<tr><td>21</td><td>公海超期待办无人处理则永久挂起</td><td>加超时升级：超 7 天未处理 → 推上级/总经理；看板显示"待办堆积天数"。</td></tr>
+<tr><td>22</td><td>判死次日补写提醒会成红墙</td><td>多条判死<strong>合并成一条汇总提醒</strong>。</td></tr>
+<tr><td>23</td><td>判死后关系归属未定义</td><td>判死 = 关系归档（不再是活跃跟进对象，不参与掉海扫描，不回流公海），保留历史可查。</td></tr>
+<tr><td>28</td><td>审批路由规则未定义</td><td>明确：默认 <span class="mono">direct_manager_id</span>；跨部门转交 → 双方经理会签；总经理为最终审批人。</td></tr>
+<tr><td>29</td><td>手机号解锁无批量控制与额度</td><td>批量申请需填用途；单人单日解锁 >N 次自动告警经理；解锁记录可被经理按人查询。</td></tr>
+<tr><td>32</td><td>voucher_file_id / attachments 无文件表</td><td>补一张轻量 <span class="mono">file_asset</span> 表（或明确用对象存储 + URL），否则回款凭证无处落地。</td></tr>
+</table>
+
+<h3>4.3 P2 · 后续优化（21 条，摘要）</h3>
+<div class="card">
+<span class="pill">09 客户要求换销售无入口</span>
+<span class="pill">10 合并树递归深度未定义</span>
+<span class="pill">18 必填"仅此一处"vs"两处"文字打架</span>
+<span class="pill">24 查重 FULLTEXT 后置（先用 core_name）</span>
+<span class="pill">26 联系人跳槽后未兑现承诺处置</span>
+<span class="pill">27 ledger 与 contract 重复列</span>
+<span class="pill">30 状态机缺"已流失"终态</span>
+<span class="pill">31 tag_id 与 dict_item 关系未明说</span>
+<span class="pill">33 节奏全量扫描改增量</span>
+<span class="pill">34 公海热度排序计数冗余</span>
+<span class="pill">35 合并树递归查询</span>
+<span class="pill">36 台账 JSON 统计键</span>
+<span class="pill">37 覆盖索引</span>
+<span class="pill">38 日志归档账号与失败留痕</span>
+<span class="pill">39 stat_daily 汇总行标记</span>
+<span class="pill">43 交付/客服角色的客户数据权限未定义</span>
+<span class="pill">44 notification 与 daily_agenda 职责重叠</span>
+<span class="pill">45 弹药库缺结构化检索维度</span>
+<span class="pill">46 多产品线员工与"跨业务线金额脱敏"冲突</span>
+</div>
+<div class="box bx-gray">
+<span class="bt">其中三条值得单独说</span>
+<ul style="margin-bottom:0">
+<li><strong>#43 交付/客服权限空白</strong>：工单 assignee 是交付人员，但他们不是 relation_member。交付人员能不能看客户历史跟单？看不到服务质量下降，看到则"跨部门互不可见"失守。<strong>建议</strong>：交付角色对"本人工单关联的关系"授予<strong>只读</strong>权限（正式协同的只读版）。</li>
+<li><strong>#44 两套提醒通道</strong>：notification 有 commitment_due/cadence/drop_warn，daily_agenda 也有同样内容。销售会不会收到双份？<strong>建议</strong>：动线是"首页待办"，notification 只做"非动线的事件通知"（审批结果、协同到期、被@）。</li>
+<li><strong>#46 脱敏与多产品线冲突</strong>：员工可关联多产品线，那"跨业务线金额脱敏"按关系的线还是按人的线判断？<strong>建议</strong>：按"登录人是否属于该关系的产品线"判断，与部门无关。</li>
+</ul>
+</div>
+
+<!-- ============ 五、交互体验 ============ -->
+<h2>五、交互体验问题（9 条）</h2>
+<table>
+<tr><th style="width:5%">#</th><th style="width:26%">问题</th><th>为什么体验差</th></tr>
+<tr><td>E1</td><td><strong>一天 40 通电话要写 40 条跟单</strong></td><td>T2 说摩擦趋零，但电销场景是<strong>高频短动作</strong>。40 次"一句话+两个点选"≈ 20 分钟，销售必然敷衍 → 写成"已联系"三个字 → <strong>统计数据源头失真</strong>。<strong>建议</strong>：支持"批量快速标记"（勾选 10 个客户 → 批量写"电话未接通"），或通话记录导入。</td></tr>
+<tr><td>E2</td><td><strong>跟单树杈折叠增加认知负担</strong></td><td>owner 想看协同人跟了什么，要在树杈里翻。<strong>建议</strong>：树杈默认折叠但可一键展开；提供"全部 / 只看我的"切换。</td></tr>
+<tr><td>E3</td><td><strong>外出登记录两遍</strong></td><td>见漏洞 #20。行政与业务割裂。</td></tr>
+<tr><td>E4</td><td><strong>判死次日的补写红墙</strong></td><td>见漏洞 #22。</td></tr>
+<tr><td>E5</td><td><strong>公海列表不能按"最近被跟过热度"排序</strong></td><td>销售最爱"捡软柿子"（找别人跟过但没拿下的）。目前只有"近 30 天 N 次"展示，<strong>无法排序筛选</strong>。</td></tr>
+<tr><td>E6</td><td><strong>合并后历史以树呈现，前端成本高</strong></td><td>git 式分支对销售是陌生概念。建议默认"按时间合并展示"，只有点开"查看合并历史"才显示树。</td></tr>
+<tr><td>E7</td><td><strong>实体可点铁律的执行成本</strong></td><td>规则好（§13.1），但意味着<strong>每个列表页、卡片、审批单、报表都要接入抽屉/悬浮卡组件</strong>。若不抽成全局组件，会出现"这个页面的公司名点不了"。<strong>建议</strong>：做成全局 Vue 指令/组件强制复用。</td></tr>
+<tr><td>E8</td><td><strong>「今日动线」无"今日已完成"的正反馈</strong></td><td>全是催办，没有成就感。建议：完成一条动线给轻量反馈（今日已处理 N 条）。</td></tr>
+<tr><td>E9</td><td><strong>移动端</strong></td><td>销售在外面跑，手机是主战场。原型有 workbench-mobile，但需求文档§13 未系统定义移动端交互（悬浮卡→底部面板已提，其余未提）。<strong>建议</strong>：明确"手机只做三件事：写跟单 / 看今日动线 / 查客户"。</td></tr>
+</table>
+
+<!-- ============ 六、三角色 ============ -->
+<h2>六、三角色视角：能不能真提效、真解焦虑</h2>
+
+<div class="two">
+<div class="card">
+<h4 style="margin-top:0;color:var(--green)">销售视角 <span class="tag t-green">80 分 · 大概率爱用</span></h4>
+<p><strong>会喜欢的</strong>：录一句话就行（不用填表）、早上打开就知道今天该找谁、承诺三分（我答应/他答应/我判定）说到心坎里、实体可点（不用回头搜）。</p>
+<p><strong>会抱怨的</strong>：</p>
+<ul>
+<li>一天 40 通电话要写 40 条（E1）——<strong>这是最大的流失风险</strong></li>
+<li>外出登记了还要再写跟单（E3）</li>
+<li>协同人的跟单被折叠成树杈，看不全（E2）</li>
+</ul>
+<p><strong>判断</strong>：只要解决 E1（批量快速标记），销售大概率愿意用。这套系统<strong>不要求销售为报表打工</strong>，这是它能活下去的根本。</p>
+</div>
+
+<div class="card">
+<h4 style="margin-top:0;color:var(--orange)">经理视角 <span class="tag t-org">60 分 · 能用，但抓手不够</span></h4>
+<p><strong>会喜欢的</strong>：防逃逸（snoozed 3 次上限、ignored 必填原因且自己可见）、死因看板、S/A 强制回访、掉海预警推给自己。</p>
+<p><strong>会缺的</strong>：</p>
+<ul>
+<li><strong>周重点管不住</strong>（#11）——最该管的一环没抓手</li>
+<li><strong>开发价值没人标</strong>（#14）——客户盘子看不清</li>
+<li><strong>打开客户全是树杈</strong>（#19）——看不到主线</li>
+<li><strong>报表只有 1/4 能出</strong>（§3.3）——转化率、公海数出不来</li>
+<li><strong>改规则会误伤存量</strong>（#04）——不敢轻易调参数</li>
+</ul>
+<p><strong>判断</strong>：经理能"看见"了（比现在强很多），但还"管不住"。<strong>建议优先补 #11 + #14</strong>，这两个是经理抓手的命门。</p>
+</div>
+</div>
+
+<div class="card" style="border-left:4px solid var(--red)">
+<h4 style="margin-top:0;color:var(--red)">老板视角 <span class="tag t-red">45 分 · 焦虑解不了</span></h4>
+<p><strong>这套系统回答了</strong>："客户为什么不要我们"（死因看板）、"谁在赢、怎么赢的"（弹药库）、"谁在偷懒"（ignored 占比）。这三块做得好，是真实的进步。</p>
+<p><strong>但它回答不了老板真正焦虑的三件事</strong>：</p>
+<table style="margin-top:8px">
+<tr><th style="width:26%">老板的真实问题</th><th style="width:14%">系统能答吗</th><th>缺什么</th></tr>
+<tr><td><strong>"这个月能不能完成目标？"</strong></td><td><span class="tag t-red">不能</span></td><td><strong>没有目标/配额体系</strong>。系统里没有月度目标、没有分解到部门/个人、没有"时间进度 vs 完成进度"的对比条。这是最致命的缺失——<strong>管理焦虑的核心就是这个</strong>。</td></tr>
+<tr><td><strong>"还差多少？缺口在哪？"</strong></td><td><span class="tag t-red">不能</span></td><td>没有预测。有"同环比"但没有"按当前速度月底预计完成多少"。建议：用当月已成交速度 × 剩余工作日做线性外推（粗糙但有用）。</td></tr>
+<tr><td><strong>"为什么降了？"</strong></td><td><span class="tag t-orange" style="background:var(--orangebg);color:var(--orange)">部分</span></td><td>有归因的<em>素材</em>（死因/流失原因/跟进频次），但没有<strong>归因视图</strong>——把"业绩下降"自动拆成"新增少了 / 转化低了 / 流失多了 / 跟进少了"四因子的看板。</td></tr>
+</table>
+<p style="margin-bottom:0"><strong>建议（这是给老板的最高价值增量）</strong>：加一个<strong>极简目标层</strong>——月度目标（公司/部门/人三层，只填金额）+ 每日自动算"完成率 vs 时间进度"+ 缺口归因四因子。<strong>一个表、一个看板，但直接命中老板的核心焦虑。</strong>而且它完全符合 T3（目标由经理/老板填，不增加销售负担）。</p>
+</div>
+
+<div class="box bx-blue">
+<span class="bt">一个更大的提醒：管理焦虑不是"看不见"造成的，是"看见了却改不动"造成的</span>
+现在的系统让老板<strong>第一次能看见</strong>（这是巨大进步）。但如果只有看见、没有<strong>干预手段</strong>（目标、配额、归因、周重点强制闭环），焦虑会从"不知道怎么样"变成"知道很差但没办法"——<strong>可能更焦虑</strong>。所以建议把"目标层"和"周重点闭环"跟看板一起做，不要拆成二期。
+</div>
+
+<!-- ============ 七、落地风险 ============ -->
+<h2>七、开工前的前置条件（历史代码已废弃）</h2>
+<div class="card">
+<div class="box bx-blue" style="margin-top:0">
+<span class="bt">七叔已明确（2026-09-10）</span>
+<strong>backend/ 现有 22 个文件（583 行）是历史遗留，将整体废弃；等需求确定后从零重新开始。</strong>
+因此本章<strong>不作为"代码缺陷清单"</strong>——那些旧代码里与需求冲突的写法（sea 三态、owner_id 挂主表、旧的 INTENTION 状态）都会随重构自然消失，<strong>不需要单独去修</strong>。本章只回答一件事：<strong>重新开工之前，必须先定下来什么。</strong>
+</div>
+<table>
+<tr><th style="width:26%">前置项</th><th>为什么必须先定</th></tr>
+<tr><td><strong>① 需求锁定</strong></td><td>需求文档 24 小时内迭代 8 版、数据架构 11 版，"合并"相关的 4 个重大决策（#27/#28/#29/#30）全是 09-10 一天内拍的。合并逻辑是 CRM 里最复杂的部分之一——<strong>在需求剧烈变动时写代码必然返工</strong>。本文档 §八 与配套《需求拍板清单》就是在做这件事。</td></tr>
+<tr><td><strong>② ORM 选型</strong></td><td>README §七 仍挂着"TypeORM vs Prisma 待定"。<strong>这个不定，数据层一行都写不了</strong>——尤其是本设计重度依赖<strong>生成列（STORED）</strong>，两种 ORM 对生成列的支持方式差别很大（Prisma 需要手写 migration，TypeORM 需确认版本支持）。建议优先确认这一项。</td></tr>
+<tr><td><strong>③ 运行环境</strong></td><td>轻量服务器 vs 本机 Node；MySQL 8 + Redis 的 provision 方式。<strong>不定则无法联调</strong>，但这一项可以边写边定，不阻塞。</td></tr>
+<tr><td>原型（可复用）</td><td>37 页高保真 HTML（<span class="mono">原型设计/高保真/</span>，假数据）。<strong>这是本项目的资产，不要废弃</strong>——它已经把交互规范（实体可点、一层抽屉、悬浮卡、跟单以本人分界）跑通了，重开时直接作为前端实现的交互依据。</td></tr>
+<tr><td>数据库</td><td>尚未落库。这意味着<strong>没有存量数据包袱</strong>——§四 里那些"生成列唯一索引上线前须清理存量重复"的顾虑全部不成立，可以放开手脚按最优设计建库。<strong>这是个好消息。</strong></td></tr>
+</table>
+
+<div class="box bx-org" style="margin-bottom:0">
+<span class="bt">风险判断</span>
+现在最大的风险<strong>不是代码，是"需求边写边改"</strong>。文档质量已经很高（业务设计 85 分），值得先把 §四 的 P0 八条拍死、再开工，而不是一边写代码一边补规则。<br>
+<strong>建议顺序</strong>：① 过一遍《需求拍板清单》把 P0 拍完 → ② 同步进需求文档 V1.9 + 数据架构 V1.12 → ③ 拍 ORM → ④ 从零建库、按模块重写（原型可直接参照）。
+</div>
+</div>
+
+<!-- ============ 八、建议清单 ============ -->
+<h2>八、建议清单（拍板用）</h2>
+<table>
+<tr><th style="width:8%">优先级</th><th style="width:34%">事项</th><th style="width:12%">对应编号</th><th>工作量感</th></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>修 action_event 分区 × uk_idem 冲突</td><td>#41</td><td>改一行索引定义</td></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>company 加 core_name 列 + 索引</td><td>#42 / #24</td><td>1 列 1 索引 1 个公共函数</td></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>定死公海 dept_id 归属与跨部门领取规则</td><td>#01 / #03</td><td>文档决策，半小时</td></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>@求助限制同部门（或走审批）</td><td>#05</td><td>一条规则，收益极大</td></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>客户等级口径写死（时间窗/聚合范围）</td><td>#13</td><td>文档决策</td></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>跟单分叉规则补经理/老板视角</td><td>#19</td><td>文档决策 + 前端分支</td></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>签约校验改按关系级必填清单</td><td>#25</td><td>文档决策</td></tr>
+<tr><td><span class="tag t-red">P0</span></td><td>拍板 ORM 选型（生成列支持方式是关键）</td><td>§七-②</td><td>决策，阻塞开工</td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>周重点纳入防逃逸（僵尸榜 + 强制二选一）</td><td>#11</td><td>中。经理抓手命门</td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>开发价值给系统建议值 + 经理可代标</td><td>#14</td><td>小</td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>补"关系日快照"（报表底座）</td><td>§3.3</td><td>中。不做则报表出不来</td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>支持批量快速写跟单（电销场景）</td><td>E1</td><td>小。<strong>决定销售用不用</strong></td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>灰度 vs 掉海规则二选一</td><td>#12</td><td>文档决策</td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>判死/转交后关系与承诺的处置</td><td>#23 / #16</td><td>文档决策</td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>审批路由规则 + 解锁批量额度</td><td>#28 / #29</td><td>文档决策 + 小开发</td></tr>
+<tr><td><span class="tag t-org">P1</span></td><td>补 file_asset 表（凭证/附件）</td><td>#32</td><td>1 张表</td></tr>
+<tr><td><span class="tag t-blue">P2</span></td><td><strong>极简目标层（公司/部门/人 + 完成率 + 缺口归因）</strong></td><td>§六-3</td><td>中。<strong>唯一能直接解老板焦虑的东西</strong></td></tr>
+<tr><td><span class="tag t-blue">P2</span></td><td>节奏扫描改增量 + 公海热度计数冗余</td><td>#33 / #34</td><td>中</td></tr>
+<tr><td><span class="tag t-blue">P2</span></td><td>其余 21 条 P2 项</td><td>§4.3</td><td>见正文</td></tr>
+</table>
+
+<div class="box bx-green">
+<span class="bt">如果只做三件事，做这三件</span>
+<ol style="margin-bottom:0">
+<li><strong>把 @求助锁在同部门</strong>（#05）——一条规则，避免最严重的信息泄露，零成本。</li>
+<li><strong>让销售能批量写跟单</strong>（E1）——决定系统是"助理"还是"监工"，决定销售用不用。</li>
+<li><strong>加极简目标层</strong>（§六-3）——唯一能让老板早上打开系统就看到"这个月能不能完成"的东西。</li>
+</ol>
+</div>
+
+<div class="foot">
+  本报告依据《销售CRM业务需求文档》V1.8、《销售CRM数据架构文档》V1.11、原型设计（37 页高保真）交叉核对生成；<strong>代码层不纳入评估</strong>（backend/ 现有 22 文件 583 行为历史遗留，七叔已明确整体废弃，等需求定稿后从零重开）。<br>
+  <strong>性质：只评不改</strong>——未修改任何现行规格文档与技术资产。七叔拍板要吸收哪些条，再逐条落进对应文档并升版（按 L0 变更联动铁律）。
+</div>
+
+</div>
+</body>
+</html>

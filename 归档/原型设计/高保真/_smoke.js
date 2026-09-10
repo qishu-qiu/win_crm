@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const ROOT = 'd:/WorkBuddy/销售标准管理/原型设计/高保真';
+const ROOT = 'd:/WorkBuddy/销售标准管理/归档/原型设计/高保真';
 
 /* ============ 最小 DOM ============ */
 class El {

@@ -2,7 +2,7 @@
 
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
 > 配套真相源：《销售CRM业务需求文档》V1.11（需求规格/）、《销售CRM数据架构文档》V1.14（需求规格/）。
-> 生效日期：2026-09-10 ｜ 状态：V1.0 起步版（先锁约定 + 全量接口目录 + 关键契约，逐模块字段随开发回填）。
+> 生效日期：2026-09-10 ｜ 状态：**V1.1**（对齐校正版 · 已关闭全部对齐缺口）。
 
 ---
 
@@ -16,6 +16,7 @@
 ### 1.2 两条元铁律（L0 变更联动 / L1 单一事实源）
 - **L0**：业务需求一改，本文件必须**同批**跟着改、同批升版；一次变更一张变更单，先改需求再改下游。
 - **L1**：枚举值、错误码、脱敏口径在本文定义一次后，前端文档只写「见《接口 API 文档》§二」，不复制。
+- **★ 对齐铁律（2026-09-11 立）**：**需求文档 §14.1「V1 做」里定义的每一项功能，都必须在本文件 §三 有对应端点**；反过来，端点也必须有前端页面落点（见《前端页面与交互文档》§一.1.2）。新增功能不得只写进需求、不落接口。
 
 ---
 
@@ -75,7 +76,8 @@
   - 紧迫 `urgency`：`week_key` / `month_key` / `quarter_follow` / `long_term` / `gray`（默认）。
   - 公海 `sea_status`：`private` / `company_sea`（两态，`→架构F`）。
   - 竞争 `competition`：`none` / `in_use` / `comparing`。
-  - 审批 `approval_type`：`transfer` / `collaborate` / `phone_unlock` / `review` / `relation_reassign`（四型一单，`→需求§7.9`）。
+  - 审批 `approval_type`：**`transfer` / `collaborate` / `phone_change` / `phone_unlock`**（四型一单）＋ **`relation_reassign`**（离职批量转交，管理员发起）（`→需求§7.9`）。
+    - ⚠ 2026-09-11 校正：原枚举误列 `review`、漏 `phone_change`——**复盘不是审批类型**，手机号变更才是（`→需求§7.9`）。
   - 数字/状态字典以 `dict_item` 为准（`→架构A11`）。
 
 ### 2.7 分页 / 排序 / 过滤
@@ -107,24 +109,36 @@
 | 认证 | account | /account/login | P | 登录 |
 | 认证 | account | /account/refresh | P | 刷新 token |
 | 认证 | account | /account/me | G | 当前人+角色+管辖部门 |
-| 组织 | org | /org/departments | G | 部门树 |
-| 组织 | org | /org/employees | G | 员工列表（按管辖收敛）|
+| 认证 | account | /account/preferences | U ★ | 个人外观/通知偏好（换肤存账号，`→需求§13`）|
+| 组织 | org | /org/departments | G/**P/U/D** ★ | 部门树（增/改/停用，`→需求§7.1`）|
+| 组织 | org | /org/departments/:id/managers | G/P/D ★ | 部门经理（多对多，`→架构A3`）|
+| 组织 | org | /org/employees | G/**P/U** ★ | 员工（入职/改主兼部门/改直属经理/离职停用）|
+| 组织 | org | /org/employees/:id/roles | G/U ★ | 角色分配（多选，`→架构A5`）|
+| 组织 | org | /org/employees/:id/offboard | P ★ | 离职：批量转交关系（管理员发起，走审批）|
 | 组织 | org | /org/roles , /org/permissions | G | 角色/权限矩阵 |
-| 组织 | org | /org/product-lines | G/U | 产品线（固定配色）|
+| 组织 | org | /org/product-lines | G/**P**/U ★ | 产品线（固定配色、承接部门、服务周期）|
 | 组织 | org | /org/dept-rule | G/U | 部门规则（掉海天数/灰度提醒/等级档/特质上限）|
-| 组织 | dict | /dict/types , /dict/items | G/U | 数据字典 |
+| 组织 | dict | /dict/types , /dict/items | G/**P**/U ★ | 数据字典（builtin 不可删可停用）|
 | 公司 | company | /companies | G/P | 公司档案列表/建档 |
 | 公司 | company | /companies/:id | G/U | 详情/改 |
 | 公司 | company | /companies/:id/profile-tags | G/P/D | 公司档案标签（身份/制度/决策链）|
 | 公司 | company | /companies/search-dup | P | 撞库查重（手机/信用代码/名相似）|
+| 公司 | company | /companies/:id/merge | P ★ | 撞码**墓碑合并**（单事务 6 步，`→需求§7.3`）|
+| 公司 | company | /companies/:id/contacts | G ★ | 公司联系人（含历史/已离职标记，`→架构B5`）|
 | 联系人 | contact | /contacts | G/P/U | 联系人 |
+| 联系人 | contact | /contacts/:id | **D** ★ | 删除（**经理权限**，销售不可，`→需求§7.2`）|
 | 联系人 | contact | /contacts/:id/traits | U | 谈判特质（≤3，部门可配）|
+| 联系人 | contact | /contacts/:id/merge | P ★ | **墓碑合并**（经理权限，traits 并集、子记录零改动）|
+| 联系人 | contact | /contacts/:id/employments | G ★ | 就职/跳槽历史（N:M 含历史，`→架构B5`）|
+| 联系人 | contact | /contacts/phone-change/apply | P ★ | **手机号变更申请**（审批通过后冻结 24h，`→需求§7.2`）|
 | 关系 | relation | /relations | G/P | 业务关系列表/激活 |
-| 关系 | relation | /relations/:id | G/U | 详情/改 |
+| 关系 | relation | /relations/:id | G/U | 详情/改（含 urgency / value_tier）|
+| 关系 | relation | /relations/:id/stage | P ★ | **推进阶段**（建议态+限频≥3天/跨里程碑+留痕）|
 | 关系 | relation | /relations/:id/members | G/P/U/D | owner/collaborator/ask_help |
 | 关系 | relation | /relations/:id/stage-log | G | 阶段推进留痕 |
-| 关系 | relation | /relations/:id/labels | G/P/D | 关系级标注（风险等）|
+| 关系 | relation | /relations/:id/labels | G/P/D | 关系级标注（风险/价值/协同）|
 | 关系 | relation | /relations/:id/transfer | P | 转交（审批）|
+| 关系 | relation | /relations/batch-transfer | P ★ | 离职**批量**转交（管理员发起）|
 | 关系 | relation | /relations/:id/competition | U | 竞品态（事件回写快照）|
 | 公海 | sea | /sea/company , /sea/department | G | 系统/部门公海 |
 | 公海 | sea | /sea/company/:id/claim | P | 领取到私海（幂等）|
@@ -136,23 +150,42 @@
 | 行动 | event | /events/quick-mark | P | 快速标记（未联系/未接/说两句，落库不更新 last_event_at）|
 | 行动 | cadence | /cadence-rules | G/U | 节奏规则 |
 | 行动 | agenda | /today-agenda | G | 今日动线（每日组装）|
+| 行动 | agenda | /today-agenda/:id/action | P ★ | **处理反馈** done/snoozed/ignored（防逃逸：snooze≤3、ignored 必填原因）|
 | 预约 | appointment | /appointments | G/P/U | 预约 |
 | 预约 | appointment | /appointments/:id/complete | P | 完成预约（强制生成跟单事件，否则 422）|
-| 外出 | visit | /visits | G/P | 外出登记（纯行政，不产生事件）|
+| 外出 | visit | /visits | G/P | 外出登记（出去：时间+去干什么+可选关联关系）|
+| 外出 | visit | /visits/:id/return | P ★ | **回来点一下**（记 `actual_return_at`，纯行政不产生事件）|
 | 合同 | contract | /contracts | G/P/U | 合同 |
 | 合同 | contract | /contracts/:id/payments | G/P | 回款流水 |
 | 合同 | contract | /contracts/:id/splits | G/P/U | 合同业绩分配（默认 signer100%）|
 | 工单 | workorder | /workorders | G/P/U | 工单（售后/商机双分类）|
+| 工单 | workorder | /workorders/:id/convert | P ★ | 商机↔工单**双向流转**（`→需求§6.4`）|
 | 台账 | ledger | /ledgers | G | 客户台账（JSON 扩展列）|
 | 台账 | ledger | /ledgers/:id | G/U | 台账详情（动态表单）|
 | 台账 | field | /product-lines/:id/field-templates | G/P/U | 字段模板（先登记后写）|
 | 审批 | approval | /approvals/todo , /approvals/mine | G | 待我审批/我发起 |
 | 审批 | approval | /approvals/:id/approve , /reject | P | 通过/驳回（驳回必填原因）|
 | 审批 | approval | /phone-unlock/apply | P | 手机号解锁申请（L05）|
-| 报表 | report | /reports/dashboard , /reports/sales , /reports/dept | G | 看板/个人/部门 |
+| 报表 | report | /reports/dashboard , /reports/sales , /reports/dept | G | 看板/个人日报/部门月报 |
+| 报表 | report | /reports/company | G ★ | 全公司月报（总经理）|
+| 报表 | report | /reports/sea | G ★ | 公海报表（停留/领取率/流失原因）|
+| 报表 | report | /reports/renewal | G ★ | 续约预警（30/60/90 天）|
+| 报表 | report | /reports/workorder-sla | G ★ | 工单 SLA（处理时长/超时率）|
+| 报表 | report | /reports/death-reason | G ★ | **死因看板**（客户为什么不要我们）|
+| 报表 | report | /reports/churn-reason | G ★ | 流失原因分布（被撬/到期未续/服务不满/疏忽）|
 | 目标 | target | /targets | G/P/U | 月目标（个人/部门/公司）|
-| 通知 | notice | /notifications | G/U | 消息中心（已读）|
+| 目标 | target | /targets/progress | G ★ | 目标进度（回款额主 + 并列签约额 + 时间已过 X%）|
+| 通知 | notice | /notifications | G/U | 消息中心（已读，同类合并）|
 | 复盘 | review | /relations/:id/review | P | 出口复盘 win/loss/churn |
+| 复盘 | review | /reviews/win-library | G ★ | **赢单弹药库**（本部门可见，gm 可全公司）|
+| 复盘 | review | /reviews/defense | G ★ | **防守清单**（哪个竞品在反挖）|
+| 竞品 | competitor | /competitors | G/P/U ★ | **竞品名册**（经理维护，销售只读引用，`→需求§11.1`）|
+| 文件 | file | /files/asset | P ★ | 上传拿 `file_key`（合同附件/回款凭证，`→架构B8`）|
+| 文件 | file | /files/:id | G ★ | 预览/下载（带鉴权，不落 URL）|
+| 系统 | system | /system/config | G/U ★ | 系统级配置（gm 可改，留痕，`→架构A12`）|
+| 系统 | system | /operation-logs | G ★ | 操作留痕审计（经理+/管理员，`→架构A10`）|
+
+> ★ = V1.1 对齐校正新增/补全方法（原目录遗漏，需求已定义）。接口总数 **~50 → ~78**。
 
 ---
 
@@ -222,6 +255,77 @@
 
 ---
 
+### 4.14 V1.1 补齐端点契约（对齐校正新增，★）
+
+> 以下为 2026-09-11 三方对账后补齐的端点。业务规则见 `→需求§`，表结构见 `→架构表`。
+
+**4.14.1 组织与权限（原只有 G，补 CRUD，`→需求§7.1`）**
+- `POST/PUT/DELETE /org/departments`：部门增/改/**停用不删**（名称、上级、关联产品线、启用客服开关、状态）。
+- `GET/POST/DELETE /org/departments/:id/managers`：部门经理**多对多**（`dept_manager`，决定经理查数范围 `→架构A3`）。
+- `POST/PUT /org/employees`：员工入职 / 改主部门·兼部门·关联产品线·**直属经理（审批链）**；`status` ∈ `active`/`resigned`/`disabled`。**离职用 `resigned`，物理不删**（历史业绩照常显示）。
+- `PUT /org/employees/:id/roles`：角色多选分配（`employee_role` `→架构A5`）。
+- `POST /org/employees/:id/offboard`：**离职批量转交**——管理员发起，把该员工名下关系批量转交接任人，走 `relation_reassign` 审批（直接上级批 `→需求§7.9`）；幂等。
+- `POST/PUT /org/product-lines`：产品线（含 `color_key` 7 线固定配色、承接部门、服务周期）。
+- `POST /dict/items`：新增字典项（**builtin=1 不可删、只可停用** `→架构A11`）。
+
+**4.14.2 公司 / 联系人合并与跳槽（`→需求§7.2` §7.3）**
+- `POST /companies/:id/merge`：撞码**墓碑合并**——单事务 6 步：① loser 打 `merged_into` ② winner `aliases` 收进 loser 全称 ③ loser `credit_code` 置 NULL **释放唯一位** ④ 档案标签并集（决策链冲突弹人工选，打标人留痕全保留）⑤ 任职记录 + 业务关系归 winner（**同部门同产品线撞 `uk_active_rel` → loser 关系置非活跃分支，不占活跃位**；否则 `company_id` 直接改指）⑥ 写 1 条 `operation_log`。**子表（跟单/承诺/预约/阶段/合同回款）零改动**。
+- `POST /contacts/:id/merge`：**墓碑合并**（**经理权限**）——loser 打 `merged_into`=winner、**物理不删**、traits **并集**、子记录零改动（`→需求§7.2`）。
+- `GET /contacts/:id/employments`：就职/**跳槽历史**（`company_contact` N:M 含历史）；换公司时新公司存在则加入、不存在则新建档案，**原就职记录保留**并在原公司标"对接人已离职"。
+- `DELETE /contacts/:id`：**仅经理可删，销售不可**（`→需求§7.2`）。
+- `POST /contacts/phone-change/apply`：**手机号变更申请** → `approval_type=phone_change` → **通过后冻结 24h 生效**；留痕写 `contact_change_log`（`→架构B6` `→需求§7.9`）。
+- **旧号回收提示**：注册/改号时若该号**曾属于其他联系人**（历史号）→ 出参带 `phone_history_hint: "曾属于 XX"`，**只提示、不拦截**（运营商回收号属正常，`→需求§7.2`）。
+
+**4.14.3 阶段推进（`→需求§8.1`）**
+- `POST /relations/:id/stage`：入 `{to_stage, confirm?}`。**动作驱动 + 建议态**：服务端按事件给 `suggested_stage`，**绝不自动改**，须销售确认。**限频**：距上次变更 <3 天且非跨里程碑 → 不重复建议（`422 / 20402`）。允许跳级与回退，**每次写 `relation_stage_log`**（谁/何时/从哪到哪）。`cooperated`(6)、`churned`(7) 为终态。
+
+**4.14.4 今日动线处理反馈（`→需求§10.4`）**
+- `POST /today-agenda/:id/action`：入 `{action, reason?}` ∈ `done` / `snoozed` / `ignored`。
+  - `done` → 引导写事件并**自动销承诺**；
+  - `snoozed` → 推明天，**同一条最多 3 次**，第 4 次起**不再返回该选项**（强制 done/ignored，杜绝无限推迟）；
+  - `ignored` → **必填原因**（`422 / 20403`），留痕且**经理可见**（看板可看某人 ignored 占比）。
+  - 同一客户同一原因被忽略后 **7 天内不再重复推**。
+
+**4.14.5 外出登记（`→需求§7.5`）**
+- `POST /visits`：外出时登记 `{depart_at, reason, relation_id?}`（**就三样**，无预计返回时间/交通方式/目的地/备注）。
+- `POST /visits/:id/return`：**回来点一下**，只写 `actual_return_at`。**纯行政，不产生业务事件、不关联报销**。
+
+**4.14.6 工单流转与审批人（`→需求§6.4` §7.9）**
+- `POST /workorders/:id/convert`：商机↔工单**双向流转**（`after_sale` ⇄ `opportunity`），双向留痕。
+- 审批人：一般＝申请人**直属上级**；跨部门转交＝**双方上级双签**；上级缺失或本人即上级 → 上溯部门经理/总经理；离职批量转交＝管理员发起、直接上级批。
+
+**4.14.7 报表补齐（`→需求§7.10`，共 9 张）**
+
+| 端点 | 报表 | 受众 |
+|---|---|---|
+| `/reports/sales` | 我的日报 | 销售本人 |
+| `/reports/dept` | 部门月报 | 部门经理 |
+| `/reports/company` | 全公司月报 | 总经理 |
+| `/reports/sea` | 公海报表（停留/领取率/流失原因）| 经理+ |
+| `/reports/renewal` | 续约预警 30/60/90 | 销售+客服 |
+| `/reports/workorder-sla` | 工单 SLA（时长/超时率）| 交付+管理员 |
+| `/targets/progress` | 目标进度（vs 时间进度）| 老板+经理 |
+| `/reports/death-reason` | 死因看板 | 经理+ |
+| `/reports/churn-reason` | 流失原因分布 | 经理+ |
+
+- **铁律**：所有指标**只被动聚合**销售干活留下的痕迹，**禁止新增"为报表而填"的字段**。
+- 视图：汇总统计（图表+数字）｜明细下钻到业务关系｜同环比（日报含昨日、月报含上月）。
+- 凡涉客户等级统计，出参必须带 `stat_unit`（`relation` 条 / `company` 家）口径标注（`→需求§8.3`）。
+
+**4.14.8 复盘消费视图 + 竞品名册（`→需求§11`）**
+- `GET /reviews/win-library`：**赢单弹药库**——默认**本部门可见**，总经理可设全公司可见；未收录（待处理/已丢弃）仅本人+直属经理可见（让销售敢写真话）。
+- `GET /reviews/defense`：**防守清单**——哪个竞品在反挖我们的客户。
+- `GET/POST/PUT /competitors`：**竞品名册**（名称+产品线+一句话定位）——**经理维护，销售只读引用**；**不做价格表/功能对照表**（`→需求§11.1`）。
+
+**4.14.9 文件 / 系统 / 个人偏好**
+- `POST /files/asset`：上传 → 返回 `file_key`（**存 key 不存 URL**）；业务接口只传 `file_key`（如 `payment_record.voucher_file_id` `→架构B8`）。
+- `GET /files/:id`：预览/下载，**服务端按归属鉴权**，防越权直链。
+- `GET/PUT /system/config`：系统级配置（gm 可改，改前改后写 `operation_log` `→架构A12`）。
+- `GET /operation-logs`：操作留痕审计查询（经理+/管理员，按人/对象/时间筛 `→架构A10`）。
+- `PUT /account/preferences`：个人外观（亮度 light/dark × 风格 A/B/C）与通知偏好，**存账号**。
+
+---
+
 ## 五、跨模块关键流程（实现务必对齐）
 
 1. **撞单**：激活 `uk_active_rel` 撞 → 409/20401 → 前端提示「已有归属」并给转交/协同入口；同部门显归属人、跨部门只说「已有其他部门跟进」不露名（`→需求§6.3`）。
@@ -237,3 +341,4 @@
 | 版本 | 日期 | 说明 |
 |---|---|---|
 | V1.0 | 2026-09-10 | 起步版：锁通用约定 + 全量接口目录（约 50 接口）+ 分模块关键契约；逐接口字段随开发回填，业务规则以 `→需求` / `→架构` 指针为准 |
+| **V1.1** | 2026-09-11 | **对齐校正版（全部补齐）**：对照需求 V1.11 三方对账，接口 **~50 → ~78**。①**组织架构补 CRUD**（部门增改停用/部门经理多对多/员工入职·改部门·改直属经理·离职/角色分配/离职批量转交/产品线新建/字典项新增）——原来只有 G；②补**墓碑合并**（公司撞码 6 步单事务、联系人经理合并）、**跳槽/就职历史**、联系人**删除（经理）**、**手机号变更申请**（原枚举误列 `review`、漏 `phone_change`，已校正）；③补 **推进阶段**（建议态+限频+留痕）、**今日动线处理反馈**（done/snoozed/ignored，snooze≤3、ignored 必填原因）、**外出登记回来点一下**；④补 **工单双向流转转换**、**离职批量转交**；⑤**报表从 3 张补到 9 张**（全公司月报/公海/续约预警/工单SLA/死因看板/流失原因分布/目标进度）；⑥补 **复盘消费视图**（赢单弹药库/防守清单）+ **竞品名册**；⑦补 **文件上传下载**（原只在 §2.10 提及、总览未列）、系统配置、操作留痕审计、个人外观偏好；⑧新增 §4.14 补齐端点契约；⑨§1.2 立「需求 V1 做 → 接口必须有端点」对齐铁律 |

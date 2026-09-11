@@ -1,0 +1,1067 @@
+// =============================================================================
+// 销售 CRM — Prisma Schema（45 张表）
+// 真相源：《需求规格/销售CRM数据架构文档》V1.14 §三~§九（表）、§十（索引）、§十五（落库口径）
+// ORM 定案：Prisma（2026-09-10）；MySQL 8.0+ / InnoDB / utf8mb4
+//
+// ★ Prisma 落库口径（数据架构 §十五.5，务必遵守）：
+//   1. 生成列（active_key / owner_flag / phone_active）：字段加 @ignore（Client 不暴露、不进 create/update），
+//      唯一索引在 migration SQL 里手写 `GENERATED ALWAYS AS (...) STORED` + UNIQUE。应用层不读不写。
+//   2. 分区表（action_event / daily_agenda / stat_daily / operation_log / job_run_log）：
+//      schema 保持普通表定义，migration 手写 `PARTITION BY RANGE`（drift 警告可接受）。
+//      ⚠ action_event 唯一键 uk_idem 必须含分区键 event_at，否则建表报 ERROR 1503。
+//   3. 唯一冲突：Prisma 报 P2002（非 MySQL 1062）→ 异常过滤器映射 409/422，meta.target 取约束名。
+//   4. 复杂查询/报表/递归 CTE：走 $queryRaw + Prisma.sql（不为迁就 Client 牺牲 SQL 表达力）。
+//   5. JSON 列（ledger.extra_fields / contact.extra_phones / dept_rule.level_tiers 等）：原生 Json 支持；
+//      禁止在 JSON 列做反向 JSON_CONTAINS 全表扫描（高频检索 key 走生成列或正式字段）。
+//
+// 命名：表名/字段名统一 snake_case（与本 Schema 字段名一一对应，便于与文档对账）；索引前缀 idx_ / uk_。
+// 枚举：一律 String（VARCHAR(32) 英文码），展示文案走字典 dict_item（T1/T5：可加项、停用不删，不走 DB ENUM）。
+// 审计字段全表统一：created_by / created_at / updated_by / updated_at；逻辑删除 deleted_at（NULL=未删）。
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// 域 A：组织与权限
+// =============================================================================
+
+/// A1 部门
+model Department {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name            String    @db.VarChar(100)
+  parent_id       BigInt    @default(0) @db.UnsignedBigInt // 0=根（自引用不建 FK，树由应用层维护）
+  service_enabled Boolean   @default(false) // 客服开关
+  status          String    @default("active") @db.VarChar(32) // active / disabled
+  created_by      BigInt?   @db.UnsignedBigInt
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  updated_by      BigInt?   @db.UnsignedBigInt
+  updated_at      DateTime  @updatedAt @db.DateTime(0)
+  deleted_at      DateTime? @db.DateTime(0)
+
+  dept_managers      DeptManager[]
+  dept_rule          DeptRule?
+  business_relations BusinessRelation[]
+  sea_rules          SeaRule[]
+  cadence_rules      CadenceRule[]
+
+  @@index([parent_id], map: "idx_parent_id")
+  @@map("department")
+}
+
+/// A2 员工
+model Employee {
+  id                BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  work_no           String    @unique(map: "uk_work_no") @db.VarChar(32)
+  name              String    @db.VarChar(50)
+  phone             String    @unique(map: "uk_phone") @db.VarChar(32)
+  password_hash     String    @db.VarChar(255)
+  primary_dept_id   BigInt    @db.UnsignedBigInt
+  extra_dept_ids    Json? // 兼部门 JSON
+  product_line_ids  Json? // 关联产品线 JSON
+  direct_manager_id BigInt?   @db.UnsignedBigInt // 直属经理（审批链）
+  status            String    @default("active") @db.VarChar(32) // active / resigned / disabled
+  created_by        BigInt?   @db.UnsignedBigInt
+  created_at        DateTime  @default(now()) @db.DateTime(0)
+  updated_by        BigInt?   @db.UnsignedBigInt
+  updated_at        DateTime  @updatedAt @db.DateTime(0)
+  deleted_at        DateTime? @db.DateTime(0)
+
+  dept_managers  DeptManager[]
+  employee_roles EmployeeRole[]
+  notifications  Notification[]
+
+  @@index([primary_dept_id], map: "idx_primary_dept_id")
+  @@index([direct_manager_id], map: "idx_direct_manager_id")
+  @@map("employee")
+}
+
+/// A3 管辖部门（经理查数范围 = 本表集合）
+model DeptManager {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  dept_id     BigInt    @db.UnsignedBigInt
+  employee_id BigInt    @db.UnsignedBigInt
+  created_by  BigInt?   @db.UnsignedBigInt
+  created_at  DateTime  @default(now()) @db.DateTime(0)
+  updated_by  BigInt?   @db.UnsignedBigInt
+  updated_at  DateTime  @updatedAt @db.DateTime(0)
+  deleted_at  DateTime? @db.DateTime(0)
+
+  dept     Department @relation(fields: [dept_id], references: [id])
+  employee Employee   @relation(fields: [employee_id], references: [id])
+
+  @@unique([dept_id, employee_id], map: "uk_dept_emp")
+  @@index([employee_id], map: "idx_employee_id")
+  @@map("dept_manager")
+}
+
+/// A4 角色（内置 6 条：sale/service/delivery/admin/dept_manager/gm）
+model Role {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  code       String    @unique(map: "uk_code") @db.VarChar(32)
+  name       String    @db.VarChar(50)
+  is_builtin Boolean   @default(true)
+  created_by BigInt?   @db.UnsignedBigInt
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_by BigInt?   @db.UnsignedBigInt
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  employee_roles    EmployeeRole[]
+  permission_matrix PermissionMatrix[]
+
+  @@map("role")
+}
+
+/// A5 员工角色（一人多角色）
+model EmployeeRole {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  employee_id BigInt   @db.UnsignedBigInt
+  role_code   String   @db.VarChar(32)
+  created_by  BigInt?  @db.UnsignedBigInt
+  created_at  DateTime @default(now()) @db.DateTime(0)
+  updated_by  BigInt?  @db.UnsignedBigInt
+  updated_at  DateTime @updatedAt @db.DateTime(0)
+
+  employee Employee @relation(fields: [employee_id], references: [id])
+  role     Role     @relation(fields: [role_code], references: [code])
+
+  @@unique([employee_id, role_code], map: "uk_emp_role")
+  @@index([role_code], map: "idx_role_code")
+  @@map("employee_role")
+}
+
+/// A6 权限矩阵（perm_key × role_code → level）
+model PermissionMatrix {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  perm_key   String   @db.VarChar(64) // cross_dept_private / contract_amount / phone_unlock ...
+  role_code  String   @db.VarChar(32)
+  level      String   @db.VarChar(32) // visible / masked / denied
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @updatedAt @db.DateTime(0)
+
+  role Role @relation(fields: [role_code], references: [code])
+
+  @@unique([perm_key, role_code], map: "uk_perm_role")
+  @@map("permission_matrix")
+}
+
+/// A7 产品线
+model ProductLine {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name               String    @unique(map: "uk_product_line_name") @db.VarChar(50)
+  code               String    @unique(map: "uk_code") @db.VarChar(32)
+  dept_ids           Json? // 承接部门 JSON
+  service_cycle_days Int?
+  status             String    @default("active") @db.VarChar(32)
+  created_by         BigInt?   @db.UnsignedBigInt
+  created_at         DateTime  @default(now()) @db.DateTime(0)
+  updated_by         BigInt?   @db.UnsignedBigInt
+  updated_at         DateTime  @updatedAt @db.DateTime(0)
+  deleted_at         DateTime? @db.DateTime(0)
+
+  business_relations BusinessRelation[]
+  contracts          Contract[]
+  field_templates    FieldTemplate[]
+  ledgers            Ledger[]
+  sea_rules          SeaRule[]
+  competitors        Competitor[]
+  cadence_rules      CadenceRule[]
+
+  @@map("product_line")
+}
+
+/// A8 部门规则（经理可配，写入留痕）
+model DeptRule {
+  id                        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  dept_id                   BigInt   @unique(map: "uk_dept_id") @db.UnsignedBigInt
+  level_tiers               Json? // 客户等级金额档位 [{level:S/A/B/C/D, minAmount}]
+  gray_remind_days          Int?
+  gray_release_days         Int?
+  s_social_days             Int? // S 级客情节奏默认间隔（建议 45）
+  newbie_first_follow_hours Int? // 新关系/新联系人首次跟进窗口（建议 48）
+  ask_help_days             Int? // @求助临时协同默认有效期（建议 7）
+  contact_trait_max         Int      @default(3) // 谈判特质上限（1~5）
+  nearby_radius_km          Int? // 预留
+  created_by                BigInt?  @db.UnsignedBigInt
+  created_at                DateTime @default(now()) @db.DateTime(0)
+  updated_by                BigInt?  @db.UnsignedBigInt
+  updated_at                DateTime @updatedAt @db.DateTime(0)
+
+  dept Department @relation(fields: [dept_id], references: [id])
+
+  @@map("dept_rule")
+}
+
+/// A9 通知
+model Notification {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt    @db.UnsignedBigInt
+  title      String    @db.VarChar(120)
+  content    String?   @db.VarChar(500)
+  biz_type   String?   @db.VarChar(32) // commitment_due / cadence / drop_warn / gray / approval ...
+  biz_id     BigInt?   @db.UnsignedBigInt
+  channel    String    @default("site") @db.VarChar(16) // site / wechat(预留)
+  read_at    DateTime? @db.DateTime(0)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+
+  user Employee @relation(fields: [user_id], references: [id])
+
+  @@index([user_id, read_at, created_at], map: "idx_user_read")
+  @@index([biz_type, biz_id], map: "idx_biz")
+  @@map("notification")
+}
+
+/// A10 操作留痕（★ 全局审计日志 · 按月分区 · 只 INSERT/SELECT，DB 账号无 UPDATE/DELETE）
+model OperationLog {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  occurred_at     DateTime @default(now()) @db.DateTime(0) // ★ 分区键
+  req_id          String?  @db.VarChar(64)
+  operator_id     BigInt   @default(0) @db.UnsignedBigInt // 系统动作=0
+  operator_name   String?  @db.VarChar(50) // 快照冗余
+  dept_id         BigInt?  @db.UnsignedBigInt
+  product_line_id BigInt?  @db.UnsignedBigInt
+  action          String   @db.VarChar(64) // 模块.动词：approval.approve / phone.unlock.view / event.create ...
+  target_type     String?  @db.VarChar(32)
+  target_id       BigInt?  @db.UnsignedBigInt
+  before          Json?
+  after           Json?
+  detail          Json?
+  ip              String?  @db.VarChar(64)
+  user_agent      String?  @db.VarChar(255)
+
+  @@index([operator_id, occurred_at], map: "idx_operator")
+  @@index([target_type, target_id], map: "idx_target")
+  @@index([action, occurred_at], map: "idx_action")
+  @@map("operation_log")
+}
+
+/// A11 字典类型
+model DictType {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  code       String    @unique(map: "uk_code") @db.VarChar(64)
+  name       String    @db.VarChar(80)
+  created_by BigInt?   @db.UnsignedBigInt
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_by BigInt?   @db.UnsignedBigInt
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  items DictItem[]
+
+  @@map("dict_type")
+}
+
+/// A12 字典项（builtin 不可删、可停用）
+model DictItem {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  type_id    BigInt    @db.UnsignedBigInt
+  item_code  String    @db.VarChar(64)
+  label      String    @db.VarChar(80)
+  sort       Int       @default(0)
+  builtin    Boolean   @default(false)
+  status     String    @default("active") @db.VarChar(32)
+  created_by BigInt?   @db.UnsignedBigInt
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_by BigInt?   @db.UnsignedBigInt
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  type DictType @relation(fields: [type_id], references: [id])
+
+  @@unique([type_id, item_code], map: "uk_type_item")
+  @@index([type_id, status, sort], map: "idx_type_sort")
+  @@map("dict_item")
+}
+
+/// A13 系统级配置（gm 可改，留痕）
+model SystemConfig {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  config_key String   @unique(map: "uk_config_key") @db.VarChar(64)
+  value      Json?
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_by BigInt?  @db.UnsignedBigInt
+  updated_at DateTime @updatedAt @db.DateTime(0)
+
+  @@map("system_config")
+}
+
+/// A14 定时任务执行日志（按 run_at 月分区，保留 90 天）
+model JobRunLog {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  job_name      String   @db.VarChar(64)
+  run_at        DateTime @default(now()) @db.DateTime(0) // ★ 分区键
+  status        String   @db.VarChar(16) // running / success / failed
+  rows_affected Int      @default(0)
+  cost_ms       Int      @default(0)
+  watermark     String?  @db.VarChar(64) // 处理水位线
+  error         String?  @db.Text
+
+  @@index([job_name, run_at], map: "idx_job_time")
+  @@map("job_run_log")
+}
+
+/// A14 target 月目标（三层：公司/部门/个人；完成进度按回款额算，不落表）
+model Target {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  period     String   @db.VarChar(7) // YYYY-MM
+  scope_type String   @db.VarChar(16) // company / dept / employee
+  scope_id   BigInt   @default(0) @db.UnsignedBigInt // company 层填 0
+  amount     Decimal  @db.Decimal(12, 2) // 回款额口径
+  remark     String?  @db.VarChar(255)
+  created_by BigInt?  @db.UnsignedBigInt
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_by BigInt?  @db.UnsignedBigInt
+  updated_at DateTime @updatedAt @db.DateTime(0)
+
+  @@unique([period, scope_type, scope_id], map: "uk_target")
+  @@index([period], map: "idx_period")
+  @@map("target")
+}
+
+// =============================================================================
+// 域 B：客户资产与公司档案
+// =============================================================================
+
+/// B1 公司（唯一档案）
+model Company {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  full_name      String    @db.VarChar(200)
+  credit_code    String?   @unique(map: "uk_credit_code") @db.VarChar(32) // 可空；撞码强制使用已有档案
+  industry_l1    String?   @db.VarChar(64)
+  industry_l2    String?   @db.VarChar(64)
+  province       String?   @db.VarChar(32)
+  city           String?   @db.VarChar(32)
+  district       String?   @db.VarChar(32)
+  scale          String?   @db.VarChar(32)
+  completeness_1 Int       @default(0) // 完善度三档 0-100
+  completeness_2 Int       @default(0)
+  completeness_3 Int       @default(0)
+  website        String?   @db.VarChar(255)
+  address        String?   @db.VarChar(255)
+  bank_name      String?   @db.VarChar(120)
+  invoice_title  String?   @db.VarChar(200)
+  tax_no         String?   @db.VarChar(64)
+  longitude      Decimal?  @db.Decimal(10, 6) // GCJ-02
+  latitude       Decimal?  @db.Decimal(9, 6) // GCJ-02
+  merged_into    BigInt?   @db.UnsignedBigInt // 合并墓碑（自引用，物理不删）
+  aliases        Json? // 曾用名/别名 JSON
+  created_by     BigInt?   @db.UnsignedBigInt
+  created_at     DateTime  @default(now()) @db.DateTime(0)
+  updated_by     BigInt?   @db.UnsignedBigInt
+  updated_at     DateTime  @updatedAt @db.DateTime(0)
+  deleted_at     DateTime? @db.DateTime(0)
+
+  profile_tags       CompanyProfileTag[]
+  company_contacts   CompanyContact[]
+  business_relations BusinessRelation[]
+  ledgers            Ledger[]
+
+  @@index([full_name], map: "idx_full_name")
+  @@index([latitude, longitude], map: "idx_geo")
+  @@index([merged_into], map: "idx_merged")
+  @@map("company")
+}
+
+/// B2 公司档案标签（身份/制度/决策链；建档勾一次、全公司共享）
+model CompanyProfileTag {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  company_id BigInt   @db.UnsignedBigInt
+  group_code String   @db.VarChar(32) // company_identity_tag / company_policy_tag / decision_chain
+  tag_id     BigInt   @db.UnsignedBigInt
+  tag_code   String   @db.VarChar(64) // 冗余防字典改名
+  marked_by  BigInt   @db.UnsignedBigInt
+  marked_at  DateTime @default(now()) @db.DateTime(0)
+
+  company Company @relation(fields: [company_id], references: [id])
+
+  @@unique([company_id, group_code, tag_id], map: "uk_cpt")
+  @@index([tag_id], map: "idx_tag")
+  @@map("company_profile_tag")
+}
+
+/// B3 联系人（手机号唯一改走生成列 phone_active；软删/换号自动释放）
+model Contact {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name               String    @db.VarChar(50)
+  phone              String    @db.VarChar(32) // 当前主号（撞单校验核心）
+  phone_active       String?   @ignore @db.VarChar(32) // ★ 生成列：未删=phone，已删=NULL（唯一索引手写 migration）
+  extra_phones       Json? // 附加号 [{type,number,note}]，不参与撞单
+  wechat             String?   @db.VarChar(64)
+  email              String?   @db.VarChar(120)
+  gender             String?   @db.VarChar(8)
+  birthday           DateTime? @db.Date
+  decision_role      String?   @db.VarChar(16) // decision / influence / execute
+  tags               Json? // 个人自由标签
+  trait_summary      Json? // 谈判特质冗余（从 contact_trait 派生展示）
+  status             String    @default("active") @db.VarChar(16) // active / left / freelance
+  merged_into        BigInt?   @db.UnsignedBigInt // 联系人合并墓碑（自引用）
+  phone_frozen_until DateTime? @db.DateTime(0) // 手机号变更冻结期（24h）
+  created_by         BigInt?   @db.UnsignedBigInt
+  created_at         DateTime  @default(now()) @db.DateTime(0)
+  updated_by         BigInt?   @db.UnsignedBigInt
+  updated_at         DateTime  @updatedAt @db.DateTime(0)
+  deleted_at         DateTime? @db.DateTime(0)
+
+  company_contacts    CompanyContact[]
+  contact_traits      ContactTrait[]
+  contact_change_logs ContactChangeLog[]
+
+  @@index([name], map: "idx_name")
+  @@index([merged_into], map: "idx_merged_contact")
+  @@map("contact")
+}
+
+/// B4 联系人谈判特质（上限 = 部门 dept_rule.contact_trait_max，默认 3）
+model ContactTrait {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  contact_id BigInt   @db.UnsignedBigInt
+  trait_id   BigInt   @db.UnsignedBigInt
+  trait_code String   @db.VarChar(64)
+  marked_by  BigInt   @db.UnsignedBigInt
+  marked_at  DateTime @default(now()) @db.DateTime(0)
+
+  contact Contact @relation(fields: [contact_id], references: [id])
+
+  @@unique([contact_id, trait_id], map: "uk_ct")
+  @@index([trait_id], map: "idx_trait")
+  @@map("contact_trait")
+}
+
+/// B5 就职关系（N:M 含历史）
+model CompanyContact {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  company_id BigInt    @db.UnsignedBigInt
+  contact_id BigInt    @db.UnsignedBigInt
+  is_current Boolean   @default(true)
+  joined_at  DateTime? @db.DateTime(0)
+  left_at    DateTime? @db.DateTime(0)
+  position   String?   @db.VarChar(64)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+
+  company Company @relation(fields: [company_id], references: [id])
+  contact Contact @relation(fields: [contact_id], references: [id])
+
+  @@index([company_id, is_current], map: "idx_company_cur")
+  @@index([contact_id, is_current], map: "idx_contact_cur")
+  @@map("company_contact")
+}
+
+/// B6 联系人变更留痕（手机号变更必须关联审批单；旧号即历史号）
+model ContactChangeLog {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  contact_id  BigInt   @db.UnsignedBigInt
+  field       String   @db.VarChar(32)
+  old_value   String?  @db.VarChar(255)
+  new_value   String?  @db.VarChar(255)
+  approval_id BigInt?  @db.UnsignedBigInt
+  created_at  DateTime @default(now()) @db.DateTime(0)
+
+  contact Contact @relation(fields: [contact_id], references: [id])
+
+  @@index([contact_id, created_at], map: "idx_contact_time")
+  @@index([approval_id], map: "idx_approval")
+  @@map("contact_change_log")
+}
+
+/// B8 文件资产（多态 biz_type + biz_id；存 file_key 不存 URL）
+model FileAsset {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  biz_type    String   @db.VarChar(32) // contract / payment / workorder / company / review
+  biz_id      BigInt   @db.UnsignedBigInt
+  file_name   String   @db.VarChar(255)
+  file_key    String   @db.VarChar(500) // 对象存储 key / 相对路径（不存全 URL）
+  file_size   Int? // bytes
+  mime_type   String?  @db.VarChar(120)
+  uploaded_by BigInt   @db.UnsignedBigInt
+  uploaded_at DateTime @default(now()) @db.DateTime(0)
+  status      String   @default("active") @db.VarChar(16) // active / deleted
+
+  @@index([biz_type, biz_id, status], map: "idx_biz")
+  @@index([uploaded_by, uploaded_at], map: "idx_uploader")
+  @@map("file_asset")
+}
+
+// =============================================================================
+// 域 C：业务关系与归属协同
+// =============================================================================
+
+/// C1 业务关系（最小业务单元；dept_id 恒定不可变；只留归属与两轴）
+model BusinessRelation {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  company_id       BigInt    @db.UnsignedBigInt
+  dept_id          BigInt    @db.UnsignedBigInt // ★ 恒定不可变
+  product_line_id  BigInt    @db.UnsignedBigInt
+  stage_id         Int       @default(1) // 1~6 + 7=已流失
+  urgency          String    @default("gray") @db.VarChar(16) // weekly/monthly/quarterly/long_term/gray
+  value_tier       String?   @db.VarChar(16) // high/medium/low/pending
+  customer_level   String?   @db.VarChar(4) // S/A/B/C/D（系统自动算，不手填）
+  competition      String?   @db.VarChar(16) // none/in_use/comparing（事件回写快照）
+  competitor_id    BigInt?   @db.UnsignedBigInt
+  sea_status       String    @default("private") @db.VarChar(16) // private(有owner) / company_sea(无owner)
+  gray_release_at  DateTime? @db.DateTime(0)
+  last_event_at    DateTime? @db.DateTime(0) // ★ 仅有效沟通更新；快速标记不计
+  next_action_hint String?   @db.VarChar(255)
+  merged_into      BigInt?   @db.UnsignedBigInt // 关系级合并墓碑（自引用，置非活跃分支）
+  active_key       String?   @ignore @db.VarChar(128) // ★ 生成列：private 且未并 → 三元组，否则 NULL（UK 手写 migration）
+  created_by       BigInt?   @db.UnsignedBigInt
+  created_at       DateTime  @default(now()) @db.DateTime(0)
+  updated_by       BigInt?   @db.UnsignedBigInt
+  updated_at       DateTime  @updatedAt @db.DateTime(0)
+  deleted_at       DateTime? @db.DateTime(0)
+
+  company       Company            @relation(fields: [company_id], references: [id])
+  dept          Department         @relation(fields: [dept_id], references: [id])
+  product_line  ProductLine        @relation(fields: [product_line_id], references: [id])
+  members       RelationMember[]
+  stage_logs    RelationStageLog[]
+  labels        RelationLabel[]
+  appointments  Appointment[]
+  commitments   Commitment[]
+  action_events ActionEvent[]
+  reviews       Review[]
+  contracts     Contract[]
+  workorders    Workorder[]
+  sea_records   SeaRecord[]
+  daily_agendas DailyAgenda[]
+
+  @@index([company_id], map: "idx_company")
+  @@index([last_event_at, sea_status], map: "idx_sea_scan")
+  @@index([dept_id, product_line_id, sea_status], map: "idx_dept_sea")
+  @@index([merged_into], map: "idx_merged_rel")
+  @@map("business_relation")
+}
+
+/// C2 关系成员（owner / collaborator；owner_flag 生成列保证一关系一 owner）
+model RelationMember {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id BigInt    @db.UnsignedBigInt
+  employee_id BigInt    @db.UnsignedBigInt
+  member_type String    @db.VarChar(16) // owner / collaborator
+  source      String?   @db.VarChar(16) // collaborate / ask_help
+  valid_until DateTime? @db.DateTime(0) // 仅 collaborator；NULL=长期
+  added_by    BigInt?   @db.UnsignedBigInt
+  added_at    DateTime? @db.DateTime(0)
+  revoked_by  BigInt?   @db.UnsignedBigInt
+  revoked_at  DateTime? @db.DateTime(0)
+  owner_flag  BigInt?   @ignore @db.UnsignedBigInt // ★ 生成列：owner=relation_id，非owner=NULL（UK 手写 migration）
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  @@unique([relation_id, employee_id, member_type], map: "uk_member")
+  @@index([employee_id, member_type, valid_until], map: "idx_my")
+  @@index([relation_id], map: "idx_relation")
+  @@map("relation_member")
+}
+
+/// C3 阶段推进留痕
+model RelationStageLog {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id BigInt   @db.UnsignedBigInt
+  from_stage  Int?
+  to_stage    Int
+  action      String   @db.VarChar(16) // normal / jump / rollback / lost
+  reason      String?  @db.VarChar(255)
+  operator_id BigInt   @db.UnsignedBigInt
+  created_at  DateTime @default(now()) @db.DateTime(0)
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  @@index([relation_id, created_at], map: "idx_rel_time")
+  @@map("relation_stage_log")
+}
+
+/// C4 关系级标注（风险等人补标签；自动风险信号不落库）
+model RelationLabel {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id BigInt   @db.UnsignedBigInt
+  group_code  String   @db.VarChar(32) // risk / other
+  label_id    BigInt   @db.UnsignedBigInt
+  label_code  String   @db.VarChar(64)
+  marked_by   BigInt   @db.UnsignedBigInt
+  marked_at   DateTime @default(now()) @db.DateTime(0)
+  remark      String?  @db.VarChar(255)
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  @@unique([relation_id, group_code, label_id], map: "uk_rel_label")
+  @@index([label_id], map: "idx_label")
+  @@map("relation_label")
+}
+
+/// C5 预约
+model Appointment {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id     BigInt   @db.UnsignedBigInt
+  contact_id      BigInt?  @db.UnsignedBigInt
+  appointment_at  DateTime @db.DateTime(0)
+  note            String?  @db.VarChar(255)
+  status          String   @default("pending") @db.VarChar(24) // pending/done/rescheduled/expired_archived
+  action_event_id BigInt?  @db.UnsignedBigInt // 完成时强制关联事件（422）
+  reschedule_log  Json?
+  created_by      BigInt?  @db.UnsignedBigInt
+  created_at      DateTime @default(now()) @db.DateTime(0)
+  updated_by      BigInt?  @db.UnsignedBigInt
+  updated_at      DateTime @updatedAt @db.DateTime(0)
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  @@index([relation_id, appointment_at, status], map: "idx_rel_time")
+  @@index([contact_id], map: "idx_contact")
+  @@index([appointment_at, status], map: "idx_due")
+  @@index([action_event_id], map: "idx_event")
+  @@map("appointment")
+}
+
+/// C6 外出登记（纯行政考勤，不产生业务事件）
+model VisitLog {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  employee_id      BigInt    @db.UnsignedBigInt
+  depart_at        DateTime  @db.DateTime(0)
+  reason           String    @db.VarChar(255) // 去干什么（一句话）
+  actual_return_at DateTime? @db.DateTime(0) // 回来点一下
+  relation_ids     Json? // 可选：去了哪些客户
+  created_at       DateTime  @default(now()) @db.DateTime(0)
+  updated_at       DateTime  @updatedAt @db.DateTime(0)
+
+  @@index([employee_id, depart_at], map: "idx_emp_time")
+  @@map("visit_log")
+}
+
+/// C7 竞品名册（轻量主数据；经理维护，销售只读引用）
+model Competitor {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name            String   @db.VarChar(100)
+  product_line_id BigInt   @db.UnsignedBigInt
+  positioning     String?  @db.VarChar(255) // 一句话定位
+  note            String?  @db.VarChar(255)
+  created_by      BigInt?  @db.UnsignedBigInt
+  updated_by      BigInt?  @db.UnsignedBigInt
+  status          String   @default("active") @db.VarChar(16)
+  created_at      DateTime @default(now()) @db.DateTime(0)
+  updated_at      DateTime @updatedAt @db.DateTime(0)
+
+  product_line ProductLine @relation(fields: [product_line_id], references: [id])
+
+  @@unique([name, product_line_id], map: "uk_name_line")
+  @@index([product_line_id, status], map: "idx_line_status")
+  @@map("competitor")
+}
+
+// =============================================================================
+// 域 D：行动引擎
+// =============================================================================
+
+/// D1 承诺 ★心脏
+model Commitment {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id     BigInt    @db.UnsignedBigInt
+  contact_id      BigInt?   @db.UnsignedBigInt
+  owner_id        BigInt    @db.UnsignedBigInt
+  party           String    @db.VarChar(16) // me / them / verdict
+  ctype           String    @db.VarChar(24) // reply/quote/meet/deliver/decision/followup/social_*
+  content         String    @db.VarChar(255)
+  due_at          DateTime? @db.DateTime(0)
+  remind_at       DateTime? @db.DateTime(0)
+  status          String    @default("open") @db.VarChar(16) // open/done/expired/waived/cancelled
+  done_at         DateTime? @db.DateTime(0)
+  done_by         BigInt?   @db.UnsignedBigInt
+  source_event_id BigInt?   @db.UnsignedBigInt
+  closed_event_id BigInt?   @db.UnsignedBigInt
+  created_by      BigInt?   @db.UnsignedBigInt
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  updated_by      BigInt?   @db.UnsignedBigInt
+  updated_at      DateTime  @updatedAt @db.DateTime(0)
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  @@index([owner_id, status, due_at], map: "idx_owner_due")
+  @@index([relation_id], map: "idx_relation")
+  @@index([status, due_at], map: "idx_due")
+  @@index([contact_id], map: "idx_contact")
+  @@map("commitment")
+}
+
+/// D2 事件流 ★（跟单 / 客情 / 求助 / 系统；按月分区；快速标记不更新 last_event_at）
+model ActionEvent {
+  id                 BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id        BigInt   @db.UnsignedBigInt
+  contact_id         BigInt?  @db.UnsignedBigInt
+  actor_id           BigInt   @db.UnsignedBigInt
+  action_type        String   @db.VarChar(16) // phone/wechat/visit/onsite/email/meal/gift/greeting/ask_help/note/system
+  summary            String?  @db.VarChar(500) // 一句话结果（快速标记可空）
+  outcome            String?  @db.VarChar(16) // advanced/stalled/await_reply | not_contacted/no_answer/brief_hangup
+  stage_forward      Int? // 系统建议下一阶段（限频）
+  pain_point_id      BigInt?  @db.UnsignedBigInt
+  competition        String?  @db.VarChar(16) // none/in_use/comparing（事务回写 C1 快照）
+  competitor_id      BigInt?  @db.UnsignedBigInt
+  competition_note   String?  @db.VarChar(255)
+  duration_min       Int?
+  mentioned_user_ids Json? // @求助同事（仅正向展示；禁 JSON_CONTAINS 反向查）
+  source             String   @default("manual") @db.VarChar(16) // manual / auto / import
+  visit_log_id       BigInt?  @db.UnsignedBigInt
+  appointment_id     BigInt?  @db.UnsignedBigInt
+  idempotency_key    String?  @db.VarChar(64)
+  attachments        Json?
+  event_at           DateTime @default(now()) @db.DateTime(0) // ★ 分区键
+  created_at         DateTime @default(now()) @db.DateTime(0)
+  updated_at         DateTime @updatedAt @db.DateTime(0)
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  // ⚠ uk_idem 必须含分区键 event_at，否则 PARTITION BY 建表报 ERROR 1503（migration 手写时确认）
+  @@unique([idempotency_key, event_at], map: "uk_idem")
+  @@index([relation_id, event_at], map: "idx_rel_time")
+  @@index([actor_id, event_at], map: "idx_actor_time")
+  @@index([pain_point_id], map: "idx_pain")
+  @@index([appointment_id], map: "idx_appointment")
+  @@map("action_event")
+}
+
+/// D3 节奏规则（加提醒=加行，经理可配）
+model CadenceRule {
+  id             BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  scope_dept_id  BigInt?  @db.UnsignedBigInt // 空=全局默认
+  scope_line_id  BigInt?  @db.UnsignedBigInt
+  trigger        Json // 触发谓词
+  suggest_action Json? // 建议（文案 + 动作类型）
+  soft           Boolean  @default(true) // 是否"仅提醒不催"（掉海预警=非 soft）
+  enabled        Boolean  @default(true)
+  sort           Int      @default(0)
+  created_at     DateTime @default(now()) @db.DateTime(0)
+  updated_at     DateTime @updatedAt @db.DateTime(0)
+
+  dept         Department?  @relation(fields: [scope_dept_id], references: [id])
+  product_line ProductLine? @relation(fields: [scope_line_id], references: [id])
+
+  @@index([scope_dept_id, scope_line_id, enabled], map: "idx_scope")
+  @@map("cadence_rule")
+}
+
+/// D4 今日动线（每日组装产物；按 biz_date 月分区；结转+新增，禁清空重写）
+model DailyAgenda {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id       BigInt   @db.UnsignedBigInt
+  biz_date      DateTime @db.Date // ★ 分区键
+  ref_type      String   @db.VarChar(16) // commitment / appointment / cadence / relation
+  ref_id        BigInt?  @db.UnsignedBigInt
+  relation_id   BigInt?  @db.UnsignedBigInt
+  contact_id    BigInt?  @db.UnsignedBigInt
+  reason        String?  @db.VarChar(255)
+  priority      Int      @default(0)
+  action_hint   String?  @db.VarChar(255)
+  status        String   @default("open") @db.VarChar(16) // open/done/snoozed/ignored
+  action_reason String?  @db.VarChar(255) // ignored 必填原因 / snoozed 备注
+  snooze_count  Int      @default(0) // ★ 实现补充：支撑防逃逸（同一条最多 snooze 3 次）
+  created_at    DateTime @default(now()) @db.DateTime(0)
+  updated_at    DateTime @updatedAt @db.DateTime(0)
+
+  relation BusinessRelation? @relation(fields: [relation_id], references: [id])
+
+  @@index([user_id, biz_date, status], map: "idx_user_day")
+  @@index([ref_type, ref_id], map: "idx_ref")
+  @@index([relation_id], map: "idx_relation")
+  @@map("daily_agenda")
+}
+
+/// D6 出口复盘 ★（win/loss/churn）
+model Review {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id     BigInt    @db.UnsignedBigInt
+  review_type     String    @db.VarChar(8) // win / loss / churn
+  why_code        String?   @db.VarChar(64) // 主因码（走字典 review_*_reason）
+  competitor_id   BigInt?   @db.UnsignedBigInt
+  detail          String?   @db.VarChar(500)
+  manager_note    String?   @db.VarChar(500)
+  status          String    @db.VarChar(16) // open/published/dismissed/closed
+  created_by      BigInt?   @db.UnsignedBigInt
+  manager_id      BigInt?   @db.UnsignedBigInt
+  manager_done_at DateTime? @db.DateTime(0)
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  updated_at      DateTime  @updatedAt @db.DateTime(0)
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  @@index([status, created_at], map: "idx_status_time")
+  @@index([relation_id], map: "idx_relation")
+  @@index([review_type, status], map: "idx_type_status")
+  @@map("review")
+}
+
+/// D7 日级行为汇总（★ 派生预聚合；按 biz_date 月分区；可覆盖重跑）
+model StatDaily {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  biz_date        DateTime  @db.Date // ★ 分区键
+  dept_id         BigInt    @db.UnsignedBigInt
+  product_line_id BigInt    @db.UnsignedBigInt
+  owner_id        BigInt    @db.UnsignedBigInt
+  action_type     String    @db.VarChar(16) // phone/wechat/visit/... / _total
+  cnt             Int       @default(0)
+  first_at        DateTime? @db.DateTime(0)
+  last_at         DateTime? @db.DateTime(0)
+
+  @@unique([biz_date, dept_id, product_line_id, owner_id, action_type], map: "uk_stat")
+  @@index([owner_id, biz_date], map: "idx_owner_day")
+  @@map("stat_daily")
+}
+
+// =============================================================================
+// 域 E：交易与服务
+// =============================================================================
+
+/// E1 合同（signer_id=签单人锁定=业绩归属，终身不变）
+model Contract {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  contract_no     String    @unique(map: "uk_contract_no") @db.VarChar(64)
+  relation_id     BigInt    @db.UnsignedBigInt
+  company_id      BigInt    @db.UnsignedBigInt // 供"老客户"派生（有历史合同）
+  product_line_id BigInt    @db.UnsignedBigInt
+  contact_id      BigInt?   @db.UnsignedBigInt
+  signer_id       BigInt    @db.UnsignedBigInt
+  amount          Decimal   @db.Decimal(12, 2)
+  paid_amount     Decimal   @default(0) @db.Decimal(12, 2)
+  pay_type        String?   @db.VarChar(32)
+  sign_date       DateTime? @db.Date
+  service_start   DateTime? @db.Date
+  service_end     DateTime? @db.Date
+  auto_renew      Boolean   @default(false)
+  remind_days     Json? // [30,60,90]
+  attachments     Json?
+  status          String    @default("unpaid") @db.VarChar(16) // unpaid/partial/running/done/terminated
+  created_by      BigInt?   @db.UnsignedBigInt
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  updated_by      BigInt?   @db.UnsignedBigInt
+  updated_at      DateTime  @updatedAt @db.DateTime(0)
+  deleted_at      DateTime? @db.DateTime(0)
+
+  relation     BusinessRelation @relation(fields: [relation_id], references: [id])
+  product_line ProductLine      @relation(fields: [product_line_id], references: [id])
+  payments     PaymentRecord[]
+  splits       ContractSplit[]
+  ledgers      Ledger[]
+
+  @@index([relation_id], map: "idx_relation")
+  @@index([company_id], map: "idx_company")
+  @@index([signer_id], map: "idx_signer")
+  @@index([service_end, status], map: "idx_expire")
+  @@index([product_line_id, status], map: "idx_line_status")
+  @@map("contract")
+}
+
+/// E2 回款流水
+model PaymentRecord {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  contract_id     BigInt   @db.UnsignedBigInt
+  amount          Decimal  @db.Decimal(12, 2)
+  paid_at         DateTime @db.DateTime(0)
+  method          String?  @db.VarChar(32)
+  voucher_file_id BigInt?  @db.UnsignedBigInt // → file_asset.id
+  created_by      BigInt?  @db.UnsignedBigInt
+  created_at      DateTime @default(now()) @db.DateTime(0)
+  updated_at      DateTime @updatedAt @db.DateTime(0)
+
+  contract Contract @relation(fields: [contract_id], references: [id])
+
+  @@index([contract_id], map: "idx_contract")
+  @@index([paid_at], map: "idx_paid_at")
+  @@map("payment_record")
+}
+
+/// E3 工单（售后 / 商机 双分类）
+model Workorder {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  order_no         String    @unique(map: "uk_order_no") @db.VarChar(64)
+  type             String    @db.VarChar(16) // after_sale / opportunity
+  relation_id      BigInt?   @db.UnsignedBigInt
+  title            String    @db.VarChar(200)
+  content          String?   @db.Text
+  source           String?   @db.VarChar(32)
+  priority         String?   @db.VarChar(8) // P0-P3（仅售后）
+  assignee_id      BigInt?   @db.UnsignedBigInt
+  sla_deadline     DateTime? @db.DateTime(0)
+  est_effort_min   Int? // 工时估算（点选）
+  status           String    @default("created") @db.VarChar(16) // created/assigned/processing/confirming/closed
+  upgraded_from_id BigInt?   @db.UnsignedBigInt // 升级互链（自引用）
+  created_by       BigInt?   @db.UnsignedBigInt
+  created_at       DateTime  @default(now()) @db.DateTime(0)
+  updated_by       BigInt?   @db.UnsignedBigInt
+  updated_at       DateTime  @updatedAt @db.DateTime(0)
+  deleted_at       DateTime? @db.DateTime(0)
+
+  relation BusinessRelation? @relation(fields: [relation_id], references: [id])
+  logs     WorkorderLog[]
+
+  @@index([relation_id], map: "idx_relation")
+  @@index([assignee_id, status, sla_deadline], map: "idx_assignee")
+  @@index([status, sla_deadline], map: "idx_sla")
+  @@index([upgraded_from_id], map: "idx_upgraded")
+  @@map("workorder")
+}
+
+/// E4 工单日志
+model WorkorderLog {
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  workorder_id BigInt   @db.UnsignedBigInt
+  action       String   @db.VarChar(32)
+  from_status  String?  @db.VarChar(16)
+  to_status    String?  @db.VarChar(16)
+  reason       String?  @db.VarChar(255) // 升级必填原因
+  operator_id  BigInt   @db.UnsignedBigInt
+  created_at   DateTime @default(now()) @db.DateTime(0)
+
+  workorder Workorder @relation(fields: [workorder_id], references: [id])
+
+  @@index([workorder_id, created_at], map: "idx_wo_time")
+  @@map("workorder_log")
+}
+
+/// E5 客户台账（扩展字段走 extra_fields JSON，Key 必须先经 field_template 登记）
+model Ledger {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  contract_id     BigInt    @db.UnsignedBigInt
+  company_id      BigInt    @db.UnsignedBigInt
+  product_line_id BigInt    @db.UnsignedBigInt
+  customer_level  String?   @db.VarChar(4)
+  sign_date       DateTime? @db.Date
+  expire_date     DateTime? @db.Date
+  contact_id      BigInt?   @db.UnsignedBigInt
+  sales_id        BigInt?   @db.UnsignedBigInt // 销售对接人
+  delivery_id     BigInt?   @db.UnsignedBigInt // 交付对接人
+  remark          String?   @db.VarChar(500)
+  extra_fields    Json? // 扩展列（Key 已登记 field_template）
+  created_by      BigInt?   @db.UnsignedBigInt
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  updated_by      BigInt?   @db.UnsignedBigInt
+  updated_at      DateTime  @updatedAt @db.DateTime(0)
+
+  contract     Contract    @relation(fields: [contract_id], references: [id])
+  company      Company     @relation(fields: [company_id], references: [id])
+  product_line ProductLine @relation(fields: [product_line_id], references: [id])
+
+  @@index([product_line_id, expire_date], map: "idx_line_expire")
+  @@index([contract_id], map: "idx_contract")
+  @@index([company_id], map: "idx_company")
+  @@map("ledger")
+}
+
+/// E6 字段元数据（登记唯一入口；field_key / control_type 保存后不可变）
+model FieldTemplate {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  product_line_id BigInt    @db.UnsignedBigInt
+  field_key       String    @db.VarChar(64)
+  label           String    @db.VarChar(80)
+  control_type    String    @db.VarChar(16) // text/number/date/select/multiselect/link
+  required        Boolean   @default(false)
+  sort            Int       @default(0)
+  show_in_list    Boolean   @default(false)
+  options         Json?
+  status          String    @default("active") @db.VarChar(16) // active / disabled
+  created_by      BigInt?   @db.UnsignedBigInt
+  created_at      DateTime  @default(now()) @db.DateTime(0)
+  updated_by      BigInt?   @db.UnsignedBigInt
+  updated_at      DateTime  @updatedAt @db.DateTime(0)
+  deleted_at      DateTime? @db.DateTime(0)
+
+  product_line ProductLine @relation(fields: [product_line_id], references: [id])
+
+  @@unique([product_line_id, field_key], map: "uk_line_key")
+  @@index([product_line_id, status, sort], map: "idx_line_sort")
+  @@map("field_template")
+}
+
+/// E7 合同业绩分配（默认不写=100% 归 signer；合计须 100%）
+model ContractSplit {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  contract_id BigInt   @db.UnsignedBigInt
+  employee_id BigInt   @db.UnsignedBigInt
+  percent     Decimal  @db.Decimal(5, 2)
+  created_by  BigInt?  @db.UnsignedBigInt
+  created_at  DateTime @default(now()) @db.DateTime(0)
+
+  contract Contract @relation(fields: [contract_id], references: [id])
+
+  @@unique([contract_id, employee_id], map: "uk_split")
+  @@index([employee_id], map: "idx_employee")
+  @@map("contract_split")
+}
+
+// =============================================================================
+// 域 F：公海与流转
+// =============================================================================
+
+/// F1 公海规则（L1-L4；改天数走 7 天缓冲，插新版本行 + 旧行 status=disabled）
+model SeaRule {
+  id               BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  level            Int      @db.TinyInt // 1=全局 2=产品线 3=部门 4=部门×产品线
+  dept_id          BigInt?  @db.UnsignedBigInt
+  product_line_id  BigInt?  @db.UnsignedBigInt
+  follow_freq_days Int?
+  deal_cycle_days  Int?
+  stay_days        Int? // ① 私海掉落倒计时 ② 公海停留超期→经理决策待办
+  no_progress_max  Int?
+  effective_from   DateTime @db.DateTime(0) // ★ 生效时间＝变更提交日 + 7 天
+  status           String   @default("active") @db.VarChar(16) // active / disabled（停用不删）
+  created_by       BigInt?  @db.UnsignedBigInt
+  created_at       DateTime @default(now()) @db.DateTime(0)
+  updated_by       BigInt?  @db.UnsignedBigInt
+  updated_at       DateTime @updatedAt @db.DateTime(0)
+
+  dept         Department?  @relation(fields: [dept_id], references: [id])
+  product_line ProductLine? @relation(fields: [product_line_id], references: [id])
+
+  @@index([level, dept_id, product_line_id, status], map: "idx_level")
+  @@map("sea_rule")
+}
+
+/// F2 入公海历史
+model SeaRecord {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  relation_id BigInt    @db.UnsignedBigInt
+  from_sea    String    @db.VarChar(16)
+  to_sea      String    @db.VarChar(16) // 仅 company_sea
+  reason      String    @db.VarChar(32) // follow_timeout/deal_timeout/stagnant/manual/gray_release/dept_manager_delete
+  dropped_at  DateTime  @db.DateTime(0)
+  claimed_by  BigInt?   @db.UnsignedBigInt
+  claimed_at  DateTime? @db.DateTime(0)
+
+  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+
+  @@index([relation_id, dropped_at], map: "idx_rel_time")
+  @@index([claimed_by, claimed_at], map: "idx_claimer")
+  @@index([dropped_at, to_sea], map: "idx_drop")
+  @@map("sea_record")
+}
+
+// =============================================================================
+// 域 G：审批中心（四型一单）
+// =============================================================================
+
+/// G1 审批（transfer / collaborate / phone_change / phone_unlock）
+model Approval {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  type         String    @db.VarChar(24) // transfer / collaborate / phone_change / phone_unlock
+  applicant_id BigInt    @db.UnsignedBigInt
+  approver_id  BigInt    @db.UnsignedBigInt // 申请人≠审批人（DB CHECK + 应用双拦）
+  target_type  String?   @db.VarChar(32) // relation / contact
+  target_id    BigInt?   @db.UnsignedBigInt
+  payload      Json?
+  status       String    @default("pending") @db.VarChar(16) // pending / approved / rejected
+  comment      String?   @db.VarChar(500) // 驳回必填原因
+  handled_at   DateTime? @db.DateTime(0)
+  created_at   DateTime  @default(now()) @db.DateTime(0)
+  updated_at   DateTime  @updatedAt @db.DateTime(0)
+
+  @@index([approver_id, status, created_at], map: "idx_approver")
+  @@index([applicant_id, created_at], map: "idx_applicant")
+  @@index([target_type, target_id], map: "idx_target")
+  @@index([type, status], map: "idx_type_status")
+  @@map("approval")
+}

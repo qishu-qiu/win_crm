@@ -145,6 +145,7 @@
 | 公海 | sea | /sea/records | G | 入公海历史 |
 | 公海 | sea | /sea/manager-todo | G | 超期经理决策待办 |
 | 公海 | sea | /sea/manager-decision | P | 保留/删除关系 |
+| 公海 | sea | /sea/rules | G/U ★ | **公海规则 L1-L4 配置**（`→架构F1`；改掉海天数走 7 天缓冲）|
 | 行动 | commitment | /relations/:id/commitments | G/P/U | 承诺（me/them/verdict）|
 | 行动 | event | /relations/:id/events | G/P | 跟单事件流（近1月默认）|
 | 行动 | event | /events/quick-mark | P | 快速标记（未联系/未接/说两句，落库不更新 last_event_at）|
@@ -323,6 +324,9 @@
 - `GET/PUT /system/config`：系统级配置（gm 可改，改前改后写 `operation_log` `→架构A12`）。
 - `GET /operation-logs`：操作留痕审计查询（经理+/管理员，按人/对象/时间筛 `→架构A10`）。
 - `PUT /account/preferences`：个人外观（亮度 light/dark × 风格 A/B/C）与通知偏好，**存账号**。
+
+**4.14.10 公海规则配置（`→架构F1` `→需求§6.3`）**
+- `GET/PUT /sea/rules`：公海规则 L1-L4 配置（`sea_rule` 表）。**改掉海天数走 7 天缓冲**——新值 **7 天后生效**、在途倒计时**从生效日重新起算**、提交时**预告受影响客户数**；落库＝插新版本行 ＋ 旧行 `status=disabled`（**停用不删**，`→需求§6.3` 第二批）。
 
 ---
 

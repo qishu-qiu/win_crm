@@ -1,8 +1,8 @@
-# 销售 CRM 接口 API 文档 V1.6
+# 销售 CRM 接口 API 文档 V1.8
 
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》V1.16、《销售CRM数据架构文档》V1.19、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》V1.8（均 需求规格/）。
-> 生效日期：2026-09-11 ｜ 状态：**V1.4**（B 组澄清版 · 紧随需求 V1.13 / 数据架构 V1.17）。
+> 配套真相源：《销售CRM业务需求文档》**V1.20**、《销售CRM数据架构文档》**V1.23**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.12**（均 需求规格/）。
+> 生效日期：2026-09-11 ｜ 状态：**V1.8**（P0-④⑤ 历史轮次 + 前主人归组 · 紧随需求 V1.20 / 数据架构 V1.23 / 前端 V1.12）。
 
 ---
 
@@ -279,7 +279,7 @@
 - **旧号回收提示**：注册/改号时若该号**曾属于其他联系人**（历史号）→ 出参带 `phone_history_hint: "曾属于 XX"`，**只提示、不拦截**（运营商回收号属正常，`→需求§7.2`）。
 
 **4.14.3 阶段推进（`→需求§8.1`）**
-- `POST /relations/:id/stage`：入 `{to_stage, confirm?}`。**动作驱动 + 建议态**：服务端按事件给 `suggested_stage`，**绝不自动改**，须销售确认。**限频**：距上次变更 <3 天且非跨里程碑 → 不重复建议（`422 / 20402`）。允许跳级与回退，**每次写 `relation_stage_log`**（谁/何时/从哪到哪）。`cooperated`(6)、`churned`(7) 为终态。
+- `POST /relations/:id/stage`：入 `{to_stage, confirm?}`。**动作驱动 + 建议态**：服务端按事件给 `suggested_stage`，**绝不自动改**，须销售确认。**限频**：距上次变更 <3 天且非跨里程碑 → 不重复建议（`422 / 20402`）。允许跳级与回退，**每次写 `relation_stage_log`**（谁/何时/从哪到哪）。`cooperated`(6)、`churned`(7) 为终态。**推进零证据、经理不审核**（`→需求§8.1`）；**回退（rollback）触发经理 `notification`（`biz_type=stage_revert`，→架构 A9）——经理只知会、不审核、不拦截**，流程照走。
 
 **4.14.4 今日动线处理反馈（`→需求§10.4`）**
 - `POST /today-agenda/:id/action`：入 `{action, reason?}` ∈ `done` / `snoozed` / `ignored`。
@@ -396,7 +396,7 @@
 
 ### 5.6 业务关系 relation（核心）
 - **列表项** `{id,company:{id,name},dept:{id,name},product_line:{id,name,color_key},stage:1-7,urgency,value_tier,customer_level,owner:{id,name},last_event_at,drop_in_x_days,overdue,competition,amount|amount_masked,old_customer,is_weekly}`
-- **详情** ＝ 列表项 ＋ `{next_action_hint,sea_status,competitors:[{id,name,positioning}],labels:{risk:[{label_id,label_code,label}],other:[]},members:[{employee:{id,name},member_type:"owner"|"collaborator",source,valid_until?}],stage_logs:[{from_stage,to_stage,action,reason?,operator:{id,name},created_at}],try_count_30d}`
+- **详情** ＝ 列表项 ＋ `{next_action_hint,sea_status,round_no（当前轮次号＝已掉海次数+1，派生不落表）,prev_round?:{round_no,owner:{id,name},dead_or_churn?:reason,dropped_at,claimed_at?,event_count},competitors:[{id,name,positioning}],labels:{risk:[{label_id,label_code,label}],other:[]},members:[{employee:{id,name},member_type:"owner"|"collaborator",source,valid_until?}],stage_logs:[{from_stage,to_stage,action,reason?,operator:{id,name},created_at}],try_count_30d}`
 - `POST /relations`（激活）req `{company_id,dept_id,product_line_id}`（撞 `uk_active_rel` → **409/20401**）
 - `PUT /relations/:id` req `{urgency?,value_tier?,next_action_hint?,competition?,competitor_id?}`
 - `PUT /relations/:id/stage` req `{to_stage,confirm?:true}` → resp `{suggested_stage?,stage_log}`
@@ -405,9 +405,11 @@
 - `POST /relations/:id/transfer` req `{to_employee_id,reason?}`
 - `POST /relations/batch-transfer` req `{from_employee_id,to_employee_id,relation_ids?:[]}`
 - `PUT /relations/:id/competition` req `{competition,competitor_id?,competition_note?}`
+- **历史轮次（P0-④⑤，`→需求§8.1` / `→架构 F2/D2`）**：`GET /relations/:id/rounds` → `{rounds:[RelationRound]}`，`RelationRound{round_no,owner:{id,name},sea_record:{relation_id,reason,dropped_at,claimed_at?},event_count,stage_logs?:[...]}`；`round_no` 由 `sea_record` 计数派生（一轮＝一次私海→掉回公海）。
+- **重新领取级联（P0-④⑤）**：`POST /sea/company/:id/claim` 领取瞬间，该关系所有 **open 承诺 `owner_id` 转新 owner**（承诺随关系走，与转交口径一致，→需求§8.1）；领取后新建跟单的 `owner_snapshot` 取新 owner，前主人轮次跟单保留旧 `owner_snapshot` 供归组。
 
 ### 5.7 行动引擎 commitment / event / cadence / agenda
-- **事件项（跟单卡）** `{id,action_type,summary,outcome,pain_point:{id,label}?,competition?,actor:{id,name},contact:{id,name}?,duration_min?,event_at,branch:"main"|"sub",attachments:[]}`
+- **事件项（跟单卡）** `{id,action_type,summary,outcome,pain_point:{id,label}?,competition?,actor:{id,name},owner_snapshot?（本条创建时关系归属人，用于按轮次归组）,contact:{id,name}?,duration_min?,event_at,branch:"main"|"sub",round_no（派生：本条所属轮次）,attachments:[]}`（**P0-④⑤**：前端按 `round_no` 分组、轮次内按 `owner_snapshot` 归组——先看本轮 owner 主线/树杈，前主人轮次标姓名；`branch` 仍按 `actor_id` 与 owner 比较，→需求§7.5 / §8.1）
 - `POST /relations/:id/events` req `{contact_id?,action_type,summary?,outcome?,stage_forward?,pain_point_id?,competition?,competitor_id?,competition_note?,duration_min?,mentioned_user_ids?:[],promise?:{party,ctype,content,due_at?},appointment_id?,visit_log_id?}`
 - **待关联阶段事件（无关系，配合 需求§6.1 模型 B）**：`POST /contacts/:id/events` req 同 `POST /relations/:id/events`（省 `relation_id`，由服务端置空）；**关联公司激活关系后，服务端批量把该联系人名下 `relation_id` 为空的事件挂到新关系**（`→架构 D2` `→需求§10.2`）。
 - `POST /events/quick-mark` req `{relation_ids?:[],contact_ids?:[],outcome:"not_contacted"|"no_answer"|"brief_hangup"}`（`relation_ids` 与 `contact_ids` **至少一组非空**；**不更新 `last_event_at`**）
@@ -492,3 +494,5 @@
 | **V1.4** | 2026-09-11 | **B 组澄清版**：①§2.8 补**「报表/看板不脱敏」**（经理/老板出口返回真实金额；脱敏只管"销售看他人/跨部门"的列表与详情）；②§5.5 特质校验口径细化为**「只拦新增」**（不增量则放行）；③配套真相源版本同步（需求 V1.13 / 数据架构 V1.17 / 前端 V1.5）。 |
 | **V1.5** | **2026-09-11** | **P0-② 录入可跳公司（L0 联动需求 V1.15 / 数据架构 V1.18）**：§5.7 行动引擎新增「待关联阶段事件」端点 `POST /contacts/:id/events`（`relation_id` 由服务端置空，配合 §6.1 模型 B「待关联公司」）；`POST /events/quick-mark` 由仅 `relation_ids` 扩为 `relation_ids?` + `contact_ids?`（至少一组非空），支持"只录手机号"阶段的批量快速标记；关联公司激活关系后服务端批量回填 `relation_id`（`→架构 D2`）。配套真相源同步（需求 V1.15 / 数据架构 V1.18 / 前端 V1.7）。 |
 | **V1.6** | **2026-09-11** | **P0-③ 签约校验清单（L0 联动需求 V1.16 / 数据架构 V1.19）**：①§4.8 签约校验句补「服务端按 sign_checklist 预校验+硬卡」；②§5.9 合同创建 req 补「签约校验（创建前）」422 + 缺失清单结构 `{missing:[{scope,field_key,label,goto}]}`；③**新增 §5.15 sign_checklist（管理员配置）**——查询/改/新增项/停用接口 + `SignChecklistItem` / `ContractSignMissing` DTO（`goto` 内联补/跳补锚点）；④配套真相源同步（需求 V1.16 / 数据架构 V1.19 / 前端 V1.8）。 |
+| **V1.7** | **2026-09-11** | **阶段推进治理（L0 联动需求 V1.19 / 数据架构 V1.22）**：①§4.14.3 阶段推进补「**推进零证据、经理不审核**」与「**回退（rollback）触发经理 `notification`（`biz_type=stage_revert`）——只知会不审核不拦截**」（→架构 A9）；②配套真相源同步（需求 V1.19 / 数据架构 V1.22 / 前端 V1.11）。 |
+| **V1.8** | **2026-09-11** | **P0-④⑤ 历史轮次展示 + 前主人归组（L0 联动需求 V1.20 / 数据架构 V1.23 / 前端 V1.12）**：①§5.6 业务关系详情新增 `round_no`（派生轮次号）＋ `prev_round?`（上一轮摘要）；②**新增 `GET /relations/:id/rounds`** + `RelationRound` DTO（按 `sea_record` 还原各轮 owner/掉海原因/跟单数）；③**重新领取级联**：`POST /sea/company/:id/claim` 领取瞬间该关系所有 open 承诺 `owner_id` 转新 owner（承诺随关系走，与转交一致）；④§5.7 事件项 DTO 补 `owner_snapshot` / `round_no`，分组语义由"按 owner 主线/树杈"升级为"**先按轮次、轮次内按 owner 归组**"。配套真相源同步（需求 V1.20 / 数据架构 V1.23 / 前端 V1.12）。 |

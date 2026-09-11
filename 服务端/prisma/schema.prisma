@@ -1,6 +1,6 @@
 // =============================================================================
-// 销售 CRM — Prisma Schema（45 张表）
-// 真相源：《需求规格/销售CRM数据架构文档》V1.14 §三~§九（表）、§十（索引）、§十五（落库口径）
+// 销售 CRM — Prisma Schema（46 张表）
+// 真相源：《需求规格/销售CRM数据架构文档》V1.23 §三~§九（表）、§十（索引）、§十五（落库口径）
 // ORM 定案：Prisma（2026-09-10）；MySQL 8.0+ / InnoDB / utf8mb4
 //
 // ★ Prisma 落库口径（数据架构 §十五.5，务必遵守）：
@@ -694,6 +694,7 @@ model ActionEvent {
   relation_id        BigInt?  @db.UnsignedBigInt // 可空（配合"待关联公司"模型 B：未激活关系时只绑 contact_id）；CHECK: relation_id 与 contact_id 至少一非空（手写 migration）
   contact_id         BigInt?  @db.UnsignedBigInt
   actor_id           BigInt   @db.UnsignedBigInt
+  owner_snapshot     BigInt?  @db.UnsignedBigInt // ★ 事件创建时关系的 owner 冗余快照（P0-⑤ 前主人跟单归组 + 历史轮次分组；服务端插入时取当前 owner，relation_id 可空时为空）
   action_type        String   @db.VarChar(16) // phone/wechat/visit/onsite/email/meal/gift/greeting/ask_help/note/system
   summary            String?  @db.VarChar(500) // 一句话结果（快速标记可空）
   outcome            String?  @db.VarChar(16) // advanced/stalled/await_reply | not_contacted/no_answer/brief_hangup
@@ -718,6 +719,7 @@ model ActionEvent {
   // ⚠ uk_idem 必须含分区键 event_at，否则 PARTITION BY 建表报 ERROR 1503（migration 手写时确认）
   @@unique([idempotency_key, event_at], map: "uk_idem")
   @@index([relation_id, event_at], map: "idx_rel_time")
+  @@index([relation_id, owner_snapshot, event_at], map: "idx_rel_owner") // ★ P0-⑤ 前主人跟单归组 + 历史轮次分组
   @@index([actor_id, event_at], map: "idx_actor_time")
   @@index([pain_point_id], map: "idx_pain")
   @@index([appointment_id], map: "idx_appointment")
@@ -1043,9 +1045,10 @@ model SeaRule {
 model SeaRecord {
   id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   relation_id BigInt    @db.UnsignedBigInt
+  owner_id    BigInt    @db.UnsignedBigInt // ★ 掉海时持有该关系的归属人（轮次归属，用于历史轮次/前主人归组；P0-④，→需求§8.1 / →架构F2）
   from_sea    String    @db.VarChar(16)
   to_sea      String    @db.VarChar(16) // 仅 company_sea
-  reason      String    @db.VarChar(32) // follow_timeout/deal_timeout/stagnant/manual/dept_manager_delete
+  reason      String    @db.VarChar(32) // follow_timeout/deal_timeout/stagnant/manual/dept_manager_delete/dead(判死)/churn(流失)
   dropped_at  DateTime  @db.DateTime(0)
   claimed_by  BigInt?   @db.UnsignedBigInt
   claimed_at  DateTime? @db.DateTime(0)
@@ -1053,6 +1056,7 @@ model SeaRecord {
   relation BusinessRelation @relation(fields: [relation_id], references: [id])
 
   @@index([relation_id, dropped_at], map: "idx_rel_time")
+  @@index([owner_id, dropped_at], map: "idx_owner") // ★ P0-④ 按归属人查其掉海历史/历史轮次
   @@index([claimed_by, claimed_at], map: "idx_claimer")
   @@index([dropped_at, to_sea], map: "idx_drop")
   @@map("sea_record")

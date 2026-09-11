@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.20（现行有效）
+# 销售 CRM 数据架构文档 V1.23（现行有效）
 
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
@@ -10,8 +10,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.20（现行有效）** / 2026-09-11 |
-| 上游 | 《销售CRM业务需求文档》**V1.17**（业务规则唯一来源） |
+| 版本 / 日期 | **V1.23（现行有效）** / 2026-09-11 |
+| 上游 | 《销售CRM业务需求文档》**V1.20**（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》**V1.3**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.4** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
@@ -110,7 +110,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | nearby_radius_km | 预留：将来做附近客户时的默认半径（V1 不用） |
 
 ### A9 notification 通知
-`user_id`、`title/content`、`biz_type`(commitment_due/cadence/drop_warn/gray/approval…)、`biz_id`、`channel`(site/wechat 预留)、`read_at`
+`user_id`、`title/content`、`biz_type`(commitment_due/cadence/drop_warn/gray/approval/stage_revert…)、`biz_id`、`channel`(site/wechat 预留)、`read_at`
 
 ### A10 operation_log 操作留痕（★ 全局审计日志 · 升级）
 | 字段 | 说明 |
@@ -265,6 +265,8 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 ### C3 relation_stage_log 阶段推进留痕
 `relation_id + from_stage/to_stage + action(normal/jump/rollback/lost) + reason + operator_id`
+- **★ 历史轮次与终态（P0-④⑤ 配套，`→需求§8.1`）**：判死（reason=dead）阶段**保留**、流失（reason=churn）阶段**置 7**，二者均掉回公海可被重新领取（V1.13）；**重新领取后新一轮从阶段 1 重来**，上一轮的阶段推进留痕保留在本表（按 `relation_id` 全量可读，配合 `sea_record` 还原各轮时间线）。`lost` 动作＝流失终态留痕；判死不新增动作行（由 `sea_record.reason=dead` 记载），避免与本表"阶段推进"语义混淆。
+- **★ 回退知会经理（2026-09-11 七叔定，`→需求§8.1`）**：`action=rollback`（阶段往后退）时，除正常写本表留痕外，**额外触发经理 `notification`（`biz_type=stage_revert`，→A9）**——经理只收到知会、不审核、不拦截，流程照走。让经理知道"谁把哪单从哪退到哪"即可。（阶段往前推＝销售一键确认即生效、系统不要求证据、经理不审核，防糊弄靠「阶段 N 天未推进」闸门。）
 
 ### C4 relation_label 关系级标注（风险等人补标签）
 `relation_id + group_code(risk/other) + label_id/label_code + marked_by/marked_at + remark`；联合唯一 `uk(relation_id, group_code, label_id)`。自动风险信号不落库，由规则从事件流实时派生只读回传
@@ -322,14 +324,16 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | visit_log_id / appointment_id 可空 | 关联外出/预约 |
 | idempotency_key UNIQUE | 防重复提交 |
 | attachments JSON | 附件 |
+| owner_snapshot 可空 | **P0-④⑤ 新增**：本条跟单创建时该关系 `business_relation.owner_id` 的**冗余快照**——与 `actor_id`（操作人）区分：跟单"归属哪一轮、当时归谁所有"由本列定，支撑"按归属轮次分组 + 前主人归组"（→需求§7.5 / §8.1）。重新领取开启新一轮后，新 owner 写的跟单 `owner_snapshot`=新 owner；前主人轮次的跟单仍保留旧 `owner_snapshot`，据此归组并标姓名，无需新表。 |
 
-- 索引：`idx(relation_id, event_at)`、`idx(actor_id, event_at)`、`idx(pain_point_id)`、`idx_contact(contact_id, event_at)`（供"待关联公司"的联系人查其孤儿跟单 / 补关联时批量回填）
-- **展示口径（决策 #30 · `→需求§7.5`；分界基准 2026-09-10 修正）**：跟单列表**默认近 1 个月**（按 `event_at` 倒序分页，可切"全部"）；**分界基准 = 该关系的主跟单人（owner），不是"当前登录人"**——`actor_id`=**该关系 owner** → **主线**，否则（协同同事 / 合并前其他销售）→ **树杈分支**（合并关系按 `C1.merged_into` 归类）。**经理 / 老板打开时看到的就是「主跟单人的视角」**（否则经理不是 owner，会看到全是树杈、没有主线）。**复用现有 `idx(relation_id, event_at)` / `idx(actor_id, event_at)`，不新增字段、不做"疑似重复"等智能判断**
+- 索引：`idx(relation_id, event_at)`、`idx(actor_id, event_at)`、`idx(pain_point_id)`、`idx_contact(contact_id, event_at)`（供"待关联公司"的联系人查其孤儿跟单 / 补关联时批量回填）、`idx_rel_owner(relation_id, owner_snapshot, event_at)`（**P0-④⑤ 新增**，供"按归属轮次 + owner 分组"拉取某关系全部跟单）
+- **展示口径（决策 #30 · #56 · `→需求§7.5` / §8.1；分界基准 2026-09-10 修正，P0-④⑤ 加轮次分组）**：跟单列表**默认近 1 个月**（按 `event_at` 倒序分页，可切"全部"）；**分界基准 = 该关系的主跟单人（owner），不是"当前登录人"**——`actor_id`=**该关系 owner** → **主线**，否则（协同同事 / 合并前其他销售）→ **树杈分支**（合并关系按 `C1.merged_into` 归类）。**经理 / 老板打开时看到的就是「主跟单人的视角」**（否则经理不是 owner，会看到全是树杈、没有主线）。**P0-④⑤ 新增"按归属轮次分组"**：以 `sea_record` 划分轮次（一轮＝一次从私海到掉回公海的完整周期；轮次号＝已掉海次数+1，派生不落表），跟单先按轮次分组、轮次内再按 `owner_snapshot` 归组——**本轮 owner 走主线/树杈，前主人轮次按 `owner_snapshot` 归组并标姓名**；新 owner 本轮尚无跟单时明确提示"以下是前主人记录供参考"。**复用现有 `idx(relation_id, event_at)` / `idx(actor_id, event_at)` / `idx_rel_owner`，不新增字段、不做"疑似重复"等智能判断**
 - **★ 快速标记口径（`→需求§6.3` / §10.2，2026-09-10 定）**：无效沟通也**必须写一条事件**（`outcome` ∈ `not_contacted` / `no_answer` / `brief_hangup`；`summary` 可空），否则"这个客户打过多少次"统计失真。批量标记＝一次请求写多行，逐行落 `action_event`（行数不多，无需额外汇总）。
   - **⚠ 关键：快速标记『不』更新 `business_relation.last_event_at`**——只有**有效沟通**事件才更新它。否则销售对 100 个客户点一下快速标记，`sea_rule` 的跟进倒计时就被刷爆、客户永不掉海。
   - **实现**：`last_event_at` 回写逻辑中**排除** outcome ∈ 三型 quick_mark 的事件；"最近 30 天尝试联系 N 次"另行按这三型 COUNT（走现有 `idx(relation_id, event_at)`）。
 - **★ 多联系人口径（2026-09-11 七叔定，`→需求§6.3` / §10.2；无表结构变更）**：一条 `relation_id` 下可**同时**存在多个 `contact_id` 的事件（老板 / 招商 / 财务各跟各的）——**见谁都算有效跟进**：`last_event_at` 回写与"跟进次数"统计**一律计入，不按 `contact.decision_role` 区分含金量**。
   - **不新增"关系级关键决策人"字段 / 关联表**：`decision_role` 是 `contact` 自身属性（跟人走、跨业务线复用）。若按关系再存一份，同一人在法律线是决策人、在财税线是影响人时会产生**双重维护与口径打架**。
+  - **提醒触发同口径（对应需求 §6.3 / §10.3，2026-09-11 七叔定）**：关系下新增联系人触发首跟提醒（`dept_rule.newbie_first_follow_hours`，建议 48h）时，**以 `contact.decision_role` 作为是否催的判据**——决策人/影响人催，执行人/未定不催。提醒生成逻辑读 `contact.decision_role`，**不新增字段、不新增表、不新增索引**。
   - **防"吊着"的闸门是 `sea_rule` 的「N 天阶段未推进」，不是"见了谁"**——只见执行人刷跟单、阶段不动，照样掉海。**经理盯的是阶段/工作流变化**（复用 `relation_stage_log` 与 `business_relation.stage_id`，无需新数据）。
   - **录入**：`contact_id` 选填；关系下已有联系人时前端默认带出上次跟进的联系人（`idx(relation_id, event_at)` 取最近一条），**一点即选、不选也可提交**，不硬卡（T2）。
   - 查询复用现有 `idx(relation_id, event_at)`（时间线混排）与 `idx_contact(contact_id, event_at)`（按人回看），**不新增索引**。
@@ -455,8 +459,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 > **公海粒度（`→需求§6.3`）**：`sea_status` 只有 `private`（**有 owner**）/ `company_sea`（**无 owner**），**掉海只改本字段、`dept_id` 恒定不变**；**部门公海 ＝ `company_sea` 中 `dept_id`=本部门的集合**（映射视图，非独立池）。`stay_days` 两类用途：① 私海掉落倒计时（自动触发）；② **公海停留超期 → 生成经理决策待办**（不自动删除、不自动流转）。
 
 ### F2 sea_record 入公海历史
-`relation_id + from_sea/to_sea` + `reason`(follow_timeout/deal_timeout/stagnant/manual/dept_manager_delete) + `dropped_at + claimed_by + claimed_at`
-> 私海掉落回公海、经理"删除关系"（reason=dept_manager_delete，逻辑删除）均写本表留痕；`to_sea` 仅 `company_sea`（公司公海）。
+`relation_id + owner_id + from_sea/to_sea` + `reason`(follow_timeout/deal_timeout/stagnant/manual/dept_manager_delete/**dead(判死)/churn(流失)**) + `dropped_at + claimed_by + claimed_at`
+> 私海掉落回公海、经理"删除关系"（reason=dept_manager_delete，逻辑删除）均写本表留痕；`to_sea` 仅 `company_sea`（公司公海）。**`owner_id` ＝本次掉海时该关系的归属人（每轮回海的归属人快照）**——与 `business_relation.owner_id` 同步写入，支撑"历史轮次展示"与"前主人归组"（→需求§7.5 / §8.1；P0-④⑤）。判死（reason=dead）阶段保留、流失（reason=churn）阶段置 7，二者均掉回公海可被重新领取（V1.13）。
+> **索引**：`idx_rel_time(relation_id, dropped_at)`、`idx_owner(owner_id, dropped_at)`（P0-④⑤ 新增，供"某销售名下曾掉海过哪些客户"查询）、`idx_claimer(claimed_by, claimed_at)`、`idx_drop(dropped_at, to_sea)`。
 
 ---
 
@@ -545,7 +550,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 表 | 索引 |
 |---|---|
 | commitment | `idx_owner_due(owner_id, status, due_at)`、`idx_relation(relation_id)`、`idx_due(status, due_at)`、`idx_contact(contact_id)` |
-| action_event | `idx_rel_time(relation_id, event_at)`、`idx_actor_time(actor_id, event_at)`、`idx_pain(pain_point_id)`、**`uk_idem(idempotency_key)`**、`idx_appointment(appointment_id)`、`idx_contact(contact_id, event_at)`；**按 event_at 月分区** |
+| action_event | `idx_rel_time(relation_id, event_at)`、`idx_actor_time(actor_id, event_at)`、`idx_pain(pain_point_id)`、**`uk_idem(idempotency_key)`**、`idx_appointment(appointment_id)`、`idx_contact(contact_id, event_at)`、`idx_rel_owner(relation_id, owner_snapshot, event_at)`（P0-④⑤ 新增）；**按 event_at 月分区** |
 | cadence_rule | `idx_scope(scope_dept_id, scope_line_id, enabled)` |
 | daily_agenda | `idx_user_day(user_id, biz_date, status)`、`idx_ref(ref_type, ref_id)`、`idx_relation(relation_id)`；**按 biz_date 月分区** |
 | review | `idx_status_time(status, created_at)`、`idx_relation(relation_id)`、`idx_type_status(review_type, status)` |
@@ -569,7 +574,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 表 | 索引 |
 |---|---|
 | sea_rule | `idx_level(level, dept_id, product_line_id, status)` |
-| sea_record | `idx_rel_time(relation_id, dropped_at)`、`idx_claimer(claimed_by, claimed_at)`、`idx_drop(dropped_at, to_sea)` |
+| sea_record | `idx_rel_time(relation_id, dropped_at)`、`idx_owner(owner_id, dropped_at)`（P0-④⑤ 新增）、`idx_claimer(claimed_by, claimed_at)`、`idx_drop(dropped_at, to_sea)` |
 
 **域 G 审批**
 
@@ -735,6 +740,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | **V1.18** | **2026-09-11** | **P0-② 录入可跳公司 + 撞库（L0 联动需求 V1.15）**：①**D2 `action_event.relation_id` 改为可空**，并加 **CHECK：`relation_id` 与 `contact_id` 至少一非空**（配合需求§6.1 模型 B「待关联公司」——只录手机号未问到公司时，跟单/快速标记/承诺只绑 `contact_id`，关联公司激活关系后服务端批量回填 `relation_id`，历史不断）；②**D2 索引补 `idx_contact(contact_id, event_at)`**（孤立跟单查询）；③**§十 索引清单同步补 `idx_contact`**。**schema.prisma（backend 锁需求后从本架构重建）须同步 relation_id `@ignore`? — 否，relation_id 仍写库但允许 NULL，migration 手写 `ALTER ... MODIFY relation_id ... NULL` + 加 CHECK 约束**；当前 backend 未落地，以本架构为唯一真相源。 |
 | **V1.19** | **2026-09-11** | **P0-③ 签约校验清单落地（L0 联动需求 V1.16）**：①**新增 E8 `sign_checklist` 签约校验清单表**（挂 `product_line_id`，`scope`∈company/relation/ledger + `field_key` + `label` + `required`/`sort`/`status`(停用不删)；`uk_line_scope_field(product_line_id, scope, field_key)` + `idx_line_status`）；②**默认清单系统播种**（公司级 6 项＋关系级 value_tier/contact，`required=true`），管理员在「系统设置→产品线」增删改；③**校验逻辑**：`POST /contracts` 创建前取该线 `active AND required` 项逐项查对应层级字段，缺失→422＋缺失清单（scope+label+goto）；④**§10.1 索引清单 45 → 46 张**、§二 ER 总览同步。**`服务端/prisma/schema.prisma` 须同步新增 `SignChecklist` model + migration（P0-② 已确认该 schema 实际存在并已建）。** |
 | **V1.20** | **2026-09-11** | **D2 多联系人口径落地（L0 联动需求 V1.17，七叔定；★ 无表结构变更、无新增索引、无新增字段）**：①一条 `relation_id` 下可同时存在多个 `contact_id` 的事件，**见谁都算有效跟进**——`last_event_at` 回写与跟进次数**不按 `contact.decision_role` 区分含金量**；②**不新增"关系级关键决策人"字段 / 关联表**（`decision_role` 跟人走、跨业务线复用，按关系另存会双重维护并打架）；③**防"吊着"的闸门＝「N 天阶段未推进」，不是"见了谁"**（复用 `relation_stage_log` / `business_relation.stage_id`，无需新数据）；④`contact_id` 选填，前端默认带出上次跟进的联系人（走 `idx(relation_id, event_at)`），不硬卡；⑤查询复用 `idx(relation_id, event_at)`（混排）与 `idx_contact(contact_id, event_at)`（按人回看）。 |
+| **V1.21** | **2026-09-11** | **多联系人·剩余两条采纳（L0 联动需求 V1.18，七叔定；★ 无表结构变更、无新增索引、无新增字段）**：①D2 多联系人口径补「跟单 Tab 联系人筛选芯片」纯展示说明（需方见前端 V1.10 页 6，数据层复用 `idx_contact(contact_id, event_at)` 即可，不新增查询结构）；②D2 补「新增联系人首跟提醒触发同口径」——关系下新增联系人触发 `dept_rule.newbie_first_follow_hours` 首跟提醒时，**以 `contact.decision_role` 为是否催的判据**（决策人/影响人催、执行人/未定不催），提醒生成逻辑读 `contact.decision_role`，**不新增字段/表/索引**。§一「上游」同步需求 V1.18。 |
+| **V1.22** | **2026-09-11** | **阶段推进治理（L0 联动需求 V1.19，七叔定；★ 无表结构变更、无新增索引）**：①**A9 `notification.biz_type` 新增 `stage_revert`**——阶段**往后退（rollback）**时触发经理通知（经理只知会、不审核、不拦截，流程照走）；②**C3 `relation_stage_log` 补「回退触发经理提醒」说明**——`action=rollback` 除留痕外额外发 `notification.biz_type=stage_revert`；③**阶段往前推＝销售一键确认即生效、系统不要求证据、经理不审核**（防"推进"变审批、销售绕系统），防糊弄靠「阶段 N 天未推进」这道闸门。§一「上游」同步需求 V1.19。 |
+| **V1.23** | **2026-09-11** | **P0-④⑤ 历史轮次展示 + 前主人归组（L0 联动需求 V1.20；API 见接口 V1.8 / 前端 V1.12）**：①**F2 `sea_record` 新增 `owner_id`**（每轮回海的归属人快照，与 `business_relation.owner_id` 同步写入）+ `reason` 枚举补 `dead(判死)/churn(流失)` + 索引补 `idx_owner(owner_id, dropped_at)`；②**D2 `action_event` 新增 `owner_snapshot`**（每条跟单创建时关系 owner 冗余快照，与 `actor_id` 区分）+ 索引补 `idx_rel_owner(relation_id, owner_snapshot, event_at)`；③**D2 展示口径新增"按归属轮次分组"**——以 `sea_record` 划轮次（轮次号＝已掉海次数+1，派生不落表），跟单先按轮次分组、轮次内按 `owner_snapshot` 归组（本轮 owner 主线/树杈、前主人按快照归组标姓名）；④**C3 补"历史轮次与终态"说明**——判死阶段保留、流失置 7，重新领取后从阶段 1 重来，上轮留痕保留。**共 +2 字段 +2 索引、0 新表**（与"加规则加行不加列"铁律一致）；`服务端/prisma/schema.prisma` + `migrations/0001_init` 已同步。§一「上游」同步需求 V1.20。 |
 
 ---
 

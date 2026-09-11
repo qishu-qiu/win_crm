@@ -575,6 +575,7 @@ CREATE TABLE `action_event` (
     `relation_id` BIGINT UNSIGNED NULL,
     `contact_id` BIGINT UNSIGNED NULL,
     `actor_id` BIGINT UNSIGNED NOT NULL,
+    `owner_snapshot` BIGINT UNSIGNED NULL,
     `action_type` VARCHAR(16) NOT NULL,
     `summary` VARCHAR(500) NULL,
     `outcome` VARCHAR(16) NULL,
@@ -595,6 +596,7 @@ CREATE TABLE `action_event` (
     `updated_at` DATETIME(0) NOT NULL,
 
     INDEX `idx_rel_time`(`relation_id`, `event_at`),
+    INDEX `idx_rel_owner`(`relation_id`, `owner_snapshot`, `event_at`),
     INDEX `idx_actor_time`(`actor_id`, `event_at`),
     INDEX `idx_pain`(`pain_point_id`),
     INDEX `idx_appointment`(`appointment_id`),
@@ -882,6 +884,7 @@ CREATE TABLE `sea_rule` (
 CREATE TABLE `sea_record` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `relation_id` BIGINT UNSIGNED NOT NULL,
+    `owner_id` BIGINT UNSIGNED NOT NULL,
     `from_sea` VARCHAR(16) NOT NULL,
     `to_sea` VARCHAR(16) NOT NULL,
     `reason` VARCHAR(32) NOT NULL,
@@ -890,6 +893,7 @@ CREATE TABLE `sea_record` (
     `claimed_at` DATETIME(0) NULL,
 
     INDEX `idx_rel_time`(`relation_id`, `dropped_at`),
+    INDEX `idx_owner`(`owner_id`, `dropped_at`),
     INDEX `idx_claimer`(`claimed_by`, `claimed_at`),
     INDEX `idx_drop`(`dropped_at`, `to_sea`),
     PRIMARY KEY (`id`)

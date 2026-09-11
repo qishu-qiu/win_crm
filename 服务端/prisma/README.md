@@ -15,11 +15,18 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma validate --schema
 DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema prisma/schema.prisma
 ```
 
+## migrations / 0001_init / migration.sql
+
+- **生成方式**：`DATABASE_URL=占位 npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > migrations/0001_init/migration.sql`（**离线生成，不需要真库**）。
+- **内容** = **Prisma 生成的 baseline（45 张表 / 索引 / 外键）** ＋ **结尾「手工补充段」**（①生成列改造 ②5 张分区表改造 ③视图 `v_contract_performance` ④审批 CHECK）。
+- **⚠ 未在真实 MySQL 8 上跑过**：本环境无数据库，migration 为**静态产出**，首次建库时须在真库执行并逐条核对（重点：生成列表达式、分区键与主键扩列、ERROR 1503）。
+- **发现并已记录**：Prisma 会把 `@ignore` 字段建成普通列 → 手工段里 `DROP` 后重建为 `GENERATED`（见下）。
+
 ## ★ 必须「手写 migration」的部分（数据架构 §十五.5，Prisma 表达不了）
 
 | # | 场景 | 做法 |
 |---|---|---|
-| 1 | **生成列**：`business_relation.active_key` / `relation_member.owner_flag` / `contact.phone_active` | schema 中已声明为 `@ignore` 字段（Client 不暴露、不读不写）；migration SQL 手写 `ADD COLUMN x GENERATED ALWAYS AS (...) STORED` **＋ 对应唯一索引**（`uk_active_rel` / `uk_owner` / `uk_phone_active`）。**唯一性由 DB 兜底，冲突靠 P2002 识别** |
+| 1 | **生成列**：`business_relation.active_key` / `relation_member.owner_flag` / `contact.phone_active` | schema 中已声明为 `@ignore` 字段（Client 不暴露、不读不写）。**⚠ 实测：Prisma 仍会把这 3 个字段建成「普通可空列」**——故 migration 里需 **`DROP COLUMN` 后重建为 `GENERATED ALWAYS AS (...) STORED` ＋ 建唯一索引**（`uk_active_rel` / `uk_owner` / `uk_phone_active`）。**唯一性由 DB 兜底，冲突靠 P2002 识别** |
 | 2 | **分区表**（5 张）：`action_event` / `daily_agenda` / `stat_daily` / `operation_log` / `job_run_log` | schema 保持普通表定义（会报 drift 警告，可接受）；migration 手写 `CREATE TABLE ... PARTITION BY RANGE`（按 `event_at` / `biz_date` / `run_at` / `occurred_at` 月分区）。**⚠ `action_event` 的 `uk_idem` 必须含分区键 `event_at`，否则建表报 ERROR 1503** |
 | 3 | **CHECK 约束** | 如 `approval` 申请人 ≠ 审批人（DB CHECK ＋ 应用双拦） |
 | 4 | **视图** | `v_contract_performance` ＝ `contract × contract_split`（无 split 则 `signer_id` 占 100%）——**业绩统计一律读此视图**，避免口径漂移 |

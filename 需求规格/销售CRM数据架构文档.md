@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.14（现行有效）
+# 销售 CRM 数据架构文档 V1.15（现行有效）
 
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
@@ -10,7 +10,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.14（现行有效）** / 2026-09-10 |
+| 版本 / 日期 | **V1.15（现行有效）** / 2026-09-11 |
 | 上游 | 《销售CRM业务需求文档》V1.11（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》（待建）、《销售CRM前端页面与交互文档》（待建） |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
@@ -347,7 +347,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | ref_type / ref_id | commitment / appointment / cadence / relation(掉海硬提醒) |
 | relation_id / contact_id | 冗余方便直达 |
 | reason / priority / action_hint | 为什么今天该找 TA / 优先级 / 建议动作 |
-| status | open / done / snoozed / ignored（可选原因） |
+| status | open / done / snoozed / ignored |
+| action_reason | **★ 2026-09-11 补**：ignored 必填原因 / snoozed 备注（`→需求§10.4`，防逃逸） |
+| snooze_count | **★ 2026-09-11 补**：本条被 snoozed 次数——支撑「同一条最多 snooze 3 次，第 4 次起强制 done / ignored」（`→需求§10.4`） |
 
 - 组装规则与**降噪收敛**（逾期>3 天收入"逾期抽屉"、硬约束永远置顶、ignored 7 天不重复）及**防逃逸规则**（snoozed 上限 3 次、ignored 须填原因且经理可见、长期停滞自动降权）见 `→需求§10.4`
 - **组装方式 = 结转 + 新增（禁止"清空重写"）**：每日组装时先处理昨日遗留（`open` 行按规则结转/失效，`snoozed` 到期行推今日），再插入今日新命中的条目；`done`/`ignored` 状态跨天保留、不重复推。**理由**：避免行数线性膨胀、重复提醒、以及"整表重写导致处理状态丢失"。
@@ -408,7 +410,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 `workorder_id + action + from_status + to_status + reason + operator_id`（升级必填原因）
 
 ### E5 ledger 客户台账
-`contract_id + company_id + product_line_id + customer_level + sign_date + expire_date + 通用字段 + extra_fields` **JSON**（Key 必须已登记 field_template，未登记拒收）；索引 `(product_line_id, expire_date)`；高频统计 Key 走生成列+索引（DBA 逐个评估）
+`contract_id + company_id + product_line_id + customer_level + sign_date + expire_date` + **通用字段（★ 2026-09-11 明确落列：`contact_id` 联系人 / `sales_id` 销售对接人 / `delivery_id` 交付对接人 / `remark` 备注）** + `extra_fields` **JSON**（Key 必须已登记 field_template，未登记拒收）；索引 `(product_line_id, expire_date)`；高频统计 Key 走生成列+索引（DBA 逐个评估）
 
 ### E6 field_template 字段元数据（登记唯一入口）
 `product_line_id + field_key`(`uk(product_line_id, field_key)`，保存后不可变) + `label` + `control_type`(text/number/date/select/multiselect/link，**不可变**) + `required/sort/show_in_list`(可改) + `options` JSON + `status`(active/disabled)
@@ -710,6 +712,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | **V1.12** | **2026-09-10** | L0 联动需求 **V1.9**（七叔拍板第一批 8 条 + 目标层）：①**C1 `dept_id` 标注"恒定不可变"**——掉公海只改"有无 owner"、不改部门，别的部门想要＝自己激活本部门关系（唯一约束含 dept_id，互不冲突），**"跨部门领取"问题消解**；②**C1 `sea_status` 语义改写为"这条关系当前有没有主人"**，部门公海＝`company_sea` 中 `dept_id`=本部门的集合；③**C1 `customer_level` 口径写死**＝本关系（本部门×本产品线）**滚动 12 个月回款额**、每日重算、跨年不清零，并补"看板统计按条/按家"口径；④**C1 `stage_id` 由 6 步扩为 7 步**，新增 **7 已流失（终态）**；⑤**D2 `outcome` 新增 `no_answer`**（快速标记专用，`summary` 可空），补"快速标记必须落库 + 支持批量"口径；⑥**D2 展示口径分界基准由"当前登录人"改为"该关系 owner"**（经理/老板看主跟单人视角）；⑦**新增 A14 `target` 月目标表**（三层：公司/部门/人，`uk_target(period, scope_type, scope_id)`；**进度不落表**、按回款实时 SUM、签约额并列、时间进度应用层算）；⑧字典 `workflow_stage` 补第 7 步"已流失"；⑨§二 ER 总览补 target、§10.1 索引清单补 target（**42 → 43 张**）、§十四 追溯索引补 target；⑩**ORM 定案 Prisma**（2026-09-10 七叔拍板），**§十五 新增第 5 条「Prisma 落库口径」**：生成列在 schema.prisma 中 `@ignore` ＋ migration 手写 `GENERATED ALWAYS AS ... STORED`（应用层不读不写）、分区表手写 `PARTITION BY RANGE`、唯一约束冲突映射 **P2002 → 409/422**、复杂查询/递归 CTE 走 `$queryRaw`、JSON 列禁止反向 `JSON_CONTAINS`。 |
 | **V1.13** | **2026-09-10** | L0 联动需求 **V1.10**（七叔拍板第二批 8 条）：①**D2 `outcome` 由单值扩为两组**——有效沟通 `advanced/stalled/await_reply`；**快速标记三型 `not_contacted`/`no_answer`/`brief_hangup`**（`summary` 可空、支持批量）；②**★ 明确"快速标记不更新 `business_relation.last_event_at`"**（否则点一下就能刷爆掉海倒计时），C1 `last_event_at` 字段说明同步改为"最近一次**有效沟通**事件时间"；③**C1 `stage_id` 的"7 已流失"语义修正**——**判死与流失均掉回公海可被重新领取**（判死阶段保留、流失置 7；重新领取后阶段从 1 重新开始，`relation_stage_log` 留上一轮），取代 V1.12 的"不回流公海终态"；④**C1 `value_tier` 加校验**——`urgency != gray` 的关系必须已标价值（服务端 422）；⑤**F1 `sea_rule` 新增 `effective_from`**——掉海天数变更 **7 天后生效**（插新版本行、旧行 disable 停用不删），生效时在途倒计时从生效日重新起算；⑥**B1 补「老客户」徽标派生口径**——依据＝该公司存在历史合同（跨部门也能查到），**不加字段**；⑦字典 `workflow_stage` 第 7 步说明同步（"本轮结束"≠"不回流公海"）。 |
 | **V1.14** | **2026-09-10** | L0 联动需求 **V1.11**（第三批中"开工前该定"的 7 条）：①**新增 B8 `file_asset` 文件资产表**（多态 biz_type/biz_id，存 file_key 不存 URL，`idx_biz` + `idx_uploader`）——补上原 `payment_record.voucher_file_id` 的悬空外键；②**新增 E7 `contract_split` 合同业绩分配表**（`uk_split(contract_id, employee_id)`、`idx_employee`；无记录＝100% 归 signer；建议建 `v_contract_performance` 视图统一报表口径）；③**C6 `visit_log` 字段精简**——删 `expect_return_at`/`transport`/`destination`/`note`，只留 `depart_at` + `reason` + `actual_return_at` + 可选 `relation_ids`；④**§10.1 索引清单 43 → 45 张**（补 file_asset、contract_split）；⑤§二 ER 总览同步补两张表。**介绍费相关规则一律不建**（`→需求§14.2`）。 |
+| **V1.15** | **2026-09-11** | **L0 联动 `schema.prisma` 落地**（写 schema 时发现两处"规则落不了地"的缺口，补齐）：①**D4 `daily_agenda` 新增 `action_reason` / `snooze_count`**——支撑「ignored 必填原因」与「同一条最多 snooze 3 次」防逃逸规则（`→需求§10.4`）；②**E5 `ledger` 明确"通用字段"落列**＝`contact_id`（联系人）/ `sales_id`（销售对接人）/ `delivery_id`（交付对接人）/ `remark`（备注）（`→需求§7.7`）。同步：`服务端/prisma/schema.prisma`（45 张表）已含这些字段并通过 Prisma 6.19 校验。 |
 
 ---
 

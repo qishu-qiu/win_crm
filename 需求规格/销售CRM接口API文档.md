@@ -1,8 +1,8 @@
-# 销售 CRM 接口 API 文档 V1.0
+# 销售 CRM 接口 API 文档 V1.2
 
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》V1.11（需求规格/）、《销售CRM数据架构文档》V1.14（需求规格/）。
-> 生效日期：2026-09-10 ｜ 状态：**V1.1**（对齐校正版 · 已关闭全部对齐缺口）。
+> 配套真相源：《销售CRM业务需求文档》V1.11、《销售CRM数据架构文档》V1.15、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》V1.4（均 需求规格/）。
+> 生效日期：2026-09-11 ｜ 状态：**V1.2**（数据结构版 · 新增 §五 请求/响应结构）。
 
 ---
 
@@ -330,7 +330,135 @@
 
 ---
 
-## 五、跨模块关键流程（实现务必对齐）
+## 五、数据结构（请求 / 响应）★（2026-09-11 新增）
+
+> **本章定义各接口的请求体（DTO）与响应体（VO）**。**接口结构 ≠ 表结构**——出参须**脱敏**、含**派生字段**、剔除**内部字段**（如 `password_hash`、审计列）。
+> 记号：`?`=可选，`[]`=数组，`|`=枚举取值；时间 ISO8601（`2026-09-05T09:30:00+08:00`）；金额为 number（前端做 `¥` 千分位）；金额/手机脱敏见 2.8。
+> **枚举出参一律「英文码」**，展示文案由前端读 `GET /dict/items` 本地映射（**不逐条下发 label**）；**实体引用**返 `xxx_id` ＋ 展示名（`xxx_name` 或 `{id,name}` 对象）。
+
+### 5.1 公共对象
+
+**Envelope（所有响应外层）**
+```jsonc
+{ "code": 0, "message": "ok", "request_id": "r-x", "data": {} }
+```
+**PageResult（列表类 `data`）**
+```jsonc
+{ "list": [], "total": 120, "page": 1, "page_size": 20 }
+```
+**列表通用入参（query）**：`page=1`、`page_size=20`、`order_by`、`desc=false`、`keyword?`、`start_at?`、`end_at?`
+**实体通用出参**：`id`、`created_at`、`updated_at`、`created_by_id?`、`created_by_name?`
+**实体引用（内嵌）**：`dept:{id,name}`、`product_line:{id,name,color_key}`、`owner:{id,name,avatar}`、`contact:{id,name}`、`company:{id,name}`
+**脱敏出参形态（[铁律]）**
+```jsonc
+// 跨业务线金额：amount 置 null + 掩码，仅露非金额信息
+{ "amount": null, "amount_masked": "***", "cooperated": true, "sign_date": "2026-08-01" }
+// 非归属部门手机号
+{ "phone_masked": "****1234" }   // 不给 phone
+// 公海未领取：不返跟单全文
+{ "try_count_30d": 5, "last_summary": "客户说下周答复", "stuck_stage": 3 }
+```
+**派生字段（出参算、库不存）**：`old_customer`（有历史合同）、`address_maintained`（address 或坐标为空→false）、`drop_in_x_days`、`overdue`、`is_weekly`、`pay_progress`、`expire_level`、`stat_unit`（`relation`｜`company`）。
+
+### 5.2 认证 account
+- `POST /account/login` req `{phone,password}` → resp `{access_token,refresh_token,user:UserVO}`
+- `GET /account/me` → `UserVO` ＝ `{id,name,role,dept:{id,name},managed_dept_ids:[],permissions:{"perm_key":"level"}}`
+- `PUT /account/preferences` req `{theme:"light"|"dark",notif?:{...}}`
+
+### 5.3 组织与权限 org / dict
+- 部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`
+- 员工 `{id,work_no,name,phone,primary_dept:{id,name},extra_depts:[],product_lines:[],direct_manager:{id,name},roles:["sale"],status}`
+- `POST/PUT /org/employees` req `{name,phone,work_no?,primary_dept_id,extra_dept_ids?:[],product_line_ids?:[],direct_manager_id?,role_codes:[],password?}`
+- 部门规则 `{dept_id,level_tiers:[{level,min_amount}],gray_remind_days,gray_release_days,s_social_days,newbie_first_follow_hours,ask_help_days,contact_trait_max,updated_at}`
+- 产品线 `{id,name,code,color_key,dept_ids:[],service_cycle_days,status}`
+- 角色 `{code,name,is_builtin}`；权限矩阵行 `{perm_key,role_code,level}`
+- 字典 `type:{code,name}`、`item:{id,item_code,label,sort,builtin,status}`
+
+### 5.4 公司档案 company
+- 列表项 `{id,full_name,city,industry_l1,scale,credit_code?,relation_count,old_customer,address_maintained,updated_at}`
+- 详情 `{...company字段, completeness:{c1,c2,c3}, profile_tags:{identity:[{tag_id,tag_code,label}],policy:[],decision_chain:{tag_id,label}?}, contacts:[ContactBrief], relations_summary:[{dept,product_line:{id,name,color_key},sign_date,amount|amount_masked}]}`
+- 建档/改 req `{full_name,industry_l1?,industry_l2?,province?,city?,district?,scale?,website?,address?,bank_name?,invoice_title?,tax_no?,credit_code?,longitude?,latitude?,aliases?:[]}`
+- `POST /companies/:id/profile-tags` req `{group_code,tag_id}`
+- `POST /companies/search-dup` req `{phone?,credit_code?,name?}` → resp `{candidates:[{id,full_name,credit_code_masked,similarity,match_type:"same"|"high_sim"}],suggest:"use_exists"|"create_new"}`
+- `POST /companies/:id/merge` req `{loser_id,decision_chain_tag_id?}`（survivor＝路径 `:id`）
+- `GET /companies/:id/contacts` → `[ContactBrief]`（含历史/已离职标记）
+
+### 5.5 联系人 contact
+- `ContactBrief` `{id,name,position?,phone|phone_masked,decision_role,is_current}`
+- 详情 `{id,name,phone|phone_masked,extra_phones:[{type,number,note}],wechat,email,gender,birthday,decision_role,tags:[],traits:[{trait_id,trait_code,label}],status,employments:[{company_id,company_name,position,joined_at,left_at,is_current}]}`
+- 建档/改 req `{name,phone,extra_phones?:[],wechat?,email?,gender?,birthday?,decision_role?,tags?:[],company_id?,position?}`
+- `PUT /contacts/:id/traits` req `{trait_ids:[]}`（超 `contact_trait_max` → **422/20402**）
+- `POST /contacts/:id/merge` req `{winner_id}`（经理权限）
+- `GET /contacts/:id/employments` → 就职/跳槽历史（同上 employments 形态）
+- `POST /contacts/phone-change/apply` req `{contact_id,new_phone}` → `approval_id`
+- 建号/改号命中历史号 → 出参 `phone_history_hint:"曾属于 XX"`（**提示不拦截**）
+
+### 5.6 业务关系 relation（核心）
+- **列表项** `{id,company:{id,name},dept:{id,name},product_line:{id,name,color_key},stage:1-7,urgency,value_tier,customer_level,owner:{id,name},last_event_at,drop_in_x_days,overdue,competition,amount|amount_masked,old_customer,is_weekly}`
+- **详情** ＝ 列表项 ＋ `{next_action_hint,sea_status,competitors:[{id,name,positioning}],labels:{risk:[{label_id,label_code,label}],other:[]},members:[{employee:{id,name},member_type:"owner"|"collaborator",source,valid_until?}],stage_logs:[{from_stage,to_stage,action,reason?,operator:{id,name},created_at}],try_count_30d}`
+- `POST /relations`（激活）req `{company_id,dept_id,product_line_id}`（撞 `uk_active_rel` → **409/20401**）
+- `PUT /relations/:id` req `{urgency?,value_tier?,next_action_hint?,competition?,competitor_id?}`
+- `PUT /relations/:id/stage` req `{to_stage,confirm?:true}` → resp `{suggested_stage?,stage_log}`
+- `POST/DELETE /relations/:id/members` req `{employee_id,member_type,source:"collaborate"|"ask_help",valid_until?}`
+- `POST/DELETE /relations/:id/labels` req `{group_code,label_id}`
+- `POST /relations/:id/transfer` req `{to_employee_id,reason?}`
+- `POST /relations/batch-transfer` req `{from_employee_id,to_employee_id,relation_ids?:[]}`
+- `PUT /relations/:id/competition` req `{competition,competitor_id?,competition_note?}`
+
+### 5.7 行动引擎 commitment / event / cadence / agenda
+- **事件项（跟单卡）** `{id,action_type,summary,outcome,pain_point:{id,label}?,competition?,actor:{id,name},contact:{id,name}?,duration_min?,event_at,branch:"main"|"sub",attachments:[]}`
+- `POST /relations/:id/events` req `{contact_id?,action_type,summary?,outcome?,stage_forward?,pain_point_id?,competition?,competitor_id?,competition_note?,duration_min?,mentioned_user_ids?:[],promise?:{party,ctype,content,due_at?},appointment_id?,visit_log_id?}`
+- `POST /events/quick-mark` req `{relation_ids:[],outcome:"not_contacted"|"no_answer"|"brief_hangup"}`（**不更新 `last_event_at`**）
+- 承诺 `{id,relation_id,party:"me"|"them"|"verdict",ctype,content,due_at,remind_at,status,done_at?}`
+- 节奏规则 `{id,scope_dept_id?,scope_line_id?,trigger,suggest_action,soft,enabled,sort}`
+- 动线条目 `{id,ref_type,ref_id,relation:{id,name},contact?,reason,priority,action_hint,status,snooze_count}`
+- `POST /today-agenda/:id/action` req `{action:"done"|"snoozed"|"ignored",reason?}`（snoozed 上限 3；**ignored 必填 reason** → 422/20403）
+
+### 5.8 预约 / 外出 appointment / visit
+- 预约 `{id,relation_id,contact?,appointment_at,note,status,drop_in_x_days}`
+- `POST /appointments` req `{relation_id,contact_id?,appointment_at,note?}`；`PUT /appointments/:id` 改期 req 同（写 `reschedule_log`）
+- `POST /appointments/:id/complete` → resp `{event_id}`（服务端强制生成事件，否则 **422**）
+- `POST /visits` req `{depart_at,reason,relation_ids?:[]}`；`POST /visits/:id/return` req `{}`（写 `actual_return_at`）
+
+### 5.9 合同 / 回款 / 分配 contract / payment / split
+- 列表项 `{id,contract_no,company:{id,name},product_line,signer:{id,name},amount,paid_amount,pay_progress,status,sign_date,service_end,expire_level:0|30|60|90}`
+- 详情 ＋ `{payments:[{id,amount,paid_at,method,voucher?:{file_id,file_name}}],splits:[{employee:{id,name},percent}],attachments:[]}`
+- 创建 req `{relation_id,contact_id?,amount,pay_type?,sign_date,service_start?,service_end?,auto_renew?,remind_days?:[]}`
+- `POST /contracts/:id/payments` req `{amount,paid_at,method?,voucher_file_key?}`
+- `PUT /contracts/:id/splits` req `{splits:[{employee_id,percent}]}`（**合计须 100 → 422**）
+
+### 5.10 工单 workorder
+- `{id,order_no,type:"after_sale"|"opportunity",title,priority?,assignee:{id,name}?,sla_deadline?,overdue,relation:{id,name}?,status}`
+- 建/改 req `{type,title,content?,relation_id?,source?,priority?,assignee_id?,sla_deadline?,est_effort_min?}`
+- `POST /workorders/:id/convert` req `{to_type}`
+
+### 5.11 客户台账 ledger / field
+- 列表行 ＝ 通用列 `{contract_no,company:{id,name},contact?,sales?,delivery?,customer_level,sign_date,expire_date,remark}` ＋ `extra_fields`（按字段模板动态）
+- `GET /ledgers` 出参附 `columns:[{field_key,label,control_type,show_in_list,status}]` 供前端**动态渲染**
+- `POST /product-lines/:id/field-templates` req `{field_key,label,control_type,required?,sort?,show_in_list?,options?}`（**field_key / control_type 保存后不可改**）
+
+### 5.12 审批中心 approval
+- 待办项 `{id,type,title,applicant:{id,name},target:{type,id},payload,waiting_hours,urgent:bool}`
+- **payload 分型**：`transfer{to_employee_id,reason?}`｜`collaborate{employee_id,valid_until?}`｜`phone_change{contact_id,old_phone,new_phone}`｜`phone_unlock{contact_id,relation_id?}`
+- `POST /approvals/:id/approve` req `{comment?}`；`POST /approvals/:id/reject` req `{comment}`（**必填**）
+- `POST /phone-unlock/apply` req `{contact_id,relation_id?}` → resp `{approval_id}`；批准后目标联系人出参带 `phone` 与 `unlocked_until`
+
+### 5.13 报表 / 目标 report / target
+- 看板 `GET /reports/dashboard` → `{kpi:{today_new,today_todo,month_signed:{amount,chain_ratio}},pending_todo:[],warnings:[{type,...}],dept_compare:[],top_sales:[],zombie_weekly:[],sea_todo:[]}`
+- 目标 `POST/PUT /targets` req `{period,scope_type:"company"|"dept"|"employee",scope_id,amount,remark?}`
+- 进度 `GET /targets/progress` → `{stat_unit:"relation"|"company",items:[{scope_type,scope_id,name,target_amount,paid_amount,signed_amount,rate,time_rate,diff_points,adjusted:bool}]}`
+- 各报表统一 `{summary:{...},list:[]}`；涉客户等级统计必带 `stat_unit`（条/家）
+
+### 5.14 通知 / 复盘 / 竞品 / 文件 / 系统
+- 通知项 `{id,type,title,content,biz:{type,id},read:bool,created_at}`
+- 复盘 `POST /relations/:id/review` req `{review_type:"win"|"loss"|"churn",why_code?,competitor_id?,detail?}`；`GET /reviews/win-library` 项 `{id,review_type,company,detail,manager_note,published_at}`
+- 竞品 `{id,name,product_line_id,positioning?,note?,status}`
+- 文件 `POST /files/asset`（multipart）→ `{file_id,file_key,file_name,file_size,mime_type}`；`GET /files/:id` → 服务端鉴权后返回短时下载地址
+- 系统 `GET/PUT /system/config` `{config_key,value}`；`GET /operation-logs` 项 `{id,occurred_at,operator:{id,name},action,target:{type,id},ip}`
+
+---
+
+## 六、跨模块关键流程（实现务必对齐）
 
 1. **撞单**：激活 `uk_active_rel` 撞 → 409/20401 → 前端提示「已有归属」并给转交/协同入口；同部门显归属人、跨部门只说「已有其他部门跟进」不露名（`→需求§6.3`）。
 2. **协同**：`collaborator`（审批通过，可带 `valid_until`）可共同写跟单+看全文；`ask_help`（轻量临时，默认7天自动收回，不授读权）——两码事（`→需求§13` `→架构C2`）。
@@ -340,9 +468,10 @@
 
 ---
 
-## 六、修改记录
+## 七、修改记录
 
 | 版本 | 日期 | 说明 |
 |---|---|---|
 | V1.0 | 2026-09-10 | 起步版：锁通用约定 + 全量接口目录（约 50 接口）+ 分模块关键契约；逐接口字段随开发回填，业务规则以 `→需求` / `→架构` 指针为准 |
 | **V1.1** | 2026-09-11 | **对齐校正版（全部补齐）**：对照需求 V1.11 三方对账，接口 **~50 → ~78**。①**组织架构补 CRUD**（部门增改停用/部门经理多对多/员工入职·改部门·改直属经理·离职/角色分配/离职批量转交/产品线新建/字典项新增）——原来只有 G；②补**墓碑合并**（公司撞码 6 步单事务、联系人经理合并）、**跳槽/就职历史**、联系人**删除（经理）**、**手机号变更申请**（原枚举误列 `review`、漏 `phone_change`，已校正）；③补 **推进阶段**（建议态+限频+留痕）、**今日动线处理反馈**（done/snoozed/ignored，snooze≤3、ignored 必填原因）、**外出登记回来点一下**；④补 **工单双向流转转换**、**离职批量转交**；⑤**报表从 3 张补到 9 张**（全公司月报/公海/续约预警/工单SLA/死因看板/流失原因分布/目标进度）；⑥补 **复盘消费视图**（赢单弹药库/防守清单）+ **竞品名册**；⑦补 **文件上传下载**（原只在 §2.10 提及、总览未列）、系统配置、操作留痕审计、个人外观偏好；⑧新增 §4.14 补齐端点契约；⑨§1.2 立「需求 V1 做 → 接口必须有端点」对齐铁律 |
+| **V1.2** | 2026-09-11 | **数据结构版（七叔定）**：新增 **§五 数据结构（请求 / 响应）**——①§5.1 公共对象（Envelope / PageResult / 列表入参 / 实体通用出参 / 实体引用 / **脱敏出参形态** / **派生字段清单**）；②§5.2~5.14 覆盖全部模块的**请求体 DTO 与响应体 VO**（含 approval payload 分型、ledger 动态列 `columns`、target 进度 `time_rate`/`stat_unit` 等）。**明确「接口结构 ≠ 表结构」**（须脱敏、含派生字段、剔除内部字段）。原 §五 跨模块流程顺延为 §六、§六 修改记录顺延为 §七。 |

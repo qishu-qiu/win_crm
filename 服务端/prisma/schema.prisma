@@ -992,6 +992,25 @@ model ContractSplit {
   @@map("contract_split")
 }
 
+// 签约校验清单：挂产品线，管理员配置（P0-③，→需求§7.3 / →架构E8）
+model SignChecklist {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  product_line_id BigInt   @db.UnsignedBigInt
+  scope           String   @db.VarChar(16) // company | relation | ledger
+  field_key       String   @db.VarChar(64)
+  label           String   @db.VarChar(128)
+  required        Boolean  @default(true)
+  sort            Int      @default(0)
+  status          String   @default("active") @db.VarChar(16) // active | disabled (T5 停用不删)
+  created_at      DateTime @default(now()) @db.DateTime(0)
+
+  product_line ProductLine @relation(fields: [product_line_id], references: [id])
+
+  @@unique([product_line_id, scope, field_key], map: "uk_line_scope_field")
+  @@index([product_line_id, status, sort], map: "idx_line_status")
+  @@map("sign_checklist")
+}
+
 // =============================================================================
 // 域 F：公海与流转
 // =============================================================================

@@ -841,6 +841,22 @@ CREATE TABLE `contract_split` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+CREATE TABLE `sign_checklist` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `product_line_id` BIGINT UNSIGNED NOT NULL,
+    `scope` VARCHAR(16) NOT NULL,
+    `field_key` VARCHAR(64) NOT NULL,
+    `label` VARCHAR(128) NOT NULL,
+    `required` TINYINT(1) NOT NULL DEFAULT 1,
+    `sort` INT NOT NULL DEFAULT 0,
+    `status` VARCHAR(16) NOT NULL DEFAULT 'active',
+    `created_at` DATETIME(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+
+    INDEX `idx_line_status`(`product_line_id`, `status`, `sort`),
+    UNIQUE INDEX `uk_line_scope_field`(`product_line_id`, `scope`, `field_key`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- CreateTable
 CREATE TABLE `sea_rule` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -1011,6 +1027,7 @@ ALTER TABLE `field_template` ADD CONSTRAINT `field_template_product_line_id_fkey
 
 -- AddForeignKey
 ALTER TABLE `contract_split` ADD CONSTRAINT `contract_split_contract_id_fkey` FOREIGN KEY (`contract_id`) REFERENCES `contract`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `sign_checklist` ADD CONSTRAINT `sign_checklist_product_line_id_fkey` FOREIGN KEY (`product_line_id`) REFERENCES `product_line`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `sea_rule` ADD CONSTRAINT `sea_rule_dept_id_fkey` FOREIGN KEY (`dept_id`) REFERENCES `department`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

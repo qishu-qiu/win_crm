@@ -1,7 +1,7 @@
-# 销售 CRM 接口 API 文档 V1.5
+# 销售 CRM 接口 API 文档 V1.6
 
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》V1.13、《销售CRM数据架构文档》V1.17、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》V1.5（均 需求规格/）。
+> 配套真相源：《销售CRM业务需求文档》V1.16、《销售CRM数据架构文档》V1.19、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》V1.8（均 需求规格/）。
 > 生效日期：2026-09-11 ｜ 状态：**V1.4**（B 组澄清版 · 紧随需求 V1.13 / 数据架构 V1.17）。
 
 ---
@@ -232,7 +232,7 @@
 ### 4.8 合同 / 回款 contract / payment / split
 - `POST /contracts/:id/payments`：回款流水；`voucher_file_id` 指向 `file_asset`（补上悬空外键，`→架构B8`）。
 - `POST /contracts/:id/splits`：默认 signer 100%；填「给谁多少」合计须 100%；**不配费率/不分类型/不走审批**（`→需求§7.6` `→架构E7`）。
-- 签约校验：点「签合同」时按**本条业务线必填清单**卡（完善度百分比只展示不卡，`→需求§7.3` `→需求§十六`）。
+- 签约校验：点「签合同」时按**本条业务线必填清单**卡（完善度百分比只展示不卡，`→需求§7.3` `→需求§十六`）；创建前服务端按 `sign_checklist` 预校验＋硬卡（见 §5.15 / §5.9 校验结构），缺失返回 422 + 缺失清单。
 
 ### 4.9 工单 workorder
 - `type` ∈ `after_sale` / `opportunity`（双分类）；商机↔工单双向流转（`→需求§6.4` `→架构E3`）。
@@ -428,6 +428,7 @@
 - 创建 req `{relation_id,contact_id?,amount,pay_type?,sign_date,service_start?,service_end?,auto_renew?,remind_days?:[]}`
 - `POST /contracts/:id/payments` req `{amount,paid_at,method?,voucher_file_key?}`
 - `PUT /contracts/:id/splits` req `{splits:[{employee_id,percent}]}`（**合计须 100 → 422**）
+- **签约校验（创建前）**：`POST /contracts` 先按 `sign_checklist`（本 `product_line_id`）逐项校验；缺失任一 → **422 / `20402` 类** + 响应 `{missing:[{scope,field_key,label,goto}]}`（`goto` = 内联补/跳补锚点，见 §5.15）；全部齐备才落库。
 
 ### 5.10 工单 workorder
 - `{id,order_no,type:"after_sale"|"opportunity",title,priority?,assignee:{id,name}?,sla_deadline?,overdue,relation:{id,name}?,status}`
@@ -458,6 +459,16 @@
 - 文件 `POST /files/asset`（multipart）→ `{file_id,file_key,file_name,file_size,mime_type}`；`GET /files/:id` → 服务端鉴权后返回短时下载地址
 - 系统 `GET/PUT /system/config` `{config_key,value}`；`GET /operation-logs` 项 `{id,occurred_at,operator:{id,name},action,target:{type,id},ip}`
 
+### 5.15 签约校验清单 sign_checklist（管理员配置）
+- **查询** `GET /sign-checklists?product_line_id=` → 该线全部项 `[{id,product_line_id,scope,field_key,label,required,sort,status}]`
+- **改** `PUT /sign-checklists/:id` req `{required?,sort?,status?}`（仅 `required`/`sort`/`status` 可改；`product_line_id`/`scope`/`field_key` 保存后不可变，参照 `field_template` 铁律）→ **管理员权限**，其余角色 403
+- **新增项** `POST /sign-checklists` req `{product_line_id,scope,field_key,label,required?}`（超 `uk_line_scope_field` → 409）；`ledger` 类 `field_key` 须已登记 `field_template` 否则 422
+- **删除** = 置 `status=disabled`（T5 停用不删，不物理删）
+- **数据结构（DTO）**：
+  - `SignChecklistItem` `{id,product_line_id,scope:"company"|"relation"|"ledger",field_key,label,required:bool,sort:int,status:"active"|"disabled"}`
+  - `ContractSignMissing` `{missing:[{scope,field_key,label,goto:"inline_company"|"goto_relation_value"|"goto_ledger"}]}`（签约校验 422 响应体）
+- 落点：`→架构 E8 sign_checklist`、`→需求§7.3` 签约校验清单落地。`scope=company` 字段校验看 `company` 表（共享，有值即过）；`scope=relation` 看 `business_relation.value_tier`/签约联系人；`scope=ledger` 看 `ledger.extra_fields`。
+
 ---
 
 ## 六、跨模块关键流程（实现务必对齐）
@@ -480,3 +491,4 @@
 | **V1.3** | 2026-09-11 | **自查校正版**：①§5.3 部门规则出参**删除 `gray_release_days`**（灰度寿命只管提醒、取消释放候选，与需求 §8.2 对齐）；②配套真相源版本同步（需求 V1.12 / 数据架构 V1.16）。 |
 | **V1.4** | 2026-09-11 | **B 组澄清版**：①§2.8 补**「报表/看板不脱敏」**（经理/老板出口返回真实金额；脱敏只管"销售看他人/跨部门"的列表与详情）；②§5.5 特质校验口径细化为**「只拦新增」**（不增量则放行）；③配套真相源版本同步（需求 V1.13 / 数据架构 V1.17 / 前端 V1.5）。 |
 | **V1.5** | **2026-09-11** | **P0-② 录入可跳公司（L0 联动需求 V1.15 / 数据架构 V1.18）**：§5.7 行动引擎新增「待关联阶段事件」端点 `POST /contacts/:id/events`（`relation_id` 由服务端置空，配合 §6.1 模型 B「待关联公司」）；`POST /events/quick-mark` 由仅 `relation_ids` 扩为 `relation_ids?` + `contact_ids?`（至少一组非空），支持"只录手机号"阶段的批量快速标记；关联公司激活关系后服务端批量回填 `relation_id`（`→架构 D2`）。配套真相源同步（需求 V1.15 / 数据架构 V1.18 / 前端 V1.7）。 |
+| **V1.6** | **2026-09-11** | **P0-③ 签约校验清单（L0 联动需求 V1.16 / 数据架构 V1.19）**：①§4.8 签约校验句补「服务端按 sign_checklist 预校验+硬卡」；②§5.9 合同创建 req 补「签约校验（创建前）」422 + 缺失清单结构 `{missing:[{scope,field_key,label,goto}]}`；③**新增 §5.15 sign_checklist（管理员配置）**——查询/改/新增项/停用接口 + `SignChecklistItem` / `ContractSignMissing` DTO（`goto` 内联补/跳补锚点）；④配套真相源同步（需求 V1.16 / 数据架构 V1.19 / 前端 V1.8）。 |

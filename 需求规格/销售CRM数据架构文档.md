@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.18（现行有效）
+# 销售 CRM 数据架构文档 V1.20（现行有效）
 
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
@@ -10,8 +10,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.17（现行有效）** / 2026-09-11 |
-| 上游 | 《销售CRM业务需求文档》V1.13（业务规则唯一来源） |
+| 版本 / 日期 | **V1.20（现行有效）** / 2026-09-11 |
+| 上游 | 《销售CRM业务需求文档》**V1.17**（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》**V1.3**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.4** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
@@ -328,6 +328,11 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 - **★ 快速标记口径（`→需求§6.3` / §10.2，2026-09-10 定）**：无效沟通也**必须写一条事件**（`outcome` ∈ `not_contacted` / `no_answer` / `brief_hangup`；`summary` 可空），否则"这个客户打过多少次"统计失真。批量标记＝一次请求写多行，逐行落 `action_event`（行数不多，无需额外汇总）。
   - **⚠ 关键：快速标记『不』更新 `business_relation.last_event_at`**——只有**有效沟通**事件才更新它。否则销售对 100 个客户点一下快速标记，`sea_rule` 的跟进倒计时就被刷爆、客户永不掉海。
   - **实现**：`last_event_at` 回写逻辑中**排除** outcome ∈ 三型 quick_mark 的事件；"最近 30 天尝试联系 N 次"另行按这三型 COUNT（走现有 `idx(relation_id, event_at)`）。
+- **★ 多联系人口径（2026-09-11 七叔定，`→需求§6.3` / §10.2；无表结构变更）**：一条 `relation_id` 下可**同时**存在多个 `contact_id` 的事件（老板 / 招商 / 财务各跟各的）——**见谁都算有效跟进**：`last_event_at` 回写与"跟进次数"统计**一律计入，不按 `contact.decision_role` 区分含金量**。
+  - **不新增"关系级关键决策人"字段 / 关联表**：`decision_role` 是 `contact` 自身属性（跟人走、跨业务线复用）。若按关系再存一份，同一人在法律线是决策人、在财税线是影响人时会产生**双重维护与口径打架**。
+  - **防"吊着"的闸门是 `sea_rule` 的「N 天阶段未推进」，不是"见了谁"**——只见执行人刷跟单、阶段不动，照样掉海。**经理盯的是阶段/工作流变化**（复用 `relation_stage_log` 与 `business_relation.stage_id`，无需新数据）。
+  - **录入**：`contact_id` 选填；关系下已有联系人时前端默认带出上次跟进的联系人（`idx(relation_id, event_at)` 取最近一条），**一点即选、不选也可提交**，不硬卡（T2）。
+  - 查询复用现有 `idx(relation_id, event_at)`（时间线混排）与 `idx_contact(contact_id, event_at)`（按人回看），**不新增索引**。
 
 ### D3 cadence_rule 节奏规则（加提醒=加行）
 | 字段 | 说明 |
@@ -427,6 +432,17 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 - **★ 报表口径统一走视图**：建 `v_contract_performance` ＝ `contract × contract_split`（无 split 则 `signer_id` 占 100%），**业绩统计一律读这张视图**，避免每处 SQL 各写一遍 `COALESCE` 造成口径漂移。
 - **业绩分配改不改签单人？** 不改。`contract.signer_id` 仍是签单人（锁历史）；`contract_split` 只影响**业绩怎么摊**（`→需求§5.2`）。
 
+### E8 sign_checklist 签约校验清单 ★新增（2026-09-11，`→需求§7.3`）
+`product_line_id` + `scope`(company/relation/ledger) + `field_key` + `label`(中文显示名，弹窗用，前端不硬编码) + `required`(bool，可改) + `sort` + `status`(active/disabled，T5 停用不删)
+- **唯一约束** `uk_line_scope_field(product_line_id, scope, field_key)`——同产品线同层级同字段仅一条配置。
+- **字段来源（三层）**：
+  - `scope=company`：`field_key` ∈ {credit_code, registered_capital, legal_person, registered_address, industry, region}；**公司级，补全一次全公司共享**——校验看 `company` 表该字段非空即过，**不论谁、哪条线补的**。
+  - `scope=relation`：`field_key` ∈ {value_tier, contact}；校验看 `business_relation.value_tier` 非空（开发价值已标）／ `company_contact` 有 `is_current=1` 记录（签约联系人已关联）。
+  - `scope=ledger`：`field_key` ＝ 该线 `field_template.field_key`（台账差异化字段）；校验看 `ledger.extra_fields` 该 key 存在且非空。
+- **默认清单（系统播种）**：每条产品线初始化 `scope=company` 6 项（credit_code/registered_capital/legal_person/registered_address/industry/region，`required=true`）+ `scope=relation` 的 value_tier 与 contact（`required=true`）。管理员可在「系统设置 → 产品线」增删改——`required`/`sort`/`status` 可改，`product_line_id`/`scope`/`field_key` 保存后不可变（参照 `field_template` 铁律）。
+- **校验逻辑（服务端 `POST /contracts` 创建前）**：取该 `product_line_id` 下 `status=active AND required=true` 的全部项 → 逐项查对应层级字段是否非空 → 任一缺失 → **422（业务码 `20402` 类，语义"签约必填未填"）＋ 返回缺失清单**（每项 `{scope, field_key, label, goto}` 供前端内联补 / 跳补：company 级内联补、relation/ledger 级跳对应页）。
+- 索引：`uk_line_scope_field(product_line_id, scope, field_key)`、`idx_line_status(product_line_id, status, sort)`。
+
 ---
 
 ## 八、域 F：公海与流转（`→需求§6.3` §12）
@@ -476,7 +492,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 事件写放大 | `last_event_at` / `next_action_hint` 由事件写入事务冗余更新 |
 | 地理检索（预留） | `company.idx_geo(latitude, longitude)` |
 
-### 10.1 全表索引清单（45 张 · 落库唯一依据）
+### 10.1 全表索引清单（46 张 · 落库唯一依据）
 
 > 约定：`uk`=唯一索引（业务不变量，撞则 409/422）；`idx`=普通索引（性能）；索引名 `uk_/idx_` 前缀 + 表意后缀。**加粗=业务关键约束，不可省**。本清单为落库/评审的**唯一索引依据**，实现时逐表比对，缺一不可。
 
@@ -546,6 +562,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | ledger | `idx_line_expire(product_line_id, expire_date)`、`idx_contract(contract_id)`、`idx_company(company_id)`；高频统计 key 走生成列（逐个评估） |
 | field_template | **`uk_line_key(product_line_id, field_key)`**、`idx_line_sort(product_line_id, status, sort)` |
 | **contract_split** | **`uk_split(contract_id, employee_id)`**、`idx_employee(employee_id)` |
+| **sign_checklist** | **`uk_line_scope_field(product_line_id, scope, field_key)`**、`idx_line_status(product_line_id, status, sort)` |
 
 **域 F 公海**
 
@@ -689,7 +706,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 > **一句话分工**：**Prisma 管"类型安全 ＋ 日常 CRUD"，MySQL 原生特性（生成列 / 分区 / CTE）交给手写 migration 与 `$queryRaw`。** 二者不冲突，但必须在**第一次建库时就把 migration 写对**——后期再改成本高。
 >
-> **对账便利（选 Prisma 的理由之一）**：`schema.prisma` 是纯文本、**45 张表**全集中在一个文件里，七叔可直接对照本文档 §二～§九 逐表检查，与《数据架构文档》保持一一对应。
+> **对账便利（选 Prisma 的理由之一）**：`schema.prisma` 是纯文本、**46 张表**全集中在一个文件里，七叔可直接对照本文档 §二～§九 逐表检查，与《数据架构文档》保持一一对应。
 
 ---
 
@@ -716,6 +733,8 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | **V1.16** | **2026-09-11** | **开发前自查校正（L0 联动需求 V1.12）**：①**A8 `dept_rule` 删除 `gray_release_days`**、**C1 `business_relation` 删除 `gray_release_at`**——灰度寿命规则只管提醒、**取消"释放候选"**（与需求 §8.2 对齐）；②**F2 `sea_record.reason` 枚举删除 `gray_release`**；③**§十二 定时任务「灰度寿命」行**改为"只提醒下结论，不落 `gray_release_at`"；④**E3 工单 `type` 枚举 `aftersale` → `after_sale`**（与接口 §2.6 统一）；⑤§一「上游」→ 需求 V1.12、「下游」→ 接口 V1.3 / 设计规范 V1.0 / 前端 V1.4；⑥§十七 FAQ A.4 删"谁先签约谁得"（改"各签各的（互不干扰）"）。**同步：`schema.prisma` + `migrations/0001_init` 删这两个字段。** |
 | **V1.17** | **2026-09-11** | **B 组澄清落地（L0 联动需求 V1.13）**：①**B4 `contact_trait`** 补口径——**422 只拦「新增」**，更新后数量 ≤ 当前已有数量则放行（防"调小上限后存量超限特质无法编辑"）；②**§十一 权限脱敏** 补口径——**脱敏只作用于"销售看他人私海 / 跨部门关系"的列表与详情；报表/看板/汇总不脱敏**（经理、老板出口返回真实金额）；③§一「上游」→ 需求 V1.13。 |
 | **V1.18** | **2026-09-11** | **P0-② 录入可跳公司 + 撞库（L0 联动需求 V1.15）**：①**D2 `action_event.relation_id` 改为可空**，并加 **CHECK：`relation_id` 与 `contact_id` 至少一非空**（配合需求§6.1 模型 B「待关联公司」——只录手机号未问到公司时，跟单/快速标记/承诺只绑 `contact_id`，关联公司激活关系后服务端批量回填 `relation_id`，历史不断）；②**D2 索引补 `idx_contact(contact_id, event_at)`**（孤立跟单查询）；③**§十 索引清单同步补 `idx_contact`**。**schema.prisma（backend 锁需求后从本架构重建）须同步 relation_id `@ignore`? — 否，relation_id 仍写库但允许 NULL，migration 手写 `ALTER ... MODIFY relation_id ... NULL` + 加 CHECK 约束**；当前 backend 未落地，以本架构为唯一真相源。 |
+| **V1.19** | **2026-09-11** | **P0-③ 签约校验清单落地（L0 联动需求 V1.16）**：①**新增 E8 `sign_checklist` 签约校验清单表**（挂 `product_line_id`，`scope`∈company/relation/ledger + `field_key` + `label` + `required`/`sort`/`status`(停用不删)；`uk_line_scope_field(product_line_id, scope, field_key)` + `idx_line_status`）；②**默认清单系统播种**（公司级 6 项＋关系级 value_tier/contact，`required=true`），管理员在「系统设置→产品线」增删改；③**校验逻辑**：`POST /contracts` 创建前取该线 `active AND required` 项逐项查对应层级字段，缺失→422＋缺失清单（scope+label+goto）；④**§10.1 索引清单 45 → 46 张**、§二 ER 总览同步。**`服务端/prisma/schema.prisma` 须同步新增 `SignChecklist` model + migration（P0-② 已确认该 schema 实际存在并已建）。** |
+| **V1.20** | **2026-09-11** | **D2 多联系人口径落地（L0 联动需求 V1.17，七叔定；★ 无表结构变更、无新增索引、无新增字段）**：①一条 `relation_id` 下可同时存在多个 `contact_id` 的事件，**见谁都算有效跟进**——`last_event_at` 回写与跟进次数**不按 `contact.decision_role` 区分含金量**；②**不新增"关系级关键决策人"字段 / 关联表**（`decision_role` 跟人走、跨业务线复用，按关系另存会双重维护并打架）；③**防"吊着"的闸门＝「N 天阶段未推进」，不是"见了谁"**（复用 `relation_stage_log` / `business_relation.stage_id`，无需新数据）；④`contact_id` 选填，前端默认带出上次跟进的联系人（走 `idx(relation_id, event_at)`），不硬卡；⑤查询复用 `idx(relation_id, event_at)`（混排）与 `idx_contact(contact_id, event_at)`（按人回看）。 |
 
 ---
 

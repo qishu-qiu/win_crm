@@ -109,7 +109,7 @@
 | 认证 | account | /account/login | P | 登录 |
 | 认证 | account | /account/refresh | P | 刷新 token |
 | 认证 | account | /account/me | G | 当前人+角色+管辖部门 |
-| 认证 | account | /account/preferences | U ★ | 个人外观/通知偏好（换肤存账号，`→需求§13`）|
+| 认证 | account | /account/preferences | U ★ | 个人主题（**白天/夜间**）与通知偏好（存账号，`→需求§13`）|
 | 组织 | org | /org/departments | G/**P/U/D** ★ | 部门树（增/改/停用，`→需求§7.1`）|
 | 组织 | org | /org/departments/:id/managers | G/P/D ★ | 部门经理（多对多，`→架构A3`）|
 | 组织 | org | /org/employees | G/**P/U** ★ | 员工（入职/改主兼部门/改直属经理/离职停用）|
@@ -323,7 +323,7 @@
 - `GET /files/:id`：预览/下载，**服务端按归属鉴权**，防越权直链。
 - `GET/PUT /system/config`：系统级配置（gm 可改，改前改后写 `operation_log` `→架构A12`）。
 - `GET /operation-logs`：操作留痕审计查询（经理+/管理员，按人/对象/时间筛 `→架构A10`）。
-- `PUT /account/preferences`：个人外观（亮度 light/dark × 风格 A/B/C）与通知偏好，**存账号**。
+- `PUT /account/preferences`：个人主题（**`light` 白天 / `dark` 夜间**，V1 两态；A/B/C 风格后置）与通知偏好，**存账号**。
 
 **4.14.10 公海规则配置（`→架构F1` `→需求§6.3`）**
 - `GET/PUT /sea/rules`：公海规则 L1-L4 配置（`sea_rule` 表）。**改掉海天数走 7 天缓冲**——新值 **7 天后生效**、在途倒计时**从生效日重新起算**、提交时**预告受影响客户数**；落库＝插新版本行 ＋ 旧行 `status=disabled`（**停用不删**，`→需求§6.3` 第二批）。

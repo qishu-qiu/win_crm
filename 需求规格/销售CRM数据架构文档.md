@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.17（现行有效）
+# 销售 CRM 数据架构文档 V1.18（现行有效）
 
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
@@ -308,7 +308,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 ### D2 action_event 事件流 ★
 | 字段 | 说明 |
 |---|---|
-| relation_id / contact_id 可空 / actor_id | 关系、联系人、操作人（销售或 system） |
+| relation_id **可空** / contact_id **可空** / actor_id | 关系、联系人、操作人（销售或 system）。**CHECK 约束：`relation_id` 与 `contact_id` 至少一非空**（两皆可空＝跟单无主体，写入时服务端 422）。配合 需求§6.1 模型 B「待关联公司」——未激活关系时跟单/快速标记/承诺只绑 `contact_id`，关联公司激活关系后由服务端批量回填 `relation_id`。 |
 | action_type | phone/wechat/visit/onsite/email/**meal**/**gift**/**greeting**/**ask_help**/note/system |
 | summary | 一句话结果（≤200 字）。**快速标记（outcome ∈ 三型 quick_mark）时允许为空**——点一下即落库，不强制写字（`→需求§10.2`） |
 | outcome 可空 | **有效沟通**：advanced / stalled / await_reply；**快速标记（无效沟通）**：**`not_contacted`（未联系）/ `no_answer`（未接电话）/ `brief_hangup`（说两句挂了）**；空＝中性（**非必填**）。快速标记**支持批量**（一次勾多个关系批量写入）（`→需求§6.3` / §10.2） |
@@ -323,7 +323,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | idempotency_key UNIQUE | 防重复提交 |
 | attachments JSON | 附件 |
 
-- 索引：`idx(relation_id, event_at)`、`idx(actor_id, event_at)`、`idx(pain_point_id)`
+- 索引：`idx(relation_id, event_at)`、`idx(actor_id, event_at)`、`idx(pain_point_id)`、`idx_contact(contact_id, event_at)`（供"待关联公司"的联系人查其孤儿跟单 / 补关联时批量回填）
 - **展示口径（决策 #30 · `→需求§7.5`；分界基准 2026-09-10 修正）**：跟单列表**默认近 1 个月**（按 `event_at` 倒序分页，可切"全部"）；**分界基准 = 该关系的主跟单人（owner），不是"当前登录人"**——`actor_id`=**该关系 owner** → **主线**，否则（协同同事 / 合并前其他销售）→ **树杈分支**（合并关系按 `C1.merged_into` 归类）。**经理 / 老板打开时看到的就是「主跟单人的视角」**（否则经理不是 owner，会看到全是树杈、没有主线）。**复用现有 `idx(relation_id, event_at)` / `idx(actor_id, event_at)`，不新增字段、不做"疑似重复"等智能判断**
 - **★ 快速标记口径（`→需求§6.3` / §10.2，2026-09-10 定）**：无效沟通也**必须写一条事件**（`outcome` ∈ `not_contacted` / `no_answer` / `brief_hangup`；`summary` 可空），否则"这个客户打过多少次"统计失真。批量标记＝一次请求写多行，逐行落 `action_event`（行数不多，无需额外汇总）。
   - **⚠ 关键：快速标记『不』更新 `business_relation.last_event_at`**——只有**有效沟通**事件才更新它。否则销售对 100 个客户点一下快速标记，`sea_rule` 的跟进倒计时就被刷爆、客户永不掉海。
@@ -529,7 +529,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 表 | 索引 |
 |---|---|
 | commitment | `idx_owner_due(owner_id, status, due_at)`、`idx_relation(relation_id)`、`idx_due(status, due_at)`、`idx_contact(contact_id)` |
-| action_event | `idx_rel_time(relation_id, event_at)`、`idx_actor_time(actor_id, event_at)`、`idx_pain(pain_point_id)`、**`uk_idem(idempotency_key)`**、`idx_appointment(appointment_id)`；**按 event_at 月分区** |
+| action_event | `idx_rel_time(relation_id, event_at)`、`idx_actor_time(actor_id, event_at)`、`idx_pain(pain_point_id)`、**`uk_idem(idempotency_key)`**、`idx_appointment(appointment_id)`、`idx_contact(contact_id, event_at)`；**按 event_at 月分区** |
 | cadence_rule | `idx_scope(scope_dept_id, scope_line_id, enabled)` |
 | daily_agenda | `idx_user_day(user_id, biz_date, status)`、`idx_ref(ref_type, ref_id)`、`idx_relation(relation_id)`；**按 biz_date 月分区** |
 | review | `idx_status_time(status, created_at)`、`idx_relation(relation_id)`、`idx_type_status(review_type, status)` |
@@ -715,6 +715,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | **V1.15** | **2026-09-11** | **L0 联动 `schema.prisma` 落地**（写 schema 时发现两处"规则落不了地"的缺口，补齐）：①**D4 `daily_agenda` 新增 `action_reason` / `snooze_count`**——支撑「ignored 必填原因」与「同一条最多 snooze 3 次」防逃逸规则（`→需求§10.4`）；②**E5 `ledger` 明确"通用字段"落列**＝`contact_id`（联系人）/ `sales_id`（销售对接人）/ `delivery_id`（交付对接人）/ `remark`（备注）（`→需求§7.7`）。同步：`服务端/prisma/schema.prisma`（45 张表）已含这些字段并通过 Prisma 6.19 校验。 |
 | **V1.16** | **2026-09-11** | **开发前自查校正（L0 联动需求 V1.12）**：①**A8 `dept_rule` 删除 `gray_release_days`**、**C1 `business_relation` 删除 `gray_release_at`**——灰度寿命规则只管提醒、**取消"释放候选"**（与需求 §8.2 对齐）；②**F2 `sea_record.reason` 枚举删除 `gray_release`**；③**§十二 定时任务「灰度寿命」行**改为"只提醒下结论，不落 `gray_release_at`"；④**E3 工单 `type` 枚举 `aftersale` → `after_sale`**（与接口 §2.6 统一）；⑤§一「上游」→ 需求 V1.12、「下游」→ 接口 V1.3 / 设计规范 V1.0 / 前端 V1.4；⑥§十七 FAQ A.4 删"谁先签约谁得"（改"各签各的（互不干扰）"）。**同步：`schema.prisma` + `migrations/0001_init` 删这两个字段。** |
 | **V1.17** | **2026-09-11** | **B 组澄清落地（L0 联动需求 V1.13）**：①**B4 `contact_trait`** 补口径——**422 只拦「新增」**，更新后数量 ≤ 当前已有数量则放行（防"调小上限后存量超限特质无法编辑"）；②**§十一 权限脱敏** 补口径——**脱敏只作用于"销售看他人私海 / 跨部门关系"的列表与详情；报表/看板/汇总不脱敏**（经理、老板出口返回真实金额）；③§一「上游」→ 需求 V1.13。 |
+| **V1.18** | **2026-09-11** | **P0-② 录入可跳公司 + 撞库（L0 联动需求 V1.15）**：①**D2 `action_event.relation_id` 改为可空**，并加 **CHECK：`relation_id` 与 `contact_id` 至少一非空**（配合需求§6.1 模型 B「待关联公司」——只录手机号未问到公司时，跟单/快速标记/承诺只绑 `contact_id`，关联公司激活关系后服务端批量回填 `relation_id`，历史不断）；②**D2 索引补 `idx_contact(contact_id, event_at)`**（孤立跟单查询）；③**§十 索引清单同步补 `idx_contact`**。**schema.prisma（backend 锁需求后从本架构重建）须同步 relation_id `@ignore`? — 否，relation_id 仍写库但允许 NULL，migration 手写 `ALTER ... MODIFY relation_id ... NULL` + 加 CHECK 约束**；当前 backend 未落地，以本架构为唯一真相源。 |
 
 ---
 

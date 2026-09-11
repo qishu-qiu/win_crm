@@ -691,7 +691,7 @@ model Commitment {
 /// D2 事件流 ★（跟单 / 客情 / 求助 / 系统；按月分区；快速标记不更新 last_event_at）
 model ActionEvent {
   id                 BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  relation_id        BigInt   @db.UnsignedBigInt
+  relation_id        BigInt?  @db.UnsignedBigInt // 可空（配合"待关联公司"模型 B：未激活关系时只绑 contact_id）；CHECK: relation_id 与 contact_id 至少一非空（手写 migration）
   contact_id         BigInt?  @db.UnsignedBigInt
   actor_id           BigInt   @db.UnsignedBigInt
   action_type        String   @db.VarChar(16) // phone/wechat/visit/onsite/email/meal/gift/greeting/ask_help/note/system
@@ -713,7 +713,7 @@ model ActionEvent {
   created_at         DateTime @default(now()) @db.DateTime(0)
   updated_at         DateTime @updatedAt @db.DateTime(0)
 
-  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+  relation BusinessRelation? @relation(fields: [relation_id], references: [id], onDelete: Restrict)
 
   // ⚠ uk_idem 必须含分区键 event_at，否则 PARTITION BY 建表报 ERROR 1503（migration 手写时确认）
   @@unique([idempotency_key, event_at], map: "uk_idem")
@@ -721,6 +721,7 @@ model ActionEvent {
   @@index([actor_id, event_at], map: "idx_actor_time")
   @@index([pain_point_id], map: "idx_pain")
   @@index([appointment_id], map: "idx_appointment")
+  @@index([contact_id, event_at], map: "idx_contact") // 供"待关联公司"联系人查孤儿跟单
   @@map("action_event")
 }
 

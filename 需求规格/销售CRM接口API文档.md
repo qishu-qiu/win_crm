@@ -1,4 +1,4 @@
-# 销售 CRM 接口 API 文档 V1.4
+# 销售 CRM 接口 API 文档 V1.5
 
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
 > 配套真相源：《销售CRM业务需求文档》V1.13、《销售CRM数据架构文档》V1.17、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》V1.5（均 需求规格/）。
@@ -409,7 +409,8 @@
 ### 5.7 行动引擎 commitment / event / cadence / agenda
 - **事件项（跟单卡）** `{id,action_type,summary,outcome,pain_point:{id,label}?,competition?,actor:{id,name},contact:{id,name}?,duration_min?,event_at,branch:"main"|"sub",attachments:[]}`
 - `POST /relations/:id/events` req `{contact_id?,action_type,summary?,outcome?,stage_forward?,pain_point_id?,competition?,competitor_id?,competition_note?,duration_min?,mentioned_user_ids?:[],promise?:{party,ctype,content,due_at?},appointment_id?,visit_log_id?}`
-- `POST /events/quick-mark` req `{relation_ids:[],outcome:"not_contacted"|"no_answer"|"brief_hangup"}`（**不更新 `last_event_at`**）
+- **待关联阶段事件（无关系，配合 需求§6.1 模型 B）**：`POST /contacts/:id/events` req 同 `POST /relations/:id/events`（省 `relation_id`，由服务端置空）；**关联公司激活关系后，服务端批量把该联系人名下 `relation_id` 为空的事件挂到新关系**（`→架构 D2` `→需求§10.2`）。
+- `POST /events/quick-mark` req `{relation_ids?:[],contact_ids?:[],outcome:"not_contacted"|"no_answer"|"brief_hangup"}`（`relation_ids` 与 `contact_ids` **至少一组非空**；**不更新 `last_event_at`**）
 - 承诺 `{id,relation_id,party:"me"|"them"|"verdict",ctype,content,due_at,remind_at,status,done_at?}`
 - 节奏规则 `{id,scope_dept_id?,scope_line_id?,trigger,suggest_action,soft,enabled,sort}`
 - 动线条目 `{id,ref_type,ref_id,relation:{id,name},contact?,reason,priority,action_hint,status,snooze_count}`
@@ -478,3 +479,4 @@
 | **V1.2** | 2026-09-11 | **数据结构版（七叔定）**：新增 **§五 数据结构（请求 / 响应）**——①§5.1 公共对象（Envelope / PageResult / 列表入参 / 实体通用出参 / 实体引用 / **脱敏出参形态** / **派生字段清单**）；②§5.2~5.14 覆盖全部模块的**请求体 DTO 与响应体 VO**（含 approval payload 分型、ledger 动态列 `columns`、target 进度 `time_rate`/`stat_unit` 等）。**明确「接口结构 ≠ 表结构」**（须脱敏、含派生字段、剔除内部字段）。原 §五 跨模块流程顺延为 §六、§六 修改记录顺延为 §七。 |
 | **V1.3** | 2026-09-11 | **自查校正版**：①§5.3 部门规则出参**删除 `gray_release_days`**（灰度寿命只管提醒、取消释放候选，与需求 §8.2 对齐）；②配套真相源版本同步（需求 V1.12 / 数据架构 V1.16）。 |
 | **V1.4** | 2026-09-11 | **B 组澄清版**：①§2.8 补**「报表/看板不脱敏」**（经理/老板出口返回真实金额；脱敏只管"销售看他人/跨部门"的列表与详情）；②§5.5 特质校验口径细化为**「只拦新增」**（不增量则放行）；③配套真相源版本同步（需求 V1.13 / 数据架构 V1.17 / 前端 V1.5）。 |
+| **V1.5** | **2026-09-11** | **P0-② 录入可跳公司（L0 联动需求 V1.15 / 数据架构 V1.18）**：§5.7 行动引擎新增「待关联阶段事件」端点 `POST /contacts/:id/events`（`relation_id` 由服务端置空，配合 §6.1 模型 B「待关联公司」）；`POST /events/quick-mark` 由仅 `relation_ids` 扩为 `relation_ids?` + `contact_ids?`（至少一组非空），支持"只录手机号"阶段的批量快速标记；关联公司激活关系后服务端批量回填 `relation_id`（`→架构 D2`）。配套真相源同步（需求 V1.15 / 数据架构 V1.18 / 前端 V1.7）。 |

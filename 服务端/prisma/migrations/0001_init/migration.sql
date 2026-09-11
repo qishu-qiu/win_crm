@@ -572,7 +572,7 @@ CREATE TABLE `commitment` (
 -- CreateTable
 CREATE TABLE `action_event` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `relation_id` BIGINT UNSIGNED NOT NULL,
+    `relation_id` BIGINT UNSIGNED NULL,
     `contact_id` BIGINT UNSIGNED NULL,
     `actor_id` BIGINT UNSIGNED NOT NULL,
     `action_type` VARCHAR(16) NOT NULL,
@@ -598,7 +598,9 @@ CREATE TABLE `action_event` (
     INDEX `idx_actor_time`(`actor_id`, `event_at`),
     INDEX `idx_pain`(`pain_point_id`),
     INDEX `idx_appointment`(`appointment_id`),
+    INDEX `idx_contact`(`contact_id`, `event_at`),
     UNIQUE INDEX `uk_idem`(`idempotency_key`, `event_at`),
+    CONSTRAINT `chk_action_event_subject` CHECK ((`relation_id` IS NOT NULL) OR (`contact_id` IS NOT NULL)),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 

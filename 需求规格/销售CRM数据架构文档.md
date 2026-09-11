@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.16（现行有效）
+# 销售 CRM 数据架构文档 V1.17（现行有效）
 
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
@@ -10,8 +10,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.16（现行有效）** / 2026-09-11 |
-| 上游 | 《销售CRM业务需求文档》V1.12（业务规则唯一来源） |
+| 版本 / 日期 | **V1.17（现行有效）** / 2026-09-11 |
+| 上游 | 《销售CRM业务需求文档》V1.13（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》**V1.3**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.4** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
@@ -196,7 +196,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | phone_frozen_until | 手机号变更审核冻结期（24h） |
 
 ### B4 contact_trait 联系人谈判特质（默认 ≤3，部门可配）
-`contact_id` + `trait_id/trait_code` + `marked_by/marked_at`；联合唯一；**每人上限 = 所属部门 `dept_rule.contact_trait_max`（默认 3，范围 1~5）**（超出 422+20402）；**经理调小上限后存量超限特质保留，仅对新写入/编辑生效**；特质跟着人走（换公司保留）
+`contact_id` + `trait_id/trait_code` + `marked_by/marked_at`；联合唯一；**每人上限 = 所属部门 `dept_rule.contact_trait_max`（默认 3，范围 1~5）**（超出 **422+20402**）；**★ 2026-09-11 明确：422 只拦「新增」——更新后数量 ≤ 当前已有数量则放行**（否则经理调小上限后，存量超限特质连编辑都做不了）；**经理调小上限后存量超限特质保留**；特质跟着人走（换公司保留）
 
 ### B5 company_contact 就职关系（N:M 含历史）
 `company_id + contact_id + is_current + joined_at + left_at + position`；一人多段就职全留痕
@@ -588,6 +588,8 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 公海卡片/列表 | 脱敏 `xxx****xxxx` | 仅「近 30 天 N 次」概览 |
 | 跨业务线金额 | 完全脱敏 | 仅"N 个工单进行中"概览 |
 
+> ★ **脱敏口径只作用于「销售看他人私海 / 跨部门关系」的列表与详情**；**报表 / 看板 / 汇总不脱敏**（经理、老板出口返回真实金额，2026-09-11 定）。
+
 - 数据范围：销售可见客户全集 = **本人 owner 私海 ∪ 我作为 collaborator 的关系（含正式协同 collaborate 与 @求助 ask_help，valid_until 未过期）∪ 公海**；经理=dept_manager 管辖部门；总经理=全部；他人私海不可见（除非协同/@求助授权）。客户列表提供"@我 / 我协同 / 全部关联"筛选视图，底层即 relation_member 中 employee_id=当前用户 的 collaborator 集合，与 owner 私海取并集后按筛选裁剪（口径见 §十七 A.3）
 - 赢单弹药库（review published）：**默认本部门可见**；gm 经 system_config(ammo_scope=company) 改全公司；未收录的（open/dismissed）仅本人+直属经理可见
 - 坐标属公司档案基础信息（非敏感）；将来做地图时必须走同一套权限过滤
@@ -712,6 +714,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | **V1.14** | **2026-09-10** | L0 联动需求 **V1.11**（第三批中"开工前该定"的 7 条）：①**新增 B8 `file_asset` 文件资产表**（多态 biz_type/biz_id，存 file_key 不存 URL，`idx_biz` + `idx_uploader`）——补上原 `payment_record.voucher_file_id` 的悬空外键；②**新增 E7 `contract_split` 合同业绩分配表**（`uk_split(contract_id, employee_id)`、`idx_employee`；无记录＝100% 归 signer；建议建 `v_contract_performance` 视图统一报表口径）；③**C6 `visit_log` 字段精简**——删 `expect_return_at`/`transport`/`destination`/`note`，只留 `depart_at` + `reason` + `actual_return_at` + 可选 `relation_ids`；④**§10.1 索引清单 43 → 45 张**（补 file_asset、contract_split）；⑤§二 ER 总览同步补两张表。**介绍费相关规则一律不建**（`→需求§14.2`）。 |
 | **V1.15** | **2026-09-11** | **L0 联动 `schema.prisma` 落地**（写 schema 时发现两处"规则落不了地"的缺口，补齐）：①**D4 `daily_agenda` 新增 `action_reason` / `snooze_count`**——支撑「ignored 必填原因」与「同一条最多 snooze 3 次」防逃逸规则（`→需求§10.4`）；②**E5 `ledger` 明确"通用字段"落列**＝`contact_id`（联系人）/ `sales_id`（销售对接人）/ `delivery_id`（交付对接人）/ `remark`（备注）（`→需求§7.7`）。同步：`服务端/prisma/schema.prisma`（45 张表）已含这些字段并通过 Prisma 6.19 校验。 |
 | **V1.16** | **2026-09-11** | **开发前自查校正（L0 联动需求 V1.12）**：①**A8 `dept_rule` 删除 `gray_release_days`**、**C1 `business_relation` 删除 `gray_release_at`**——灰度寿命规则只管提醒、**取消"释放候选"**（与需求 §8.2 对齐）；②**F2 `sea_record.reason` 枚举删除 `gray_release`**；③**§十二 定时任务「灰度寿命」行**改为"只提醒下结论，不落 `gray_release_at`"；④**E3 工单 `type` 枚举 `aftersale` → `after_sale`**（与接口 §2.6 统一）；⑤§一「上游」→ 需求 V1.12、「下游」→ 接口 V1.3 / 设计规范 V1.0 / 前端 V1.4；⑥§十七 FAQ A.4 删"谁先签约谁得"（改"各签各的（互不干扰）"）。**同步：`schema.prisma` + `migrations/0001_init` 删这两个字段。** |
+| **V1.17** | **2026-09-11** | **B 组澄清落地（L0 联动需求 V1.13）**：①**B4 `contact_trait`** 补口径——**422 只拦「新增」**，更新后数量 ≤ 当前已有数量则放行（防"调小上限后存量超限特质无法编辑"）；②**§十一 权限脱敏** 补口径——**脱敏只作用于"销售看他人私海 / 跨部门关系"的列表与详情；报表/看板/汇总不脱敏**（经理、老板出口返回真实金额）；③§一「上游」→ 需求 V1.13。 |
 
 ---
 

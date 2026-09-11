@@ -1,8 +1,8 @@
-# 销售 CRM 接口 API 文档 V1.2
+# 销售 CRM 接口 API 文档 V1.3
 
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》V1.11、《销售CRM数据架构文档》V1.15、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》V1.4（均 需求规格/）。
-> 生效日期：2026-09-11 ｜ 状态：**V1.2**（数据结构版 · 新增 §五 请求/响应结构）。
+> 配套真相源：《销售CRM业务需求文档》V1.12、《销售CRM数据架构文档》V1.16、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》V1.4（均 需求规格/）。
+> 生效日期：2026-09-11 ｜ 状态：**V1.3**（自查校正版 · 紧随需求 V1.12 / 数据架构 V1.16）。
 
 ---
 
@@ -369,7 +369,7 @@
 - 部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`
 - 员工 `{id,work_no,name,phone,primary_dept:{id,name},extra_depts:[],product_lines:[],direct_manager:{id,name},roles:["sale"],status}`
 - `POST/PUT /org/employees` req `{name,phone,work_no?,primary_dept_id,extra_dept_ids?:[],product_line_ids?:[],direct_manager_id?,role_codes:[],password?}`
-- 部门规则 `{dept_id,level_tiers:[{level,min_amount}],gray_remind_days,gray_release_days,s_social_days,newbie_first_follow_hours,ask_help_days,contact_trait_max,updated_at}`
+- 部门规则 `{dept_id,level_tiers:[{level,min_amount}],gray_remind_days,s_social_days,newbie_first_follow_hours,ask_help_days,contact_trait_max,updated_at}`
 - 产品线 `{id,name,code,color_key,dept_ids:[],service_cycle_days,status}`
 - 角色 `{code,name,is_builtin}`；权限矩阵行 `{perm_key,role_code,level}`
 - 字典 `type:{code,name}`、`item:{id,item_code,label,sort,builtin,status}`
@@ -475,3 +475,4 @@
 | V1.0 | 2026-09-10 | 起步版：锁通用约定 + 全量接口目录（约 50 接口）+ 分模块关键契约；逐接口字段随开发回填，业务规则以 `→需求` / `→架构` 指针为准 |
 | **V1.1** | 2026-09-11 | **对齐校正版（全部补齐）**：对照需求 V1.11 三方对账，接口 **~50 → ~78**。①**组织架构补 CRUD**（部门增改停用/部门经理多对多/员工入职·改部门·改直属经理·离职/角色分配/离职批量转交/产品线新建/字典项新增）——原来只有 G；②补**墓碑合并**（公司撞码 6 步单事务、联系人经理合并）、**跳槽/就职历史**、联系人**删除（经理）**、**手机号变更申请**（原枚举误列 `review`、漏 `phone_change`，已校正）；③补 **推进阶段**（建议态+限频+留痕）、**今日动线处理反馈**（done/snoozed/ignored，snooze≤3、ignored 必填原因）、**外出登记回来点一下**；④补 **工单双向流转转换**、**离职批量转交**；⑤**报表从 3 张补到 9 张**（全公司月报/公海/续约预警/工单SLA/死因看板/流失原因分布/目标进度）；⑥补 **复盘消费视图**（赢单弹药库/防守清单）+ **竞品名册**；⑦补 **文件上传下载**（原只在 §2.10 提及、总览未列）、系统配置、操作留痕审计、个人外观偏好；⑧新增 §4.14 补齐端点契约；⑨§1.2 立「需求 V1 做 → 接口必须有端点」对齐铁律 |
 | **V1.2** | 2026-09-11 | **数据结构版（七叔定）**：新增 **§五 数据结构（请求 / 响应）**——①§5.1 公共对象（Envelope / PageResult / 列表入参 / 实体通用出参 / 实体引用 / **脱敏出参形态** / **派生字段清单**）；②§5.2~5.14 覆盖全部模块的**请求体 DTO 与响应体 VO**（含 approval payload 分型、ledger 动态列 `columns`、target 进度 `time_rate`/`stat_unit` 等）。**明确「接口结构 ≠ 表结构」**（须脱敏、含派生字段、剔除内部字段）。原 §五 跨模块流程顺延为 §六、§六 修改记录顺延为 §七。 |
+| **V1.3** | 2026-09-11 | **自查校正版**：①§5.3 部门规则出参**删除 `gray_release_days`**（灰度寿命只管提醒、取消释放候选，与需求 §8.2 对齐）；②配套真相源版本同步（需求 V1.12 / 数据架构 V1.16）。 |

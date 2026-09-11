@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.15（现行有效）
+# 销售 CRM 数据架构文档 V1.16（现行有效）
 
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
@@ -10,9 +10,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.15（现行有效）** / 2026-09-11 |
-| 上游 | 《销售CRM业务需求文档》V1.11（业务规则唯一来源） |
-| 下游 | 《销售CRM接口API文档》（待建）、《销售CRM前端页面与交互文档》（待建） |
+| 版本 / 日期 | **V1.16（现行有效）** / 2026-09-11 |
+| 上游 | 《销售CRM业务需求文档》V1.12（业务规则唯一来源） |
+| 下游 | 《销售CRM接口API文档》**V1.3**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.4** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
 | 外部依赖 | 高德开放平台：JS API（坐标拾取器）。坐标系统一 **GCJ-02**（见 §五 B7） |
@@ -102,8 +102,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 |---|---|
 | dept_id UNIQUE | 适用部门 |
 | level_tiers JSON | 客户等级金额档位 `[{level:S/A/B/C/D, minAmount}]`——**每部门各自定义**，回款到账事务内自动算等级 |
-| gray_remind_days | 灰度 N 天未定性 → 提醒下结论 |
-| gray_release_days | 再 M 天未动 → 列为公海释放候选，经理确认后释放 |
+| gray_remind_days | 灰度 N 天未定性 → 提醒下结论（**★ 2026-09-11：已取消 `gray_release_days` 与"释放候选"——灰度寿命只管提醒，到期照常掉公海**）|
 | s_social_days | S 级客户客情节奏默认间隔（建议 45） |
 | newbie_first_follow_hours | 新联系人/新关系首次跟进窗口（建议 48h） |
 | ask_help_days | @求助临时协同默认有效期（建议 7 天） |
@@ -243,7 +242,6 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | competition | **竞品态势快照**（可空=未知）：none/in_use/comparing。**录入不在此表**——写事件(D2)时顺手标记并回写；列表/推导读本字段 |
 | competitor_id 可空 | 关联 `competitor` 名册（最近一次标记对象），由事件回写 |
 | sea_status | **语义＝"这条关系当前有没有主人"**：`private` 私海（有 owner）/ `company_sea` 公海（无 owner）。**部门公海 = `company_sea` 中 `dept_id`=本部门的关系集合**（映射视图，非独立状态、非独立池）。**掉落只改本字段，`dept_id` 不变**（`→需求§6.3`） |
-| gray_release_at | 灰度寿命释放候选时间戳 |
 | last_event_at | **最近一次「有效沟通」事件时间**（**快速标记不计入**，见 D2）——INDEX 供预警扫描与掉海倒计时（`→需求§6.3`） |
 | next_action_hint | 可空：一句话"上次说好下次干嘛"（从最近承诺/事件冗余） |
 | merged_into | **关系级合并墓碑**：自引用 FK（`business_relation.id`，可空）。非 NULL = 本关系已并入该 survivor 关系、置**非活跃分支**（不占 `uk_active_rel` 活跃位）；其跟单/承诺等子表仍挂本关系节点，展示层作为分支（见 `→需求§7.3` ⑦ 树呈现）。公司合并时，与 A 同部门同产品线撞 `uk_active_rel` 的关系走此路径 |
@@ -404,7 +402,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 `contract_id + amount + paid_at + method + voucher_file_id + created_by`；事务内更新 contract.paid_amount/状态，按 dept_rule 重算 customer_level，写 ledger
 
 ### E3 workorder 工单
-`order_no` UNIQUE + `type`(aftersale/opportunity) + `relation_id` + `title/content` + `source` + `priority`(P0-P3 仅售后) + `assignee_id` + `sla_deadline` + `est_effort_min` 可空(工时估算点选) + `status`(created/assigned/processing/confirming/closed) + `upgraded_from_id`(升级互链)
+`order_no` UNIQUE + `type`(after_sale/opportunity) + `relation_id` + `title/content` + `source` + `priority`(P0-P3 仅售后) + `assignee_id` + `sla_deadline` + `est_effort_min` 可空(工时估算点选) + `status`(created/assigned/processing/confirming/closed) + `upgraded_from_id`(升级互链)
 
 ### E4 workorder_log
 `workorder_id + action + from_status + to_status + reason + operator_id`（升级必填原因）
@@ -441,7 +439,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 > **公海粒度（`→需求§6.3`）**：`sea_status` 只有 `private`（**有 owner**）/ `company_sea`（**无 owner**），**掉海只改本字段、`dept_id` 恒定不变**；**部门公海 ＝ `company_sea` 中 `dept_id`=本部门的集合**（映射视图，非独立池）。`stay_days` 两类用途：① 私海掉落倒计时（自动触发）；② **公海停留超期 → 生成经理决策待办**（不自动删除、不自动流转）。
 
 ### F2 sea_record 入公海历史
-`relation_id + from_sea/to_sea` + `reason`(follow_timeout/deal_timeout/stagnant/manual/gray_release/dept_manager_delete) + `dropped_at + claimed_by + claimed_at`
+`relation_id + from_sea/to_sea` + `reason`(follow_timeout/deal_timeout/stagnant/manual/dept_manager_delete) + `dropped_at + claimed_by + claimed_at`
 > 私海掉落回公海、经理"删除关系"（reason=dept_manager_delete，逻辑删除）均写本表留痕；`to_sea` 仅 `company_sea`（公司公海）。
 
 ---
@@ -608,7 +606,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 节奏提醒 | 每日 | cadence_rule 逐条命中（新客 48h / S 级客情 / 灰度定性 / 周重点周五清点） |
 | 掉海预警（私海→公海） | 每小时 | 按 sea_rule：≤3 天进动线；到期前 24h 推销售；6h 标红+推经理；超期落 sea_record 转**公司公海**（部门映射保留，仍显示于部门公海） |
 | 公海停留超期（经理决策） | 每日 | 扫描 `company_sea` 中归口本部门、停留超期的无主关系 → 生成**经理决策待办**（保留 / 删除关系）；**不自动删除、不自动流转**（`→需求§6.3`） |
-| 灰度寿命 | 每日 | urgency=gray 超 remind_days → 提醒下结论；再超 release_days → 置 gray_release_at |
+| 灰度寿命 | 每日 | urgency=gray 超 `gray_remind_days` → **提醒下结论**（**不产生释放候选、不落 `gray_release_at`**；灰度到期由掉海任务照常处理） |
 | 协同到期 | 每日 | relation_member.collaborator.valid_until 到期 → 自动失效并通知双方 |
 | 判死教训缓写提醒 | 每日 | loss review 已 closed 但 detail 空 → 次日动线提醒补写 |
 | win 复盘超时 | 每日 | B/C/D 级 win review open 超 30 天 → 自动 dismissed |
@@ -713,6 +711,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | **V1.13** | **2026-09-10** | L0 联动需求 **V1.10**（七叔拍板第二批 8 条）：①**D2 `outcome` 由单值扩为两组**——有效沟通 `advanced/stalled/await_reply`；**快速标记三型 `not_contacted`/`no_answer`/`brief_hangup`**（`summary` 可空、支持批量）；②**★ 明确"快速标记不更新 `business_relation.last_event_at`"**（否则点一下就能刷爆掉海倒计时），C1 `last_event_at` 字段说明同步改为"最近一次**有效沟通**事件时间"；③**C1 `stage_id` 的"7 已流失"语义修正**——**判死与流失均掉回公海可被重新领取**（判死阶段保留、流失置 7；重新领取后阶段从 1 重新开始，`relation_stage_log` 留上一轮），取代 V1.12 的"不回流公海终态"；④**C1 `value_tier` 加校验**——`urgency != gray` 的关系必须已标价值（服务端 422）；⑤**F1 `sea_rule` 新增 `effective_from`**——掉海天数变更 **7 天后生效**（插新版本行、旧行 disable 停用不删），生效时在途倒计时从生效日重新起算；⑥**B1 补「老客户」徽标派生口径**——依据＝该公司存在历史合同（跨部门也能查到），**不加字段**；⑦字典 `workflow_stage` 第 7 步说明同步（"本轮结束"≠"不回流公海"）。 |
 | **V1.14** | **2026-09-10** | L0 联动需求 **V1.11**（第三批中"开工前该定"的 7 条）：①**新增 B8 `file_asset` 文件资产表**（多态 biz_type/biz_id，存 file_key 不存 URL，`idx_biz` + `idx_uploader`）——补上原 `payment_record.voucher_file_id` 的悬空外键；②**新增 E7 `contract_split` 合同业绩分配表**（`uk_split(contract_id, employee_id)`、`idx_employee`；无记录＝100% 归 signer；建议建 `v_contract_performance` 视图统一报表口径）；③**C6 `visit_log` 字段精简**——删 `expect_return_at`/`transport`/`destination`/`note`，只留 `depart_at` + `reason` + `actual_return_at` + 可选 `relation_ids`；④**§10.1 索引清单 43 → 45 张**（补 file_asset、contract_split）；⑤§二 ER 总览同步补两张表。**介绍费相关规则一律不建**（`→需求§14.2`）。 |
 | **V1.15** | **2026-09-11** | **L0 联动 `schema.prisma` 落地**（写 schema 时发现两处"规则落不了地"的缺口，补齐）：①**D4 `daily_agenda` 新增 `action_reason` / `snooze_count`**——支撑「ignored 必填原因」与「同一条最多 snooze 3 次」防逃逸规则（`→需求§10.4`）；②**E5 `ledger` 明确"通用字段"落列**＝`contact_id`（联系人）/ `sales_id`（销售对接人）/ `delivery_id`（交付对接人）/ `remark`（备注）（`→需求§7.7`）。同步：`服务端/prisma/schema.prisma`（45 张表）已含这些字段并通过 Prisma 6.19 校验。 |
+| **V1.16** | **2026-09-11** | **开发前自查校正（L0 联动需求 V1.12）**：①**A8 `dept_rule` 删除 `gray_release_days`**、**C1 `business_relation` 删除 `gray_release_at`**——灰度寿命规则只管提醒、**取消"释放候选"**（与需求 §8.2 对齐）；②**F2 `sea_record.reason` 枚举删除 `gray_release`**；③**§十二 定时任务「灰度寿命」行**改为"只提醒下结论，不落 `gray_release_at`"；④**E3 工单 `type` 枚举 `aftersale` → `after_sale`**（与接口 §2.6 统一）；⑤§一「上游」→ 需求 V1.12、「下游」→ 接口 V1.3 / 设计规范 V1.0 / 前端 V1.4；⑥§十七 FAQ A.4 删"谁先签约谁得"（改"各签各的（互不干扰）"）。**同步：`schema.prisma` + `migrations/0001_init` 删这两个字段。** |
 
 ---
 
@@ -750,7 +749,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 2. **会造成客户数翻倍**：同一家公司允许在两个部门各有一条活跃关系，看板上的"客户数"会虚增。
 3. **唯一约束要重建**：`uk_active_rel`（公司+部门+产品线）本就允许不同部门各建一条，不需要靠"改部门"来实现。
 
-**正确做法**：别的部门想要这个客户 = **INSERT 一条本部门自己的业务关系**（因 `uk_active_rel` 含 `dept_id`，与原有关系不冲突）。这正是"跨部门同产品线**竞争并行**、谁先签约谁得"的落点。
+**正确做法**：别的部门想要这个客户 = **INSERT 一条本部门自己的业务关系**（因 `uk_active_rel` 含 `dept_id`，与原有关系不冲突）。这正是"跨部门同产品线**竞争并行**、**各签各的（互不干扰）**"的落点。
 
 **实现要点**：掉海定时任务**只 UPDATE `sea_status`，严禁 UPDATE `dept_id`**；建议把这一条列为代码评审检查项（或在同一事务里加断言）。
 

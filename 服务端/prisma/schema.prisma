@@ -182,8 +182,7 @@ model DeptRule {
   id                        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
   dept_id                   BigInt   @unique(map: "uk_dept_id") @db.UnsignedBigInt
   level_tiers               Json? // 客户等级金额档位 [{level:S/A/B/C/D, minAmount}]
-  gray_remind_days          Int?
-  gray_release_days         Int?
+  gray_remind_days          Int? // 灰度 N 天未定性 → 提醒下结论（2026-09-11：取消 gray_release_days / 释放候选）
   s_social_days             Int? // S 级客情节奏默认间隔（建议 45）
   newbie_first_follow_hours Int? // 新关系/新联系人首次跟进窗口（建议 48）
   ask_help_days             Int? // @求助临时协同默认有效期（建议 7）
@@ -507,7 +506,6 @@ model BusinessRelation {
   competition      String?   @db.VarChar(16) // none/in_use/comparing（事件回写快照）
   competitor_id    BigInt?   @db.UnsignedBigInt
   sea_status       String    @default("private") @db.VarChar(16) // private(有owner) / company_sea(无owner)
-  gray_release_at  DateTime? @db.DateTime(0)
   last_event_at    DateTime? @db.DateTime(0) // ★ 仅有效沟通更新；快速标记不计
   next_action_hint String?   @db.VarChar(255)
   merged_into      BigInt?   @db.UnsignedBigInt // 关系级合并墓碑（自引用，置非活跃分支）
@@ -1027,7 +1025,7 @@ model SeaRecord {
   relation_id BigInt    @db.UnsignedBigInt
   from_sea    String    @db.VarChar(16)
   to_sea      String    @db.VarChar(16) // 仅 company_sea
-  reason      String    @db.VarChar(32) // follow_timeout/deal_timeout/stagnant/manual/gray_release/dept_manager_delete
+  reason      String    @db.VarChar(32) // follow_timeout/deal_timeout/stagnant/manual/dept_manager_delete
   dropped_at  DateTime  @db.DateTime(0)
   claimed_by  BigInt?   @db.UnsignedBigInt
   claimed_at  DateTime? @db.DateTime(0)

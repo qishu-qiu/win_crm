@@ -6,7 +6,7 @@
 
 - **后端**：NestJS 12（Node + TypeScript）+ MySQL 8 + Redis
 - **前端**：Vue 3（TypeScript）+ Vite + **Ant Design Vue**（2026-09-11 定：组件库以《销售CRM设计规范》V1.0 的 **Ant Design 5 token** 为基准；原写 Element Plus 与设计基准不符，已更正）
-- **全栈统一语言/类型**：前端与后端共用一套 TypeScript 类型，来源是后端 OpenAPI（Swagger），由 `openapi-typescript` 生成到 `frontend/src/api/types.ts`。**禁止手写对接、禁止前后端各维护一份接口类型**（双真相源是 AI 出错重灾区）。
+- **全栈统一语言/类型**：前端与后端共用一套 TypeScript 类型，来源是后端 OpenAPI（Swagger），由 `openapi-typescript` 生成到 `前端/src/api/types.ts`。**禁止手写对接、禁止前后端各维护一份接口类型**（双真相源是 AI 出错重灾区）。
 - **ORM = Prisma**（2026-09-10 七叔拍板）：三理由——① 类型安全最强，**AI 写错字段/类型时编译即报错**，最契合本项目的 AI 协作方式；② 全部表结构集中在**一个 `schema.prisma` 文件**，七叔可直接与《数据架构文档》逐行对账（TypeORM 散在几十个 entity 文件里，看不全）；③ 复杂报表查询可用 `$queryRaw` 兜底。代价：MySQL 生成列与分区表需手写 migration（一次性，见《数据架构文档》§十五「Prisma 落库口径」）。
 - **数据库为唯一真相源**：DB 约束（唯一索引、CHECK、生成列）兜底业务不变量；应用层只做"友好提示"，不替代约束。
 

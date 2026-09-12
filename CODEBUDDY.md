@@ -51,7 +51,7 @@ Web 可多开实例；**Worker 全局只能跑 1 个**，否则定时任务重�
 ```bash
 npm run gen:types
 ```
-从后端 OpenAPI（Swagger）用 `openapi-typescript` 生成 `frontend/src/api/types.ts`。**禁止手写对接、禁止前后端各维护一份接口类型**（双真相源是 AI 出错重灾区）。
+从后端 OpenAPI（Swagger）用 `openapi-typescript` 生成 `前端/src/api/types.ts`。**禁止手写对接、禁止前后端各维护一份接口类型**（双真相源是 AI 出错重灾区）。
 
 ## 三、代码架构（大图景）
 

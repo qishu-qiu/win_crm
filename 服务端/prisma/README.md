@@ -1,6 +1,6 @@
 # 服务端 / Prisma（新后端起点）
 
-> 本目录是新后端（NestJS + Prisma）的起点。当前仅含 `prisma/schema.prisma`。
+> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）；**`package.json` 与 `src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
 
 ## schema.prisma
 
@@ -28,6 +28,8 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
   - **ERROR 1503** —— 分区表**每个唯一键（含主键）都必须包含分区列**。故 3 张分区表先 `ADD PRIMARY KEY (id, 分区列)` 再 `PARTITION BY`。
   - **ERROR 1064（分区）** —— `PARTITION BY` 是 `ALTER TABLE` 的**独立子句，前面不能有逗号**；`DROP PRIMARY KEY, ADD PRIMARY KEY (...), PARTITION BY ...` 中的**尾逗号必须删掉**。
 - **⚠ 环境版本门槛（重要 · 实测）**：本机 phpStudy 为 **MySQL 8.0.12**，而 **CHECK 约束自 MySQL 8.0.16 才支持** —— 8.0.12 会把 `CHECK (...)` **解析后静默忽略**（实测：整段跑完后 `information_schema.TABLE_CONSTRAINTS` 里 `CONSTRAINT_TYPE='CHECK'` 计数为 **0**）。即 `chk_approval_not_self` 与 `action_event` 的内联 CHECK **在本机不生效**。**建生产库 / CI 请用 8.0.16+**，否则「审批人 ≠ 申请人」只剩应用层单拦。
+- **⚠ 本机「多版本 MySQL 并存」（2026-09-12 实测 · 最容易悄悄踩）**：phpStudy 面板的 `Extensions/` 下装了 **三个** MySQL —— `MySQL5.5.29` / `MySQL5.7.26` / **`MySQL8.0.12`**。**3306 上跑的确实是 8.0.12**（`netstat -ano` 查到 PID → 进程路径 `…\MySQL8.0.12\bin\mysqld.exe`，可自证）。**但风险真实存在**：面板切版本、或用 `PATH` 里的 `mysql` 命令，会连到 / 建到别的版本上（**实测：脚本探测时第一下抓到的就是 `MySQL5.5.29\bin\mysql.exe`**）。**5.5 / 5.7 建不出生成列与 CHECK**，一旦用错版本，`0001_init` 会中途炸且现场难辨。
+  - **动手前自证一条**：`select version()`（**建议直接用** `D:\ITtool\phpstudy_pro\Extensions\MySQL8.0.12\bin\mysql.exe`，别依赖 `PATH`）—— 建库 / 跑 `migration.sql` / `SHOW CREATE TABLE` / `information_schema` 核对之前都先跑这一句。
 - **发现并已记录**：Prisma 会把 `@ignore` 字段建成普通列 → 手工段里 `DROP` 后重建为 `GENERATED`（见下）。
 
 ## ★ 必须「手写 migration」的部分（数据架构 §十五.5，Prisma 表达不了）

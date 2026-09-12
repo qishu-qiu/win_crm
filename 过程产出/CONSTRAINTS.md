@@ -30,7 +30,7 @@
 
 | # | 检查 | 通过判据 |
 | --- | --- | --- |
-| T2-1 | **真库 migration 核对** | 生成列 / 5 张分区表 / 视图 / CHECK 逐条通过；`prisma migrate status` = up to date |
+| T2-1 | **真库 migration 核对** | 生成列 / **3 张**分区表（`stat_daily` / `operation_log` / `job_run_log`） / 视图 逐条通过；**CHECK 需 MySQL 8.0.16+**（8.0.12 会静默忽略 → 本机改由应用层单测兜底，判据见《开发计划-V1》M0-19）；`prisma migrate status` = up to date |
 | T2-2 | **动线端到端** | 用真账号走完本里程碑声明的那一段（不许只跑单测） |
 | T2-3 | **角色矩阵走查** | 按《前端页面与交互文档》§四.2：不可见页 403 / 不下发路由 |
 | T2-4 | `npm run gen:types` | 前端 `types.ts` **无 diff**（有 diff＝契约漂移） |

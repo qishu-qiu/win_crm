@@ -518,9 +518,9 @@ model BusinessRelation {
   updated_at       DateTime  @updatedAt @db.DateTime(0)
   deleted_at       DateTime? @db.DateTime(0)
 
-  company       Company            @relation(fields: [company_id], references: [id])
-  dept          Department         @relation(fields: [dept_id], references: [id])
-  product_line  ProductLine        @relation(fields: [product_line_id], references: [id])
+  company       Company            @relation(fields: [company_id], references: [id], onUpdate: Restrict)
+  dept          Department         @relation(fields: [dept_id], references: [id], onUpdate: Restrict)
+  product_line  ProductLine        @relation(fields: [product_line_id], references: [id], onUpdate: Restrict)
   members       RelationMember[]
   stage_logs    RelationStageLog[]
   labels        RelationLabel[]
@@ -554,7 +554,7 @@ model RelationMember {
   revoked_at  DateTime? @db.DateTime(0)
   owner_flag  BigInt?   @ignore @db.UnsignedBigInt // ★ 生成列：owner=relation_id，非owner=NULL（UK 手写 migration）
 
-  relation BusinessRelation @relation(fields: [relation_id], references: [id])
+  relation BusinessRelation @relation(fields: [relation_id], references: [id], onUpdate: Restrict)
 
   @@unique([relation_id, employee_id, member_type], map: "uk_member")
   @@index([employee_id, member_type, valid_until], map: "idx_my")
@@ -712,14 +712,14 @@ model ActionEvent {
   appointment_id     BigInt?  @db.UnsignedBigInt
   idempotency_key    String?  @db.VarChar(64)
   attachments        Json?
-  event_at           DateTime @default(now()) @db.DateTime(0) // ★ 分区键
+  event_at           DateTime @default(now()) @db.DateTime(0) // 事件发生时间（工作台时间线基准）；本表不分区
   created_at         DateTime @default(now()) @db.DateTime(0)
   updated_at         DateTime @updatedAt @db.DateTime(0)
 
   relation BusinessRelation? @relation(fields: [relation_id], references: [id], onDelete: Restrict)
 
-  // ⚠ uk_idem 必须含分区键 event_at，否则 PARTITION BY 建表报 ERROR 1503（migration 手写时确认）
-  @@unique([idempotency_key, event_at], map: "uk_idem")
+  // uk_idem = 全局唯一幂等键（防重复提交）；本表不分区，故无需含分区键
+  @@unique([idempotency_key], map: "uk_idem")
   @@index([relation_id, event_at], map: "idx_rel_time")
   @@index([relation_id, owner_snapshot, event_at], map: "idx_rel_owner") // ★ P0-⑤ 前主人跟单归组 + 历史轮次分组
   @@index([actor_id, event_at], map: "idx_actor_time")

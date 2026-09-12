@@ -68,7 +68,7 @@ npm run gen:types
 | ④-a | 《销售CRM设计规范》V1.0（需求规格/） | 视觉 / 组件 / token / 主题 |
 | ⑤ | 《销售CRM架构设计说明》V1.1（技术决策/） | 代码目录 / 模块边界 / 进程 / 扩展 |
 
-**动手前必读《需求规格/废止口径登记表》** —— 被推翻的 25 条旧口径集中登记，正文若仍出现旧说法以它为准。**`归档/` 内容默认不得作为实现依据。**
+**动手前必读《需求规格/废止口径登记表》**（现行 **V1.6**）—— 被推翻的 **28 条**旧口径集中登记，正文若仍出现旧说法以它为准。**`归档/` 内容默认不得作为实现依据。**
 
 **关键鉴别**：文档里标「**索引·非规范**」的章节（速查表、接口总目录、追溯索引、README 文档地图）**只作导航**，实现一律以**正文**为准；需求 **§十六《否决与后置清单》是★规范级**，收录全部「不做 / 已砍 / 后置 / 不是那样」，**"表里没有"才代表"允许"**。改文档时负面约束必须收全在 §十六。
 
@@ -131,7 +131,7 @@ npm run gen:types
 - **命名**：表名/字段名统一 `snake_case`；索引前缀 `idx_` / `uk_`；审计字段全表统一 `created_by/at`、`updated_by/at`；逻辑删除 `deleted_at`（NULL=未删）。
 - **枚举一律 `String`（VARCHAR(32) 英文码）**，展示文案走字典 `dict_item`，**不用 DB ENUM**。
 - **主键** `BigInt @db.UnsignedBigInt`；金额 `Decimal(12,2)`。
-- **Prisma 表达不了、必须手写 migration** 的 5 类：①生成列（`active_key`/`owner_flag`/`phone_active`，schema 用 `@ignore`，migration 里 `DROP` 后重建为 `GENERATED ... STORED` ＋唯一索引）；②5 张分区表（`action_event`/`daily_agenda`/`stat_daily`/`operation_log`/`job_run_log`）；③CHECK（如审批人≠申请人）；④视图 `v_contract_performance`（**业绩统计一律读此视图**）；⑤手机号/信用代码等 DB 级唯一约束。
+- **Prisma 表达不了、必须手写 migration** 的 5 类：①生成列（`active_key`/`owner_flag`/`phone_active`，schema 用 `@ignore`，migration 里 `DROP` 后重建为 `GENERATED ... STORED` ＋唯一索引）；②**3 张**分区表（`stat_daily`/`operation_log`/`job_run_log`；`action_event`/`daily_agenda` 因「分区表不能参与外键，ERROR 1506」已**放弃分区、改为保外键**）；③CHECK（如审批人≠申请人）；④视图 `v_contract_performance`（**业绩统计一律读此视图**）；⑤手机号/信用代码等 DB 级唯一约束。
 - **复杂查询 / 报表 / 递归 CTE** 走 `$queryRaw` ＋ `Prisma.sql`，不为迁就 Client API 牺牲 SQL 表达力。
 - `schema.prisma` 顶部注释与 `服务端/prisma/README.md` 是落库口径的完整说明，改表前先读。
 

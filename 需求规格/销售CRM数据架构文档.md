@@ -363,7 +363,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 - 组装规则与**降噪收敛**（逾期>3 天收入"逾期抽屉"、硬约束永远置顶、ignored 7 天不重复）及**防逃逸规则**（snoozed 上限 3 次、ignored 须填原因且经理可见、长期停滞自动降权）见 `→需求§10.4`
 - **组装方式 = 结转 + 新增（禁止"清空重写"）**：每日组装时先处理昨日遗留（`open` 行按规则结转/失效，`snoozed` 到期行推今日），再插入今日新命中的条目；`done`/`ignored` 状态跨天保留、不重复推。**理由**：避免行数线性膨胀、重复提醒、以及"整表重写导致处理状态丢失"。
 - **失败兜底**：本表是**预计算缓存**（真相源为 commitment/appointment/cadence/relation），05:00 任务失败时销售首页**实时用同一套组装逻辑现算兜底**，绝不返回空白；任务失败自动重试并告警（执行记录方案见日志设计）。
-- **生命周期**：按 `biz_date` 月分区；`done`/`ignored` 超期（建议 30/90 天）清理或分区归档。
+- **生命周期**：**不分区**（**2026-09-12 调整**：本表因「保外键」放弃分区，见 §十五.5 第 2 条）；`done`/`ignored` 超期（建议 30/90 天）定期清理。
 
 ### D5 卡点字典（走 dict，不建表）
 组 `pain_point`，种子见 §十三
@@ -555,9 +555,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 表 | 索引 |
 |---|---|
 | commitment | `idx_owner_due(owner_id, status, due_at)`、`idx_relation(relation_id)`、`idx_due(status, due_at)`、`idx_contact(contact_id)` |
-| action_event | `idx_rel_time(relation_id, event_at)`、`idx_actor_time(actor_id, event_at)`、`idx_pain(pain_point_id)`、**`uk_idem(idempotency_key)`**、`idx_appointment(appointment_id)`、`idx_contact(contact_id, event_at)`、`idx_rel_owner(relation_id, owner_snapshot, event_at)`（P0-④⑤ 新增）；**按 event_at 月分区** |
+| action_event | `idx_rel_time(relation_id, event_at)`、`idx_actor_time(actor_id, event_at)`、`idx_pain(pain_point_id)`、**`uk_idem(idempotency_key)`**、`idx_appointment(appointment_id)`、`idx_contact(contact_id, event_at)`、`idx_rel_owner(relation_id, owner_snapshot, event_at)`（P0-④⑤ 新增）；**不分区**（**2026-09-12 调整**：因「保外键」放弃分区，见 §十五.5 第 2 条） |
 | cadence_rule | `idx_scope(scope_dept_id, scope_line_id, enabled)` |
-| daily_agenda | `idx_user_day(user_id, biz_date, status)`、`idx_ref(ref_type, ref_id)`、`idx_relation(relation_id)`；**按 biz_date 月分区** |
+| daily_agenda | `idx_user_day(user_id, biz_date, status)`、`idx_ref(ref_type, ref_id)`、`idx_relation(relation_id)`；**不分区**（**2026-09-12 调整**：因「保外键」放弃分区，见 §十五.5 第 2 条） |
 | review | `idx_status_time(status, created_at)`、`idx_relation(relation_id)`、`idx_type_status(review_type, status)` |
 | stat_daily | **`uk_stat(biz_date, dept_id, product_line_id, owner_id, action_type)`**、`idx_owner_day(owner_id, biz_date)`；**按 biz_date 月分区** |
 
@@ -710,8 +710,8 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 | # | 场景 | 做法 |
 |---|---|---|
-| 1 | **生成列**<br>（`business_relation.active_key`、`relation_member.owner_flag`、`contact.phone_active`） | schema.prisma 中定义为**可选字段并加 `@ignore`**（Prisma Client 不暴露、不进入 create/update input，**杜绝"试图写入生成列"的运行时报错**）；**在 migration SQL 里手写** `ADD COLUMN x GENERATED ALWAYS AS (...) STORED` ＋ 唯一索引。应用层**不读不写**这些列——唯一性由 DB 兜底，冲突靠错误码识别（见第 3 条） |
-| 2 | **分区表**<br>（action_event / daily_agenda / stat_daily / operation_log / job_run_log） | Prisma 不支持 `PARTITION BY`：migration 中手写 `CREATE TABLE ... PARTITION BY RANGE ...`，schema.prisma 保持普通表定义（可能产生 drift 警告，可接受）。**⚠ 注意 §10.1 已确认：`action_event` 的 `uk_idem` 必须含分区键 `event_at`**，否则建表报 ERROR 1503 |
+| 1 | **生成列**<br>（`business_relation.active_key`、`relation_member.owner_flag`、`contact.phone_active`） | schema.prisma 中定义为**可选字段并加 `@ignore`**（Prisma Client 不暴露、不进入 create/update input，**杜绝"试图写入生成列"的运行时报错**）；**在 migration SQL 里手写** `ADD COLUMN x GENERATED ALWAYS AS (...) STORED` ＋ 唯一索引。应用层**不读不写**这些列——唯一性由 DB 兜底，冲突靠错误码识别（见第 3 条）。**⚠ 2026-09-12 实测补充：生成列引用的 FK 列必须为 `ON UPDATE RESTRICT`**（否则 ERROR 1215）——`business_relation.company_id / dept_id / product_line_id` 与 `relation_member.relation_id` **这 4 条外键已改**，其余外键不变 |
+| 2 | **分区表**<br>（**stat_daily / operation_log / job_run_log 三张**） | Prisma 不支持 `PARTITION BY`：migration 中手写 `ALTER TABLE ... PARTITION BY RANGE ...`，schema.prisma 保持普通表定义（可能产生 drift 警告，可接受）。**⚠ MySQL 规则：每个唯一键（含主键）都必须包含分区列，否则报 ERROR 1503**，故先扩主键含分区列。**🚫 2026-09-12 调整：原定的 `action_event` / `daily_agenda` 已放弃分区** —— 「分区表不能参与外键」（ERROR 1506）与「保外键」策略冲突；`action_event.uk_idem` 随之回退为**全局唯一 `(idempotency_key)`**（§10.1 原文即如此） |
 | 3 | **唯一约束冲突 → 409 / 422** | Prisma 唯一冲突错误码是 **P2002**（不是 MySQL 的 1062）。统一在异常过滤器映射：P2002 → 409（撞单 / 激活竞态 / 抢公海）/ 422（业务校验），并从 `meta.target` 读出命中的约束名，返回对应提示（如"已有归属：张三"） |
 | 4 | **复杂查询 / 报表 / 递归 CTE** | 经理看板、合并树递归（`WITH RECURSIVE`）、`GROUP BY` 聚合一律走 `$queryRaw` ＋ `Prisma.sql` 参数化防注入。**不为迁就 Client API 而牺牲 SQL 表达力** |
 | 5 | **JSON 字段**<br>（`ledger.extra_fields`、`contact.extra_phones`、`dept_rule.level_tiers` 等） | Prisma `Json` 类型原生支持 ✓。但**禁止在 JSON 列上做 `JSON_CONTAINS` 反向查询**（全表扫描，见 §十七 A.2）；高频检索的 key 走生成列或提升为正式字段 |

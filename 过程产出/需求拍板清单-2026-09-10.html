@@ -384,7 +384,7 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 <li>✅ <strong>第三批里"开工前该定"的 7 条，已写进《业务需求文档》V1.11</strong>（决策 #48~#54）；<strong>《数据架构文档》升 V1.14</strong>（<strong>新增 file_asset 文件资产表</strong>、<strong>新增 contract_split 业绩分配表</strong>、visit_log 字段精简、索引清单 <strong>43 → 45 张</strong>）。</li>
 <li>✅ <strong>ORM 已定：Prisma</strong>（2026-09-10 七叔拍板）——已写入 README §一 技术栈定案、并从 §七 待确认项划掉；《数据架构文档》§十五 新增第 5 条 <strong>《Prisma 落库口径》</strong>五条（生成列 <span class="mono">@ignore</span> ＋ migration 手写 <span class="mono">GENERATED ALWAYS AS ... STORED</span>；分区表手写 <span class="mono">PARTITION BY RANGE</span>；唯一冲突映射 <strong>P2002 → 409/422</strong>；复杂查询与递归 CTE 走 <span class="mono">$queryRaw</span>；JSON 列禁止反向 <span class="mono">JSON_CONTAINS</span>）。</li>
 <li>⬜ <strong>C 组 10 条后置</strong>——等系统跑起来、有真实反馈再定（现在拍是拍脑袋）。</li>
-<li>▶ <strong>下一步：开工建库</strong>——先写 <span class="mono">schema.prisma</span>（45 张表，可对着数据架构文档逐表检查），再手写生成列与分区 migration。</li>
+<li>▶ <strong>下一步：开工建库</strong>——先写 <span class="mono">schema.prisma</span>（<strong>当时 45 张；现行为 46 张</strong>，以《数据架构文档》V1.24 为准、逐表检查），再手写生成列与分区 migration。</li>
 </ol>
 </div>
 

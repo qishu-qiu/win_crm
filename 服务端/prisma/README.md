@@ -4,7 +4,7 @@
 
 ## schema.prisma
 
-- **45 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.14**（§三~§九 表、§十 索引、§十五 落库口径）。
+- **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.24**（§三~§九 表、§十 索引、§十五 落库口径）。
 - 已通过 **Prisma 6.19.3 校验**：`The schema at prisma/schema.prisma is valid 🚀`。
 
 ### 本地校验 / 格式化
@@ -18,7 +18,7 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 ## migrations / 0001_init / migration.sql
 
 - **生成方式**：`DATABASE_URL=占位 npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > migrations/0001_init/migration.sql`（**离线生成，不需要真库**）。
-- **内容** = **Prisma 生成的 baseline（45 张表 / 索引 / 外键）** ＋ **结尾「手工补充段」**（①生成列改造 ②5 张分区表改造 ③视图 `v_contract_performance` ④审批 CHECK）。
+- **内容** = **Prisma 生成的 baseline（46 张表 / 索引 / 外键）** ＋ **结尾「手工补充段」**（①生成列改造 ②5 张分区表改造 ③视图 `v_contract_performance` ④审批 CHECK）。
 - **⚠ 未在真实 MySQL 8 上跑过**：本环境无数据库，migration 为**静态产出**，首次建库时须在真库执行并逐条核对（重点：生成列表达式、分区键与主键扩列、ERROR 1503）。
 - **发现并已记录**：Prisma 会把 `@ignore` 字段建成普通列 → 手工段里 `DROP` 后重建为 `GENERATED`（见下）。
 

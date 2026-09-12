@@ -1,5 +1,6 @@
-# 销售 CRM 数据架构文档 V1.23（现行有效）
+# 销售 CRM 数据架构文档 V1.24（现行有效）
 
+> **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
 > **元铁律**：**L0 变更联动**（需求改 → 本文件同批改）｜**L1 单一事实源**（规则只在需求文档定义一次，本文只写指针）。
@@ -10,9 +11,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.23（现行有效）** / 2026-09-11 |
+| 版本 / 日期 | **V1.24（现行有效）** / 2026-09-11 |
 | 上游 | 《销售CRM业务需求文档》**V1.20**（业务规则唯一来源） |
-| 下游 | 《销售CRM接口API文档》**V1.3**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.4** |
+| 下游 | 《销售CRM接口API文档》**V1.9**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.12** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
 | 外部依赖 | 高德开放平台：JS API（坐标拾取器）。坐标系统一 **GCJ-02**（见 §五 B7） |
@@ -488,7 +489,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 场景 | 设计 |
 |---|---|
 | 撞单 | `contact.phone_active` 生成列唯一（未删行才占号）+ `company.credit_code`（撞码合并流程见 需求§7.3）；公司名**两段式**相似度（标准化+核心词，见 需求§7.3）。**历史号提示**：建号时回查 `contact_change_log`，命中旧号 → 提示"该号曾属于 XX"（**提示不拦截**） |
-| 激活竞态 | `business_relation.active_key` 生成列唯一索引——后到者 INSERT 撞 1062 → 409 返回归属人 |
+| 激活竞态 | `business_relation.active_key` 生成列唯一索引——后到者 INSERT 撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409 返回归属人 |
 | 抢公海认领 | 条件 UPDATE（`WHERE sea_status='company_sea'`），影响 1 行才算抢到，否则 409（见 §10.2-3） |
 | 一关系一 owner | `relation_member.owner_flag` 生成列唯一索引（见 §10.2-1） |
 | 编辑并发 | 主表 `updated_at` 乐观锁版本戳，更新带条件，影响 0 行即 409 |
@@ -588,11 +589,11 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 | # | 目标 | 实现 |
 |---|---|---|
-| 1 | **一关系仅一 owner** | `relation_member` 加生成列 `owner_flag = IF(member_type='owner', relation_id, NULL)`（STORED），`UNIQUE uk_owner(owner_flag)`。owner 唯一、collaborator 多行不受限；重复 owner 撞 1062 → 409 |
+| 1 | **一关系仅一 owner** | `relation_member` 加生成列 `owner_flag = IF(member_type='owner', relation_id, NULL)`（STORED），`UNIQUE uk_owner(owner_flag)`。owner 唯一、collaborator 多行不受限；重复 owner 撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409 |
 | 2 | **活跃手机号唯一**（软删/换号后号码释放） | `contact` 加生成列 `phone_active = IF(deleted_at IS NULL, phone, NULL)`（STORED），`UNIQUE uk_phone_active(phone_active)`。未删行占号、软删行变 NULL 放行；换号=改 phone 自动释放旧号。`company.credit_code`、`employee.work_no` **同理** |
 | 3 | **抢公海原子认领** | 认领 = 条件 UPDATE：`UPDATE business_relation SET sea_status='private', owner_id=? WHERE id=? AND sea_status='company_sea'`（同一事务写 relation_member owner + sea_record）。**影响行数=1 才算抢到**；=0 → 409「已被领走」 |
 | 4 | 撞单（已有） | `contact.phone`（→ 改为 `phone_active` 生成列唯一）+ `company.credit_code`；公司名相似度应用层；**撞码合并流程（信用代码撞重→墓碑合并）见 `→需求§7.3`**：B 打 `merged_into`→A、B.`credit_code` 置 NULL（UNIQUE 可空放行）、子表随 `relation_id`/`company_id` 重定向零改动 |
-| 5 | 激活竞态（已有） | `business_relation.active_key` 生成列唯一索引——后到者撞 1062 → 409 返回归属人 |
+| 5 | 激活竞态（已有） | `business_relation.active_key` 生成列唯一索引——后到者撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409 返回归属人 |
 
 > **注意**：生成列唯一索引上线前须**先清理存量重复**（否则 `ADD UNIQUE` 直接失败）。
 
@@ -663,7 +664,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 ---
 
-## 十四、需求追溯索引（本文件 ↔ 业务需求文档，变更时按此对账）
+## 十四、需求追溯索引（★ 索引·非规范：表结构以 §三~§十 为准）
+
+> **⚠ 本表是"对账索引"，不是"规范"。** 它只回答"这张表对应需求哪一节"，用于 L0 变更时双向核对。**字段 / 索引 / 字典的权威落点始终是 §三~§九 与 §10.1**，本表与正文不一致时以正文为准。
 
 | 本文件 | 对应业务需求 | 说明 |
 |---|---|---|
@@ -674,7 +677,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | B3-B6 联系人 | 需求 §7.2 联系人档案 | 跳槽留历史、手机号冻结、一人多号（附加号）、旧号回收提示 |
 | A10 operation_log / A13 job_run_log | 需求 §4.3 权限脱敏 / §10.4 | 全局审计日志、任务执行日志 |
 | D7 stat_daily | 需求 §10.4（统计口径派生） | 日级行为汇总（经理统计性能层） |
-| C1 business_relation | 需求 §5 三层模型 / §8 意向体系 | 阶段、紧迫、两轴 |
+| C1 business_relation | 需求 §5 两层模型 / §8 意向体系 | 阶段、紧迫、两轴 |
 | C2 relation_member | 需求 §5.2 归属 / §10.2 @求助 | owner 唯一、临时协同 |
 | C5 appointment | 需求 §10.2 | 完成必留事件 |
 | C7 competitor | 需求 §11.1 竞品三层 | 禁建档案库 |
@@ -743,6 +746,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | **V1.21** | **2026-09-11** | **多联系人·剩余两条采纳（L0 联动需求 V1.18，七叔定；★ 无表结构变更、无新增索引、无新增字段）**：①D2 多联系人口径补「跟单 Tab 联系人筛选芯片」纯展示说明（需方见前端 V1.10 页 6，数据层复用 `idx_contact(contact_id, event_at)` 即可，不新增查询结构）；②D2 补「新增联系人首跟提醒触发同口径」——关系下新增联系人触发 `dept_rule.newbie_first_follow_hours` 首跟提醒时，**以 `contact.decision_role` 为是否催的判据**（决策人/影响人催、执行人/未定不催），提醒生成逻辑读 `contact.decision_role`，**不新增字段/表/索引**。§一「上游」同步需求 V1.18。 |
 | **V1.22** | **2026-09-11** | **阶段推进治理（L0 联动需求 V1.19，七叔定；★ 无表结构变更、无新增索引）**：①**A9 `notification.biz_type` 新增 `stage_revert`**——阶段**往后退（rollback）**时触发经理通知（经理只知会、不审核、不拦截，流程照走）；②**C3 `relation_stage_log` 补「回退触发经理提醒」说明**——`action=rollback` 除留痕外额外发 `notification.biz_type=stage_revert`；③**阶段往前推＝销售一键确认即生效、系统不要求证据、经理不审核**（防"推进"变审批、销售绕系统），防糊弄靠「阶段 N 天未推进」这道闸门。§一「上游」同步需求 V1.19。 |
 | **V1.23** | **2026-09-11** | **P0-④⑤ 历史轮次展示 + 前主人归组（L0 联动需求 V1.20；API 见接口 V1.8 / 前端 V1.12）**：①**F2 `sea_record` 新增 `owner_id`**（每轮回海的归属人快照，与 `business_relation.owner_id` 同步写入）+ `reason` 枚举补 `dead(判死)/churn(流失)` + 索引补 `idx_owner(owner_id, dropped_at)`；②**D2 `action_event` 新增 `owner_snapshot`**（每条跟单创建时关系 owner 冗余快照，与 `actor_id` 区分）+ 索引补 `idx_rel_owner(relation_id, owner_snapshot, event_at)`；③**D2 展示口径新增"按归属轮次分组"**——以 `sea_record` 划轮次（轮次号＝已掉海次数+1，派生不落表），跟单先按轮次分组、轮次内按 `owner_snapshot` 归组（本轮 owner 主线/树杈、前主人按快照归组标姓名）；④**C3 补"历史轮次与终态"说明**——判死阶段保留、流失置 7，重新领取后从阶段 1 重来，上轮留痕保留。**共 +2 字段 +2 索引、0 新表**（与"加规则加行不加列"铁律一致）；`服务端/prisma/schema.prisma` + `migrations/0001_init` 已同步。§一「上游」同步需求 V1.20。 |
+| **V1.24** | **2026-09-11** | **口径残留校正（L0 联动 · ★ 无表结构变更、无字段/索引变动）**：①**§10.1 索引清单 + §10.2 三处「撞 1062 → 409」统一为 Prisma 口径**——应用层捕获的是 **`P2002`**（MySQL 1062 只是底层原码，**不得据此 catch**），与本文 §十五 第 5 条、接口 §2.4、README §二 一致；②**§一「下游」版本引用校正**为 接口 **V1.9** / 前端 **V1.12**（原写 V1.3 / V1.4 系早期值，已漂移）。**同步：《废止口径登记表》#17。** |
 
 ---
 

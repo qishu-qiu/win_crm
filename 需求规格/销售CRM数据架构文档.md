@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.25（现行有效）
+# 销售 CRM 数据架构文档 V1.26（现行有效）
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
@@ -11,8 +11,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.25（现行有效）** / 2026-09-12 |
-| 上游 | 《销售CRM业务需求文档》**V1.21**（业务规则唯一来源） |
+| 版本 / 日期 | **V1.26（现行有效）** / 2026-09-12 |
+| 上游 | 《销售CRM业务需求文档》**V1.22**（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》**V1.10**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.13** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
@@ -167,7 +167,8 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 ### B1 company 公司（唯一档案）
 | 字段 | 说明 |
 |---|---|
-| full_name | 公司全称，INDEX；查重（相似度应用层算） |
+| full_name | 公司全称，INDEX |
+| name_core | **★ 2026-09-12 新增（`→需求§7.3`）**：全称的**标准化核心词**——去地域 / 行业 / 公司类型词（安徽 / 信息技术 / 有限公司 / 股份 / 集团）、去括号与空格、全半角统一、英文大小写归一。**由服务端在建档 / 改名 / 合并时生成并落库**（生成规则见 `→需求§7.3`），INDEX。**两段式查重的第一段走本列**（精确匹配 / 前缀）**收缩候选集**，第二段才在候选集上算编辑距离——否则每录一个客户都要全表比一遍 |
 | credit_code | 统一社会信用代码 UNIQUE（可空；撞码强制使用已有档案） |
 | industry_l1/l2、province/city/district、scale | 行业/地区/规模 |
 | completeness_1/2/3 | 三档完善度 0-100（写入重算） |
@@ -396,6 +397,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 - **用途**：经理看板、跟进频率/健康度等**按部门/产品线/人聚合**的统计**一律读本表**；只有"点进去看具体哪几条"才回 `action_event` 钻取。
 - **不含关系（客户）维度**：单客户级统计（如**公海卡片"近 30 天 N 次"**）不走本表——按列表页的关系 id 集合做**一条 `GROUP BY relation_id` 批量查**（走 `action_event.idx(relation_id, event_at)`），一页一次查询即可，无需为此再建表。
 - **索引**：`uk_stat(biz_date, dept_id, product_line_id, owner_id, action_type)`、`idx_owner_day(owner_id, biz_date)`；保留策略同 `daily_agenda`（分区 + 超期归档）。
+- **★ 报表取数口径（2026-09-12 定，`→需求§7.10` / §十六 N10）**：本表只解决"**行为**"类统计。**关系状态变化类**指标（每日新增关系 / 成交 / 掉公海）**直接按基表时间戳按天聚合**——`business_relation.created_at` / `contract` 签约时间 / `sea_record.dropped_at`（各走自身索引），**不为报表另建快照表**。**"历史时点存量"类**（如"上月末各部门公海条数 / S 级客户家数"）**V1 不做**：`sea_status` / `customer_level` 只存当前值、历史时点无法回算；将来需要时由 V2 快照表解决——`sea_record` ＋ `relation_stage_log` ＋ `created_at` 时间轴完整，**历史可回填**。
 
 > **统计口径**：所有"看数"走 stat_daily（读小表、毫秒级）；所有"看明细"回 action_event。这是经理统计从"每次扫几百万行"降到"读几万行"的关键一层。
 
@@ -490,7 +492,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 | 场景 | 设计 |
 |---|---|
-| 撞单 | `contact.phone_active` 生成列唯一（未删行才占号）+ `company.credit_code`（撞码合并流程见 需求§7.3）；公司名**两段式**相似度（标准化+核心词，见 需求§7.3）。**历史号提示**：建号时回查 `contact_change_log`，命中旧号 → 提示"该号曾属于 XX"（**提示不拦截**） |
+| 撞单 | `contact.phone_active` 生成列唯一（未删行才占号）+ `company.credit_code`（撞码合并流程见 需求§7.3）；公司名**两段式**相似度（标准化+核心词，见 需求§7.3）——**第一段走 `company.idx_name_core` 精确 / 前缀收缩候选集，第二段才在候选集上算编辑距离**（2026-09-12 定）。**历史号提示**：建号时回查 `contact_change_log`，命中旧号 → 提示"该号曾属于 XX"（**提示不拦截**） |
 | 激活竞态 | `business_relation.active_key` 生成列唯一索引——后到者 INSERT 撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409 返回归属人 |
 | 抢公海认领 | 条件 UPDATE（`WHERE sea_status='company_sea'`），影响 1 行才算抢到，否则 409（见 §10.2-3） |
 | 一关系一 owner | `relation_member.owner_flag` 生成列唯一索引（见 §10.2-1） |
@@ -528,7 +530,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 | 表 | 索引 |
 |---|---|
-| company | **`uk_credit_code`**、`idx_full_name`、`idx_geo(latitude, longitude)`（预留）、`idx_merged(merged_into)`（墓碑查询：列出已并入某公司的档案） |
+| company | **`uk_credit_code`**、`idx_full_name`、**`idx_name_core(name_core)`（★ 2026-09-12 新增：两段式查重第一段，按标准化核心词收缩候选集）**、`idx_geo(latitude, longitude)`（预留）、`idx_merged(merged_into)`（墓碑查询：列出已并入某公司的档案） |
 | company_profile_tag | **`uk_cpt(company_id, group_code, tag_id)`**、`idx_tag(tag_id)`（用量统计） |
 | contact | `idx_name`、**`uk_phone_active`（生成列 `phone_active`：未删=phone，已删=NULL → 仅活跃行唯一，软删后号码释放）**、`idx_merged_contact(merged_into)`（被并分支查询） |
 | contact_trait | **`uk_ct(contact_id, trait_id)`**、`idx_trait(trait_id)` |
@@ -630,7 +632,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 动线清理 | 每日 | daily_agenda 中 done/ignored 超期（建议 30/90 天）行清理或分区归档 |
 | 日级行为汇总 | 每日 05:00 | 从 action_event 按 `biz_date×部门×产品线×人×动作类型` GROUP BY 回填 `stat_daily`（可按 biz_date 覆盖重跑）；供经理看板/健康度读取；记 job_run_log |
 | 承诺提醒 | 到点/每日 | remind_at 到 → notification；逾期未办 → 次日动线置顶红（>3 天收进逾期抽屉） |
-| 节奏提醒 | 每日 | cadence_rule 逐条命中（新客 48h / S 级客情 / 灰度定性 / 周重点周五清点） |
+| 节奏提醒 | 每日 | **★ 实现口径写死（2026-09-12 定，`→需求§10.3` / §十六 N9）**：**每条 cadence_rule ＝ 一条集合式 SQL（WHERE ＋ 走索引），禁止"规则 × 客户"双层遍历**——各谓词均可收缩为索引范围扫（新客 48h 走 `business_relation.created_at` / `contact.created_at`；S 级客情、灰度定性、距掉海走 `idx_sea_scan(last_event_at, sea_status)`）。命中结果按 D4 组装进 `daily_agenda`；覆盖 5 类：新客 48h / S 级客情 / 灰度定性 / 周重点周五清点 / 待关联补全。**「增量扫描 / 到期队列（`next_cadence_at` 列）」＝ V2 选项，V1 不做** |
 | 掉海预警（私海→公海） | 每小时 | 按 sea_rule：≤3 天进动线；到期前 24h 推销售；6h 标红+推经理；超期落 sea_record 转**公司公海**（部门映射保留，仍显示于部门公海） |
 | 公海停留超期（经理决策） | 每日 | 扫描 `company_sea` 中归口本部门、停留超期的无主关系 → 生成**经理决策待办**（保留 / 删除关系）；**不自动删除、不自动流转**（`→需求§6.3`） |
 | 灰度寿命 | 每日 | urgency=gray 超 `gray_remind_days` → **提醒下结论**（**不产生释放候选、不落 `gray_release_at`**；灰度到期由掉海任务照常处理） |

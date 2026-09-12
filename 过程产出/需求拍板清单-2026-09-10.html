@@ -67,7 +67,7 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
     <span>第二批 ✅ 已落 V1.10</span>
     <span>第三批可定的 7 条 ✅ 已落 V1.11</span>
     <span>ORM ✅ Prisma</span>
-    <span>C 组 10 条后置</span>
+    <span>C 组 10 条 ✅ 已结清（09-12）</span>
     <span>代码已废弃，不涉及</span>
   </div>
 </header>
@@ -329,7 +329,7 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 
 <div class="box bx-green">
 <span class="bt">2026-09-10：可开工前定的 7 条已拍板并落文档（需求 V1.11 ＋ 数据架构 V1.14）</span>
-其余 10 条（C 组）**建议等系统跑起来、有真实反馈再定**——现在拍是拍脑袋。
+其余 10 条（C 组）原建议"等系统跑起来、有真实反馈再定"——<strong>2026-09-12 已全部拍板并落正文</strong>（逐条去向见下表），待定项清零。
 </div>
 
 <table>
@@ -363,21 +363,22 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 </div>
 
 <!-- 附录 -->
-<h2>附录 · 技术项（我直接定了，你不用拍）</h2>
+<h2>附录 · 技术项（★ 2026-09-12 已逐条确认并结清）</h2>
 <div class="card">
-<p class="small" style="margin-top:0">这几条是纯技术活，不影响业务规则，我在报告里已给结论。列出来只是让你知道有这么回事。</p>
+<p class="small" style="margin-top:0">这 5 条是我在《全量盘点评审》报告里自己提的技术建议。原以为"纯技术活、不用你拍"，但 2026-09-12 逐条核对后实测：<strong>只有 1 条真落了文档，其余 4 条没落</strong>——已按你的选择全部结清，落点见下表。</p>
 <table>
-<tr><th style="width:30%">事项</th><th>处理结论</th></tr>
-<tr><td>建表会报错的硬伤</td><td><code>action_event</code> 要按月分区，但它的幂等唯一索引不含分区键，MySQL 会直接拒绝建表。<strong>改法</strong>：唯一索引加上月份字段，或把幂等校验挪到 Redis。</td></tr>
-<tr><td>公司名查重太慢</td><td>核心词是临时算的、没索引，每录一个客户都要全表比一遍。<strong>改法</strong>：加一列"标准化后的核心词"＋索引，先精确匹配再算相似度。零成本，不用等全文索引。</td></tr>
-<tr><td>报表有 3/4 出不来</td><td>现有的日汇总只统计"动作"，但"新增客户/成交/掉海"是<strong>关系状态变化</strong>，算不出来。<strong>改法</strong>：补一张"关系每日快照"表。</td></tr>
-<tr><td>节奏规则每天全量扫</td><td>规则×客户＝每天上百万次判断。<strong>改法</strong>：改成增量扫描，只扫有变化的那批。</td></tr>
-<tr><td>公海列表按"被跟过热度"排序</td><td>销售最爱"捡软柿子"，但现在排不了序。<strong>改法</strong>：在关系表上加一个"近 30 天跟进次数"的冗余计数，每天批量刷新。</td></tr>
+<tr><th style="width:20%">事项</th><th style="width:34%">当初的"改法"</th><th>最终结论 / 落点</th></tr>
+<tr><td><strong>技-1</strong> 建表会报错的硬伤</td><td><code>action_event</code> 的幂等唯一索引不含分区键，MySQL 拒绝建表。</td><td>✅ <strong>早已落</strong>（数据架构 §十五.5 第 2 条：<code>uk_idem</code> 必须含分区键 <code>event_at</code>）。<strong>不用拍。</strong></td></tr>
+<tr><td><strong>技-2</strong> 公司名查重太慢</td><td>加一列"标准化核心词"＋索引，先精确匹配再算相似度。</td><td>✅ <strong>选 A · 已落</strong>：<code>company.name_core</code> ＋ <code>idx_name_core</code>（数据架构 §B1 / §10.1 / §10.2-4 ＋ 需求 §7.3）＋ <span class="mono">schema.prisma</span> 与 baseline migration 同步。</td></tr>
+<tr><td><strong>技-3</strong> 报表有 3/4 出不来</td><td>补一张"关系每日快照"表。</td><td>🔻 <strong>选 B · 不建表</strong>：逐条核对后 <strong>需求 §7.10 的 9 张报表一条都不缺</strong>（流量类按基表时间戳按天聚合即可）；只有"历史时点存量"算不出，而时间轴可回放、<strong>V2 补表能回填历史</strong> → 落 <strong>需求 §十六 N10</strong> ＋ 数据架构 §D7。</td></tr>
+<tr><td><strong>技-4</strong> 节奏规则每天全量扫</td><td>改成增量扫描，只扫有变化的那批。</td><td>🔻 <strong>选 B+ · 不加列</strong>："上百万次判断"是<strong>写法</strong>造成的——改成"<strong>每条规则一条集合式 SQL（走索引）、禁止规则×客户 双层遍历</strong>"即可；增量列会撞 T1 铁律（主表永不新增判断列） → 落 <strong>数据架构 §十二</strong>（写死实现口径）＋ <strong>需求 §十六 N9</strong>。</td></tr>
+<tr><td><strong>技-5</strong> 公海列表按"热度"排序</td><td>加一列"近 30 天跟进次数"冗余计数，每天刷新。</td><td>🔻 <strong>选 B · 不做</strong>：这条"需求"<strong>从未进过需求正文</strong>（是我在报告里自己提的）；且公海里"被跟过多次"是<strong>反面信号</strong>（跟不动才掉回来） → 落 <strong>需求 §6.3</strong>（默认按掉海时间倒序）＋ <strong>§十六 N11</strong>。</td></tr>
 </table>
+<p class="small" style="margin-bottom:0">★ 5 条的共同点：<strong>"批量查"给不了排序、"全量扫"是写法问题、"快照表"被误诊、"热度排序"不是需求</strong>——原报告的"改法"里有 <strong>3 条是提前付代价</strong>。核对完只留了 1 条真正要落的结构改动（技-2 加一列），<strong>表数仍 46 张</strong>。</p>
 </div>
 
 <div class="box bx-green">
-<span class="bt">第一批已完成 —— 剩下什么</span>
+<span class="bt">已落文档总账 —— 各批次结清情况与下一步</span>
 <ol style="margin-bottom:0">
 <li>✅ 第一批 8 条 ＋ 跟单录入 ＋ 目标层，已写进<strong>《业务需求文档》V1.9</strong>（决策 #31~#39、速查 #23~#27、新增 §7.11）。</li>
 <li>✅ 表结构同步，<strong>《数据架构文档》升 V1.12</strong>：dept_id 恒定不可变、sea_status 语义改写、customer_level 口径写死、stage 扩为 7 步（加"已流失"）、outcome 增 <span class="mono">no_answer</span>、<strong>新增 A14 target 月目标表</strong>（索引清单 42→43 张）、补 FAQ A.4「掉公海为什么不动 dept_id」。</li>
@@ -386,7 +387,8 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 <li>✅ <strong>第三批里"开工前该定"的 7 条，已写进《业务需求文档》V1.11</strong>（决策 #48~#54）；<strong>《数据架构文档》升 V1.14</strong>（<strong>新增 file_asset 文件资产表</strong>、<strong>新增 contract_split 业绩分配表</strong>、visit_log 字段精简、索引清单 <strong>43 → 45 张</strong>）。</li>
 <li>✅ <strong>ORM 已定：Prisma</strong>（2026-09-10 七叔拍板）——已写入 README §一 技术栈定案、并从 §七 待确认项划掉；《数据架构文档》§十五 新增第 5 条 <strong>《Prisma 落库口径》</strong>五条（生成列 <span class="mono">@ignore</span> ＋ migration 手写 <span class="mono">GENERATED ALWAYS AS ... STORED</span>；分区表手写 <span class="mono">PARTITION BY RANGE</span>；唯一冲突映射 <strong>P2002 → 409/422</strong>；复杂查询与递归 CTE 走 <span class="mono">$queryRaw</span>；JSON 列禁止反向 <span class="mono">JSON_CONTAINS</span>）。</li>
 <li>✅ <strong>C 组 10 条后置 —— 2026-09-12 全部结清</strong>（见上表逐条去向）：多数已揉进正文，末 3 条（解锁限额 / 预约过期 / 台账合同重复）于 09-12 拍板并落 §4.3 / §10.4 / §7.6 ＋ §十五 #41~#43 ＋ §十六 N6~N8。<strong>待定项清零</strong>。</li>
-<li>▶ <strong>下一步：开工建库</strong>——先写 <span class="mono">schema.prisma</span>（<strong>46 张</strong>，以《数据架构文档》V1.25 为准、逐表检查），再手写生成列与分区 migration。</li>
+<li>✅ <strong>附录 5 条技术项 —— 2026-09-12 逐条结清</strong>（见上表）：需求升 <strong>V1.22</strong>（§7.3 查重落点 ＋ §6.3 公海列表排序 ＋ §十六 <strong>N9~N11</strong>）、数据架构升 <strong>V1.26</strong>（<span class="mono">company.name_core</span> ＋ <span class="mono">idx_name_core</span>、§十二 节奏扫描实现口径、§D7 报表取数口径）；<span class="mono">schema.prisma</span> 与 0001_init migration 已同步，<strong>表数仍 46 张</strong>。</li>
+<li>▶ <strong>下一步：开工建库</strong>——先写 <span class="mono">schema.prisma</span>（<strong>46 张</strong>，以《数据架构文档》V1.26 为准、逐表检查），再手写生成列与分区 migration。</li>
 </ol>
 </div>
 
@@ -399,7 +401,7 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 <div class="foot">
   本清单来自《需求与数据库全量盘点评审-2026-09-10.html》的 46 条待决问题，已按"是否阻塞开工"重新分组、改写为大白话，并给出默认建议。<br>
   <strong>性质：只评不改</strong>——截至生成时未修改任何现行规格文档。七叔拍板后再统一落文档并升版。<br>
-  <strong>⚠ 时态提醒（2026-09-12 补）</strong>：本表是 <strong>2026-09-10 快照</strong>；正文里出现的 <span class="mono">V1.9 / V1.11 / V1.12 / V1.14</span> 等<strong>均为"当时的版本"</strong>，不是现行。现行版本一律以 <strong>README §十 文档地图</strong>为准（需求 V1.21 / 数据架构 V1.25 / 接口 V1.10 / 前端 V1.13）。<strong>C 组 10 条已于 2026-09-12 全部结清，待定项清零。</strong>
+  <strong>⚠ 时态提醒（2026-09-12 补）</strong>：本表是 <strong>2026-09-10 快照</strong>；正文里出现的 <span class="mono">V1.9 / V1.11 / V1.12 / V1.14</span> 等<strong>均为"当时的版本"</strong>，不是现行。现行版本一律以 <strong>README §十 文档地图</strong>为准（需求 V1.22 / 数据架构 V1.26 / 接口 V1.10 / 前端 V1.13）。<strong>C 组 10 条已于 2026-09-12 全部结清，待定项清零。</strong>
 </div>
 
 </div>

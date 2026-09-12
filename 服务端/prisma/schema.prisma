@@ -1,6 +1,6 @@
 // =============================================================================
 // 销售 CRM — Prisma Schema（46 张表）
-// 真相源：《需求规格/销售CRM数据架构文档》V1.25 §三~§九（表）、§十（索引）、§十五（落库口径）
+// 真相源：《需求规格/销售CRM数据架构文档》V1.26 §三~§九（表）、§十（索引）、§十五（落库口径）
 // ORM 定案：Prisma（2026-09-10）；MySQL 8.0+ / InnoDB / utf8mb4
 //
 // ★ Prisma 落库口径（数据架构 §十五.5，务必遵守）：
@@ -333,6 +333,7 @@ model Target {
 model Company {
   id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   full_name      String    @db.VarChar(200)
+  name_core      String?   @db.VarChar(200) // ★ B1 2026-09-12：标准化核心词（去地域/行业/公司类型词），服务端建档/改名时生成；两段式查重第一段
   credit_code    String?   @unique(map: "uk_credit_code") @db.VarChar(32) // 可空；撞码强制使用已有档案
   industry_l1    String?   @db.VarChar(64)
   industry_l2    String?   @db.VarChar(64)
@@ -364,6 +365,7 @@ model Company {
   ledgers            Ledger[]
 
   @@index([full_name], map: "idx_full_name")
+  @@index([name_core], map: "idx_name_core")
   @@index([latitude, longitude], map: "idx_geo")
   @@index([merged_into], map: "idx_merged")
   @@map("company")

@@ -266,6 +266,7 @@ CREATE TABLE `target` (
 CREATE TABLE `company` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `full_name` VARCHAR(200) NOT NULL,
+    `name_core` VARCHAR(200) NULL,
     `credit_code` VARCHAR(32) NULL,
     `industry_l1` VARCHAR(64) NULL,
     `industry_l2` VARCHAR(64) NULL,
@@ -293,6 +294,7 @@ CREATE TABLE `company` (
 
     UNIQUE INDEX `uk_credit_code`(`credit_code`),
     INDEX `idx_full_name`(`full_name`),
+    INDEX `idx_name_core`(`name_core`),
     INDEX `idx_geo`(`latitude`, `longitude`),
     INDEX `idx_merged`(`merged_into`),
     PRIMARY KEY (`id`)

@@ -1,9 +1,9 @@
-# 销售 CRM 接口 API 文档 V1.9
+# 销售 CRM 接口 API 文档 V1.10
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据。
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》**V1.20**、《销售CRM数据架构文档》**V1.24**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.12**（均 需求规格/）。
-> 生效日期：2026-09-11 ｜ 状态：**V1.9**（口径残留校正版 · 紧随需求 V1.20 / 数据架构 V1.24 / 前端 V1.12）。
+> 配套真相源：《销售CRM业务需求文档》**V1.21**、《销售CRM数据架构文档》**V1.25**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.13**（均 需求规格/）。
+> 生效日期：2026-09-12 ｜ 状态：**V1.10**（待定项拍板版 · 紧随需求 V1.21 / 数据架构 V1.25 / 前端 V1.13）。
 
 ---
 
@@ -163,6 +163,7 @@
 | 合同 | contract | /contracts | G/P/U | 合同 |
 | 合同 | contract | /contracts/:id/payments | G/P | 回款流水 |
 | 合同 | contract | /contracts/:id/splits | G/P/U | 合同业绩分配（默认 signer100%）|
+| 合同 | contract | /contracts/suspected-duplicates | G ★ | **疑似重复合同清单**（只检测、不合并，经理判定；`→需求§7.6`）|
 | 工单 | workorder | /workorders | G/P/U | 工单（售后/商机双分类）|
 | 工单 | workorder | /workorders/:id/convert | P ★ | 商机↔工单**双向流转**（`→需求§6.4`）|
 | 台账 | ledger | /ledgers | G | 客户台账（JSON 扩展列）|
@@ -236,6 +237,7 @@
 - `POST /contracts/:id/payments`：回款流水；`voucher_file_id` 指向 `file_asset`（补上悬空外键，`→架构B8`）。
 - `POST /contracts/:id/splits`：默认 signer 100%；填「给谁多少」合计须 100%；**不配费率/不分类型/不走审批**（`→需求§7.6` `→架构E7`）。
 - 签约校验：点「签合同」时按**本条业务线必填清单**卡（完善度百分比只展示不卡，`→需求§7.3` `→需求§十六`）；创建前服务端按 `sign_checklist` 预校验＋硬卡（见 §5.15 / §5.9 校验结构），缺失返回 422 + 缺失清单。
+- `GET /contracts/suspected-duplicates`：**经理侧**「疑似重复合同」清单。入参可选 `{window_days?}`（默认 7）；按 **同 `company_id` ＋ 同 `signer_id` ＋ 同 `amount` ＋ `sign_date` 相近（≤ `window_days`）** 分组，返回可疑对 `[{contracts:[{id,contract_no,amount,sign_date,signer_id}], company_id}]`。**只读、只"找"**——**无自动合并/拦截端点**；经理在前端点选"合并/保留"走既有合同编辑/作废流程，判定留痕（`→需求§7.6` `→需求§十六` N7）。**同号重复**仍由 `uk_contract_no` 在 `POST /contracts` 时以 `P2002` → 409 拦死。
 
 ### 4.9 工单 workorder
 - `type` ∈ `after_sale` / `opportunity`（双分类）；商机↔工单双向流转（`→需求§6.4` `→架构E3`）。

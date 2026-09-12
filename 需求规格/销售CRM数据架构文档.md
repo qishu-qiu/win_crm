@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.24（现行有效）
+# 销售 CRM 数据架构文档 V1.25（现行有效）
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
@@ -11,9 +11,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.24（现行有效）** / 2026-09-11 |
-| 上游 | 《销售CRM业务需求文档》**V1.20**（业务规则唯一来源） |
-| 下游 | 《销售CRM接口API文档》**V1.9**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.12** |
+| 版本 / 日期 | **V1.25（现行有效）** / 2026-09-12 |
+| 上游 | 《销售CRM业务需求文档》**V1.21**（业务规则唯一来源） |
+| 下游 | 《销售CRM接口API文档》**V1.10**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.13** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
 | 外部依赖 | 高德开放平台：JS API（坐标拾取器）。坐标系统一 **GCJ-02**（见 §五 B7） |
@@ -407,6 +407,8 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 `contract_no` UNIQUE + `relation_id` + `product_line_id` + `contact_id` + `signer_id`(**签单人锁定=业绩归属，终身不变**) + `amount` + `paid_amount` + `pay_type` + `sign_date` + `service_start/end` + `auto_renew` + `remind_days` JSON(30/60/90) + `attachments` JSON + `status`(unpaid/partial/running/done/terminated)
 
 > **维护归属**：维护责任跟**业务关系当前 owner** 走（`→需求§5.2`），**不再单独设 maintainer 字段**——避免签单人/维护人/owner 三套归属打架。
+
+> **★ 疑似重复合同（2026-09-12，`→需求§7.6`）**：**不新增表、不新增列**。`contract_no` 唯一约束（`uk_contract_no`）已在库层拦死"同号重复"；**"逻辑重复"（同一笔真合同两个不同编号）由应用层按规则检测**——`GET /contracts/suspected-duplicates`：**同 `company_id`（经 `relation_id` 归到同一家公司）＋同 `signer_id` ＋同 `amount` ＋`sign_date` 相近（默认 ≤7 天）** 分组返回可疑对。**系统只列清单给经理，不自动合并 / 不自动拦截 / 不自动删**（`→需求§十六` N7）：同公司同金额可能是两笔真合同（续费/增购），**判定重复是人的活**。
 
 ### E2 payment_record 回款流水
 `contract_id + amount + paid_at + method + voucher_file_id + created_by`；事务内更新 contract.paid_amount/状态，按 dept_rule 重算 customer_level，写 ledger

@@ -343,21 +343,23 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 <tr><td>B</td><td>外出登记</td><td><strong>砍到只剩三样</strong>：出去时间、去干什么（一句话）、回来点一下记时间；可选关联客户。<strong>砍掉</strong>预计返回时间、交通方式。<strong>让行政知道他不在公司去干啥了，不扯别的。</strong></td></tr>
 </table>
 
-<h3>C 组 · 这 10 条等系统跑起来再定</h3>
+<h3>C 组 · 10 条（✅ 2026-09-12 全部结清）</h3>
 <div class="card">
-<p class="small" style="margin-top:0">理由：还没真实使用就拍，是拍脑袋；用起来再拍，才有依据。</p>
-<div>
-<span class="pill">手机号解锁要不要限额（防批量捞号）</span>
-<span class="pill">外出登记能不能一键转成跟单</span>
-<span class="pill">交付 / 客服能看多少客户跟单</span>
-<span class="pill">客户要求换销售，从哪提</span>
-<span class="pill">赢单弹药库加行业 / 规模检索</span>
-<span class="pill">合并历史最多允许几层</span>
-<span class="pill">通知和今日动线会不会重复提醒</span>
-<span class="pill">预约过期还强不强制留事件</span>
-<span class="pill">联系人跳槽后他名下的承诺怎么办</span>
-<span class="pill">台账和合同重复字段以谁为准</span>
-</div>
+<p class="small" style="margin-top:0">原计划"等系统跑起来再定"。2026-09-12 已<strong>全部拍板并落正文</strong>——多数早前已揉进 §4~§14，末 3 条（解锁限额 / 预约过期 / 台账合同重复）于 09-12 结清。逐条去向：</p>
+<table>
+<tr><th style="width:46%">问题</th><th>结论 / 落点</th></tr>
+<tr><td>手机号解锁要不要限额</td><td><strong>不设次数 / 频率上限</strong>（只留痕给经理看，"管人"是经理的活）→ 需求 §4.3 · §十五 #41 · §十六 N6</td></tr>
+<tr><td>预约过期还强不强制留事件</td><td><strong>只提醒、不强制</strong>（逾期置顶标红 / 收抽屉；不自动判死 / 降级 / 关闭关系）→ §10.4 · §十五 #43 · §十六 N8</td></tr>
+<tr><td>台账和合同重复字段以谁为准</td><td>同号重复由 <code>contract_no</code> 唯一约束<strong>天然拦死</strong>；"同一笔真合同被录成两笔（不同号）"由系统<strong>"检测 + 列清单给经理"、不自动合并</strong>（合并 / 保留由经理点）→ §7.6 · §十五 #42 · §十六 N7</td></tr>
+<tr><td>外出登记能不能一键转成跟单</td><td><strong>不做</strong>（外出登记不产生业务事件，纯行政）→ §7.5 · §十四.2</td></tr>
+<tr><td>交付 / 客服能看多少客户跟单</td><td>仅"服务中"客户、<strong>只读</strong>、不触发掉公海 → §4.1 / §7.7</td></tr>
+<tr><td>客户要求换销售，从哪提</td><td>走<strong>转交审批</strong>（审批中心）→ §5.2 / §7.9</td></tr>
+<tr><td>赢单弹药库加行业 / 规模检索</td><td><strong>可搜</strong> → §11</td></tr>
+<tr><td>合并历史最多允许几层</td><td>合并三层规则 → §7.3 · §十六 #27~#30</td></tr>
+<tr><td>通知和今日动线会不会重复提醒</td><td><strong>相同类型 / 原因的提醒自动合并成一条</strong> → §10.4 · §十五 #40</td></tr>
+<tr><td>联系人跳槽后他名下的承诺怎么办</td><td><strong>未兑现承诺跟客户走</strong>（随关系转新 owner）→ §5.2</td></tr>
+</table>
+<p class="small" style="margin-bottom:0">★ 末 3 条贯穿同一信条：<strong>"这只是个助手系统——系统不要干需要人干的活"</strong>（系统只管留痕 / 找可疑 / 提醒，判断与干预是经理的活）。</p>
 </div>
 
 <!-- 附录 -->
@@ -383,8 +385,8 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 <li>✅ <strong>第二批 8 条 ＋ 2 条细节，已写进《业务需求文档》V1.10</strong>（决策 #40~#47、速查 #28~#34）；<strong>《数据架构文档》升 V1.13</strong>（outcome 扩为「有效沟通三值 ＋ 快速标记三型」、`last_event_at` 只由有效沟通更新、stage 7 语义修正为"可回公海"、`value_tier` 加 422 校验、`sea_rule` 新增 `effective_from` 7 天缓冲、B1 补「老客户」徽标派生口径）。</li>
 <li>✅ <strong>第三批里"开工前该定"的 7 条，已写进《业务需求文档》V1.11</strong>（决策 #48~#54）；<strong>《数据架构文档》升 V1.14</strong>（<strong>新增 file_asset 文件资产表</strong>、<strong>新增 contract_split 业绩分配表</strong>、visit_log 字段精简、索引清单 <strong>43 → 45 张</strong>）。</li>
 <li>✅ <strong>ORM 已定：Prisma</strong>（2026-09-10 七叔拍板）——已写入 README §一 技术栈定案、并从 §七 待确认项划掉；《数据架构文档》§十五 新增第 5 条 <strong>《Prisma 落库口径》</strong>五条（生成列 <span class="mono">@ignore</span> ＋ migration 手写 <span class="mono">GENERATED ALWAYS AS ... STORED</span>；分区表手写 <span class="mono">PARTITION BY RANGE</span>；唯一冲突映射 <strong>P2002 → 409/422</strong>；复杂查询与递归 CTE 走 <span class="mono">$queryRaw</span>；JSON 列禁止反向 <span class="mono">JSON_CONTAINS</span>）。</li>
-<li>⬜ <strong>C 组 10 条后置</strong>——等系统跑起来、有真实反馈再定（现在拍是拍脑袋）。</li>
-<li>▶ <strong>下一步：开工建库</strong>——先写 <span class="mono">schema.prisma</span>（<strong>当时 45 张；现行为 46 张</strong>，以《数据架构文档》V1.24 为准、逐表检查），再手写生成列与分区 migration。</li>
+<li>✅ <strong>C 组 10 条后置 —— 2026-09-12 全部结清</strong>（见上表逐条去向）：多数已揉进正文，末 3 条（解锁限额 / 预约过期 / 台账合同重复）于 09-12 拍板并落 §4.3 / §10.4 / §7.6 ＋ §十五 #41~#43 ＋ §十六 N6~N8。<strong>待定项清零</strong>。</li>
+<li>▶ <strong>下一步：开工建库</strong>——先写 <span class="mono">schema.prisma</span>（<strong>46 张</strong>，以《数据架构文档》V1.25 为准、逐表检查），再手写生成列与分区 migration。</li>
 </ol>
 </div>
 
@@ -396,7 +398,8 @@ ul,ol{padding-left:22px;margin:8px 0;} li{margin:5px 0;}
 
 <div class="foot">
   本清单来自《需求与数据库全量盘点评审-2026-09-10.html》的 46 条待决问题，已按"是否阻塞开工"重新分组、改写为大白话，并给出默认建议。<br>
-  <strong>性质：只评不改</strong>——截至生成时未修改任何现行规格文档。七叔拍板后再统一落文档并升版。
+  <strong>性质：只评不改</strong>——截至生成时未修改任何现行规格文档。七叔拍板后再统一落文档并升版。<br>
+  <strong>⚠ 时态提醒（2026-09-12 补）</strong>：本表是 <strong>2026-09-10 快照</strong>；正文里出现的 <span class="mono">V1.9 / V1.11 / V1.12 / V1.14</span> 等<strong>均为"当时的版本"</strong>，不是现行。现行版本一律以 <strong>README §十 文档地图</strong>为准（需求 V1.21 / 数据架构 V1.25 / 接口 V1.10 / 前端 V1.13）。<strong>C 组 10 条已于 2026-09-12 全部结清，待定项清零。</strong>
 </div>
 
 </div>

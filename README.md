@@ -56,7 +56,9 @@ frontend/  Vue3 桩   → 已移入 归档/旧代码/frontend/（不采用）
 
 **重开时的技术栈**：NestJS 12 + MySQL 8 + Redis + **Prisma**（见 §一）；表结构以《销售CRM数据架构文档》V1.27（46 张表）为准；Prisma 落库口径见该文档 §十五 第 5 条。
 
-> **★ 2026-09-11 第一步已完成**：`服务端/prisma/schema.prisma` 已按数据架构 V1.27 写出 **46 张表**（含 P0-②~⑤ 字段增量：`action_event.relation_id` 可空 + `owner_snapshot`、`sea_record.owner_id`、`sign_checklist` 等），并通过 **Prisma 6.19.3 校验**（`The schema is valid 🚀`）。生成列（`@ignore`）、分区表、手写 migration 清单、`P2002→409/422` 等口径见 `服务端/prisma/README.md`。**下一步**：手写生成列/分区的 migration → 建库 → 按域 A/B/C→D→E/G→F 顺序实现模块（数据架构 §十五.4）。
+> **★ 2026-09-11 第一步已完成**：`服务端/prisma/schema.prisma` 已按数据架构 V1.27 写出 **46 张表**（含 P0-②~⑤ 字段增量：`action_event.relation_id` 可空 + `owner_snapshot`、`sea_record.owner_id`、`sign_checklist` 等），并通过 **Prisma 6.19.3 校验**（`The schema is valid 🚀`）。生成列（`@ignore`）、分区表、手写 migration 清单、`P2002→409/422` 等口径见 `服务端/prisma/README.md`。~~手写生成列/分区的 migration~~ ✅ 已完成、~~建库~~ ✅ 已完成（见下一段）；**下一步＝开工**：按《技术决策/销售CRM架构设计说明》**§九 的 8 步竖切动线**（登录 → 建客户 → 建关系 → 写跟单 → 工作台，穿透 A/B/C/D 四域），**不是按域横向做完**，各域实现优先级见数据架构 §十五.4。
+
+> **★ 2026-09-12 落库已完成**：`服务端/prisma/migrations/0001_init/migration.sql`（71 KB，含生成列 / 3 张分区表 / CHECK / `v_contract_performance` 视图）已在真库 **`win_crm`** 上跑通（本机 phpStudy **MySQL 8.0.12**）—— 实测库内 **46 张表 + 1 个视图**。
 
 > **★ 2026-09-11 架构定案（第二步）**：底层架构已定案 —— **模块化单体**（一个代码库、Web/Worker 双进程、单库单缓存、7 域＝7 模块、**按业务域分目录**、边界用 ESLint 硬卡）。详见 **《技术决策/销售CRM架构设计说明》V1.1**（目录结构 / 模块边界清单 / 横切层设计 / 三阶段扩展路线）。**开工顺序＝竖切一条完整动线**（登录→建客户→建关系→写跟单→工作台，穿透 A/B/C/D 四域，8 步见该文档 §九），**不是按域横向做完**。
 
@@ -68,8 +70,8 @@ frontend/  Vue3 桩   → 已移入 归档/旧代码/frontend/（不采用）
 
 - ~~ORM：TypeORM vs Prisma~~ → **✅ 已定：Prisma**（2026-09-10 七叔拍板）
 - ~~底层架构形态~~ → **✅ 已定：模块化单体**（2026-09-11 七叔拍板；详见《技术决策/销售CRM架构设计说明》V1.1）
-- ~~验证环境~~ → **✅ 已定：开发期本机 Docker；试用期上轻量应用服务器**（¥38~45/月，你只开浏览器，无需装 Node）（2026-09-11 七叔拍板）
-- ~~Redis / MySQL 8 的 provision 方式~~ → **✅ 已定：开发期本机 Docker Compose；试用期改用轻量服务器一键镜像**（2026-09-11 七叔拍板）
+- ~~验证环境~~ → **✅ 已定：开发期本机 phpStudy（小皮面板）自带 MySQL 8.0.12，本机不走 Docker**（2026-09-12 修正：原「开发期本机 Docker」已废止）；试用期上轻量应用服务器（¥38~45/月，你只开浏览器，无需装 Node），**Docker Compose 在服务器上用**
+- ~~Redis / MySQL 8 的 provision 方式~~ → **✅ 已定：两个都走 phpStudy 小皮面板** —— 本机 MySQL 8.0.12（`服务端/.env` 指向它，库 `win_crm` 已建，migration 已跑通）＋ 本机 Redis 3.0.504（`127.0.0.1:6379`、**无密码**，2026-09-12 实测 `PING` → `+PONG`）；**Docker Compose 只留给后续上服务器 / CI**（`mysql:8` 须 ≥8.0.16、`redis:7`）（2026-09-12 修正：原「开发期本机 Docker Compose」已废止）
 - ~~鉴权方式 / 账号来源~~ → **✅ 已定：V1 用「账号密码 + JWT」，本地账号表**（2026-09-11 七叔拍板）
 - ~~前端组件库~~ → **✅ 已定：Ant Design Vue**（以《销售CRM设计规范》V1.0 的 Ant Design 5 token 为基准）（2026-09-11 七叔拍板）
 

@@ -13,7 +13,7 @@ CREATE TABLE `department` (
 
     INDEX `idx_parent_id`(`parent_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `employee` (
@@ -38,7 +38,7 @@ CREATE TABLE `employee` (
     INDEX `idx_primary_dept_id`(`primary_dept_id`),
     INDEX `idx_direct_manager_id`(`direct_manager_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `dept_manager` (
@@ -54,7 +54,7 @@ CREATE TABLE `dept_manager` (
     INDEX `idx_employee_id`(`employee_id`),
     UNIQUE INDEX `uk_dept_emp`(`dept_id`, `employee_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `role` (
@@ -70,7 +70,7 @@ CREATE TABLE `role` (
 
     UNIQUE INDEX `uk_code`(`code`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `employee_role` (
@@ -85,7 +85,7 @@ CREATE TABLE `employee_role` (
     INDEX `idx_role_code`(`role_code`),
     UNIQUE INDEX `uk_emp_role`(`employee_id`, `role_code`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `permission_matrix` (
@@ -98,7 +98,7 @@ CREATE TABLE `permission_matrix` (
 
     UNIQUE INDEX `uk_perm_role`(`perm_key`, `role_code`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `product_line` (
@@ -117,7 +117,7 @@ CREATE TABLE `product_line` (
     UNIQUE INDEX `uk_product_line_name`(`name`),
     UNIQUE INDEX `uk_code`(`code`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `dept_rule` (
@@ -137,7 +137,7 @@ CREATE TABLE `dept_rule` (
 
     UNIQUE INDEX `uk_dept_id`(`dept_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `notification` (
@@ -155,7 +155,7 @@ CREATE TABLE `notification` (
     INDEX `idx_user_read`(`user_id`, `read_at`, `created_at`),
     INDEX `idx_biz`(`biz_type`, `biz_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `operation_log` (
@@ -179,7 +179,7 @@ CREATE TABLE `operation_log` (
     INDEX `idx_target`(`target_type`, `target_id`),
     INDEX `idx_action`(`action`, `occurred_at`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `dict_type` (
@@ -194,7 +194,7 @@ CREATE TABLE `dict_type` (
 
     UNIQUE INDEX `uk_code`(`code`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `dict_item` (
@@ -214,7 +214,7 @@ CREATE TABLE `dict_item` (
     INDEX `idx_type_sort`(`type_id`, `status`, `sort`),
     UNIQUE INDEX `uk_type_item`(`type_id`, `item_code`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `system_config` (
@@ -227,7 +227,7 @@ CREATE TABLE `system_config` (
 
     UNIQUE INDEX `uk_config_key`(`config_key`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `job_run_log` (
@@ -242,7 +242,7 @@ CREATE TABLE `job_run_log` (
 
     INDEX `idx_job_time`(`job_name`, `run_at`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `target` (
@@ -260,7 +260,7 @@ CREATE TABLE `target` (
     INDEX `idx_period`(`period`),
     UNIQUE INDEX `uk_target`(`period`, `scope_type`, `scope_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `company` (
@@ -298,7 +298,7 @@ CREATE TABLE `company` (
     INDEX `idx_geo`(`latitude`, `longitude`),
     INDEX `idx_merged`(`merged_into`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `company_profile_tag` (
@@ -313,7 +313,7 @@ CREATE TABLE `company_profile_tag` (
     INDEX `idx_tag`(`tag_id`),
     UNIQUE INDEX `uk_cpt`(`company_id`, `group_code`, `tag_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `contact` (
@@ -341,7 +341,7 @@ CREATE TABLE `contact` (
     INDEX `idx_name`(`name`),
     INDEX `idx_merged_contact`(`merged_into`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `contact_trait` (
@@ -355,7 +355,7 @@ CREATE TABLE `contact_trait` (
     INDEX `idx_trait`(`trait_id`),
     UNIQUE INDEX `uk_ct`(`contact_id`, `trait_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `company_contact` (
@@ -372,7 +372,7 @@ CREATE TABLE `company_contact` (
     INDEX `idx_company_cur`(`company_id`, `is_current`),
     INDEX `idx_contact_cur`(`contact_id`, `is_current`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `contact_change_log` (
@@ -387,7 +387,7 @@ CREATE TABLE `contact_change_log` (
     INDEX `idx_contact_time`(`contact_id`, `created_at`),
     INDEX `idx_approval`(`approval_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `file_asset` (
@@ -405,7 +405,7 @@ CREATE TABLE `file_asset` (
     INDEX `idx_biz`(`biz_type`, `biz_id`, `status`),
     INDEX `idx_uploader`(`uploaded_by`, `uploaded_at`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `business_relation` (
@@ -435,7 +435,7 @@ CREATE TABLE `business_relation` (
     INDEX `idx_dept_sea`(`dept_id`, `product_line_id`, `sea_status`),
     INDEX `idx_merged_rel`(`merged_into`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `relation_member` (
@@ -455,7 +455,7 @@ CREATE TABLE `relation_member` (
     INDEX `idx_relation`(`relation_id`),
     UNIQUE INDEX `uk_member`(`relation_id`, `employee_id`, `member_type`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `relation_stage_log` (
@@ -470,7 +470,7 @@ CREATE TABLE `relation_stage_log` (
 
     INDEX `idx_rel_time`(`relation_id`, `created_at`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `relation_label` (
@@ -486,7 +486,7 @@ CREATE TABLE `relation_label` (
     INDEX `idx_label`(`label_id`),
     UNIQUE INDEX `uk_rel_label`(`relation_id`, `group_code`, `label_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `appointment` (
@@ -508,7 +508,7 @@ CREATE TABLE `appointment` (
     INDEX `idx_due`(`appointment_at`, `status`),
     INDEX `idx_event`(`action_event_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `visit_log` (
@@ -523,7 +523,7 @@ CREATE TABLE `visit_log` (
 
     INDEX `idx_emp_time`(`employee_id`, `depart_at`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `competitor` (
@@ -541,7 +541,7 @@ CREATE TABLE `competitor` (
     INDEX `idx_line_status`(`product_line_id`, `status`),
     UNIQUE INDEX `uk_name_line`(`name`, `product_line_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `commitment` (
@@ -569,7 +569,7 @@ CREATE TABLE `commitment` (
     INDEX `idx_due`(`status`, `due_at`),
     INDEX `idx_contact`(`contact_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `action_event` (
@@ -606,7 +606,7 @@ CREATE TABLE `action_event` (
     UNIQUE INDEX `uk_idem`(`idempotency_key`, `event_at`),
     CONSTRAINT `chk_action_event_subject` CHECK ((`relation_id` IS NOT NULL) OR (`contact_id` IS NOT NULL)),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `cadence_rule` (
@@ -623,7 +623,7 @@ CREATE TABLE `cadence_rule` (
 
     INDEX `idx_scope`(`scope_dept_id`, `scope_line_id`, `enabled`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `daily_agenda` (
@@ -647,7 +647,7 @@ CREATE TABLE `daily_agenda` (
     INDEX `idx_ref`(`ref_type`, `ref_id`),
     INDEX `idx_relation`(`relation_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `review` (
@@ -669,7 +669,7 @@ CREATE TABLE `review` (
     INDEX `idx_relation`(`relation_id`),
     INDEX `idx_type_status`(`review_type`, `status`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `stat_daily` (
@@ -686,7 +686,7 @@ CREATE TABLE `stat_daily` (
     INDEX `idx_owner_day`(`owner_id`, `biz_date`),
     UNIQUE INDEX `uk_stat`(`biz_date`, `dept_id`, `product_line_id`, `owner_id`, `action_type`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `contract` (
@@ -720,7 +720,7 @@ CREATE TABLE `contract` (
     INDEX `idx_expire`(`service_end`, `status`),
     INDEX `idx_line_status`(`product_line_id`, `status`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `payment_record` (
@@ -737,7 +737,7 @@ CREATE TABLE `payment_record` (
     INDEX `idx_contract`(`contract_id`),
     INDEX `idx_paid_at`(`paid_at`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `workorder` (
@@ -766,7 +766,7 @@ CREATE TABLE `workorder` (
     INDEX `idx_sla`(`status`, `sla_deadline`),
     INDEX `idx_upgraded`(`upgraded_from_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `workorder_log` (
@@ -781,7 +781,7 @@ CREATE TABLE `workorder_log` (
 
     INDEX `idx_wo_time`(`workorder_id`, `created_at`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `ledger` (
@@ -806,7 +806,7 @@ CREATE TABLE `ledger` (
     INDEX `idx_contract`(`contract_id`),
     INDEX `idx_company`(`company_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `field_template` (
@@ -829,7 +829,7 @@ CREATE TABLE `field_template` (
     INDEX `idx_line_sort`(`product_line_id`, `status`, `sort`),
     UNIQUE INDEX `uk_line_key`(`product_line_id`, `field_key`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `contract_split` (
@@ -843,7 +843,7 @@ CREATE TABLE `contract_split` (
     INDEX `idx_employee`(`employee_id`),
     UNIQUE INDEX `uk_split`(`contract_id`, `employee_id`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE `sign_checklist` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -859,7 +859,7 @@ CREATE TABLE `sign_checklist` (
     INDEX `idx_line_status`(`product_line_id`, `status`, `sort`),
     UNIQUE INDEX `uk_line_scope_field`(`product_line_id`, `scope`, `field_key`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `sea_rule` (
@@ -880,7 +880,7 @@ CREATE TABLE `sea_rule` (
 
     INDEX `idx_level`(`level`, `dept_id`, `product_line_id`, `status`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `sea_record` (
@@ -899,7 +899,7 @@ CREATE TABLE `sea_record` (
     INDEX `idx_claimer`(`claimed_by`, `claimed_at`),
     INDEX `idx_drop`(`dropped_at`, `to_sea`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `approval` (
@@ -921,7 +921,7 @@ CREATE TABLE `approval` (
     INDEX `idx_target`(`target_type`, `target_id`),
     INDEX `idx_type_status`(`type`, `status`),
     PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
 ALTER TABLE `dept_manager` ADD CONSTRAINT `dept_manager_dept_id_fkey` FOREIGN KEY (`dept_id`) REFERENCES `department`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

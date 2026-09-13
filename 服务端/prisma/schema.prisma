@@ -173,6 +173,7 @@ model ProductLine {
   sea_rules          SeaRule[]
   competitors        Competitor[]
   cadence_rules      CadenceRule[]
+  sign_checklists    SignChecklist[]
 
   @@map("product_line")
 }

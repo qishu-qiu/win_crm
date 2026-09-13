@@ -6,7 +6,7 @@
 
 ## 一、当前状态（务必先读）
 
-- `服务端/` 下**只有 `prisma/schema.prisma`（46 张表）**，**尚无 `package.json` / `src/`**；前端代码尚未创建（将落在 `前端/`）。
+- `服务端/` 下**尚无 `package.json` / `src/`**；现有 5 个文件：`prisma/schema.prisma`（46 张表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/README.md`（落库口径 ＋ 真库验收表）、`.env.example` / `.env`（本地，不入 git）。前端代码尚未创建（将落在 `前端/`）。
 - `归档/` 内是被取代的旧代码与旧文档，**移动未删除**；根目录 `.ignore` 已让 ripgrep 默认跳过 `归档/`（查历史需显式指定路径或 `--no-ignore`）。
 - 因此下文命令分两类：**现已可跑**（Prisma 相关）与**骨架搭好后按文档执行**（NestJS / 前端脚本）。
 

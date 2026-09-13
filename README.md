@@ -56,9 +56,9 @@ frontend/  Vue3 桩   → 已移入 归档/旧代码/frontend/（不采用）
 
 **重开时的技术栈**：NestJS 12 + MySQL 8 + Redis + **Prisma**（见 §一）；表结构以《销售CRM数据架构文档》V1.27（46 张表）为准；Prisma 落库口径见该文档 §十五 第 5 条。
 
-> **★ 2026-09-11 第一步已完成**：`服务端/prisma/schema.prisma` 已按数据架构 V1.27 写出 **46 张表**（含 P0-②~⑤ 字段增量：`action_event.relation_id` 可空 + `owner_snapshot`、`sea_record.owner_id`、`sign_checklist` 等），并通过 **Prisma 6.19.3 校验**（`The schema is valid 🚀`）。生成列（`@ignore`）、分区表、手写 migration 清单、`P2002→409/422` 等口径见 `服务端/prisma/README.md`。~~手写生成列/分区的 migration~~ ✅ 已完成、~~建库~~ ✅ 已完成（见下一段）；**下一步＝开工**：按《技术决策/销售CRM架构设计说明》**§九 的 8 步竖切动线**（登录 → 建客户 → 建关系 → 写跟单 → 工作台，穿透 A/B/C/D 四域），**不是按域横向做完**，各域实现优先级见数据架构 §十五.4。
+> **★ 2026-09-11 第一步已完成**：`服务端/prisma/schema.prisma` 已按数据架构 V1.27 写出 **46 张表**（含 P0-②~⑤ 字段增量：`action_event.relation_id` 可空 + `owner_snapshot`、`sea_record.owner_id`、`sign_checklist` 等），并通过 **Prisma 6.19.3 校验**（**2026-09-12 复验通过**；其间曾因 `SignChecklist.product_line` 缺 `ProductLine` 侧对向关系报 **P1012**，已补修 —— 属纯 Prisma 关系声明，不影响真库结构，详见 `服务端/prisma/README.md`）。生成列（`@ignore`）、分区表、手写 migration 清单、`P2002→409/422` 等口径见 `服务端/prisma/README.md`。~~手写生成列/分区的 migration~~ ✅ 已完成、~~建库~~ ✅ 已完成（见下一段）；**下一步＝开工**：按《技术决策/销售CRM架构设计说明》**§九 的 8 步竖切动线**（登录 → 建客户 → 建关系 → 写跟单 → 工作台，穿透 A/B/C/D 四域），**不是按域横向做完**，各域实现优先级见数据架构 §十五.4。
 
-> **★ 2026-09-12 落库已完成**：`服务端/prisma/migrations/0001_init/migration.sql`（71 KB，含生成列 / 3 张分区表 / CHECK / `v_contract_performance` 视图）已在真库 **`win_crm`** 上跑通（本机 phpStudy **MySQL 8.0.12**）—— 实测库内 **46 张表 + 1 个视图**。
+> **★ 2026-09-12 落库已完成**：`服务端/prisma/migrations/0001_init/migration.sql`（71 KB，含生成列 / 3 张分区表 / CHECK / `v_contract_performance` 视图）已在真库 **`win_crm`** 上跑通（本机 phpStudy **MySQL 8.0.12**）—— 实测库内 **46 张业务表 + 1 个视图**。同日**基线已登记**（`prisma migrate resolve --applied 0001_init`；`migrate status` → **`Database schema is up to date!`**），并完成 **drift 双向反查**（仅 4 类可接受差异，无缺表/缺列/缺索引）—— 库内另增 Prisma 元数据表 `_prisma_migrations`（**不计入业务表**）。取证与 drift 清单见 `服务端/prisma/README.md`。
 
 > **★ 2026-09-11 架构定案（第二步）**：底层架构已定案 —— **模块化单体**（一个代码库、Web/Worker 双进程、单库单缓存、7 域＝7 模块、**按业务域分目录**、边界用 ESLint 硬卡）。详见 **《技术决策/销售CRM架构设计说明》V1.1**（目录结构 / 模块边界清单 / 横切层设计 / 三阶段扩展路线）。**开工顺序＝竖切一条完整动线**（登录→建客户→建关系→写跟单→工作台，穿透 A/B/C/D 四域，8 步见该文档 §九），**不是按域横向做完**。
 
@@ -164,8 +164,9 @@ frontend/  Vue3 桩   → 已移入 归档/旧代码/frontend/（不采用）
 ├── 服务端/            # ★ 后端代码（NestJS + Prisma）；目录结构见《销售CRM架构设计说明》V1.1 §四
 │   ├── src/                        # ↓ 待建：kernel / shared / modules（七域）/ report / jobs
 │   └── prisma/
-│       ├── schema.prisma           # 当前 46 张表（已通过 Prisma 校验，与数据架构 V1.27 一致）；含 P0-④⑤ 新增 sea_record.owner_id / action_event.owner_snapshot 两列 + 两索引（idx_owner / idx_rel_owner），无新表
-│       └── README.md               # Prisma 落库口径 + 必须手写 migration 的部分
+│       ├── schema.prisma           # 当前 46 张表（与数据架构 V1.27 一致）；含 P0-④⑤ 新增 sea_record.owner_id / action_event.owner_snapshot 两列 + 两索引（idx_owner / idx_rel_owner），无新表
+│       ├── migrations/0001_init/migration.sql   # baseline（46 表 / 索引 / 外键）＋ 手工补充段（生成列 / 3 张分区表 / 视图 / CHECK / 全表中文 COMMENT）；**已在真库 `win_crm` 跑通**，并已 `migrate resolve` 登记基线
+│       └── README.md               # Prisma 落库口径 + 必须手写 migration 的部分 + 真库验收表
 ├── 技术决策/          # 选型对比、架构裁决、路线拍板（现行：《销售CRM架构设计说明》V1.1）
 ├── 项目介绍/          # 给老板 / 外部的摘要、介绍、汇报
 │   └── 销售CRM项目摘要-给老板看.md

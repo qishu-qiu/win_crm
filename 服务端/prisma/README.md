@@ -1,11 +1,12 @@
 # 服务端 / Prisma（新后端起点）
 
-> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）；**`package.json` 与 `src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
+> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）；**`package.json` 与 `src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
 
 ## schema.prisma
 
 - **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.27**（§三~§九 表、§十 索引、§十五 落库口径）。
-- 已通过 **Prisma 6.19.3 校验**：`The schema at prisma/schema.prisma is valid 🚀`。
+- ✅ **已通过 Prisma 6.19.3 校验（2026-09-12 复验）**：`The schema at prisma\schema.prisma is valid 🚀`。
+- ⚠ **复验前曾失败（P1012，2026-09-12 发现并已修）**：`SignChecklist.product_line` 缺 `ProductLine` 侧的对向字段 → 已在 `ProductLine` 补一行 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**（`sign_checklist` 表与其外键，`migration.sql` 里一直是对的）。**教训：Prisma 关系字段是双向的 —— 加表/加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败（骨架一搭好就会撞）。**
 
 ### 本地校验 / 格式化
 
@@ -58,7 +59,7 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 
 | 验收项 | 期望 | 实测 |
 |---|---|---|
-| 基表数 | 46 | **46** ✅ |
+| 基表数 | 46 | **46** ✅（**2026-09-12 二次更新**：M0-21 登记基线后库内增 Prisma 元数据表 `_prisma_migrations` → 现查为 **47 基表 = 46 业务表 ＋ 1 元数据表**，元数据表不计入业务表） |
 | 视图 | 1（`v_contract_performance`，可查） | **1**；`SELECT COUNT(*) FROM v_contract_performance` 正常返回 ✅ |
 | 表级中文 `COMMENT` | 46 / 46 | **46 / 46** ✅（抽查 `company` / `business_relation` / `action_event` / `stat_daily` 中文正常、无乱码） |
 | 字段级中文 `COMMENT` | 基表字段全覆盖 | **基表字段全覆盖（544）** ✅；仅视图 3 个表达式列 `employee_id` / `percent` / `performance_amount` 为空（视图不可注释，属预期） |
@@ -70,3 +71,34 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 | CHECK 约束 | 2（`chk_approval_not_self` ＋ `action_event` 内联） | **0** ⚠ 本机 8.0.12 不支持 CHECK（需 8.0.16+），已解析后忽略 —— 见上方「环境版本门槛」 |
 
 **回退安全网**：旧 baseline 可从 git 取回（`git show HEAD:服务端/prisma/migrations/0001_init/migration.sql`）；重建前另做了 `mysqldump --no-data` 结构备份（存于系统临时目录 `win_crm_before_rebuild.schema.sql`，**临时目录非长期保留**）。
+
+## drift 清单（M0-20 · 2026-09-12 双向反查取证）
+
+方式：**没用 `prisma db pull`** —— 它会**覆盖 `schema.prisma`**，把手工段才有的关系声明/字段抹平（风险高于收益）。改用**等价的只读**双向比对，判定结果一致但**零副作用**：
+
+```bash
+# 方向 A：schema → 真库（列出「真库有、schema 声明里没有」的项）
+npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma --to-schema-datasource prisma/schema.prisma --script
+# 方向 B：真库 → schema（列出「schema 声明里有、真库缺」的项）
+npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script
+```
+
+**结论：drift 仅 4 类，全部可接受；无一条需要改库、也无一条需要改 `schema.prisma`。**
+
+| # | drift 项 | 为什么会有 | 判定 |
+|---|---|---|---|
+| 1 | **3 张分区表的主键含分区列**：`stat_daily` `(id, biz_date)` / `operation_log` `(id, occurred_at)` / `job_run_log` `(id, run_at)`（schema 侧仍写 `(id)`） | 手工补充段按 **ERROR 1503**（分区表唯一键必须含分区列）改造；**分区本身 schema 表达不了** | **可接受·设计使然** |
+| 2 | **3 个生成列唯一索引**：`uk_active_rel` / `uk_owner` / `uk_phone_active` | 生成列在 schema 里是 `@ignore` 字段，索引由手工段 `DROP` 后重建 | **可接受·设计使然** |
+| 3 | **5 个 MySQL 自动索引**：`permission_matrix_role_code_fkey` / `business_relation_product_line_id_fkey` / `cadence_rule_scope_line_id_fkey` / `sea_rule_dept_id_fkey` / `sea_rule_product_line_id_fkey` | MySQL **为外键自动建索引**（仅当该列没有显式索引；其余 FK 列已有 `idx_*`，故未重复建） | **可接受·MySQL 机制** |
+| 4 | **`_prisma_migrations` 元数据表**（不计入业务表） | M0-21 `migrate resolve` 时由 Prisma 自建自管 | **可接受·Prisma 机制** |
+
+**关键结论**：**无缺表 / 无缺列 / 无缺索引** —— 即 `migration.sql` 与 `schema.prisma` 的**结构一致**，上文「46 表 / 索引 / 外键」的验收结论不受 drift 影响。
+
+> ⚠ **重建提醒（必读）**：日后若 `DROP DATABASE win_crm` 重灌 `migration.sql`，**必须重跑 `npx prisma migrate resolve --applied 0001_init`**。否则库内没有 `_prisma_migrations` 记录，`migrate status` 会把它判为「未应用」并试图**重跑整份 baseline**（在已有表上执行 → 必炸）。
+
+## ✅ 基线登记（M0-21 · 2026-09-12 取证）
+
+- 命令：`npx prisma migrate resolve --applied 0001_init --schema prisma/schema.prisma` → `Migration 0001_init marked as applied.`
+- 实查 `_prisma_migrations`：`0001_init｜applied_steps_count=0｜finished_at=2026-09-12 09:51:41｜rolled_back_at=NULL`
+- `npx prisma migrate status` → `1 migration found in prisma/migrations` ＋ **`Database schema is up to date!`**
+- 注：`migrate resolve` **不校验关系完整性**（只读 datasource），所以它在 `schema.prisma` 尚为 P1012 时就跑通了 —— **别把它当作 schema 有效的证据**。

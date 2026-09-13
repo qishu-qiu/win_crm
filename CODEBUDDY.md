@@ -6,7 +6,7 @@
 
 ## 一、当前状态（务必先读）
 
-- `服务端/` 下**尚无 `package.json` / `src/`**；现有 5 个文件：`prisma/schema.prisma`（46 张表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/README.md`（落库口径 ＋ 真库验收表）、`.env.example` / `.env`（本地，不入 git）。前端代码尚未创建（将落在 `前端/`）。
+- `服务端/` 下**尚无 `package.json` / `src/`**；现有 6 个文件：`prisma/schema.prisma`（46 张表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、`prisma/README.md`（落库口径 ＋ 真库验收表）、`.env.example` / `.env`（本地，不入 git）。前端代码尚未创建（将落在 `前端/`）。
 - `归档/` 内是被取代的旧代码与旧文档，**移动未删除**；根目录 `.ignore` 已让 ripgrep 默认跳过 `归档/`（查历史需显式指定路径或 `--no-ignore`）。
 - 因此下文命令分两类：**现已可跑**（Prisma 相关）与**骨架搭好后按文档执行**（NestJS / 前端脚本）。
 
@@ -23,7 +23,7 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 ```bash
 DATABASE_URL=占位 npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > migrations/0001_init/migration.sql
 ```
-仅在表结构变更后重生成。产物需再手工补「生成列 / 分区表 / 视图 / CHECK」段落，**且必须在真实 MySQL 8 上首次执行并逐条核对**（重点：生成列表达式、分区键与主键扩列、ERROR 1503）。
+⚠ 该命令**只在「首建基线」时用一次**。**`0001_init` 已 `migrate resolve --applied` 登记为基线 → 此后任何表结构变更一律「新增量 migration」（如 `0002_company_capital_legal_person`），严禁重生成 / 改动 `0001_init`**（改基线文件会与 `_prisma_migrations` 的校验和不一致）。产物需再手工补「生成列 / 分区表 / 视图 / CHECK」段落，**且必须在真实 MySQL 8 上首次执行并逐条核对**（重点：生成列表达式、分区键与主键扩列、ERROR 1503）。
 
 **Lint（含模块边界硬卡）** — 骨架搭好后
 ```bash
@@ -61,10 +61,10 @@ npm run gen:types
 
 | 层 | 文档（位置） | 管什么 |
 | --- | --- | --- |
-| ① | 《销售CRM业务需求文档》V1.23（需求规格/） | 业务规则 / 流程 / 权限口径 |
-| ② | 《销售CRM数据架构文档》V1.27（需求规格/） | 表 / 字段 / 索引 / 字典 / 数据权限 |
-| ③ | 《销售CRM接口API文档》V1.11（需求规格/） | 接口入参/出参 / 错误码 |
-| ④ | 《销售CRM前端页面与交互文档》V1.14（需求规格/） | 页面 / 交互 / 角色矩阵 |
+| ① | 《销售CRM业务需求文档》V1.24（需求规格/） | 业务规则 / 流程 / 权限口径 |
+| ② | 《销售CRM数据架构文档》V1.28（需求规格/） | 表 / 字段 / 索引 / 字典 / 数据权限 |
+| ③ | 《销售CRM接口API文档》V1.12（需求规格/） | 接口入参/出参 / 错误码 |
+| ④ | 《销售CRM前端页面与交互文档》V1.15（需求规格/） | 页面 / 交互 / 角色矩阵 |
 | ④-a | 《销售CRM设计规范》V1.0（需求规格/） | 视觉 / 组件 / token / 主题 |
 | ⑤ | 《销售CRM架构设计说明》V1.1（技术决策/） | 代码目录 / 模块边界 / 进程 / 扩展 |
 

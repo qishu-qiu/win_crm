@@ -1,9 +1,10 @@
-# 销售 CRM 接口 API 文档 V1.11
+# 销售 CRM 接口 API 文档 V1.12
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据。
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》**V1.23**、《销售CRM数据架构文档》**V1.27**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.14**（均 需求规格/）。
-> 生效日期：2026-09-12 ｜ 状态：**V1.11**（公海详情返全号 · 紧随需求 V1.23 / 数据架构 V1.27 / 前端 V1.14）。
+> 配套真相源：《销售CRM业务需求文档》**V1.24**、《销售CRM数据架构文档》**V1.28**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.15**（均 需求规格/）。
+> **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22），沿革查 `git log --follow -- 需求规格/销售CRM接口API文档.md`。
+> 生效日期：2026-09-13 ｜ 状态：**V1.12**（公司档案「注册资本 / 法定代表人」可选扩展字段 ＋ 注册资本区间筛选 · 紧随需求 V1.24 / 数据架构 V1.28 / 前端 V1.15）。
 
 ---
 
@@ -60,10 +61,10 @@
 | 403 | 20003 | 无权限（数据权限越界） | 访问他人私海/非管辖部门 |
 | 409 | 20004 / 204xx | 唯一冲突 / 竞态 | 撞单(`uk_active_rel`)、抢公海、重复激活 → 映射 Prisma `P2002`（`meta.target` 取约束名回友好提示）|
 | 422 | 204xx | 业务校验不通过 | 完成预约未留跟单、判死未填死因、开发价值未标（非灰度）、特质超限等 |
-| 429 | 20005 | 限流 | 幂等键重复/高频 |
+| 429 | 20005 | 限流 | **高频请求**（**幂等键重复不算限流** —— 见 §2.5：重复同 key 返回首次结果 200，不重复执行） |
 | 500 | 20099 | 服务异常 | 未预期错误 |
 
-常用业务码（204xx）：`20401` 撞单已存在｜`20402` 超过上限（标签/特质/必填）｜`20403` 必填未填（死因/开发价值）｜`20404` 预约未完成禁止｜`20405` 解锁申请已存在｜`20406` 关系已激活。
+常用业务码（204xx）：`20401` 撞单已存在｜`20402` 超过上限（标签/特质）｜`20403` 必填未填（死因/开发价值/签约校验清单）｜`20404` 预约未完成禁止｜`20405` 解锁申请已存在｜`20406` 关系已激活。
 > 唯一冲突一律映射 **409（撞单/竞态/抢公海）或 422（业务校验）**，**绝不把数据库原话透给销售**——DB 层是 MySQL `1062`、**Prisma 层暴露为 `P2002`**，两者都只在服务端内部消化（`→架构§7.5` `→数据架构§十五.5` `→需求§十六`）。
 
 ### 2.5 幂等（Idempotency-Key，[约定] G6）
@@ -73,7 +74,7 @@
 ### 2.6 命名与枚举（[约定] G1/G3）
 - 入参出参 **snake_case**；时间字段 `_at` 后缀。
 - **枚举一律英文码**（示例）：
-  - 阶段 `stage`：`first_contact` / `need_confirm` / `demo` / `objection` / `closing` / `cooperated`（终态）。
+  - 阶段 `stage`：`first_contact` / `need_confirm` / `demo` / `objection` / `closing` / `cooperated`（成交 · 终态）/ **`churned`（流失 · 终态）** —— 即 **6 个推进阶段 ＋ 1 个流失终态**（`→需求§8.1`）。
   - 紧迫 `urgency`：`week_key` / `month_key` / `quarter_follow` / `long_term` / `gray`（默认）。
   - 公海 `sea_status`：`private` / `company_sea`（两态，`→架构F`）。
   - 竞争 `competition`：`none` / `in_use` / `comparing`。
@@ -209,12 +210,13 @@
 - `GET /org/dept-rule`：返回 `drop_days` / `gray_remind_days` / `level_tiers` / `contact_trait_max`（默认3）/ `ask_help_days`（默认7）。
 
 ### 4.3 公司档案 company / 联系人 contact
-- `POST /companies/search-dup`：入 `{phone?, credit_code?, name?}` → 返回相似候选（手机 UNIQUE 为主入口；公司名归一化去噪声词后比字号，`→需求§6.3`）。命中分支：公海可直领 / 跨部门可并行激活 / 本人别线可直建 / 挂现有公司 / **疑似重复必须给强行新建出口**（防乱填公司名）。
-- `GET /companies/:id`：出参含 `profile_tags`（身份/制度/决策链，`→架构B2`）、`contacts[]`（非归属部门 `phone_masked`）、`relations_summary`（各业务线签约日期，跨线金额 `amount_masked`）。
+- `POST /companies/search-dup`：入 `{phone?, credit_code?, name?}` → 返回相似候选（手机 UNIQUE 为主入口；公司名归一化去噪声词后比字号，`→需求§6.3`）。命中分支（**4 分支**，逐条文案 / 按钮 / 落点见 `→需求§12.1`）：① **公海可直领**；② **本部门已激活**（联系本人 / 申请转交 / 申请协同）；③ **跨部门可并行激活**（只显部门名 ＋ 日期，不露跟单）；④ **挂现有公司**（使用已有 / 确认新建，**疑似重复必须给强行新建出口**，防乱填公司名）。
+- `GET /companies/:id`：出参含 `profile_tags`（身份/制度/决策链，`→架构B2`）、`contacts[]`（非归属部门 `phone_masked`）、`relations_summary`（各业务线签约日期，跨线金额 `amount_masked`）、**`registered_capital`（注册资本，单位＝元）/ `legal_person`（法定代表人）——可选扩展字段，不做签约强制**（`→需求§7.3`）。
+- `GET /companies`：列表支持**注册资本区间筛选** `min_registered_capital` / `max_registered_capital`（**单位＝元**；如"注册资金 > 100 万"→ `min_registered_capital=1000000`）。
 - `PUT /contacts/:id/traits`：超过 `contact_trait_max` → **422 / 20402**；未配部门走默认3（`→需求§9` `→架构B4`）。
 
 ### 4.4 业务关系 relation（[核心]）
-- `POST /relations`（激活）：`{company_id, dept_id, product_line_id}` → 唯一约束 `uk_active_rel(company_id,dept_id,product_line_id,owner_active)` 撞则 **409 / 20401**（引导转交/协同）。
+- `POST /relations`（激活）：`{company_id, dept_id, product_line_id}` → 唯一约束 **`uk_active_rel(active_key)`**（生成列 ＝ 三元组 ＋ `sea_status='private'` ＋ `merged_into IS NULL`，`→数据架构§10.1` / `§十五.5`）撞则 **409 / 20401**（引导转交/协同）。
 - `GET /relations`：列表出参含 `stage`（彩色点）、`urgency`、`value_tier`、逾期标红、`drop_in_x_days`（24h 掉公海⚠）、竞争徽标、跨线 `amount_masked`。
 - `GET /relations/:id/events`：默认 `range=1m`（近1月）；出参按 `created_by == 当前人` 分 `main` / `branch`（树杈），带 `createdByName` + `contactName`（`→需求§7.5` `→设计规范§八`）。
 - `POST /relations/:id/transfer`：跨部门转交 = **双方上级双签**；上级缺失上溯经理/总经理（`→需求§7.9` `→架构G1`）。
@@ -284,7 +286,7 @@
 - **旧号回收提示**：注册/改号时若该号**曾属于其他联系人**（历史号）→ 出参带 `phone_history_hint: "曾属于 XX"`，**只提示、不拦截**（运营商回收号属正常，`→需求§7.2`）。
 
 **4.14.3 阶段推进（`→需求§8.1`）**
-- `POST /relations/:id/stage`：入 `{to_stage, confirm?}`。**动作驱动 + 建议态**：服务端按事件给 `suggested_stage`，**绝不自动改**，须销售确认。**限频**：距上次变更 <3 天且非跨里程碑 → 不重复建议（`422 / 20402`）。允许跳级与回退，**每次写 `relation_stage_log`**（谁/何时/从哪到哪）。`cooperated`(6)、`churned`(7) 为终态。**推进零证据、经理不审核**（`→需求§8.1`）；**回退（rollback）触发经理 `notification`（`biz_type=stage_revert`，→架构 A9）——经理只知会、不审核、不拦截**，流程照走。
+- `POST /relations/:id/stage`：入 `{to_stage, confirm?}`。**动作驱动 + 建议态**：服务端按事件给 `suggested_stage`，**绝不自动改**，须销售确认。**限频**：距上次变更 <3 天且非跨里程碑 → 不重复建议（`429 / 20005`，码值口径见 §2.4）。允许跳级与回退，**每次写 `relation_stage_log`**（谁/何时/从哪到哪）。`cooperated`(6)、`churned`(7) 为终态。**推进零证据、经理不审核**（`→需求§8.1`）；**回退（rollback）触发经理 `notification`（`biz_type=stage_revert`，→架构 A9）——经理只知会、不审核、不拦截**，流程照走。
 
 **4.14.4 今日动线处理反馈（`→需求§10.4`）**
 - `POST /today-agenda/:id/action`：入 `{action, reason?}` ∈ `done` / `snoozed` / `ignored`。
@@ -383,9 +385,10 @@
 - 字典 `type:{code,name}`、`item:{id,item_code,label,sort,builtin,status}`
 
 ### 5.4 公司档案 company
-- 列表项 `{id,full_name,city,industry_l1,scale,credit_code?,relation_count,old_customer,address_maintained,updated_at}`
+- 列表项 `{id,full_name,city,industry_l1,scale,credit_code?,registered_capital?,legal_person?,relation_count,old_customer,address_maintained,updated_at}`；**筛选参数** `min_registered_capital` / `max_registered_capital`（**单位＝元**，纯数值区间比较）
 - 详情 `{...company字段, completeness:{c1,c2,c3}, profile_tags:{identity:[{tag_id,tag_code,label}],policy:[],decision_chain:{tag_id,label}?}, contacts:[ContactBrief], relations_summary:[{dept,product_line:{id,name,color_key},sign_date,amount|amount_masked}]}`
-- 建档/改 req `{full_name,industry_l1?,industry_l2?,province?,city?,district?,scale?,website?,address?,bank_name?,invoice_title?,tax_no?,credit_code?,longitude?,latitude?,aliases?:[]}`
+- 建档/改 req `{full_name,industry_l1?,industry_l2?,province?,city?,district?,scale?,website?,address?,bank_name?,invoice_title?,tax_no?,credit_code?,registered_capital?,legal_person?,longitude?,latitude?,aliases?:[]}`
+- **注册资本单位口径（2026-09-13 定）**：`registered_capital` **接口层一律以「元」传输**（字符串 / 数值、两位小数）；**前端按「万元」录入与展示**并各做一次换算（录入 `500` 万 → 提交 `5000000`；展示 `5000000` → `500万`）。`legal_person` 为文本、同样可空。**两者均不做签约强制、不进签约校验清单默认播种**（`→需求§7.3`、`→架构 E8`）
 - `POST /companies/:id/profile-tags` req `{group_code,tag_id}`
 - `POST /companies/search-dup` req `{phone?,credit_code?,name?}` → resp `{candidates:[{id,full_name,credit_code_masked,similarity,match_type:"same"|"high_sim"}],suggest:"use_exists"|"create_new"}`
 - `POST /companies/:id/merge` req `{loser_id,decision_chain_tag_id?}`（survivor＝路径 `:id`）
@@ -437,7 +440,7 @@
 - 创建 req `{relation_id,contact_id?,amount,pay_type?,sign_date,service_start?,service_end?,auto_renew?,remind_days?:[]}`
 - `POST /contracts/:id/payments` req `{amount,paid_at,method?,voucher_file_key?}`
 - `PUT /contracts/:id/splits` req `{splits:[{employee_id,percent}]}`（**合计须 100 → 422**）
-- **签约校验（创建前）**：`POST /contracts` 先按 `sign_checklist`（本 `product_line_id`）逐项校验；缺失任一 → **422 / `20402` 类** + 响应 `{missing:[{scope,field_key,label,goto}]}`（`goto` = 内联补/跳补锚点，见 §5.15）；全部齐备才落库。
+- **签约校验（创建前）**：`POST /contracts` 先按 `sign_checklist`（本 `product_line_id`）逐项校验；缺失任一 → **422 / `20403`（必填未填）** + 响应 `{missing:[{scope,field_key,label,goto}]}`（`goto` = 内联补/跳补锚点，见 §5.15）；全部齐备才落库。
 
 ### 5.10 工单 workorder
 - `{id,order_no,type:"after_sale"|"opportunity",title,priority?,assignee:{id,name}?,sla_deadline?,overdue,relation:{id,name}?,status}`
@@ -477,6 +480,7 @@
   - `SignChecklistItem` `{id,product_line_id,scope:"company"|"relation"|"ledger",field_key,label,required:bool,sort:int,status:"active"|"disabled"}`
   - `ContractSignMissing` `{missing:[{scope,field_key,label,goto:"inline_company"|"goto_relation_value"|"goto_ledger"}]}`（签约校验 422 响应体）
 - 落点：`→架构 E8 sign_checklist`、`→需求§7.3` 签约校验清单落地。`scope=company` 字段校验看 `company` 表（共享，有值即过）；`scope=relation` 看 `business_relation.value_tier`/签约联系人；`scope=ledger` 看 `ledger.extra_fields`。
+- **默认播种（2026-09-13 定）**：`scope=company` **4 项** ＝ `credit_code` / `address`（注册地址）/ `industry_l1`（行业）/ `province`（地区）——**`field_key` 必须是 `company` 表真实列名**；**`registered_capital` / `legal_person` 默认不播种**（个别产品线要卡，由管理员自选加回）
 
 ---
 
@@ -488,10 +492,4 @@
 4. **脱敏口径**：跨线金额 `amount_masked`、非归属手机 `phone_masked`、**公海列表/卡片 `phone_masked`（详情返全号，逐次留痕 `sea.phone.view`）**；公海未领**仍不返跟单全文**（`→需求§4.3`）。
 5. **解锁**：非归属手机 → `phone-unlock/apply`（L05）→ 批后限时全号，留痕 `operation_log`（不新增表）。
 
----
 
-## 七、修改记录
-
-> **★ 本档版本沿革不在文档内复述**（2026-09-12 决定 → 《废止口径登记表》#22）。
-> **原因**：历史行会以「当时的规范口吻」存放已废止说法，与正文并存即构成 **AI 误读源**——AI 按关键词命中，读到旧行就照旧行写。
-> **查法**：`git log --follow -- 需求规格/销售CRM接口API文档.md` 看完整沿革；`git show <commit>` 看某版改了什么。

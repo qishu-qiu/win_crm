@@ -1,9 +1,10 @@
-# 销售 CRM 数据架构文档 V1.27（现行有效）
+# 销售 CRM 数据架构文档 V1.28（现行有效）
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
 > **业务规则一律不在此定义**：凡涉及"为什么这么设计、规则是什么"，一律见《销售CRM业务需求文档》对应章节（本文用 `→需求§X` 标注）。
 > **元铁律**：**L0 变更联动**（需求改 → 本文件同批改）｜**L1 单一事实源**（规则只在需求文档定义一次，本文只写指针）。
+> **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22）；沿革查 `git log --follow -- 需求规格/销售CRM数据架构文档.md`。
 
 ---
 
@@ -11,9 +12,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.27（现行有效）** / 2026-09-12 |
-| 上游 | 《销售CRM业务需求文档》**V1.23**（业务规则唯一来源） |
-| 下游 | 《销售CRM接口API文档》**V1.11**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.14** |
+| 版本 / 日期 | **V1.28（现行有效）** / 2026-09-13 |
+| 上游 | 《销售CRM业务需求文档》**V1.24**（业务规则唯一来源） |
+| 下游 | 《销售CRM接口API文档》**V1.12**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.15** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
 | 外部依赖 | 高德开放平台：JS API（坐标拾取器）。坐标系统一 **GCJ-02**（见 §五 B7） |
@@ -23,6 +24,7 @@
 - 主键统一 `id` BIGINT UNSIGNED AUTO_INCREMENT
 - 审计字段全表统一：`created_by / created_at / updated_by / updated_at`；逻辑删除 `deleted_at`（NULL=未删）
 - 金额统一 `DECIMAL(12,2)`；时间统一 `DATETIME`；枚举/字典码存 `VARCHAR(32)` 英文码，展示文案走字典
+- **★ 精度例外（2026-09-13）**：`company.registered_capital`（注册资本）用 **`DECIMAL(16,2)`、单位＝元**——12 位上限约 100 亿元，注册资本存在百亿级以上企业会溢出（`→§四 B1`）
 - 表名/字段名统一 snake_case；索引 `idx_` 前缀、唯一 `uk_` 前缀
 - 手机号唯一、公司信用代码唯一为**数据库级约束**（撞单兜底，不靠应用层自觉）
 
@@ -172,7 +174,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | credit_code | 统一社会信用代码 UNIQUE（可空；撞码强制使用已有档案） |
 | industry_l1/l2、province/city/district、scale | 行业/地区/规模 |
 | completeness_1/2/3 | 三档完善度 0-100（写入重算） |
-| website/address/bank_name/invoice_title/tax_no | 成交后强制补组 |
+| website/address/bank_name/invoice_title/tax_no | **成交后可选补全**（**2026-09-13 起不再强制**；其中 `address` 同时是签约校验清单「注册地址」项的落点，`→E8`） |
+| registered_capital | **★ 2026-09-13 新增**：**注册资本** `DECIMAL(16,2)`、**单位＝元**、可空。**可选扩展字段——不参与签约强制、不计入完善度**；用于档案留存与**按规模筛选**（如"注册资金 > 100 万"＝ `> 1000000`）。**录入 / 展示一律按「万元」**（前端换算，展示 `xx万`）。**不建索引**：区间筛选命中面大（选择性低），数据量增长后再按实际查询评估 |
+| legal_person | **★ 2026-09-13 新增**：**法定代表人** `VARCHAR(64)`、可空。**可选扩展字段——不参与签约强制、不计入完善度**；姓名类长度，含少数民族 / 外籍译名余量 |
 | longitude / latitude | **经纬度** DECIMAL(10,6)/DECIMAL(9,6)，可空。建档时人工调高德拾取器点选；**非必填**；坐标系 **GCJ-02** |
 | merged_into | **合并墓碑**：自引用 FK（`company.id`，可空）。非 NULL = 本档案已并入该公司、物理不删、永远可审计（撞码合并流程见 `→需求§7.3`）。合并时 B.`merged_into`=A.id、B.`credit_code` 置 NULL（释放唯一位） |
 | aliases | **曾用名/别名** JSON：`["安徽鑫中网网络有限公司"]`。合并时收进被并入方的全称，供查重兜底与展示 |
@@ -445,12 +449,13 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 `product_line_id` + `scope`(company/relation/ledger) + `field_key` + `label`(中文显示名，弹窗用，前端不硬编码) + `required`(bool，可改) + `sort` + `status`(active/disabled，T5 停用不删)
 - **唯一约束** `uk_line_scope_field(product_line_id, scope, field_key)`——同产品线同层级同字段仅一条配置。
 - **字段来源（三层）**：
-  - `scope=company`：`field_key` ∈ {credit_code, registered_capital, legal_person, registered_address, industry, region}；**公司级，补全一次全公司共享**——校验看 `company` 表该字段非空即过，**不论谁、哪条线补的**。
+  - `scope=company`：`field_key` ∈ {credit_code, address, industry_l1, province}；**公司级，补全一次全公司共享**——校验看 `company` 表该列非空即过，**不论谁、哪条线补的**。**★ 2026-09-13 收敛两处**：① 去掉 `registered_capital` / `legal_person`——二者改为公司档案**可选扩展字段**、不做签约强制（`→需求§7.3`）；② 原 `registered_address` / `industry` / `region` 是「逻辑名」，`company` 表**没有同名列**（原写法导致校验「逐项查字段非空」**写不出 SQL**）→ 一律改**真实列名**：注册地址 → `address`、行业 → `industry_l1`、地区 → `province`（**每项取主列判定**，二级 / 细分列不单独卡）。
   - `scope=relation`：`field_key` ∈ {value_tier, contact}；校验看 `business_relation.value_tier` 非空（开发价值已标）／ `company_contact` 有 `is_current=1` 记录（签约联系人已关联）。
   - `scope=ledger`：`field_key` ＝ 该线 `field_template.field_key`（台账差异化字段）；校验看 `ledger.extra_fields` 该 key 存在且非空。
-- **默认清单（系统播种）**：每条产品线初始化 `scope=company` 6 项（credit_code/registered_capital/legal_person/registered_address/industry/region，`required=true`）+ `scope=relation` 的 value_tier 与 contact（`required=true`）。管理员可在「系统设置 → 产品线」增删改——`required`/`sort`/`status` 可改，`product_line_id`/`scope`/`field_key` 保存后不可变（参照 `field_template` 铁律）。
-- **校验逻辑（服务端 `POST /contracts` 创建前）**：取该 `product_line_id` 下 `status=active AND required=true` 的全部项 → 逐项查对应层级字段是否非空 → 任一缺失 → **422（业务码 `20402` 类，语义"签约必填未填"）＋ 返回缺失清单**（每项 `{scope, field_key, label, goto}` 供前端内联补 / 跳补：company 级内联补、relation/ledger 级跳对应页）。
+- **默认清单（系统播种）**：每条产品线初始化 `scope=company` **4 项**（credit_code/address/industry_l1/province，`required=true`）+ `scope=relation` 的 value_tier 与 contact（`required=true`）。管理员可在「系统设置 → 产品线」增删改——`required`/`sort`/`status` 可改，`product_line_id`/`scope`/`field_key` 保存后不可变（参照 `field_template` 铁律）。
+- **校验逻辑（服务端 `POST /contracts` 创建前）**：取该 `product_line_id` 下 `status=active AND required=true` 的全部项 → 逐项查对应层级字段是否非空 → 任一缺失 → **422（业务码 `20403` ＝ "必填未填"）＋ 返回缺失清单**（每项 `{scope, field_key, label, goto}` 供前端内联补 / 跳补：company 级内联补、relation/ledger 级跳对应页）。
 - 索引：`uk_line_scope_field(product_line_id, scope, field_key)`、`idx_line_status(product_line_id, status, sort)`。
+- **★ 2026-09-13 收口**：`registered_capital` / `legal_person` **不做签约强制**（＝公司档案可选扩展字段）→ **默认不播种**；两列已在 `company` 表（`→B1`），**个别产品线要卡，管理员可自选加回**（`field_key` 填真实列名即可）。即：清单里"公司级必填"的**默认下限**是上述 4 项，不是 6 项。
 
 ---
 
@@ -694,7 +699,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 域 F 公海 | 需求 §6.3 / §12 | 掉落规则与撞单 |
 | 域 G 审批 | 需求 §7.9 | 四型一单 |
 | §11 权限脱敏 | 需求 §4.3 | 分档口径一致 |
-| 前端交互 | 需求 §13 全局交互规范 | **《销售CRM前端页面与交互文档》V1.2**（需求规格/）：设计系统（Design Tokens + 组件 + 状态 + 响应式）+ 实体可点铁律、一层抽屉、悬浮卡 |
+| 前端交互 | 需求 §13 全局交互规范 | **《销售CRM前端页面与交互文档》**（需求规格/）：页面清单 / 页面级交互 / 角色矩阵；**视觉 / 组件 / 状态 / 响应式已独立成册 →《销售CRM设计规范》**；实体可点铁律、一层抽屉、悬浮卡 |
 
 > **L0 执行提示**：需求文档任一小节变更 → 按本表反查受影响的表 → 同批改本文件并升版。
 
@@ -720,13 +725,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 >
 > **对账便利（选 Prisma 的理由之一）**：`schema.prisma` 是纯文本、**46 张表**全集中在一个文件里，七叔可直接对照本文档 §二～§九 逐表检查，与《数据架构文档》保持一一对应。
 
----
 
-## 十六、修改记录
-
-> **★ 本档版本沿革不在文档内复述**（2026-09-12 决定 → 《废止口径登记表》#22）。
-> **原因**：历史行会以「当时的规范口吻」存放已废止说法，与正文并存即构成 **AI 误读源**——AI 按关键词命中，读到旧行就照旧行写。
-> **查法**：`git log --follow -- 需求规格/销售CRM数据架构文档.md` 看完整沿革；`git show <commit>` 看某版改了什么。
 
 ---
 

@@ -1,10 +1,10 @@
 # 服务端 / Prisma（新后端起点）
 
-> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）；**`package.json` 与 `src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
+> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）＋ `prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）；**`package.json` 与 `src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
 
 ## schema.prisma
 
-- **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.27**（§三~§九 表、§十 索引、§十五 落库口径）。
+- **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.28**（§三~§九 表、§十 索引、§十五 落库口径）。
 - ✅ **已通过 Prisma 6.19.3 校验（2026-09-12 复验）**：`The schema at prisma\schema.prisma is valid 🚀`。
 - ⚠ **复验前曾失败（P1012，2026-09-12 发现并已修）**：`SignChecklist.product_line` 缺 `ProductLine` 侧的对向字段 → 已在 `ProductLine` 补一行 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**（`sign_checklist` 表与其外键，`migration.sql` 里一直是对的）。**教训：Prisma 关系字段是双向的 —— 加表/加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败（骨架一搭好就会撞）。**
 
@@ -33,6 +33,32 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
   - **动手前自证一条**：`select version()`（**建议直接用** `D:\ITtool\phpstudy_pro\Extensions\MySQL8.0.12\bin\mysql.exe`，别依赖 `PATH`）—— 建库 / 跑 `migration.sql` / `SHOW CREATE TABLE` / `information_schema` 核对之前都先跑这一句。
 - **发现并已记录**：Prisma 会把 `@ignore` 字段建成普通列 → 手工段里 `DROP` 后重建为 `GENERATED`（见下）。
 
+## migrations / 0002_company_capital_legal_person / migration.sql（增量 · 2026-09-13）
+
+- **做什么**：① `company` 加 2 列 —— `registered_capital`（注册资本 `DECIMAL(16,2)`，**单位＝元**）/ `legal_person`（法定代表人 `VARCHAR(64)`）；② 把 `address` / `bank_name` / `invoice_title` / `tax_no` 4 列的注释从「成交后强制补」改为「成交后可选补全，不强制」。
+- **为什么**：需求 **V1.24 §7.3** 定 —— 注册资本 / 法定代表人＝**公司档案「可选扩展字段」，不做签约强制、不计入完善度**，只作档案留存与按规模筛选（如"注册资金 > 100 万"）；同时修掉数据架构 **E8** 的硬伤——清单 `field_key` 用了库里不存在的「逻辑名」（`registered_address`/`industry`/`region`），导致签约校验「逐项查字段非空」**写不出 SQL** → 改真实列名 `address`/`industry_l1`/`province`，公司级默认清单 **6 项 → 4 项**。
+- **单位口径**：库内 / 接口层一律「**元**」；前端按「**万元**」录入与展示并做一次换算（`500` 万 ⇄ `5000000`）。
+- **✅ 2026-09-13 已在真库执行**（`npx prisma migrate deploy` → `Applying migration 0002_company_capital_legal_person` → **`All migrations have been successfully applied.`**）；属纯 `ALTER TABLE` 加列 / 改注释，**未回填数据、无破坏性**。若日后走手工 `SOURCE` 重建，需补 `npx prisma migrate resolve --applied 0002_company_capital_legal_person`（本次未用）。
+- **⚠ 不要改 `0001_init`**：它已 `migrate resolve --applied` 登记为基线，改文件会与 `_prisma_migrations` 的**校验和不一致** → 注释 / 结构修正一律走**新增量**（本目录即此原则的第一次实践）。
+- **重建库顺序**：`0001_init` → `0002_company_capital_legal_person`（再分别 `migrate resolve`）。
+- 表数不变（仍 **46 张业务表**）；**无新增索引**（注册资金区间筛选选择性低，暂不建，见数据架构 B1）。
+
+### ✅ 0002 验收结果（2026-09-13 · MySQL 8.0.12 实跑取证）
+
+方式：`npx prisma migrate deploy --schema prisma/schema.prisma`（**钉 `prisma@6.19.3`** —— 不钉版本 `npx` 会拉到 7.x）。下表「实测」列均为 `information_schema` 实查值。
+
+| 验收项 | 期望 | 实测 |
+|---|---|---|
+| `company.registered_capital` | `decimal(16,2)` / NULL | **`decimal(16,2)` / YES** ✅ |
+| `company.legal_person` | `varchar(64)` / NULL | **`varchar(64)` / YES** ✅ |
+| 4 列注释口径收口 | `bank_name` / `invoice_title` / `tax_no` 去「强制补」；`address` 补「签约校验清单『注册地址』项落点」 | **4 / 4 已改** ✅ |
+| `prisma migrate status` | `2 migrations found` ＋ 无 pending | **`2 migrations found` ＋ `Database schema is up to date!`** ✅ |
+| `_prisma_migrations` | 增 1 条 `0002_...` | **2 条**：`0001_init`（09-12 09:51:41）＋ `0002_company_capital_legal_person`（09-13 14:22:39） ✅ |
+| drift 双向反查（M0-20 复跑） | 新增 2 列**不得**出现在 drift 里 | **未出现** ✅（drift 仍仅 M0-20 记录的 4 类可接受项，无第 5 类） |
+| 表数 / 索引 | 仍 46 业务表；无新增索引 | **不变** ✅（全库 47 基表 ＝ 46 业务表 ＋ 1 元数据表；另 1 视图） |
+
+> ⚠ **执行前自证**：先用 `D:\ITtool\phpstudy_pro\Extensions\MySQL8.0.12\bin\mysql.exe` 跑 `select version()` → **`8.0.12`**（本机三版本并存，见上文「多版本 MySQL 并存」）。
+
 ## ★ 必须「手写 migration」的部分（数据架构 §十五.5，Prisma 表达不了）
 
 | # | 场景 | 做法 |
@@ -42,7 +68,7 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 | 3 | **CHECK 约束** | 如 `approval` 申请人 ≠ 审批人（DB CHECK ＋ 应用双拦）。**⚠ 需 MySQL 8.0.16+**：8.0.12 会解析后静默忽略（见上方「环境版本门槛」） |
 | 4 | **视图** | `v_contract_performance` ＝ `contract × contract_split`（无 split 则 `signer_id` 占 100%）——**业绩统计一律读此视图**，避免口径漂移。**⚠ 视图不能带 `COMMENT`**（MySQL `CREATE VIEW` 无该子句，ERROR 1064），口径说明只写在脚本里其上方 SQL 注释 |
 | 5 | **键约束** | 手机号唯一、公司信用代码唯一为**数据库级约束**（撞单兜底） |
-| 6 | **表 / 字段中文 `COMMENT`** | **Prisma 无法表达 MySQL `COMMENT`**（`schema.prisma` 不写、`db pull` 不读）。故 `migration.sql` 里 **46 张表全部带表级 `COMMENT='…'` ＋ 每个字段行尾 `COMMENT '…'`**，让 DBA / Navicat / `SHOW CREATE TABLE` 直接可读（口径来源＝《数据架构文档》V1.27 各表字段说明）。**⚠ 用 `prisma migrate diff` 重新生成 baseline 会把这批 COMMENT 全部抹掉** —— 重生成后必须补回，或改用「手写增量 migration」承载注释。**视图列不受此覆盖**（视图无 COMMENT，且表达式列 `employee_id` / `percent` / `performance_amount` 在 `information_schema` 里 `COLUMN_COMMENT` 为空属正常） |
+| 6 | **表 / 字段中文 `COMMENT`** | **Prisma 无法表达 MySQL `COMMENT`**（`schema.prisma` 不写、`db pull` 不读）。故 `migration.sql` 里 **46 张表全部带表级 `COMMENT='…'` ＋ 每个字段行尾 `COMMENT '…'`**，让 DBA / Navicat / `SHOW CREATE TABLE` 直接可读（口径来源＝《数据架构文档》V1.28 各表字段说明）。**⚠ 用 `prisma migrate diff` 重新生成 baseline 会把这批 COMMENT 全部抹掉** —— 重生成后必须补回，或改用「手写增量 migration」承载注释。**视图列不受此覆盖**（视图无 COMMENT，且表达式列 `employee_id` / `percent` / `performance_amount` 在 `information_schema` 里 `COLUMN_COMMENT` 为空属正常） |
 
 ## 口径约定（写代码前先读）
 
@@ -94,7 +120,7 @@ npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schem
 
 **关键结论**：**无缺表 / 无缺列 / 无缺索引** —— 即 `migration.sql` 与 `schema.prisma` 的**结构一致**，上文「46 表 / 索引 / 外键」的验收结论不受 drift 影响。
 
-> ⚠ **重建提醒（必读）**：日后若 `DROP DATABASE win_crm` 重灌 `migration.sql`，**必须重跑 `npx prisma migrate resolve --applied 0001_init`**。否则库内没有 `_prisma_migrations` 记录，`migrate status` 会把它判为「未应用」并试图**重跑整份 baseline**（在已有表上执行 → 必炸）。
+> ⚠ **重建提醒（必读）**：日后若 `DROP DATABASE win_crm` 重灌 `migration.sql`，**必须重跑 `npx prisma migrate resolve --applied 0001_init`**。否则库内没有 `_prisma_migrations` 记录，`migrate status` 会把它判为「未应用」并试图**重跑整份 baseline**（在已有表上执行 → 必炸）。**2026-09-13 起**：重灌＝**两份都要跑**（`0001_init` → `0002_company_capital_legal_person`）并**分别 `migrate resolve --applied`**（否则 `migrate status` 会报 `0002` 未应用）。
 
 ## ✅ 基线登记（M0-21 · 2026-09-12 取证）
 
@@ -102,3 +128,18 @@ npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schem
 - 实查 `_prisma_migrations`：`0001_init｜applied_steps_count=0｜finished_at=2026-09-12 09:51:41｜rolled_back_at=NULL`
 - `npx prisma migrate status` → `1 migration found in prisma/migrations` ＋ **`Database schema is up to date!`**
 - 注：`migrate resolve` **不校验关系完整性**（只读 datasource），所以它在 `schema.prisma` 尚为 P1012 时就跑通了 —— **别把它当作 schema 有效的证据**。
+
+## ⬆ 上服务器时必做（上线前清单 · 2026-09-13 立）
+
+> 本机开发环境的**已知降级项**在服务器上**必须补回** —— 本机"跑通了"不等于生产合规。
+
+| # | 项 | 本机现状（开发用） | 服务器必做 |
+|---|---|---|---|
+| 1 | **MySQL 版本** | phpStudy **8.0.12** | 装 **8.0.16+**（`CHECK` 自 8.0.16 才生效） |
+| 2 | **CHECK 约束复验** | 8.0.12 下 `CHECK` **静默忽略**（`CONSTRAINT_TYPE='CHECK'` 计数＝**0**）→ 靠应用层单测兜底（M0-19） | 建库后**复验真生效**：插入「申请人 ＝ 审批人」→ 断言报错（不再静默放过） |
+| 3 | **docker-compose** | 本机无 Docker，**从未跑过**（M0-07 只做 YAML 语法自检） | 首次部署跑 `docker compose config` ＋ `up`，确认 `mysql:8`（**≥8.0.16**）/ `redis:7` 起得来 |
+| 4 | **Redis 版本** | phpStudy **3.0.504**（**无密码**） | 换 **Redis 7**；代码里「禁用 6/7 专有命令」的临时红线（`UNLINK` / `EXPIRE … NX｜GT｜LT` / ACL）**可解禁**；**必须设密码** |
+| 5 | **密钥 / 口令** | `.env` 里 DB / Redis **均无强口令**、`JWT_SECRET` 为本地随机值 | 换生产密钥与强口令；`.env` 不入库 |
+| 6 | **migration 全量重放** | 已应用 `0001_init` ＋ `0002` | 空库上按序 `0001_init` → `0002` → 逐份 `migrate resolve --applied`（口径见上文「重建提醒」），再 `migrate status` 断言 **`up to date!`** |
+
+> ⚠ 第 **1、2 项是同一个坑的两面**：本机 `CHECK` 静默失效最容易被拖到上线才炸 —— 本机当前只靠应用层单测兜住「审批人 ≠ 申请人」。

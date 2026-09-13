@@ -1,0 +1,84 @@
+// =============================================================================
+// 横切装配模块（M0-38）—— 守卫 / 拦截器 / 过滤器 / 管道**一处可见**
+//
+// 口径来源（★ 真相源，勿自造）：
+//   · 《销售CRM架构设计说明》V1.1 §5.2：`shared/` ＝ 横切装配（guards / interceptors / filters / pipes）；
+//     §5.4：`shared/**` 只依赖更低层（kernel）。
+//   · §7.1 ~ §7.5 定义四件套各自的职责（上下文只读 / 数据范围注入 / 脱敏渲染 / 审计 / 异常映射）。
+//
+// ★ 为什么用 `APP_*` 令牌注册，而不是在 main.ts 里 `app.useGlobalXxx()`：
+//   ① 走 DI：守卫 / 拦截器要注入 `JwtService`、`ContextService`、`Reflector` —— `useGlobalXxx` 只能传裸实例，
+//      得手工 new 并自己接依赖，等于把装配知识复制到 main.ts；
+//   ② **可测**：`Test.createTestingModule({ imports: [SharedModule] })` 就能验证「全局生效」，
+//      不必起真进程（见 shared.module.spec.ts）；
+//   ③ 一处可见：四件套的**生效顺序**是本文件最要紧的信息，散在 main.ts 里没人看得出顺序。
+//
+// ★ 拦截器注册顺序（**别改**）：Nest 响应阶段是**倒序**执行的 ——
+//   ResponseInterceptor 注册在最前 → 它在出口**最后**包裹，于是它包住的是
+//   「已脱敏、已按数据范围处理」的 data。若顺序反过来，脱敏逻辑就会拿到 `{code,message,...}` 这层壳去处理，
+//   既找不到业务字段（白干），又会把壳本身当成数据（错得很难发现）。
+//
+// ⚠ M0-38 判据原文是「起服后 /docs 响应符合统一包」：`/docs` 由 M0-48 的 Swagger 提供，
+//   且它是**中间件直出的 HTML**、不经拦截器 —— 故「统一包」真正适用于 **API 处理器**。
+//   本批次先证「全局四件套真的生效」（spec 里起真 HTTP 服务逐条断言），`/docs` 到 M0-48 再核对。
+// =============================================================================
+import { Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { JwtModule } from '@nestjs/jwt';
+
+import { ACCESS_TOKEN_TTL, ContextModule } from '../kernel/index';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AllExceptionsFilter } from './filters/all-exceptions.filter';
+import { ResponseInterceptor } from './interceptors/response.interceptor';
+import { DataScopeInterceptor } from './interceptors/data-scope.interceptor';
+import { DesensitizeInterceptor } from './interceptors/desensitize.interceptor';
+import { AppValidationPipe } from './pipes/validation.pipe';
+
+/** `JWT_SECRET` 最短长度：太短的密钥可被暴力枚举（→ 架构 §8.1 硬口径「用真随机」） */
+const JWT_SECRET_MIN_LENGTH = 32;
+
+/**
+ * 取 JWT 密钥：**缺失或过短直接抛错、拒绝启动**。
+ * ★ 绝不设默认值兜底 —— 带默认密钥的服务一旦被部署，任何人都能自己签一枚「总经理」令牌进来，
+ *   而这类事故在日志里**看不出异常**。宁可起不来，也不带默认密钥跑。
+ */
+function requireJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (typeof secret !== 'string' || secret.trim().length < JWT_SECRET_MIN_LENGTH) {
+    throw new Error(
+      `缺少 JWT_SECRET 或长度不足 ${JWT_SECRET_MIN_LENGTH} 位：请在 .env 里配置真随机串（→ 架构说明 §8.1）`,
+    );
+  }
+  return secret;
+}
+
+@Module({
+  imports: [
+    // 上下文模块是 @Global()，此处显式 import 是为了让 SharedModule **自给自足**
+    // （spec 里单独 createTestingModule 也能解析出 ContextService，不依赖 app.module）
+    ContextModule,
+    // registerAsync（而非 register）：register 在**模块加载期**求值，那时 main.ts 还没 loadEnvFile，
+    // 会读到 undefined；registerAsync 的工厂在**DI 初始化期**执行，.env 已就位。
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: requireJwtSecret(),
+        signOptions: { expiresIn: ACCESS_TOKEN_TTL },
+      }),
+    }),
+  ],
+  providers: [
+    // ① 鉴权：解 JWT → 填上下文；无 token → 401 / 20002（M0-32）
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // ② 统一响应包：**必须第一个注册**（响应阶段倒序执行，它才能在最外层包裹）
+    { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    // ③ 数据范围：M0 只打标（M0-36），真实注入在 M5
+    { provide: APP_INTERCEPTOR, useClass: DataScopeInterceptor },
+    // ④ 脱敏：M0 占位放行（M0-37），真实规则在 M5
+    { provide: APP_INTERCEPTOR, useClass: DesensitizeInterceptor },
+    // ⑤ 异常映射：所有失败出口收成统一包（M0-34）
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // ⑥ 入参校验：坏 DTO → 400 / 20001 ＋ 字段级人话（M0-35）
+    { provide: APP_PIPE, useClass: AppValidationPipe },
+  ],
+})
+export class SharedModule {}

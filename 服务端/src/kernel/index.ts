@@ -10,12 +10,18 @@
 //   import { AppError, ErrorCode, resolvePagination, bigintToJson } from '@/kernel';
 // 好处＝**换实现不动调用方**：文件挪位 / 拆分只改本文件一处，
 // 而不是让几十个文件各写一条深路径（那是「改一处漏两处」的温床）。
+//
+// ⚠ **`@/` 别名只能用在测试里**（2026-09-14 实测）：`tsconfig.json` 的 `paths` 是**编译期**映射，
+//   `tsc` **不会**把产物里的 `@/kernel` 改写成相对路径 —— 源码里一旦这么写，`node dist/main.js`
+//   到运行时才报「Cannot find module '@/kernel'」（还能骗过 `tsc --noEmit` 与 jest，因为 jest 有
+//   `moduleNameMapper`）。故 **src 内一律相对路径**（如 `../../kernel`），别名留给 spec。
 // =============================================================================
 export * from './errors/app-error';
 export * from './errors/prisma-error.mapper';
 export * from './common/bigint';
 export * from './common/pagination';
 export * from './context/request-context';
+export * from './context/jwt-claims';
 export * from './context/context.module';
 export * from './events/domain-event';
 export * from './events/event-bus';

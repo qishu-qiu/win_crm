@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>工作台 · 选型对比 A · Ant Design Vue 4.2.6</title>
+
+<!-- Ant Design Vue 4.x = CSS-in-JS，无需组件样式表；仅需 reset -->
+<link rel="stylesheet" href="https://registry.npmmirror.com/ant-design-vue/4.2.6/files/dist/reset.css" />
+
+<style>
+/* ==========================================================================
+   《销售CRM设计规范》V1.0 §二 Design Tokens —— 数值唯一事实源
+   页面内一律引用 var(--…)，禁止硬编码色值 / 间距 / 圆角 / 字号
+   ========================================================================== */
+:root{
+  --color-primary:#1677ff;
+  --color-primary-hover:#4096ff;
+  --color-primary-active:#0958d9;
+  --color-primary-bg:#e6f4ff;
+  --color-success:#52c41a;
+  --color-warning:#faad14;
+  --color-error:#ff4d4f;
+
+  --color-bg-layout:#f5f5f5;
+  --color-bg-container:#ffffff;
+  --color-fill-alter:rgba(0,0,0,.02);
+  --color-text:rgba(0,0,0,.88);
+  --color-text-secondary:rgba(0,0,0,.65);
+  --color-text-tertiary:rgba(0,0,0,.45);
+  --color-text-disabled:rgba(0,0,0,.25);
+  --color-border:#d9d9d9;
+  --color-border-secondary:#f0f0f0;
+  --color-bg-hover:rgba(0,0,0,.04);
+
+  /* 业务专用色 §二「业务专用色」 */
+  --urgency-week:#ff4d4f;
+  --urgency-quarter:#1677ff;
+
+  --font-size-xs:12px;
+  --font-size-base:14px;
+  --font-size-lg:16px;
+  --font-size-2xl:24px;
+  --font-size-3xl:30px;
+  --line-height:1.5714;
+  --font-weight-medium:500;
+  --font-weight-strong:600;
+  --font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-numeric:tabular-nums;
+
+  --space-xxs:4px;  --space-xs:8px;   --space-sm:12px;  --space-md:16px;
+  --space-lg:24px;  --space-xl:32px;
+
+  --radius-xs:2px;  --radius-sm:4px;  --radius-base:6px; --radius-lg:8px;
+  --radius-pill:999px;
+
+  --shadow-1:0 1px 2px 0 rgba(0,0,0,.05),0 1px 6px -1px rgba(0,0,0,.03),0 2px 4px 0 rgba(0,0,0,.03);
+  --border-width:1px;
+  --motion-duration-base:.2s;
+  --motion-ease:cubic-bezier(.645,.045,.355,1);
+
+  --control-h:32px;
+  --z-sticky:100;
+}
+
+/* ==========================================================================
+   页面骨架（§六 栅格：24 栅格 / 内容最大宽 1440 居中）
+   ========================================================================== */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--color-bg-layout);
+  color:var(--color-text);
+  font-family:var(--font-family);
+  font-size:var(--font-size-base);
+  line-height:var(--line-height);
+  -webkit-font-smoothing:antialiased;
+}
+.wb{max-width:1440px;margin:0 auto;padding:var(--space-xl) var(--space-lg) var(--space-lg)}
+.num{font-variant-numeric:var(--font-numeric);font-weight:var(--font-weight-strong)}
+.muted{color:var(--color-text-tertiary);font-size:var(--font-size-xs)}
+.mono-time{font-variant-numeric:var(--font-numeric);color:var(--color-text-secondary)}
+
+/* —— 页头（§七.1 一屏一主；标题 24px，不放大） —— */
+.wb-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-md);margin-bottom:var(--space-lg)}
+.wb-title{margin:0;font-size:var(--font-size-2xl);font-weight:var(--font-weight-strong);line-height:1.3}
+.wb-sub{margin:var(--space-xxs) 0 0;color:var(--color-text-secondary);font-size:var(--font-size-base)}
+.wb-head-right{display:flex;align-items:center;gap:var(--space-sm)}
+.demo-flag{
+  font-size:var(--font-size-xs);color:var(--color-text-tertiary);
+  border:var(--border-width) dashed var(--color-border);border-radius:var(--radius-sm);
+  padding:2px var(--space-xs);
+}
+
+/* —— KPI 卡（§七.2 最轻：描边、无阴影、padding 16） —— */
+.kpi-row{margin-bottom:var(--space-md)}
+.kpi{
+  background:var(--color-bg-container);
+  border:var(--border-width) solid var(--color-border-secondary);
+  border-radius:var(--radius-lg);
+  padding:var(--space-md);
+  cursor:pointer;
+  transition:background var(--motion-duration-base) var(--motion-ease);
+}
+.kpi:hover{background:var(--color-bg-hover)}
+.kpi-label{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.kpi-value{
+  margin-top:var(--space-xxs);
+  font-size:var(--font-size-3xl);font-weight:var(--font-weight-strong);
+  line-height:1.2;font-variant-numeric:var(--font-numeric);
+}
+.kpi-note{margin-top:var(--space-xxs);color:var(--color-text-tertiary);font-size:var(--font-size-xs)}
+.kpi--error .kpi-value{color:var(--color-error)}
+.kpi--primary .kpi-value{color:var(--color-primary)}
+.kpi--success .kpi-value{color:var(--color-success)}
+.kpi--plain .kpi-value{color:var(--color-text)}
+
+/* —— 动作条（§4.5 同屏仅一个 primary） —— */
+.actionbar{
+  display:flex;align-items:center;gap:var(--space-xs);
+  background:var(--color-bg-container);
+  border:var(--border-width) solid var(--color-border-secondary);
+  border-radius:var(--radius-lg);
+  padding:var(--space-sm) var(--space-md);
+  margin-bottom:var(--space-md);
+}
+.actionbar .spacer{flex:1}
+.btn-inline{display:inline-flex;align-items:center;gap:var(--space-xs)}
+
+/* —— 区块卡（§七.2：内容卡＝描边＋shadow-1；列表卡＝占主区、靠分割线、无阴影） —— */
+.block-head{
+  display:flex;align-items:center;justify-content:space-between;
+  height:56px;padding:0 var(--space-lg);
+  border-bottom:var(--border-width) solid var(--color-border-secondary);
+}
+.block-title{font-size:var(--font-size-lg);font-weight:var(--font-weight-strong)}
+.card-content{
+  background:var(--color-bg-container);
+  border:var(--border-width) solid var(--color-border-secondary);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-1);
+}
+.card-list{
+  background:var(--color-bg-container);
+  border:var(--border-width) solid var(--color-border-secondary);
+  border-radius:var(--radius-lg);
+}
+
+/* —— 今日安排（§4.8 时间轴；§4.4 状态＝圆点＋文字） —— */
+.agenda-row{
+  display:flex;align-items:flex-start;gap:var(--space-md);
+  padding:var(--space-md) var(--space-lg);
+  border-bottom:var(--border-width) solid var(--color-border-secondary);
+  transition:background var(--motion-duration-base) var(--motion-ease);
+}
+.agenda-row:last-child{border-bottom:0}
+.agenda-row:hover{background:var(--color-bg-hover)}
+.agenda-row--overdue{background:rgba(255,77,79,.03)}
+.agenda-time{width:48px;flex:0 0 48px;font-size:var(--font-size-base);color:var(--color-text-secondary);font-variant-numeric:var(--font-numeric);padding-top:2px}
+.agenda-main{flex:1;min-width:0}
+.agenda-line{display:flex;align-items:center;gap:var(--space-xs);flex-wrap:wrap}
+.agenda-line + .agenda-line{margin-top:var(--space-xxs)}
+.agenda-actions{display:flex;align-items:center;gap:var(--space-xs);flex:0 0 auto}
+
+/* 色点（§4.4 圆点＋文字，色盲友好；§三.2-9 不再额外铺色块） */
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex:0 0 6px}
+.dot--error{background:var(--color-error)}
+.dot--primary{background:var(--color-primary)}
+.dot--success{background:var(--color-success)}
+.dot--gray{background:var(--color-text-disabled)}
+.agenda-flag{font-size:var(--font-size-xs);font-weight:var(--font-weight-medium)}
+.agenda-flag--error{color:var(--color-error)}
+.agenda-flag--primary{color:var(--color-primary)}
+.agenda-flag--gray{color:var(--color-text-tertiary)}
+
+/* 实体可点（需求 §13.1 实体可点铁律 / 设计规范 §三.2-8 禁只展示无交互） */
+.entity{color:var(--color-text);text-decoration:none;font-weight:var(--font-weight-medium);border-bottom:1px dashed transparent}
+.entity:hover{color:var(--color-primary);border-bottom-color:var(--color-primary)}
+
+/* 紧迫档 chip（§4.9：5 档色 / --radius-pill；此处＝色点＋文字） */
+.chip{
+  display:inline-flex;align-items:center;gap:var(--space-xxs);
+  height:22px;padding:0 var(--space-xs);
+  border:var(--border-width) solid var(--color-border-secondary);
+  border-radius:var(--radius-pill);
+  background:var(--color-fill-alter);
+  font-size:var(--font-size-xs);color:var(--color-text-secondary);
+}
+
+/* —— 本周重点（内容卡＝中重量） —— */
+.focus-item{
+  display:flex;align-items:center;gap:var(--space-sm);
+  padding:var(--space-md) var(--space-lg);
+  border-bottom:var(--border-width) solid var(--color-border-secondary);
+  transition:background var(--motion-duration-base) var(--motion-ease);
+}
+.focus-item:last-child{border-bottom:0}
+.focus-item:hover{background:var(--color-bg-hover)}
+.focus-main{flex:1;min-width:0}
+.focus-name{font-weight:var(--font-weight-medium)}
+
+/* —— 空态（§5.1：线性图标＋一句说明＋一个主行动按钮；禁 emoji / 禁装饰插图） —— */
+.empty{padding:var(--space-xl) var(--space-lg);text-align:center}
+.empty svg{color:var(--color-text-disabled)}
+.empty-text{margin:var(--space-sm) 0 var(--space-md);color:var(--color-text-secondary);font-size:var(--font-size-base)}
+
+/* —— 加载态（§5.2 骨架屏；浅灰块，不用渐变、不做全屏 spinner） —— */
+.sk{background:var(--color-border-secondary);border-radius:var(--radius-sm);animation:skPulse 1.4s ease-in-out infinite}
+@keyframes skPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.sk-row{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-md) var(--space-lg);border-bottom:var(--border-width) solid var(--color-border-secondary)}
+.sk-row:last-child{border-bottom:0}
+.sk-h14{height:14px}.sk-h30{height:30px}.sk-h44{height:44px}
+
+/* —— 页脚说明 —— */
+.foot{margin-top:var(--space-md);color:var(--color-text-tertiary);font-size:var(--font-size-xs);display:flex;gap:var(--space-sm);flex-wrap:wrap}
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <a-config-provider :theme="theme">
+    <div class="wb">
+
+      <!-- ===== 页头 ===== -->
+      <header class="wb-head">
+        <div>
+          <h1 class="wb-title">工作台</h1>
+          <p class="wb-sub">{{ today }} · 今日 <span class="num">{{ kpi[0].value }}</span> 项逾期待处理</p>
+        </div>
+        <div class="wb-head-right">
+          <span class="demo-flag">原型 · 演示数据</span>
+          <a-segmented v-model:value="view" :options="viewOptions" size="small"></a-segmented>
+        </div>
+      </header>
+
+      <!-- ===== 今日概览（4 数） ===== -->
+      <a-row :gutter="16" class="kpi-row">
+        <a-col :span="6" v-for="k in kpi" :key="k.key">
+          <div class="kpi" :class="'kpi--' + k.tone" :title="k.tip">
+            <div class="kpi-label">{{ k.label }}</div>
+            <div class="kpi-value">{{ k.value }}</div>
+            <div class="kpi-note">{{ k.note }}</div>
+          </div>
+        </a-col>
+      </a-row>
+
+      <!-- ===== 动作条（一屏一主：写跟进＝唯一 primary） ===== -->
+      <div class="actionbar">
+        <a-button type="primary" @click="onAct('写跟进')">
+          <span class="btn-inline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            写跟进
+          </span>
+        </a-button>
+        <a-button @click="onAct('外出登记')">
+          <span class="btn-inline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20l-5.4 2L5 15l9.6-9.6a2.1 2.1 0 0 1 3 3L8 18z"/></svg>
+            外出登记
+          </span>
+        </a-button>
+        <a-button type="text" @click="onAct('快速标记')">快速标记</a-button>
+        <span class="spacer"></span>
+        <span class="muted">逾期未跟进的客户已置顶</span>
+      </div>
+
+      <!-- ===== 主体两栏：今日安排（主区） / 本周重点 ===== -->
+      <a-row :gutter="24">
+
+        <!-- 今日安排（列表卡＝主重量：无阴影、靠分割线） -->
+        <a-col :span="16">
+          <div class="card-list">
+            <div class="block-head">
+              <span class="block-title">今日安排</span>
+              <span class="muted">共 {{ agenda.length }} 条 · 逾期置顶</span>
+            </div>
+
+            <!-- 加载态 -->
+            <template v-if="view === 'loading'">
+              <div class="sk-row" v-for="i in 4" :key="i">
+                <div class="sk sk-h14" style="width:48px"></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+                  <div class="sk sk-h14" style="width:38%"></div>
+                  <div class="sk sk-h14" style="width:62%"></div>
+                </div>
+                <div class="sk sk-h30" style="width:96px"></div>
+              </div>
+            </template>
+
+            <!-- 空态 -->
+            <template v-else-if="view === 'empty'">
+              <div class="empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16h6"/>
+                </svg>
+                <p class="empty-text">今天没有需要处理的安排</p>
+                <a-button type="primary" @click="onAct('录入客户')">录入客户</a-button>
+              </div>
+            </template>
+
+            <!-- 数据态 -->
+            <template v-else>
+              <div
+                v-for="row in agenda"
+                :key="row.id"
+                class="agenda-row"
+                :class="{ 'agenda-row--overdue': row.overdue }"
+              >
+                <div class="agenda-time">{{ row.time }}</div>
+
+                <div class="agenda-main">
+                  <div class="agenda-line">
+                    <span class="dot" :class="'dot--' + row.tone"></span>
+                    <span class="agenda-flag" :class="'agenda-flag--' + row.tone">{{ row.flag }}</span>
+                    <a-tag>{{ row.stage }}</a-tag>
+                  </div>
+                  <div class="agenda-line">
+                    <a href="#" class="entity" @click.prevent="onAct('打开公司：' + row.company)">{{ row.company }}</a>
+                    <span class="muted">·</span>
+                    <a href="#" class="entity" @click.prevent="onAct('打开联系人：' + row.contact)">{{ row.contact }}</a>
+                    <span class="muted">· {{ row.last }}</span>
+                  </div>
+                </div>
+
+                <div class="agenda-actions">
+                  <a-button type="link" size="small" @click="onAct(row.primary)">{{ row.primary }}</a-button>
+                  <a-button type="text" size="small" @click="onAct(row.secondary)">{{ row.secondary }}</a-button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </a-col>
+
+        <!-- 本周重点（内容卡＝中重量：描边＋shadow-1） -->
+        <a-col :span="8">
+          <div class="card-content">
+            <div class="block-head">
+              <span class="block-title">本周重点</span>
+              <span class="muted">共 {{ focus.length }} 个</span>
+            </div>
+
+            <template v-if="view === 'loading'">
+              <div class="sk-row" v-for="i in 3" :key="i">
+                <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+                  <div class="sk sk-h14" style="width:56%"></div>
+                  <div class="sk sk-h14" style="width:34%"></div>
+                </div>
+                <div class="sk sk-h30" style="width:64px"></div>
+              </div>
+            </template>
+
+            <template v-else-if="view === 'empty'">
+              <div class="empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/>
+                </svg>
+                <p class="empty-text">本周还没有标记重点客户</p>
+                <a-button @click="onAct('去标记周重点')">去标记</a-button>
+              </div>
+            </template>
+
+            <template v-else>
+              <div v-for="f in focus" :key="f.id" class="focus-item">
+                <div class="focus-main">
+                  <div class="agenda-line">
+                    <a href="#" class="entity focus-name" @click.prevent="onAct('打开公司：' + f.company)">{{ f.company }}</a>
+                    <span class="chip">
+                      <span class="dot" :style="{ background: f.color }"></span>{{ f.chip }}
+                    </span>
+                  </div>
+                  <div class="agenda-line">
+                    <span class="muted">{{ f.last }}</span>
+                  </div>
+                </div>
+                <a-button size="small" @click="onAct('去跟进：' + f.company)">去跟进</a-button>
+              </div>
+            </template>
+          </div>
+        </a-col>
+      </a-row>
+
+      <!-- ===== 页脚 ===== -->
+      <div class="foot">
+        <span>实现：Ant Design Vue 4.2.6（全局 <code>antd</code>）</span>
+        <span>·</span>
+        <span>主题：ConfigProvider <code>theme.token</code> 直接注入《设计规范》token（数值零覆写）</span>
+        <span>·</span>
+        <span>演示数据仅用于组件库选型对比；正式实现数据来自《接口API文档》</span>
+      </div>
+
+    </div>
+  </a-config-provider>
+
+</div>
+
+<!-- Ant Design Vue UMD 依赖链（官方 CDN 用法）：dayjs + 7 个插件 → Vue → antd -->
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/plugin/advancedFormat.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/plugin/customParseFormat.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/plugin/localeData.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/plugin/quarterOfYear.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/plugin/weekOfYear.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/plugin/weekYear.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/plugin/weekday.js"></script>
+<script src="https://registry.npmmirror.com/dayjs/1.11.13/files/locale/zh-cn.js"></script>
+<script src="https://registry.npmmirror.com/vue/3.5.13/files/dist/vue.global.prod.js"></script>
+<script src="https://registry.npmmirror.com/ant-design-vue/4.2.6/files/dist/antd.min.js"></script>
+
+<script>
+dayjs.locale('zh-cn');
+const { createApp, ref } = Vue;
+
+/* --------------------------------------------------------------------------
+   ConfigProvider theme：把《设计规范》§二 token 原样交给 Ant Design 5 的
+   seed/alias token —— 因为设计规范本就是以 AntD5 官方 token 为数值基准，
+   故这里是「直接对齐」而非「覆写」（0 处视觉妥协）。
+   -------------------------------------------------------------------------- */
+const theme = {
+  token: {
+    colorPrimary: '#1677ff',
+    colorPrimaryHover: '#4096ff',
+    colorPrimaryActive: '#0958d9',
+    colorPrimaryBg: '#e6f4ff',
+    colorSuccess: '#52c41a',
+    colorWarning: '#faad14',
+    colorError: '#ff4d4f',
+    colorInfo: '#1677ff',
+
+    colorBgLayout: '#f5f5f5',
+    colorBgContainer: '#ffffff',
+    colorBgElevated: '#ffffff',
+    colorFillAlter: 'rgba(0,0,0,0.02)',
+
+    colorText: 'rgba(0,0,0,0.88)',
+    colorTextSecondary: 'rgba(0,0,0,0.65)',
+    colorTextTertiary: 'rgba(0,0,0,0.45)',
+    colorTextQuaternary: 'rgba(0,0,0,0.25)',
+    colorTextDisabled: 'rgba(0,0,0,0.25)',
+
+    colorBorder: '#d9d9d9',
+    colorBorderSecondary: '#f0f0f0',
+    colorSplit: '#f0f0f0',
+
+    borderRadius: 6,
+    borderRadiusSM: 4,
+    borderRadiusLG: 8,
+    borderRadiusXS: 2,
+
+    controlHeight: 32,
+    controlHeightSM: 24,
+    controlHeightLG: 40,
+
+    fontSize: 14,
+    fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","PingFang SC","Microsoft YaHei",sans-serif',
+    lineHeight: 1.5714,
+
+    boxShadow: '0 1px 2px 0 rgba(0,0,0,.05),0 1px 6px -1px rgba(0,0,0,.03),0 2px 4px 0 rgba(0,0,0,.03)',
+    boxShadowSecondary: '0 6px 16px 0 rgba(0,0,0,.08),0 3px 6px -4px rgba(0,0,0,.12),0 9px 28px 8px rgba(0,0,0,.05)',
+
+    motionDurationFast: '0.1s',
+    motionDurationMid: '0.2s',
+    motionDurationSlow: '0.3s',
+    motionEaseInOut: 'cubic-bezier(0.645,0.045,0.355,1)',
+
+    /* §2.5 硬禁彩色阴影
+       —— AntDV 4.2.6 的实心按钮阴影 = `0 2px 0 ${controlOutline}`，
+          故必须把这三个 outlier 置透明才能真正消除彩色投影。
+       —— 踩坑警示：ant-design-vue@4.2.6 **没有** AntD5 文档里的
+          Button.primaryShadow / defaultShadow / dangerShadow，
+          照 AntD5 文档写会被静默忽略（不报错、不生效）。以下 token 名均按
+          ant-design-vue 4.2.6 源码实测确认。 */
+    controlOutline: 'transparent',
+    controlTmpOutline: 'transparent',
+    colorErrorOutline: 'transparent',
+  },
+  components: {
+    Card: { bodyPadding: 24, bodyPaddingSM: 12, headerHeight: 56, headerFontSize: 16 },
+    /* Tag 真实 token = tagDefaultBg / tagDefaultColor（非 AntD5 的 defaultBg） */
+    Tag: { tagDefaultBg: 'rgba(0,0,0,0.02)', tagDefaultColor: 'rgba(0,0,0,0.65)' },
+    /* Segmented 真实 token = bgColor / bgColorSelected（非 AntD5 的 trackBg / itemSelectedBg） */
+    Segmented: { bgColor: 'rgba(0,0,0,0.04)', bgColorSelected: '#ffffff' },
+  },
+};
+
+createApp({
+  setup() {
+    const view = ref('data');
+    const viewOptions = [
+      { label: '数据态', value: 'data' },
+      { label: '空态', value: 'empty' },
+      { label: '加载态', value: 'loading' },
+    ];
+
+    const today = '2026-09-14 周一';
+
+    /* §3.5：今日概览＝逾期 / 预约 / 周重点 / 已跟进（4 数） */
+    const kpi = [
+      { key: 'overdue', label: '逾期未跟进', value: 3, note: '需今日处理', tone: 'error',   tip: '点击查看逾期清单' },
+      { key: 'appoint', label: '今日预约',   value: 2, note: '最近 14:00',  tone: 'primary', tip: '点击进入预约管理' },
+      { key: 'focus',   label: '本周重点',   value: 5, note: '2 个周重点',  tone: 'success', tip: '点击查看本周重点' },
+      { key: 'done',    label: '今日已跟进', value: 4, note: '有效跟进',    tone: 'plain',   tip: '点击查看今日跟单' },
+    ];
+
+    /* 今日安排时间轴（逾期置顶红 → 今日预约 → 已跟进） */
+    const agenda = [
+      { id: 'a1', time: '09:00', overdue: true,  tone: 'error',   flag: '逾期 3 天', stage: '异议与卡点',   company: '华腾科技', contact: '张伟', last: '上次跟进 09-11', primary: '补写跟进', secondary: '改期' },
+      { id: 'a2', time: '10:30', overdue: true,  tone: 'error',   flag: '逾期 3 天', stage: '需求确认',     company: '中远物流', contact: '李静', last: '上次跟进 09-08', primary: '补写跟进', secondary: '改期' },
+      { id: 'a3', time: '14:00', overdue: false, tone: 'primary', flag: '今日预约', stage: '面访产品讲解', company: '恒瑞医药', contact: '王强', last: '面访 · 产品讲解', primary: '写跟进',  secondary: '完成预约' },
+      { id: 'a4', time: '16:30', overdue: false, tone: 'primary', flag: '今日预约', stage: '需求确认',     company: '长江数据', contact: '陈亮', last: '电话 · 需求确认', primary: '写跟进',  secondary: '完成预约' },
+      { id: 'a5', time: '08:50', overdue: false, tone: 'gray',    flag: '已跟进',   stage: '初步建联',     company: '星宇科技', contact: '周敏', last: '跟单已提交',     primary: '查看跟单', secondary: '—' },
+    ];
+
+    /* 本周重点：紧迫档只用红 / 蓝两档，避免同屏语义色超 3（§三.2-9） */
+    const focus = [
+      { id: 'f1', company: '华腾科技', chip: '周重点', color: 'var(--urgency-week)',    last: '最后跟进 09-11' },
+      { id: 'f2', company: '中远物流', chip: '季度跟', color: 'var(--urgency-quarter)', last: '最后跟进 09-08' },
+      { id: 'f3', company: '恒瑞医药', chip: '周重点', color: 'var(--urgency-week)',    last: '最后跟进 09-12' },
+    ];
+
+    const onAct = (name) => { console.log('[demo] 动作：', name); };
+
+    return { theme, view, viewOptions, today, kpi, agenda, focus, onAct };
+  },
+}).use(antd).mount('#app');
+</script>
+</body>
+</html>

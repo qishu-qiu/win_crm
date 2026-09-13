@@ -5,8 +5,9 @@
 //   **不 import `@eslint/js` / `globals` / `eslint-plugin-prettier` / `eslint-plugin-import`**
 //   —— 这些都没装，引了就是「未声明依赖」（现在能跑只因 node_modules 扁平化，换个安装方式就炸）。
 //
-// ★ 模块边界硬卡（架构说明 §5.4 表格 **7 条**）＝ M0-40 ~ M0-44 ＋ M0-44b（kernel 禁 modules）
-//   ＋ M0-44c（域**禁 shared**、只许引 kernel —— 横切层靠全局注册生效，见 §7.1）。
+// ★ 模块边界硬卡（架构说明 §5.4 表格 **8 条**）＝ M0-40 ~ M0-44 ＋ M0-44b（kernel 禁 modules）
+//   ＋ M0-44c（域**禁 shared**、只许引 kernel —— 横切层靠全局注册生效，见 §7.1）
+//   ＋ M0-44d（kernel 禁 shared —— `shared` 依赖 `kernel`，反向引即**成环**）。
 //   手段＝ `typescript-eslint` **内置**的 `no-restricted-imports`（**零新依赖**，正是规格指定手段）。
 //   白名单语义（"只许 import 谁" ＋ "仅本域可引仓储"）用「按域生成配置块」表达：
 //   flat config 中同一文件命中多个块时**后者覆盖前者**（不是合并），故每个域只生成一个块，
@@ -103,6 +104,11 @@ const kernelBlock = {
             group: ['**/modules/**'],
             message:
               '内核零业务依赖被拦（架构 §5.4）：`kernel/**` 不得 import `modules/*`，业务规矩不准下沉进内核。',
+          },
+          {
+            group: ['**/shared/**'],
+            message:
+              '内核不得反向依赖横切层（架构 §5.4 首行）：`shared/**` 依赖 `kernel`（守卫要 `ContextService`、装配要 `ContextModule`），`kernel` 再引 `shared` 即**成环**。「内核需要 shared」不存在正当场景 —— 横切层用的通用能力（上下文 / 错误 / 事件 / 审计）本就在 `kernel` 内，缺什么加什么，不要反向引。',
           },
         ],
       },

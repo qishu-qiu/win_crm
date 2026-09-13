@@ -16,6 +16,10 @@ describe('M0-31 kernel 汇总导出（架构 §5.2 / §5.4）', () => {
     expect(typeof kernel.requireRequestContext).toBe('function');
     expect(typeof kernel.ContextService).toBe('function');
     expect(kernel.ContextModule).toBeDefined();
+    // 免鉴权标记（M0-44c 由 shared/ 归位到 kernel/context/：域要把它写在 controller 上，
+    // 按 §5.4 域只许引 kernel，故必须从这里出；键名断死值，改了它会提醒同步守卫）
+    expect(typeof kernel.Public).toBe('function');
+    expect(kernel.IS_PUBLIC_KEY).toBe('auth:is_public');
     // 领域事件
     expect(kernel.DomainEventName.RelationCreated).toBe('RelationCreated');
     expect(typeof kernel.createDomainEvent).toBe('function');

@@ -201,7 +201,7 @@ modules/company/
 
 | 目录 | 允许 import |
 | --- | --- |
-| `kernel/**` | 任何非业务包（**不许 import `modules/*`**） |
+| `kernel/**` | 任何非业务包，**但不许 import `modules/*`**（业务规矩不准下沉进内核）**、也不许 import `shared/**`**（`shared` 依赖 `kernel`，反向引即**成环**；内核要用的通用能力都在内核内） |
 | `modules/org/**` | `kernel/**` |
 | `modules/company/**` | `kernel/**`、`modules/org/**` |
 | `modules/relation/**` | `kernel/**`、`modules/org/**`、`modules/company/**` |

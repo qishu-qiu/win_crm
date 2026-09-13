@@ -6,7 +6,7 @@
 
 ## 一、当前状态（务必先读）
 
-- `服务端/` 下**尚无 `package.json` / `src/`**；现有 6 个文件：`prisma/schema.prisma`（46 张表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、`prisma/README.md`（落库口径 ＋ 真库验收表）、`.env.example` / `.env`（本地，不入 git）。前端代码尚未创建（将落在 `前端/`）。
+- `服务端/` 下**尚无 `src/`**；现有 7 个文件：`package.json`（**2026-09-13 新增 —— 只作 `prisma` 版本锚点**：`devDependencies.prisma` 钉死 `6.19.3`，防 `npx prisma` 取到别的版本改变 `validate` / `migrate diff` 行为（**2026-09-13 实测：不钉版本 `npx prisma` 拉到的是 `latest` ＝ `8.0.0-rc.14`，一个 RC**）；**脚本与依赖安装属 M0-01 / M0-02，尚未 `npm install`**）、`prisma/schema.prisma`（46 张表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、`prisma/README.md`（落库口径 ＋ 真库验收表）、`.env.example` / `.env`（本地，不入 git）。前端代码尚未创建（将落在 `前端/`）。
 - `归档/` 内是被取代的旧代码与旧文档，**移动未删除**；根目录 `.ignore` 已让 ripgrep 默认跳过 `归档/`（查历史需显式指定路径或 `--no-ignore`）。
 - 因此下文命令分两类：**现已可跑**（Prisma 相关）与**骨架搭好后按文档执行**（NestJS / 前端脚本）。
 

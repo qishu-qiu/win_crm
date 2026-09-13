@@ -1,6 +1,6 @@
 # 服务端 / Prisma（新后端起点）
 
-> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）＋ `prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）；**`package.json` 与 `src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
+> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）＋ `prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）；**`package.json` 已于 2026-09-13 创建**（**只作 `prisma` 版本锚点**：`devDependencies.prisma` 钉死 `6.19.3`，防 `npx prisma` 取到别的版本（**2026-09-13 实测：不钉版本拉到 `latest` ＝ `8.0.0-rc.14`，一个 RC**）；⚠ **尚未 `npm install`** —— 装依赖前 `npx prisma` 仍会从 registry 取最新版，故**要么先 `npm install`、要么临时写 `npx prisma@6.19.3`**，二者行为一致才算锚点生效）、**`src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
 
 ## schema.prisma
 
@@ -45,7 +45,7 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 
 ### ✅ 0002 验收结果（2026-09-13 · MySQL 8.0.12 实跑取证）
 
-方式：`npx prisma migrate deploy --schema prisma/schema.prisma`（**钉 `prisma@6.19.3`** —— 不钉版本 `npx` 会拉到 7.x）。下表「实测」列均为 `information_schema` 实查值。
+方式：`npx prisma migrate deploy --schema prisma/schema.prisma`（**钉 `prisma@6.19.3`** —— 不钉版本 `npx` 会拉到 `latest`；**2026-09-13 实测 ＝ `8.0.0-rc.14`（一个 RC）**，故必须钉版本）。下表「实测」列均为 `information_schema` 实查值。
 
 | 验收项 | 期望 | 实测 |
 |---|---|---|

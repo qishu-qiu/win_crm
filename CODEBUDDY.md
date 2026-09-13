@@ -6,24 +6,26 @@
 
 ## 一、当前状态（务必先读）
 
-- `服务端/` 下**尚无 `src/`**；现有 7 个文件：`package.json`（**2026-09-13 新增 —— 只作 `prisma` 版本锚点**：`devDependencies.prisma` 钉死 `6.19.3`，防 `npx prisma` 取到别的版本改变 `validate` / `migrate diff` 行为（**2026-09-13 实测：不钉版本 `npx prisma` 拉到的是 `latest` ＝ `8.0.0-rc.14`，一个 RC**）；**脚本与依赖安装属 M0-01 / M0-02，尚未 `npm install`**）、`prisma/schema.prisma`（46 张表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、`prisma/README.md`（落库口径 ＋ 真库验收表）、`.env.example` / `.env`（本地，不入 git）。前端代码尚未创建（将落在 `前端/`）。
+- `服务端/` 下**尚无 `src/`**；现有 **9 个文件**：`package.json`（**2026-09-13 创建，同日升级为 Prisma `7.10.0` 版本锚点**：`devDependencies.prisma` 钉死 `7.10.0` —— 不钉版本 `npx prisma` 拉到的是 `latest` ＝ `8.0.0-rc.14`（一个 RC）；**NestJS 12 / ESLint / Jest 等其余依赖仍属 M0-01 / M0-02，未装**）、**`package-lock.json`（同日 `npm install` 产生，已入 git —— 版本真钉死的锚点）**、**`prisma.config.ts`（新增 —— Prisma 7 的连接串中枢：`datasource.url` ＋ `process.loadEnvFile('.env')`，见 `prisma/README.md`「★ Prisma 7 升级」）**、`prisma/schema.prisma`（46 张表；**generator 已按 v7 换成 `prisma-client` ＋ `output=../src/generated/prisma` ＋ `moduleFormat="cjs"`；`datasource` 已删掉 `url`（v7 保留会报 P1012）**）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、`prisma/README.md`（落库口径 ＋ 真库验收表 ＋ Prisma 7 升级口径）、`.env.example` / `.env`（本地，不入 git）；**`node_modules/` 已装**（被根 `.gitignore` 忽略）。前端代码尚未创建（将落在 `前端/`）。
 - `归档/` 内是被取代的旧代码与旧文档，**移动未删除**；根目录 `.ignore` 已让 ripgrep 默认跳过 `归档/`（查历史需显式指定路径或 `--no-ignore`）。
 - 因此下文命令分两类：**现已可跑**（Prisma 相关）与**骨架搭好后按文档执行**（NestJS / 前端脚本）。
 
 ## 二、常用命令
 
-**Prisma 校验 / 格式化**（现已可跑，需要一个占位连接串即可，不用真库）
+**Prisma 校验 / 格式化**（现已可跑；**在 `服务端/` 内执行** —— `.env` 已由 `prisma.config.ts` 加载，不必再内联连接串）
 ```bash
-DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma validate --schema prisma/schema.prisma
-DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema prisma/schema.prisma
+npx prisma validate --schema prisma/schema.prisma
+npx prisma format   --schema prisma/schema.prisma
 ```
-用途：改完 `schema.prisma` 后确认语法有效、格式统一。校验通过输出 `The schema is valid 🚀`。不连接数据库。
+用途：改完 `schema.prisma` 后确认语法有效、格式统一。校验通过输出 `The schema is valid 🚀`。不连接数据库。**依赖已装、版本已钉 `7.10.0`，无需再写 `@版本号`**；等价脚本：`npm run prisma:validate` / `prisma:format` / `prisma:status` / `prisma:deploy`。
 
 **离线生成 baseline migration**（现已可跑，不需要真库）
 ```bash
-DATABASE_URL=占位 npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > migrations/0001_init/migration.sql
+npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > prisma/migrations/0001_init/migration.sql
 ```
+⚠ **v7 参数已改名（实测）**：v6 的 `--to-schema-datamodel` / `--from-schema-datasource` / `--to-schema-datasource` **全部移除**，旧命令直接 unknown option；现为 `--from-schema` / `--to-schema`（schema 文件）＋ `--from-config-datasource` / `--to-config-datasource`（连接串取自 `prisma.config.ts`）。
 ⚠ 该命令**只在「首建基线」时用一次**。**`0001_init` 已 `migrate resolve --applied` 登记为基线 → 此后任何表结构变更一律「新增量 migration」（如 `0002_company_capital_legal_person`），严禁重生成 / 改动 `0001_init`**（改基线文件会与 `_prisma_migrations` 的校验和不一致）。产物需再手工补「生成列 / 分区表 / 视图 / CHECK」段落，**且必须在真实 MySQL 8 上首次执行并逐条核对**（重点：生成列表达式、分区键与主键扩列、ERROR 1503）。
+⚠ **`migrate diff` 的输出只作核对，绝不能直接执行**：它会把「设计使然」的差异也生成成 SQL（实测方向 B 输出含 `ALTER TABLE stat_daily/operation_log/job_run_log DROP PRIMARY KEY, ADD PRIMARY KEY (id)` 和 `DROP INDEX uk_active_rel/uk_owner/uk_phone_active`）—— 前者会把分区表主键改坏（分区表主键必须含分区列，ERROR 1503），后者会拆掉生成列的唯一约束。
 
 **Lint（含模块边界硬卡）** — 骨架搭好后
 ```bash
@@ -128,6 +130,7 @@ npm run gen:types
 
 ### 5. 数据层口径（Prisma / MySQL）
 
+- **Prisma 版本 7.10.0（2026-09-13 由 6.19.3 升级）** —— 三条硬口径：① 连接串**只**写在 `服务端/prisma.config.ts` 的 `datasource.url`（schema 里再写 `url` 直接报 **P1012**）；② **`.env` 不再自动加载**（由该文件用 `process.loadEnvFile` 显式加载，故 prisma 命令**一律在 `服务端/` 内执行**）；③ 运行时 `PrismaClient` **必须传 driver adapter**（MySQL → `@prisma/adapter-mariadb`）—— 即「迁移命令读 config、运行时传 adapter」，**两处都要 `DATABASE_URL`**。`migrate diff` 参数亦已改名（`--from-schema` / `--to-config-datasource` 等，旧的 `--*-schema-datamodel` / `--*-schema-datasource` 已移除），且**其输出只作核对、绝不能直接执行**（会把分区表主键 / 生成列唯一索引生成成 DROP）。详见 `服务端/prisma/README.md`「★ Prisma 7 升级」。
 - **命名**：表名/字段名统一 `snake_case`；索引前缀 `idx_` / `uk_`；审计字段全表统一 `created_by/at`、`updated_by/at`；逻辑删除 `deleted_at`（NULL=未删）。
 - **枚举一律 `String`（VARCHAR(32) 英文码）**，展示文案走字典 `dict_item`，**不用 DB ENUM**。
 - **主键** `BigInt @db.UnsignedBigInt`；金额 `Decimal(12,2)`。

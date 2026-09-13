@@ -4,16 +4,21 @@
   "private": true,
   "description": "销售 CRM 服务端（NestJS 12 + Prisma）。当前只承载 Prisma 落库工具链与版本锚点；完整骨架见《过程产出/开发计划-V1》M0-01 ~ M0-09",
   "engines": {
-    "node": ">=20.11.0"
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
   },
   "scripts": {
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:format": "prisma format --schema prisma/schema.prisma",
     "prisma:status": "prisma migrate status --schema prisma/schema.prisma",
     "prisma:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
-    "prisma:diff:db2schema": "prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script"
+    "prisma:diff:db2schema": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script"
+  },
+  "dependencies": {
+    "@prisma/adapter-mariadb": "7.10.0",
+    "@prisma/client": "7.10.0"
   },
   "devDependencies": {
-    "prisma": "6.19.3"
+    "prisma": "7.10.0",
+    "typescript": "~5.9.0"
   }
 }

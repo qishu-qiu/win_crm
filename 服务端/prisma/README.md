@@ -1,24 +1,68 @@
 # 服务端 / Prisma（新后端起点）
 
-> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）＋ `prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）＋ `prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）；**`package.json` 已于 2026-09-13 创建**（**只作 `prisma` 版本锚点**：`devDependencies.prisma` 钉死 `6.19.3`，防 `npx prisma` 取到别的版本（**2026-09-13 实测：不钉版本拉到 `latest` ＝ `8.0.0-rc.14`，一个 RC**）；⚠ **尚未 `npm install`** —— 装依赖前 `npx prisma` 仍会从 registry 取最新版，故**要么先 `npm install`、要么临时写 `npx prisma@6.19.3`**，二者行为一致才算锚点生效）、**`src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
+> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、**`prisma.config.ts`（2026-09-13 新增 —— Prisma 7 的连接串中枢，见下节）**、**`package.json`（2026-09-13 创建，同日升级为 Prisma `7.10.0`）＋ `package-lock.json`（同日 `npm install` 产生，**已入 git** —— 它才是版本真钉死的锚点）**；**依赖已装**（`node_modules/`，被根 `.gitignore` 忽略）：`prisma` / `@prisma/client` / `@prisma/adapter-mariadb` 均 **`7.10.0`** ＋ `typescript` **`5.9.3`**。**`src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
+
+## ★ Prisma 7 升级（2026-09-13：6.19.3 → 7.10.0）
+
+> **为什么升**：不钉版本时 `npx prisma` 取 registry 的 `latest` ＝ **`8.0.0-rc.14`（一个 RC，不可用于生产）**；而 7.10.0 是当前**最新稳定版**（其 `--version` 自报「Update available 7.10.0 -> 8.0.0-rc.14」，即 8 尚处 RC）。**升级前已留还原点**：提交 **`1300a80`**（v6 口径的最后可用状态）—— 回退＝`git revert` 或 `git reset --hard 1300a80`，另因 `node_modules` 不入库需重跑 `npm install`。
+
+**版本集（全部钉死）**：`prisma` / `@prisma/client` / `@prisma/adapter-mariadb` = **`7.10.0`**；`typescript` = `5.9.3`；`engines.node` = **`^20.19.0 || ^22.12.0 || >=24.0.0`**（v7 的硬门槛，20.11~20.18 不再允许；本机实测 Node **v24.15.0**）。
+
+**两处破坏性变更 ＋ 本项目的落法**：
+
+| # | v7 变更（**实测确证**） | 本项目怎么改 |
+|---|---|---|
+| 1 | **`datasource` 里不能再写 `url`** —— 写了直接报 `P1012: The datasource property 'url' is no longer supported in schema files. Move connection URLs for Migrate to prisma.config.ts` | `schema.prisma` 的 `datasource db` 只留 `provider`；连接串移到 **`prisma.config.ts`：`datasource.url = env('DATABASE_URL')`**（供迁移类命令用） |
+| 2 | **不再自动加载 `.env`**（v6 每次都会打印 `Environment variables loaded from .env`，v7 无此行为） | `prisma.config.ts` 顶部用 **Node 内置 `process.loadEnvFile('.env')`** 显式加载（**不引 dotenv 依赖**；用 `try/catch` 包住，CI 只给真实环境变量也能跑）。⚠ 它按**当前工作目录**找 `.env` → **prisma 命令一律在 `服务端/` 内执行** |
+
+**CLI 参数改名（`migrate diff`）**：v6 的 `--from-schema-datamodel` / `--to-schema-datamodel` / `--from-schema-datasource` / `--to-schema-datasource` **已全部移除**（旧命令直接 unknown option，实测确认），替代为：
+
+| 语义 | v7 参数 |
+|---|---|
+| 数据模型（schema 文件路径） | `--from-schema` / `--to-schema` |
+| 连接串（取自 `prisma.config.ts`） | `--from-config-datasource` / `--to-config-datasource` |
+| 空模型 | `--from-empty` / `--to-empty` |
+| 迁移目录 | `--from-migrations` / `--to-migrations` |
+
+**generator 也换了**：`provider = "prisma-client-js"` → **`provider = "prisma-client"` ＋ `output = "../src/generated/prisma"` ＋ `moduleFormat = "cjs"`**。`moduleFormat = "cjs"` 是关键 —— **NestJS 12 保持 CommonJS，不必为 Prisma 改 ESM**。⚠ **尚未跑 `prisma generate`**（属 M0-03；届时需把 `src/generated/` 加入 `.gitignore`）。
+
+**运行时（写代码时必须知道）**：v7 的 `PrismaClient` **必须显式传 driver adapter**（MySQL → **`@prisma/adapter-mariadb`**；注意 **`@prisma/adapter-mysql2` 这个包不存在**）。即 **两处都要 `DATABASE_URL`**：「迁移命令」读 `prisma.config.ts`，「运行时」由 `new PrismaClient({ adapter })` 传入。
+
+**升级实测（2026-09-13 · 4/4 通过）**：
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 依赖解析 ＋ config 生效 | `npx prisma --version` | `prisma 7.10.0` / `@prisma/client 7.10.0` / Node `v24.15.0` / TypeScript `5.9.3`，并打印 **`Loaded Prisma config from prisma.config.ts.`** ✅ |
+| schema 有效 | `npx prisma validate --schema prisma/schema.prisma` | `The schema at prisma\schema.prisma is valid 🚀` ✅ |
+| **真库兼容（关键）** | `npx prisma migrate status`（**只读**） | **`2 migrations found` ＋ `Database schema is up to date!`** ✅ —— **v7 认可 6.19.3 登记的 `_prisma_migrations` 历史：checksum 无冲突、无需重置、无需重建库** |
+| 离线重生成 baseline 的能力保留 | `npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script` | 正常产出 SQL（**1050 行**）✅ |
+
+> **v6 → v7 的安全结论**：**迁移历史与真库结构都无需任何处理** —— 本轮**未对真库执行任何写操作**（只跑了只读的 `migrate status` / `migrate diff`）。
 
 ## schema.prisma
 
 - **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.28**（§三~§九 表、§十 索引、§十五 落库口径）。
-- ✅ **已通过 Prisma 6.19.3 校验（2026-09-12 复验）**：`The schema at prisma\schema.prisma is valid 🚀`。
-- ⚠ **复验前曾失败（P1012，2026-09-12 发现并已修）**：`SignChecklist.product_line` 缺 `ProductLine` 侧的对向字段 → 已在 `ProductLine` 补一行 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**（`sign_checklist` 表与其外键，`migration.sql` 里一直是对的）。**教训：Prisma 关系字段是双向的 —— 加表/加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败（骨架一搭好就会撞）。**
+- ✅ **已通过 Prisma 校验**：`The schema at prisma\schema.prisma is valid 🚀`（**2026-09-12 于 `6.19.3`；2026-09-13 升级到 `7.10.0` 后再次复验通过**）。
+- ⚠ **两次 P1012（都已修，值得记住）**：
+  1. **2026-09-12 · 关系未双向声明**：`SignChecklist.product_line` 缺 `ProductLine` 侧的对向字段 → 已在 `ProductLine` 补一行 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**（`sign_checklist` 表与其外键，`migration.sql` 里一直是对的）。**教训：Prisma 关系字段是双向的 —— 加表/加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败（骨架一搭好就会撞）。**
+  2. **2026-09-13 · Prisma 7 移除 `datasource.url`**：`The datasource property 'url' is no longer supported in schema files` → 连接串按要求迁到 **`prisma.config.ts`**（见上文「★ Prisma 7 升级」）。**教训：主版本升级先跑只读的 `migrate status` 验证迁移历史兼容性，再动 schema。**
 
 ### 本地校验 / 格式化
 
 ```bash
-# 需要一个（哪怕占位的）连接串，仅用于解析 schema，不需要真库
-DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma validate --schema prisma/schema.prisma
-DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema prisma/schema.prisma
+# 在 服务端/ 目录内执行（prisma.config.ts 按「当前工作目录」加载 .env）
+npx prisma validate --schema prisma/schema.prisma
+npx prisma format   --schema prisma/schema.prisma
 ```
+
+> **v7 起不再需要给命令内联 `DATABASE_URL=...`**：`.env` 已由 `prisma.config.ts` 用 `process.loadEnvFile` 显式加载（v6 是 CLI 自动加载，v7 取消了这件事）。
+> 要临时换库就直接覆盖环境变量（`loadEnvFile` **不覆盖**已存在的环境变量）——**本机开发不必**，`.env` 已指向 `win_crm`。
+> 等价 npm 脚本：`npm run prisma:validate` / `prisma:format` / `prisma:status` / `prisma:deploy`。
 
 ## migrations / 0001_init / migration.sql
 
-- **生成方式**：`DATABASE_URL=占位 npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > migrations/0001_init/migration.sql`（**离线生成，不需要真库**）。
+- **生成方式（当时是 v6 口径）**：`DATABASE_URL=占位 npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > migrations/0001_init/migration.sql`（**离线生成，不需要真库**）。
+  ⚠ **该参数名 v7 已移除** —— 2026-09-13 升 v7 后的等价命令：`npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`（**已实测可跑，输出 1050 行**；`DATABASE_URL` 前缀也不再需要，由 `prisma.config.ts` 从 `.env` 加载）。**该命令仍只用于「首建基线」，不得用来改已登记的 `0001_init`。**
 - **内容** = **Prisma 生成的 baseline（46 张表 / 索引 / 外键）** ＋ **结尾「手工补充段」**（①生成列改造 ②3 张分区表改造 ③视图 `v_contract_performance` ④审批 CHECK ⑤46 表全字段中文 `COMMENT`）。
 - **✅ 2026-09-12 已在真实 MySQL 8.0.12（本机 phpStudy）上**「`DROP DATABASE win_crm` → 重建空库（utf8mb4 / utf8mb4_unicode_ci）→ 灌入 `migration.sql`」**，零报错、全段执行到底**（详见文末「✅ 验收结果」）。
 - **实测踩坑（本机真撞到，2 条，均已修）**：
@@ -45,7 +89,9 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 
 ### ✅ 0002 验收结果（2026-09-13 · MySQL 8.0.12 实跑取证）
 
-方式：`npx prisma migrate deploy --schema prisma/schema.prisma`（**钉 `prisma@6.19.3`** —— 不钉版本 `npx` 会拉到 `latest`；**2026-09-13 实测 ＝ `8.0.0-rc.14`（一个 RC）**，故必须钉版本）。下表「实测」列均为 `information_schema` 实查值。
+方式：`npx prisma migrate deploy --schema prisma/schema.prisma`（**当时钉 `prisma@6.19.3`** —— 不钉版本 `npx` 会拉到 `latest`，**2026-09-13 实测 ＝ `8.0.0-rc.14`（一个 RC）**，故必须钉版本；**同日稍后已升级到 `7.10.0` 并复验，见下**）。下表「实测」列均为 `information_schema` 实查值。
+
+> **【2026-09-13 · v7 `7.10.0` 复验】** 升级后重跑 `npx prisma migrate status` → **`2 migrations found` ＋ `Database schema is up to date!`** ✅ —— 即上表结论**在 v7 下全部依然成立**：v7 认可 6.19.3 登记的 `_prisma_migrations` 历史（**checksum 无冲突**），**升级既未触碰真库、也未改动迁移历史**。
 
 | 验收项 | 期望 | 实测 |
 |---|---|---|
@@ -104,10 +150,17 @@ DATABASE_URL="mysql://user:pass@localhost:3306/crm" npx prisma format   --schema
 
 ```bash
 # 方向 A：schema → 真库（列出「真库有、schema 声明里没有」的项）
-npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma --to-schema-datasource prisma/schema.prisma --script
+npx prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource --script
 # 方向 B：真库 → schema（列出「schema 声明里有、真库缺」的项）
-npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script
+npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script
+# 方向 B 的等价 npm 脚本：npm run prisma:diff:db2schema
 ```
+
+> ⚠ **v7 参数改名（2026-09-13 实测）**：上面两条命令在 **2026-09-12 执行时用的是 v6 参数**（`--from-schema-datamodel` / `--to-schema-datasource` / `--from-schema-datasource` / `--to-schema-datamodel`）；**v7 已把这四个全部移除**（旧命令直接 unknown option），改为 `--from-schema` / `--to-schema`（schema 文件）＋ `--from-config-datasource` / `--to-config-datasource`（连接串取自 `prisma.config.ts`）。**比对逻辑等价，下表的 drift 结论不受影响。**
+
+> 🚫 **绝不能把 diff 输出的 SQL 拿去执行**（2026-09-13 实测方向 B 的输出全文只有 6 个动作，且这 6 个都**不能做**）：
+> `ALTER TABLE stat_daily / operation_log / job_run_log DROP PRIMARY KEY, ADD PRIMARY KEY (\`id\`)`（3 条）＋ `DROP INDEX uk_active_rel / uk_owner / uk_phone_active`（3 条）。
+> 前者会把**分区表主键改坏**（分区表主键必须含分区列，否则 ERROR 1503），后者会**拆掉生成列的唯一约束**（撞单兜底失效）。这 6 条正是下表第 1 / 2 类「设计使然」的 drift —— **`migrate diff` 只作核对，永不作为执行依据**；要改库一律走「新增量 migration → 真库执行 → `information_schema` 逐条核对」。
 
 **结论：drift 仅 4 类，全部可接受；无一条需要改库、也无一条需要改 `schema.prisma`。**
 

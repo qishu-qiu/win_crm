@@ -62,6 +62,8 @@ frontend/  Vue3 桩   → 已移入 归档/旧代码/frontend/（不采用）
 
 > **⬆ 上线前清单（2026-09-13 立）**：本机开发环境的**已知降级项**（MySQL 8.0.12 的 `CHECK` 静默失效、Redis 3.0 偏老、Docker 未跑）**上线时必须补回** —— 6 项清单见 `服务端/prisma/README.md`「⬆ 上服务器时必做」。
 
+> **★ 2026-09-13 Prisma 6.19.3 → 7.10.0 升级完成**：`服务端/` 已 `npm install`，**钉死 `prisma` / `@prisma/client` / `@prisma/adapter-mariadb` = `7.10.0`**（＋ `typescript 5.9.3`；`engines.node` 提到 v7 硬门槛 `^20.19 || ^22.12 || >=24`；`package-lock.json` 入库 ＝ 版本锚点）。v7 的两处破坏性变更已按官方口径落地：① **`schema.prisma` 删掉 `datasource.url`**（v7 保留直接报 P1012）→ 连接串迁到**新增的 `服务端/prisma.config.ts`**；② **v7 不再自动加载 `.env`** → 由该文件用 Node 内置 `process.loadEnvFile` 显式加载（**不引 dotenv**）。**真库兼容已实测确证**：`prisma migrate status` → **`2 migrations found` ＋ `Database schema is up to date!`** —— **v7 认可 6.19.3 登记的迁移历史，checksum 无冲突、无需重置、无需重建库；本轮未对真库执行任何写操作**。升级前还原点 ＝ 提交 **`1300a80`**。详见 `服务端/prisma/README.md`「★ Prisma 7 升级」。
+
 > **★ 2026-09-11 架构定案（第二步）**：底层架构已定案 —— **模块化单体**（一个代码库、Web/Worker 双进程、单库单缓存、7 域＝7 模块、**按业务域分目录**、边界用 ESLint 硬卡）。详见 **《技术决策/销售CRM架构设计说明》V1.1**（目录结构 / 模块边界清单 / 横切层设计 / 三阶段扩展路线）。**开工顺序＝竖切一条完整动线**（登录→建客户→建关系→写跟单→工作台，穿透 A/B/C/D 四域，8 步见该文档 §九），**不是按域横向做完**。
 
 ## 六、MVP 边界

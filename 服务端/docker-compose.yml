@@ -1,0 +1,87 @@
+# =============================================================================
+# 销售 CRM · 服务器 / CI 环境描述（Docker Compose）
+#
+# ★ 本机不跑本文件 —— 本机开发走 phpStudy 小皮面板（MySQL 8.0.12 ＋ Redis 3.0.504），
+#   见《开发计划-V1》M0-11 与《架构设计说明》§8.1。本文件是「服务器 / CI 的部署描述」：
+#   一份文件两个用途 —— 本机**只做 YAML 语法自检**，真正的 `docker compose config`
+#   留到服务器首次部署时执行（M0-07 验收口径）。
+#
+# 首次部署顺序（详见《架构设计说明》§8.1「首次部署顺序」）：
+#   1) 装 Docker Engine ＋ compose 插件（官方脚本，别用系统源旧版）
+#   2) 把本文件 ＋ `.env` 传到服务器同一目录（`.env` 不进 git）
+#   3) docker compose up -d mysql redis   → 等 healthcheck 通过
+#   4) 灌库：在容器内执行 prisma/migrations/0001_init/migration.sql（当前库已到 0002）
+#   5) npx prisma migrate resolve --applied 0001_init 登记基线
+#      ⚠ 漏掉第 5 步：migrate status 会判「未应用」并试图重跑整份 baseline（必炸）
+#   6) docker compose up -d web worker
+#   7) 复验本机跳过的 CHECK 验收（M0-19b）
+#
+# ★ 六条硬口径（架构 §8.1，逐条已在下方落实）：
+#   ① worker 恒 1 个实例（多开＝定时任务重复跑）  ② 3306 / 6379 不对公网暴露（不写 ports）
+#   ③ MySQL ≥ 8.0.16（否则 CHECK 静默失效）       ④ 时区 +8 ＋ utf8mb4
+#   ⑤ 具名数据卷（否则 down 一次数据全丢）        ⑥ `.env` 不进 git
+#
+# ⚠ 尚未纳入本文件（待「上服务器」时补，不属 M0-07）：
+#   `web` / `worker` 两个应用容器 —— 它们是**同一个应用镜像**、分跑
+#   `npm run start:prod:web` 与 `npm run start:prod:worker`，其中 web 可多开、**worker 恒 1 个**。
+#   这两个服务依赖 Dockerfile / 应用镜像，而 M0 段没有该任务，故此处不写「引用不存在镜像」的服务，
+#   避免留下一个 config 通过但根本起不来的描述。
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MySQL 8.0 —— 应用库 win_crm（46 张业务表 / 生成列 / 3 张分区表 / 视图 / CHECK）
+  # ---------------------------------------------------------------------------
+  mysql:
+    # ★ 硬口径 ③：必须 ≥ 8.0.16。本机 phpStudy 是 8.0.12 → CHECK「解析后静默忽略」；
+    #   服务器上 CHECK 会真生效。这里钉 8.0 线而不是 `mysql:8` —— 避免 tag 漂到 8.4
+    #   引入跨版本行为差异（分区 / 生成列 / ON UPDATE 等）。
+    image: mysql:8.0
+    container_name: win-crm-mysql
+    restart: unless-stopped
+    # ★ 硬口径 ②：不写 ports —— 3306 不对公网暴露，只走容器内网（应用侧连 mysql:3306）
+    # ★ 硬口径 ④：时区 +08:00 ＋ utf8mb4/utf8mb4_unicode_ci（与本机口径一致，
+    #   否则 DATETIME(0) 会整体漂、排序/比较规则也会不一致）
+    command:
+      - --default-time-zone=+08:00
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      # ★ 硬口径 ⑥：口令取自服务器上的 `.env`（不入 git）。缺变量直接报错，
+      #   不静默回退弱口令 —— 与 prisma.config.ts 的 env() 同一条思路。
+      #   ⚠ `.env.example` 里暂无此键，服务器部署时由运维自行补（本机不跑本文件，故不影响本机）。
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在服务器 .env 中设置 MYSQL_ROOT_PASSWORD}
+      # 库名与 .env 的 DATABASE_URL 对齐（win_crm），不另开变量以免双真相源
+      MYSQL_DATABASE: win_crm
+      TZ: Asia/Shanghai
+    volumes:
+      # ★ 硬口径 ⑤：具名数据卷
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 —— 登录态 / 字典 / 管辖部门集合 / 规则缓存
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7
+    container_name: win-crm-redis
+    restart: unless-stopped
+    # ★ 硬口径 ②：不写 ports —— 6379 不对公网暴露，只走容器内网（应用侧连 redis://redis:6379）
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+# ★ 硬口径 ⑤：具名卷（不写 host 路径，避免 once down 数据全丢 / 跨机不可移植）
+volumes:
+  mysql_data:
+  redis_data:

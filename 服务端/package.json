@@ -7,6 +7,13 @@
     "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
   },
   "scripts": {
+    "start:web": "nest start",
+    "start:worker": "nest start --entryFile worker",
+    "start:prod:web": "node dist/main.js",
+    "start:prod:worker": "node dist/worker.js",
+    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "gen:types": "openapi-typescript http://localhost:3000/docs-json -o ../前端/src/api/types.ts",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:format": "prisma format --schema prisma/schema.prisma",
     "prisma:status": "prisma migrate status --schema prisma/schema.prisma",
@@ -14,11 +21,45 @@
     "prisma:diff:db2schema": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script"
   },
   "dependencies": {
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/jwt": "^12.0.1",
+    "@nestjs/platform-express": "^12.0.1",
+    "@nestjs/swagger": "^12.0.1",
     "@prisma/adapter-mariadb": "7.10.0",
-    "@prisma/client": "7.10.0"
+    "@prisma/client": "7.10.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "ioredis": "^6.0.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@nestjs/cli": "^12.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.13.4",
+    "eslint": "^10.10.0",
+    "jest": "^30.5.1",
     "prisma": "7.10.0",
-    "typescript": "~5.9.0"
+    "ts-jest": "^29.4.12",
+    "typescript": "~5.9.0",
+    "typescript-eslint": "^8.70.0"
+  },
+  "jest": {
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/../tsconfig.json" }]
+    },
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1"
+    },
+    "testEnvironment": "node",
+    "testPathIgnorePatterns": ["/node_modules/", "/generated/"],
+    "collectCoverageFrom": ["**/*.ts", "!generated/**", "!**/*.d.ts"],
+    "coveragePathIgnorePatterns": ["/generated/"],
+    "coverageDirectory": "../coverage"
   }
 }

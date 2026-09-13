@@ -7,6 +7,8 @@
     "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
   },
   "scripts": {
+    "build": "npm run prisma:generate && nest build",
+    "postinstall": "npm run prisma:generate",
     "start:web": "nest start",
     "start:worker": "nest start --entryFile worker",
     "start:prod:web": "node dist/main.js",
@@ -14,6 +16,7 @@
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "gen:types": "openapi-typescript http://localhost:3000/docs-json -o ../前端/src/api/types.ts",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:format": "prisma format --schema prisma/schema.prisma",
     "prisma:status": "prisma migrate status --schema prisma/schema.prisma",
@@ -31,6 +34,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "ioredis": "^6.0.0",
+    "mariadb": "3.4.5",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },

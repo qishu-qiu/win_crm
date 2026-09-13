@@ -4,7 +4,8 @@
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM架构设计说明》V1.1 §7.5 异常映射（**本文件的对照表原始出处**）：
 //       `P2002` + `uk_active_rel` → **409**（激活竞态）；`uk_phone_active` → **409**；`uk_owner` → **409**
-//       并从 `meta.target` 读命中的约束名，返回人话，**不把「Duplicate entry」这种原话丢给销售**。
+//       约束名取出位置见下方 ★（**不是 `meta.target`** —— 2026-09-14 真库实测收敛，→ 废止口径 #29）；
+//       返回人话，**不把「Duplicate entry」这种原话丢给销售**。
 //   · 《销售CRM接口API文档》V1.12 §2.4：409 = 唯一冲突 / 竞态，code 用 `20004` 或具体 `204xx`
 //       （撞单 = `20401`，→ §4.4 / §六.1）；`uk_contract_no` → 409（→ §4.8）；`uk_line_scope_field` → 409（→ §5.15）。
 //   · 约束名与唯一键来源：`服务端/prisma/schema.prisma` 的 `map: "uk_*"`。
@@ -12,8 +13,16 @@
 // ★ 刻意**不 import 生成物客户端**（`@/generated/prisma`）：① 它是 `prisma generate` 产物、不入 git；
 //   ② 单测要能用「假 P2002」直接构造（M0-23 判据），走鸭子类型即可。
 //
-// ⚠ 未定项（待真库实测，见批次报告）：MySQL 下 Prisma 的 `meta.target` 究竟回**约束名**还是**列名**——
-//   本文件两种形状都认（约束名优先，列名走别名表兜底），待 M0-10 Prisma 接入后实测收敛。
+// ★ 「`meta.target` 是约束名还是列名」这个未定项**已用真库实测收敛**
+//   （2026-09-14 · Prisma 7.10.0 ＋ `@prisma/adapter-mariadb` · 造真冲突 `contact.uk_phone_active` 抓取）：
+//   实测真实 P2002 **没有 `meta.target`**，约束名在
+//   `meta.driverAdapterError.cause.constraint.index`（实测值 `uk_phone_active`）；
+//   `message` 尾串另带一份 ``constraint: `uk_phone_active` ``。
+//   → `collectTargetTokens` 三种形状全认；`CONSTRAINT_BY_COLUMN` 别名表**保留**，
+//     但只为兼容旧形状 / 假 P2002 单测，**不再是主路径**。
+//   ⚠ 教训（M0-23 假绿）：当初单测用**手造**的 `meta.target`，10 条全绿，
+//     而真链路上每条具名约束都退化成兜底文案「数据唯一性冲突（未知约束）」——
+//     **形状类假设必须真库取证，不能靠单测自证。**
 // =============================================================================
 import { AppError, ErrorCode } from './app-error';
 
@@ -21,11 +30,15 @@ import { AppError, ErrorCode } from './app-error';
 export const PRISMA_UNIQUE_CONFLICT = 'P2002';
 
 /**
- * Prisma 已知请求错误的**结构形状**（鸭子类型）：本模块只需要 `code` 与 `meta.target`。
+ * Prisma 已知请求错误的**结构形状**（鸭子类型）：本模块只需 `code` ＋ 若干候选名来源。
+ * ★ `meta` / `message` **刻意收成 `unknown`**：实测形状随 Prisma 版本与驱动而变
+ *   （v7 driver adapter 就把约束名挪进了 `meta.driverAdapterError.cause.constraint.index`），
+ *   在此收窄类型只会让新形状在**编译期**被挡住、逼出 cast —— 解析职责归 `collectTargetTokens`。
  */
 export interface PrismaKnownErrorLike {
   code?: unknown;
-  meta?: { target?: unknown } | null;
+  meta?: unknown;
+  message?: unknown;
 }
 
 interface ConstraintRule {
@@ -65,14 +78,43 @@ const CONSTRAINT_BY_COLUMN: ReadonlyMap<string, string> = new Map<string, string
   ['contract_no', 'uk_contract_no'],
 ]);
 
-/** 从 `error.meta.target` 取出候选名（数组或单值都收），统一小写去空格 */
+/** 候选名统一规整：数组 / 单值都收，转小写、去空格、丢空串 */
+function normalizeTokens(raw: unknown): string[] {
+  const list: unknown[] = Array.isArray(raw) ? raw : [raw];
+  return list
+    .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+    .map((v) => v.trim().toLowerCase());
+}
+
+/**
+ * 从错误里收集**所有**候选约束名（顺序＝可信度，解析时按序命中）。
+ * ★ 三种形状并存，缺一不可（→ 见文件头「未定项已收敛」）：
+ *   ① `meta.target` —— Prisma 经典形状（数组 / 单值）；
+ *   ② `meta.driverAdapterError.cause.constraint.index` —— **Prisma 7 ＋ driver adapter 的真实形状**
+ *      （实测，约束名最准，来自 MySQL `1062` 的 key）；
+ *   ③ `message` 里的 ``constraint: `uk_xxx` `` —— 同上的文本副本（②缺失时的兜底）。
+ */
 function collectTargetTokens(error: unknown): string[] {
   if (typeof error !== 'object' || error === null) return [];
+
+  const tokens: string[] = [];
+
   const meta: unknown = (error as { meta?: unknown }).meta;
-  if (typeof meta !== 'object' || meta === null) return [];
-  const target: unknown = (meta as { target?: unknown }).target;
-  const raw: unknown[] = Array.isArray(target) ? target : [target];
-  return raw.filter((v): v is string => typeof v === 'string' && v.trim() !== '').map((v) => v.trim().toLowerCase());
+  if (typeof meta === 'object' && meta !== null) {
+    tokens.push(...normalizeTokens((meta as { target?: unknown }).target));
+    const adapterCause = (meta as { driverAdapterError?: { cause?: { constraint?: { index?: unknown } } } })
+      .driverAdapterError?.cause;
+    tokens.push(...normalizeTokens(adapterCause?.constraint?.index));
+  }
+
+  const message: unknown = (error as { message?: unknown }).message;
+  if (typeof message === 'string') {
+    const matched = /constraint:\s*`([^`]+)`/i.exec(message);
+    if (matched !== null) tokens.push(...normalizeTokens(matched[1]));
+  }
+
+  // 去重（同一约束名可能②③各来一次），并保持首次出现的顺序
+  return [...new Set(tokens)];
 }
 
 /** 候选名 → 命中规则（先按约束名，再按列名别名） */

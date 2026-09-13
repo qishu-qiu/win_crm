@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.28（现行有效）
+# 销售 CRM 数据架构文档 V1.29（现行有效）
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
@@ -12,7 +12,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.28（现行有效）** / 2026-09-13 |
+| 版本 / 日期 | **V1.29（现行有效）** / 2026-09-14 |
 | 上游 | 《销售CRM业务需求文档》**V1.24**（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》**V1.12**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.15** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
@@ -645,6 +645,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 判死教训缓写提醒 | 每日 | loss review 已 closed 但 detail 空 → 次日动线提醒补写 |
 | win 复盘超时 | 每日 | B/C/D 级 win review open 超 30 天 → 自动 dismissed |
 | 事件冗余回写 | 事件写入时 | 更新 last_event_at / next_action_hint / 建议销承诺 |
+| **分区滚动（运维）** | 每月 | **★ 2026-09-14 补录（原清单遗漏）**：三张分区表（`stat_daily` / `operation_log` / `job_run_log`）建库时只预置到 `p202712`（真实上界 `202801`）＋ `pmax(MAXVALUE)` 兜底 —— **有兜底 → 不会插失败**，但 **2028-01 起全部新行落入单一 `pmax` 分区**，且老分区**无法用 `DROP PARTITION` 清理**。故须**提前 N 个月**自动 `ALTER TABLE … ADD PARTITION` 续期，并把「建库预置月数 ≥ 3 年」写进部署清单（→ `服务端/prisma/README.md`「⬆ 上服务器时必做」）。**触发条件不是"快满了"，而是"每月固定续期"** |
 
 ---
 
@@ -717,7 +718,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 |---|---|---|
 | 1 | **生成列**<br>（`business_relation.active_key`、`relation_member.owner_flag`、`contact.phone_active`） | schema.prisma 中定义为**可选字段并加 `@ignore`**（Prisma Client 不暴露、不进入 create/update input，**杜绝"试图写入生成列"的运行时报错**）；**在 migration SQL 里手写** `ADD COLUMN x GENERATED ALWAYS AS (...) STORED` ＋ 唯一索引。应用层**不读不写**这些列——唯一性由 DB 兜底，冲突靠错误码识别（见第 3 条）。**⚠ 2026-09-12 实测补充：生成列引用的 FK 列必须为 `ON UPDATE RESTRICT`**（否则 ERROR 1215）——`business_relation.company_id / dept_id / product_line_id` 与 `relation_member.relation_id` **这 4 条外键已改**，其余外键不变 |
 | 2 | **分区表**<br>（**stat_daily / operation_log / job_run_log 三张**） | Prisma 不支持 `PARTITION BY`：migration 中手写 `ALTER TABLE ... PARTITION BY RANGE ...`，schema.prisma 保持普通表定义（可能产生 drift 警告，可接受）。**⚠ MySQL 规则：每个唯一键（含主键）都必须包含分区列，否则报 ERROR 1503**，故先扩主键含分区列。**🚫 2026-09-12 调整：原定的 `action_event` / `daily_agenda` 已放弃分区** —— 「分区表不能参与外键」（ERROR 1506）与「保外键」策略冲突；`action_event.uk_idem` 随之回退为**全局唯一 `(idempotency_key)`**（§10.1 原文即如此） |
-| 3 | **唯一约束冲突 → 409 / 422** | Prisma 唯一冲突错误码是 **P2002**（不是 MySQL 的 1062）。统一在异常过滤器映射：P2002 → 409（撞单 / 激活竞态 / 抢公海）/ 422（业务校验），并从 `meta.target` 读出命中的约束名，返回对应提示（如"已有归属：张三"） |
+| 3 | **唯一约束冲突 → 409 / 422** | Prisma 唯一冲突错误码是 **P2002**（不是 MySQL 的 1062）。统一在异常过滤器映射：P2002 → 409（撞单 / 激活竞态 / 抢公海）/ 422（业务校验），并从 **Prisma 7 ＋ driver adapter 的真实位置** `meta.driverAdapterError.cause.constraint.index` 读出命中的约束名（**2026-09-14 真库实测：v7 下已无 `meta.target`**，→ 废止口径登记表 #29），返回对应提示（如"已有归属：张三"） |
 | 4 | **复杂查询 / 报表 / 递归 CTE** | 经理看板、合并树递归（`WITH RECURSIVE`）、`GROUP BY` 聚合一律走 `$queryRaw` ＋ `Prisma.sql` 参数化防注入。**不为迁就 Client API 而牺牲 SQL 表达力** |
 | 5 | **JSON 字段**<br>（`ledger.extra_fields`、`contact.extra_phones`、`dept_rule.level_tiers` 等） | Prisma `Json` 类型原生支持 ✓。但**禁止在 JSON 列上做 `JSON_CONTAINS` 反向查询**（全表扫描，见 §十七 A.2）；高频检索的 key 走生成列或提升为正式字段 |
 

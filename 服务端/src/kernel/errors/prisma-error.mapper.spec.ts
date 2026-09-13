@@ -6,6 +6,31 @@ function fakeP2002(target: unknown): PrismaKnownErrorLike {
   return { code: PRISMA_UNIQUE_CONFLICT, meta: { target } };
 }
 
+/**
+ * ★ **真库实测抓取**的 P2002 形状（2026-09-14 · Prisma 7.10.0 ＋ `@prisma/adapter-mariadb`：
+ *   对 `contact` 造真冲突、从引擎日志原样抓取）。
+ * ⚠ **别把它「简化」回 `meta.target`** —— 那正是让 M0-23 单测假绿、真链路退化成兜底文案的形状。
+ *   `message` 里的绝对路径已隐去，其余逐字保留。
+ */
+function realP2002ViaDriverAdapter(): PrismaKnownErrorLike {
+  return {
+    code: PRISMA_UNIQUE_CONFLICT,
+    meta: {
+      modelName: 'Contact',
+      driverAdapterError: {
+        name: 'DriverAdapterError',
+        cause: {
+          originalCode: '1062',
+          originalMessage: "Duplicate entry '13900000001' for key 'uk_phone_active'",
+          kind: 'UniqueConstraintViolation',
+          constraint: { index: 'uk_phone_active' },
+        },
+      },
+    },
+    message: 'Unique constraint failed on the constraint: `uk_phone_active`',
+  };
+}
+
 function mapOrFail(error: unknown): AppError {
   const mapped = mapPrismaError(error);
   if (mapped === null) throw new Error('期望映射为 AppError，实际返回 null');
@@ -45,6 +70,35 @@ describe('M0-23 P2002 → 409 / 人话（架构 §7.5 / API §2.4）', () => {
     expect(err.httpStatus).toBe(409);
     expect(err.constraint).toBe('uk_phone_active');
     expect(err.message).toBe('该手机号已存在');
+  });
+
+  it('★ 真库实测形状（Prisma 7 ＋ driver adapter）：meta 无 target，约束名在 driverAdapterError.cause.constraint.index', () => {
+    const err = mapOrFail(realP2002ViaDriverAdapter());
+    expect(err.httpStatus).toBe(409);
+    expect(err.code).toBe(ErrorCode.UNIQUE_CONFLICT);
+    expect(err.constraint).toBe('uk_phone_active');
+    expect(err.message).toBe('该手机号已存在');
+  });
+
+  it('★ 实测形状的兜底副本：driverAdapterError 缺失、只剩 message 尾串时仍命中', () => {
+    const err = mapOrFail({
+      code: PRISMA_UNIQUE_CONFLICT,
+      meta: { modelName: 'Contact' },
+      message: 'Unique constraint failed on the constraint: `uk_phone_active`',
+    });
+    expect(err.constraint).toBe('uk_phone_active');
+    expect(err.message).toBe('该手机号已存在');
+  });
+
+  it('★ 实测形状下未登记约束也回带真名（不再退化成「未知约束」）', () => {
+    const err = mapOrFail({
+      code: PRISMA_UNIQUE_CONFLICT,
+      meta: { driverAdapterError: { cause: { constraint: { index: 'uk_some_new_thing' } } } },
+    });
+    expect(err.httpStatus).toBe(409);
+    expect(err.constraint).toBe('uk_some_new_thing');
+    expect(err.message).toContain('uk_some_new_thing');
+    expect(err.message).not.toContain('未知约束');
   });
 
   it('meta.target 是字符串（非数组）也认', () => {

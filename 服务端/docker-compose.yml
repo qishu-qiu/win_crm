@@ -10,9 +10,13 @@
 #   1) 装 Docker Engine ＋ compose 插件（官方脚本，别用系统源旧版）
 #   2) 把本文件 ＋ `.env` 传到服务器同一目录（`.env` 不进 git）
 #   3) docker compose up -d mysql redis   → 等 healthcheck 通过
-#   4) 灌库：在容器内执行 prisma/migrations/0001_init/migration.sql（当前库已到 0002）
-#   5) npx prisma migrate resolve --applied 0001_init 登记基线
+#   4) 灌库：在容器内**按序**执行 prisma/migrations/0001_init/migration.sql
+#      → 0002_company_capital_legal_person/migration.sql（两份都要，缺一份库结构不全）
+#   5) npx prisma migrate resolve --applied 0001_init
+#      npx prisma migrate resolve --applied 0002_company_capital_legal_person
 #      ⚠ 漏掉第 5 步：migrate status 会判「未应用」并试图重跑整份 baseline（必炸）
+#      ⚠ **两份都要 resolve** —— 只登记 0001 会让 migrate status 报 0002 未应用
+#        （→ 服务端/prisma/README.md「⚠ 重建提醒」；2026-09-14 修正本处漏写）
 #   6) docker compose up -d web worker
 #   7) 复验本机跳过的 CHECK 验收（M0-19b）
 #

@@ -6,10 +6,15 @@
 // ★ Prisma 落库口径（数据架构 §十五.5，务必遵守）：
 //   1. 生成列（active_key / owner_flag / phone_active）：字段加 @ignore（Client 不暴露、不进 create/update），
 //      唯一索引在 migration SQL 里手写 `GENERATED ALWAYS AS (...) STORED` + UNIQUE。应用层不读不写。
-//   2. 分区表（action_event / daily_agenda / stat_daily / operation_log / job_run_log）：
+//   2. 分区表（**3 张**：stat_daily / operation_log / job_run_log —— 2026-09-14 真库复验一致）：
 //      schema 保持普通表定义，migration 手写 `PARTITION BY RANGE`（drift 警告可接受）。
-//      ⚠ action_event 唯一键 uk_idem 必须含分区键 event_at，否则建表报 ERROR 1503。
-//   3. 唯一冲突：Prisma 报 P2002（非 MySQL 1062）→ 异常过滤器映射 409/422，meta.target 取约束名。
+//      ⚠ 分区表主键必须含分区键，否则建表报 ERROR 1503；
+//      ⚠ 但 action_event / daily_agenda **已放弃分区**（「分区表不能参与外键」ERROR 1506，与「保外键」冲突）
+//         → 二者主键保持 (id)，其 uk_idem 就是**单列** idempotency_key，**不含 event_at**
+//         （→ 废止口径登记表 #26 / #27）。
+//   3. 唯一冲突：Prisma 报 P2002（非 MySQL 1062）→ 异常过滤器映射 409/422；
+//      约束名取 `meta.driverAdapterError.cause.constraint.index`
+//      （**Prisma 7 ＋ driver adapter 实测形状；已无 `meta.target`**，→ 废止口径登记表 #29）。
 //   4. 复杂查询/报表/递归 CTE：走 $queryRaw + Prisma.sql（不为迁就 Client 牺牲 SQL 表达力）。
 //   5. JSON 列（ledger.extra_fields / contact.extra_phones / dept_rule.level_tiers 等）：原生 Json 支持；
 //      禁止在 JSON 列做反向 JSON_CONTAINS 全表扫描（高频检索 key 走生成列或正式字段）。

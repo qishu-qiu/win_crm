@@ -1,6 +1,6 @@
 # 服务端 / Prisma（新后端起点）
 
-> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、**`prisma.config.ts`（2026-09-13 新增 —— Prisma 7 的连接串中枢，见下节）**、**`package.json`（2026-09-13 创建，同日升级为 Prisma `7.10.0`）＋ `package-lock.json`（同日 `npm install` 产生，**已入 git** —— 它才是版本真钉死的锚点）**；**依赖已装**（`node_modules/`，被根 `.gitignore` 忽略）：`prisma` / `@prisma/client` / `@prisma/adapter-mariadb` 均 **`7.10.0`** ＋ `typescript` **`5.9.3`**。**`src/` 尚未创建**（骨架＝开发计划 M0-01 ~ M0-09）。
+> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、**`prisma.config.ts`（2026-09-13 新增 —— Prisma 7 的连接串中枢，见下节）**、**`package.json`（2026-09-13 创建，同日升级为 Prisma `7.10.0`）＋ `package-lock.json`（同日 `npm install` 产生，**已入 git** —— 它才是版本真钉死的锚点）**；**依赖已装**（`node_modules/`，被根 `.gitignore` 忽略）：`prisma` / `@prisma/client` / `@prisma/adapter-mariadb` 均 **`7.10.0`** ＋ `typescript` **`5.9.3`**。**`src/` 已建成（2026-09-14 复验）** —— `kernel` / `shared` / `prisma` / `health` / `app.module` / `main` / `worker` 全部落地（**18 个 spec、160 条单测全绿**，`tsc --noEmit` 与 `npm run lint` 均 0 error，`dist/` 可产出）；**未做**：M0-51（冒烟留档）、M0-52（提交）、M0-54 ~ M0-57（前端）。骨架逐条状态见《过程产出/开发计划-V1.md》「M0 现状」段。
 
 ## ★ Prisma 7 升级（2026-09-13：6.19.3 → 7.10.0）
 
@@ -24,7 +24,7 @@
 | 空模型 | `--from-empty` / `--to-empty` |
 | 迁移目录 | `--from-migrations` / `--to-migrations` |
 
-**generator 也换了**：`provider = "prisma-client-js"` → **`provider = "prisma-client"` ＋ `output = "../src/generated/prisma"` ＋ `moduleFormat = "cjs"`**。`moduleFormat = "cjs"` 是关键 —— **NestJS 12 保持 CommonJS，不必为 Prisma 改 ESM**。⚠ **尚未跑 `prisma generate`**（属 M0-03；届时需把 `src/generated/` 加入 `.gitignore`）。
+**generator 也换了**：`provider = "prisma-client-js"` → **`provider = "prisma-client"` ＋ `output = "../src/generated/prisma"` ＋ `moduleFormat = "cjs"`**。`moduleFormat = "cjs"` 是关键 —— **NestJS 12 保持 CommonJS，不必为 Prisma 改 ESM**。✅ **已跑 `prisma generate`**（2026-09-14 复验；`src/generated/` 已入根 `.gitignore`）；并已把它**串进工具链** —— `postinstall` 与 `build` 都先跑一次生成，新环境 clone 后不会再撞「`tsc` 找不到 `../generated/prisma/client`」（TS2307）。见 `package.json` 的 `postinstall` / `build` / `prisma:generate`。
 
 **运行时（写代码时必须知道）**：v7 的 `PrismaClient` **必须显式传 driver adapter**（MySQL → **`@prisma/adapter-mariadb`**；注意 **`@prisma/adapter-mysql2` 这个包不存在**）。即 **两处都要 `DATABASE_URL`**：「迁移命令」读 `prisma.config.ts`，「运行时」由 `new PrismaClient({ adapter })` 传入。
 
@@ -41,7 +41,7 @@
 
 ## schema.prisma
 
-- **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.28**（§三~§九 表、§十 索引、§十五 落库口径）。
+- **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.29**（§三~§九 表、§十 索引、§十五 落库口径）。
 - ✅ **已通过 Prisma 校验**：`The schema at prisma\schema.prisma is valid 🚀`（**2026-09-12 于 `6.19.3`；2026-09-13 升级到 `7.10.0` 后再次复验通过**）。
 - ⚠ **两次 P1012（都已修，值得记住）**：
   1. **2026-09-12 · 关系未双向声明**：`SignChecklist.product_line` 缺 `ProductLine` 侧的对向字段 → 已在 `ProductLine` 补一行 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**（`sign_checklist` 表与其外键，`migration.sql` 里一直是对的）。**教训：Prisma 关系字段是双向的 —— 加表/加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败（骨架一搭好就会撞）。**
@@ -114,12 +114,12 @@ npx prisma format   --schema prisma/schema.prisma
 | 3 | **CHECK 约束** | 如 `approval` 申请人 ≠ 审批人（DB CHECK ＋ 应用双拦）。**⚠ 需 MySQL 8.0.16+**：8.0.12 会解析后静默忽略（见上方「环境版本门槛」） |
 | 4 | **视图** | `v_contract_performance` ＝ `contract × contract_split`（无 split 则 `signer_id` 占 100%）——**业绩统计一律读此视图**，避免口径漂移。**⚠ 视图不能带 `COMMENT`**（MySQL `CREATE VIEW` 无该子句，ERROR 1064），口径说明只写在脚本里其上方 SQL 注释 |
 | 5 | **键约束** | 手机号唯一、公司信用代码唯一为**数据库级约束**（撞单兜底） |
-| 6 | **表 / 字段中文 `COMMENT`** | **Prisma 无法表达 MySQL `COMMENT`**（`schema.prisma` 不写、`db pull` 不读）。故 `migration.sql` 里 **46 张表全部带表级 `COMMENT='…'` ＋ 每个字段行尾 `COMMENT '…'`**，让 DBA / Navicat / `SHOW CREATE TABLE` 直接可读（口径来源＝《数据架构文档》V1.28 各表字段说明）。**⚠ 用 `prisma migrate diff` 重新生成 baseline 会把这批 COMMENT 全部抹掉** —— 重生成后必须补回，或改用「手写增量 migration」承载注释。**视图列不受此覆盖**（视图无 COMMENT，且表达式列 `employee_id` / `percent` / `performance_amount` 在 `information_schema` 里 `COLUMN_COMMENT` 为空属正常） |
+| 6 | **表 / 字段中文 `COMMENT`** | **Prisma 无法表达 MySQL `COMMENT`**（`schema.prisma` 不写、`db pull` 不读）。故 `migration.sql` 里 **46 张表全部带表级 `COMMENT='…'` ＋ 每个字段行尾 `COMMENT '…'`**，让 DBA / Navicat / `SHOW CREATE TABLE` 直接可读（口径来源＝《数据架构文档》V1.29 各表字段说明）。**⚠ 用 `prisma migrate diff` 重新生成 baseline 会把这批 COMMENT 全部抹掉** —— 重生成后必须补回，或改用「手写增量 migration」承载注释。**视图列不受此覆盖**（视图无 COMMENT，且表达式列 `employee_id` / `percent` / `performance_amount` 在 `information_schema` 里 `COLUMN_COMMENT` 为空属正常） |
 
 ## 口径约定（写代码前先读）
 
 - **枚举一律 `String`（VARCHAR(32) 英文码）**，展示文案走字典 `dict_item`——**不用 DB ENUM**（T1/T5：可加项、停用不删）。
-- **唯一冲突**：Prisma 报 **P2002**（不是 MySQL 1062）→ 异常过滤器映射 **409（撞单/竞态/抢公海）/ 422（业务校验）**，`meta.target` 取约束名回友好提示。
+- **唯一冲突**：Prisma 报 **P2002**（不是 MySQL 1062）→ 异常过滤器映射 **409（撞单/竞态/抢公海）/ 422（业务校验）**，约束名从 **`meta.driverAdapterError.cause.constraint.index`** 取（**非 `meta.target`** —— Prisma 7 ＋ driver adapter 实测，→ 废止口径登记表 #29）回友好提示。
 - **复杂查询 / 报表 / 递归 CTE**（合并树 `WITH RECURSIVE`、`GROUP BY` 聚合）→ 走 `$queryRaw` ＋ `Prisma.sql` 参数化，**不为迁就 Client API 牺牲 SQL 表达力**。
 - **JSON 列**（`ledger.extra_fields` / `contact.extra_phones` / `dept_rule.level_tiers` 等）→ Prisma `Json` 原生支持；**禁止反向 `JSON_CONTAINS` 全表扫描**，高频检索 key 走生成列或正式字段。
 - **审计字段**全表统一：`created_by / created_at / updated_by / updated_at`；逻辑删除 `deleted_at`（NULL=未删）。
@@ -182,7 +182,7 @@ npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prism
 - `npx prisma migrate status` → `1 migration found in prisma/migrations` ＋ **`Database schema is up to date!`**
 - 注：`migrate resolve` **不校验关系完整性**（只读 datasource），所以它在 `schema.prisma` 尚为 P1012 时就跑通了 —— **别把它当作 schema 有效的证据**。
 
-## ⬆ 上服务器时必做（上线前清单 · 2026-09-13 立）
+## ⬆ 上服务器时必做（上线前清单 · 2026-09-13 立，2026-09-14 补第 7~9 项）
 
 > 本机开发环境的**已知降级项**在服务器上**必须补回** —— 本机"跑通了"不等于生产合规。
 
@@ -194,5 +194,8 @@ npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prism
 | 4 | **Redis 版本** | phpStudy **3.0.504**（**无密码**） | 换 **Redis 7**；代码里「禁用 6/7 专有命令」的临时红线（`UNLINK` / `EXPIRE … NX｜GT｜LT` / ACL）**可解禁**；**必须设密码** |
 | 5 | **密钥 / 口令** | `.env` 里 DB / Redis **均无强口令**、`JWT_SECRET` 为本地随机值 | 换生产密钥与强口令；`.env` 不入库 |
 | 6 | **migration 全量重放** | 已应用 `0001_init` ＋ `0002` | 空库上按序 `0001_init` → `0002` → 逐份 `migrate resolve --applied`（口径见上文「重建提醒」），再 `migrate status` 断言 **`up to date!`** |
+| 7 | **`/docs` OpenAPI 暴露** | 开发环境**默认开放**（`/docs` ＋ `/docs-json`） | **生产已默认关闭** —— `main.ts` 的 `openApiEnabled()`：`NODE_ENV=production` 且未设 `OPENAPI_ENABLED=true` 时**跳过挂载**（`/docs` 是中间件直出、不经守卫，开了即等同公开全部接口定义）。确需保留必须**自加访问控制**。**部署后必查**：`curl -o /dev/null -w '%{http_code}' http://<host>/docs` 应为 **404**（2026-09-14 立） |
+| 8 | **构建链路（尤其 `npm ci --omit=dev`）** | `package.json` 已含 `prisma:generate` / `build` / `postinstall`；本机 `npm run build` **已实测通过** | `npm ci` 会自动跑 `postinstall → prisma generate`；⚠ 但 **`--omit=dev` 时 `prisma` CLI 不在 → `postinstall` 会失败**：改用**多阶段构建**（构建阶段装 devDeps 跑 `npm run build`，运行阶段只带 `dist/` ＋ prod deps ＋ 已生成的 client），或 `npm ci --ignore-scripts` 后自行 `npm run prisma:generate`。**首次部署必跑 `npm run build` 验证**（2026-09-14 立） |
+| 9 | **分区预置月数 / 滚动** | 建库时预置到 `p202712`（真实上界 `202801`）＋ `pmax(MAXVALUE)` | **有 `pmax` 兜底 → 绝不会插失败**；但 **2028-01 起全部新行落入单一 `pmax`**，且老分区**无法 `DROP PARTITION` 清理** → 生产建库**预置月数 ≥ 3 年**，并把「分区滚动」纳入定时任务（→ 数据架构 §十二 末行，2026-09-14 补录） |
 
 > ⚠ 第 **1、2 项是同一个坑的两面**：本机 `CHECK` 静默失效最容易被拖到上线才炸 —— 本机当前只靠应用层单测兜住「审批人 ≠ 申请人」。

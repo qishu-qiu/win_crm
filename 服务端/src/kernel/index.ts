@@ -22,6 +22,7 @@ export * from './common/bigint';
 export * from './common/pagination';
 export * from './context/request-context';
 export * from './context/jwt-claims';
+export * from './context/public.decorator';
 export * from './context/context.module';
 export * from './events/domain-event';
 export * from './events/event-bus';

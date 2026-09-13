@@ -8,8 +8,7 @@ import { type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 
-import { AppError, ContextService, ErrorCode, toClaims, type RequestContext } from '../../kernel/index';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { AppError, ContextService, ErrorCode, IS_PUBLIC_KEY, toClaims, type RequestContext } from '../../kernel/index';
 import { extractBearerToken, JwtAuthGuard } from './jwt-auth.guard';
 
 const SECRET = 'unit-test-secret-'.padEnd(48, 'x');

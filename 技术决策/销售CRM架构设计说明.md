@@ -206,6 +206,7 @@ modules/company/
 | `modules/company/**` | `kernel/**`、`modules/org/**` |
 | `modules/relation/**` | `kernel/**`、`modules/org/**`、`modules/company/**` |
 | `modules/{engine,trade,sea,approval}/**` | `kernel/**`、`modules/org/**`、`modules/company/**`、`modules/relation/**` |
+| `modules/*/**` | **不许 import `shared/**`**：横切层由 `APP_GUARD` / `APP_INTERCEPTOR` / `APP_FILTER` / `APP_PIPE` **运行时全局生效**，域不必也不许自己引；域要用的通用能力（上下文 / 错误 / 事件 / 审计）一律走 `kernel/**`（见 §七.1） |
 | `modules/*/*.repository.ts` | **只许被自己域内的文件 import**（别人不许直连你的仓储） |
 | `modules/*/domain/**` | **不许 import `@nestjs/*`、`@prisma/client`** |
 
@@ -256,6 +257,8 @@ RequestContext = {
 ```
 
 > **★ 关键**：横切层**只读这个上下文、不查数据库**。这样 A 域（组织权限）自己也能用同一套横切，不会出现"A 域调权限、权限查 A 域"的循环依赖。
+>
+> **⚠ 别把上句读成"域可以 import `shared/`"**：这里的"用"＝**运行时**由全局注册统一生效；**业务域代码只许引 `kernel/**`**，不得直连 `shared/**`（§5.4 表格）。正因如此，`@Public()` 这种**要写在域 controller 上的标记**放在 `kernel/context/`（§4 目录树），而不是 `shared/`。
 
 ### 7.2 数据范围注入（一处收口）
 

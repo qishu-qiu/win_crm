@@ -5,7 +5,8 @@
 //   **不 import `@eslint/js` / `globals` / `eslint-plugin-prettier` / `eslint-plugin-import`**
 //   —— 这些都没装，引了就是「未声明依赖」（现在能跑只因 node_modules 扁平化，换个安装方式就炸）。
 //
-// ★ 模块边界硬卡（架构说明 §5.4 表格 **6 条**）＝ M0-40 ~ M0-44 ＋ M0-44b。
+// ★ 模块边界硬卡（架构说明 §5.4 表格 **7 条**）＝ M0-40 ~ M0-44 ＋ M0-44b（kernel 禁 modules）
+//   ＋ M0-44c（域**禁 shared**、只许引 kernel —— 横切层靠全局注册生效，见 §7.1）。
 //   手段＝ `typescript-eslint` **内置**的 `no-restricted-imports`（**零新依赖**，正是规格指定手段）。
 //   白名单语义（"只许 import 谁" ＋ "仅本域可引仓储"）用「按域生成配置块」表达：
 //   flat config 中同一文件命中多个块时**后者覆盖前者**（不是合并），故每个域只生成一个块，
@@ -56,7 +57,20 @@ const DOMAIN_LAYER_PATTERNS = [
   },
 ];
 
-const boundaryPatterns = (d) => [...crossDomainPatterns(d), ...crossRepoPatterns(d)];
+/** 域只许引 kernel：横切层靠全局注册生效，不得直连 shared（§5.4 表格 ＋ §7.1） */
+const SHARED_PATTERNS = [
+  {
+    group: ['**/shared/**'],
+    message:
+      '横切层不可直连（架构 §5.4）：业务域不得 import `shared/**`。鉴权 / 数据范围 / 脱敏 / 异常 / 校验由 `APP_GUARD`、`APP_INTERCEPTOR`、`APP_FILTER`、`APP_PIPE` **全局生效**，域不必也不许自己引；域需要的通用能力（上下文 / 错误 / 事件 / 审计）请从 `kernel` 引（§7.1 的「A 域也能用同一套横切」指**运行时**生效，非代码 import）。',
+  },
+];
+
+const boundaryPatterns = (d) => [
+  ...crossDomainPatterns(d),
+  ...crossRepoPatterns(d),
+  ...SHARED_PATTERNS,
+];
 
 // 每个域一个块 —— 同一文件只命中一个块，避免 flat config「后者覆盖前者」把规则吃掉
 const domainBlocks = DOMAINS.map((d) => ({

@@ -17,8 +17,7 @@ import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/com
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 
-import { AppError, ContextService, ErrorCode, fromClaims } from '../../kernel/index';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { AppError, ContextService, ErrorCode, fromClaims, IS_PUBLIC_KEY } from '../../kernel/index';
 
 /** 鉴权失败的统一人话（→ §2.3：message 是给销售看的；§2.4：401 / 20002） */
 const UNAUTHENTICATED_MESSAGE = '未登录或登录已过期';

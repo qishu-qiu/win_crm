@@ -16,8 +16,7 @@ import { NestFactory } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IsInt, IsString, Min } from 'class-validator';
 
-import { ACCESS_TOKEN_TTL, AppError, ContextService, ErrorCode, toClaims, type RequestContext } from '../kernel/index';
-import { Public } from './decorators/public.decorator';
+import { ACCESS_TOKEN_TTL, AppError, ContextService, ErrorCode, Public, toClaims, type RequestContext } from '../kernel/index';
 import { SharedModule } from './shared.module';
 
 // 必须在建应用之前设好：SharedModule 的 JwtModule 工厂在 DI 初始化期读它（缺失会拒绝启动）

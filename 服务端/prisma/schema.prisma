@@ -332,33 +332,35 @@ model Target {
 
 /// B1 公司（唯一档案）
 model Company {
-  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  full_name      String    @db.VarChar(200)
-  name_core      String?   @db.VarChar(200) // ★ B1 2026-09-12：标准化核心词（去地域/行业/公司类型词），服务端建档/改名时生成；两段式查重第一段
-  credit_code    String?   @unique(map: "uk_credit_code") @db.VarChar(32) // 可空；撞码强制使用已有档案
-  industry_l1    String?   @db.VarChar(64)
-  industry_l2    String?   @db.VarChar(64)
-  province       String?   @db.VarChar(32)
-  city           String?   @db.VarChar(32)
-  district       String?   @db.VarChar(32)
-  scale          String?   @db.VarChar(32)
-  completeness_1 Int       @default(0) // 完善度三档 0-100
-  completeness_2 Int       @default(0)
-  completeness_3 Int       @default(0)
-  website        String?   @db.VarChar(255)
-  address        String?   @db.VarChar(255)
-  bank_name      String?   @db.VarChar(120)
-  invoice_title  String?   @db.VarChar(200)
-  tax_no         String?   @db.VarChar(64)
-  longitude      Decimal?  @db.Decimal(10, 6) // GCJ-02
-  latitude       Decimal?  @db.Decimal(9, 6) // GCJ-02
-  merged_into    BigInt?   @db.UnsignedBigInt // 合并墓碑（自引用，物理不删）
-  aliases        Json? // 曾用名/别名 JSON
-  created_by     BigInt?   @db.UnsignedBigInt
-  created_at     DateTime  @default(now()) @db.DateTime(0)
-  updated_by     BigInt?   @db.UnsignedBigInt
-  updated_at     DateTime  @updatedAt @db.DateTime(0)
-  deleted_at     DateTime? @db.DateTime(0)
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  full_name          String    @db.VarChar(200)
+  name_core          String?   @db.VarChar(200) // ★ B1 2026-09-12：标准化核心词（去地域/行业/公司类型词），服务端建档/改名时生成；两段式查重第一段
+  credit_code        String?   @unique(map: "uk_credit_code") @db.VarChar(32) // 可空；撞码强制使用已有档案
+  industry_l1        String?   @db.VarChar(64)
+  industry_l2        String?   @db.VarChar(64)
+  province           String?   @db.VarChar(32)
+  city               String?   @db.VarChar(32)
+  district           String?   @db.VarChar(32)
+  scale              String?   @db.VarChar(32)
+  completeness_1     Int       @default(0) // 完善度三档 0-100
+  completeness_2     Int       @default(0)
+  completeness_3     Int       @default(0)
+  website            String?   @db.VarChar(255)
+  address            String?   @db.VarChar(255)
+  bank_name          String?   @db.VarChar(120)
+  invoice_title      String?   @db.VarChar(200)
+  tax_no             String?   @db.VarChar(64)
+  registered_capital Decimal?  @db.Decimal(16, 2) // ★ 2026-09-13：注册资本（单位＝元；可选扩展字段，不参与签约强制与完善度；录入/展示按「万元」）
+  legal_person       String?   @db.VarChar(64) // ★ 2026-09-13：法定代表人（可选扩展字段，不参与签约强制与完善度）
+  longitude          Decimal?  @db.Decimal(10, 6) // GCJ-02
+  latitude           Decimal?  @db.Decimal(9, 6) // GCJ-02
+  merged_into        BigInt?   @db.UnsignedBigInt // 合并墓碑（自引用，物理不删）
+  aliases            Json? // 曾用名/别名 JSON
+  created_by         BigInt?   @db.UnsignedBigInt
+  created_at         DateTime  @default(now()) @db.DateTime(0)
+  updated_by         BigInt?   @db.UnsignedBigInt
+  updated_at         DateTime  @updatedAt @db.DateTime(0)
+  deleted_at         DateTime? @db.DateTime(0)
 
   profile_tags       CompanyProfileTag[]
   company_contacts   CompanyContact[]

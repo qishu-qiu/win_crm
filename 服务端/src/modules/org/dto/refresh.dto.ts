@@ -2,7 +2,7 @@
 // 刷新令牌入参 DTO（M1-14）—— `POST /account/refresh`
 //
 // 口径来源：
-//   · 《销售CRM接口API文档》V1.13 §三 接口总览：`/account/refresh`（P）「刷新 token」。
+//   · 《销售CRM接口API文档》V1.14 §三 接口总览：`/account/refresh`（P）「刷新 token」。
 //     ⚠ 规格**没有写** refresh 的入参落在 body 还是 header，此处取 **body `refresh_token`**
 //     （与 §2.2「登录返回 `access_token` ＋ `refresh_token`」的对称写法一致，也是通行做法）。
 //   · 同 §2.4：坏入参 → 400 / 20001；令牌本身无效 / 过期 → 401 / 20002。

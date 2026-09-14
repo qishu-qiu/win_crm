@@ -5,7 +5,7 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**（故本文件零 `if` 业务分支）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.13 §三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
+//   · 《销售CRM接口API文档》V1.14 §三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
 //     ·`GET /account/me`（G）·`GET /org/departments|employees|roles|permissions`（G）。
 //   · 同 §2.2：除登录 / 刷新外**一律带** `Authorization: Bearer <access_token>` ——
 //     故本文件只给 login / refresh 打 `@Public()`（守卫自 M0-38 起全局生效，不打就被 401 挡死）。
@@ -13,12 +13,12 @@
 //     **controller 不自己拼错误响应**。
 //   · 《销售CRM架构设计说明》V1.3 §7.4：审计要记 IP / UA / req_id → 由本文件从请求头取，交给 service。
 //
-// ⚠ 一处**规格缺口**（已记入 M1 完成报告，未自行补规格）：HTTP 状态码。
-//   《接口API文档》§2.3 只定义响应体四字段、§2.4 只定义**失败**状态码，**没有写成功用 200 还是 201**。
-//   故此处**保留 NestJS 对 POST 的默认值（201）**，不擅自拍板；前端按 `body.code === 0` 判成功
-//   （→ `前端/src/api/request.ts`），与状态码无关。若七叔要统一成 200，只需给这两个 handler 加 `@HttpCode(200)`。
+// ★ 成功状态码 **200**（2026-09-15 七叔拍板，→ API §2.3）：
+//   POST 若不显式声明，NestJS 默认返回 **201 Created** —— 规格只定义了失败码、没说成功，
+//   故此前保留默认值未拍板。现定：**成功一律 200**（与 §2.3「成功 / 失败」两态对称），
+//   故 login / refresh 两个 POST 显式 `@HttpCode(200)`；前端仍按 `body.code === 0` 判成功。
 // =============================================================================
-import { Body, Controller, Get, Headers, Ip, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Ip, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../../kernel/index';
@@ -72,6 +72,7 @@ export class OrgController {
 
   @Public()
   @Post('account/login')
+  @HttpCode(200) // 成功 200（→ §2.3；不写就是 Nest 对 POST 的默认 201）
   @ApiOperation({
     summary: '登录',
     description:
@@ -92,6 +93,7 @@ export class OrgController {
 
   @Public()
   @Post('account/refresh')
+  @HttpCode(200) // 成功 200（→ §2.3）
   @ApiOperation({
     summary: '刷新令牌',
     description: '用 `refresh_token` 换一对新令牌；**重新装载**最新角色与管辖部门（撤销经理后立即收窄数据范围）',

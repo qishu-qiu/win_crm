@@ -7,7 +7,7 @@
 //   ② controller **只解析请求 + 调一个 service**（注入的东西多了就是分层被侵蚀，坑 15 的正面用法）。
 // =============================================================================
 import { RequestMethod } from '@nestjs/common';
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { HTTP_CODE_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 
 import { IS_PUBLIC_KEY } from '../../kernel/index';
 import { OrgController, toRequestMeta } from './org.controller';
@@ -76,6 +76,13 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
         expect(Reflect.getMetadata(IS_PUBLIC_KEY, OrgController.prototype[handler])).toBeUndefined();
       },
     );
+
+    it('两个 POST 显式声明 **200**（2026-09-15 拍板，→ API §2.3）：不声明就是 Nest 对 POST 的默认 **201**', () => {
+      expect(Reflect.getMetadata(HTTP_CODE_METADATA, OrgController.prototype.login)).toBe(200);
+      expect(Reflect.getMetadata(HTTP_CODE_METADATA, OrgController.prototype.refresh)).toBe(200);
+      // GET 不声明（Nest 默认即 200）：多写一处反而多一处要与规格对齐的地方
+      expect(Reflect.getMetadata(HTTP_CODE_METADATA, OrgController.prototype.me)).toBeUndefined();
+    });
 
     it('类级路径前缀为空（Nest 归一成 `/`），且**只挂了这 7 条路由**（多一条就是多一个没人评审过的入口）', () => {
       // Nest 会把 `@Controller()` 的空前缀归一成 `/`，路径拼接时再被各 handler 的完整路径覆盖

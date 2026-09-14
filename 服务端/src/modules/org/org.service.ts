@@ -5,7 +5,7 @@
 //   **不写业务规则**（口径在 `domain/`）、**不写 SQL**（在 `*.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.13 §5.2：`POST /account/login` req **`{account,password}`**
+//   · 《销售CRM接口API文档》V1.14 §5.2：`POST /account/login` req **`{account,password}`**
 //     （`account` ＝ 手机号 或 登录账号名，**服务端判别**，→ 登记表 #32）、
 //     resp `{access_token, refresh_token, user: UserVO}`；`GET /account/me` → `UserVO`
 //     ＝ `{id,name,username?,role,dept:{id,name},managed_dept_ids:[],permissions:{}}`。

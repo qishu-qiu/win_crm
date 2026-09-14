@@ -63,6 +63,12 @@ const CONSTRAINT_RULES: ReadonlyMap<string, ConstraintRule> = new Map<string, Co
   ['uk_owner', { httpStatus: 409, code: ErrorCode.UNIQUE_CONFLICT, message: '该业务关系已有归属销售' }],
   ['uk_contract_no', { httpStatus: 409, code: ErrorCode.UNIQUE_CONFLICT, message: '该合同编号已存在' }],
   ['uk_line_scope_field', { httpStatus: 409, code: ErrorCode.UNIQUE_CONFLICT, message: '该业务线·范围的字段项已存在' }],
+  // B1 `company.credit_code`（可空唯一）：撞码时按数据架构 B1「**撞码强制使用已有档案**」
+  // —— 人话里直接给出下一步动作，别让销售自己猜（→ 数据架构 §四 B1 / 需求 §12.1 分支 4）
+  [
+    'uk_credit_code',
+    { httpStatus: 409, code: ErrorCode.UNIQUE_CONFLICT, message: '该统一社会信用代码已存在，请使用已有档案' },
+  ],
 ]);
 
 /**
@@ -76,6 +82,7 @@ const CONSTRAINT_BY_COLUMN: ReadonlyMap<string, string> = new Map<string, string
   ['phone_active', 'uk_phone_active'],
   ['owner_flag', 'uk_owner'],
   ['contract_no', 'uk_contract_no'],
+  ['credit_code', 'uk_credit_code'],
 ]);
 
 /** 候选名统一规整：数组 / 单值都收，转小写、去空格、丢空串 */

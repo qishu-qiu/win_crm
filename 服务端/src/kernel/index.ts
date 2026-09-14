@@ -19,6 +19,7 @@
 export * from './errors/app-error';
 export * from './errors/prisma-error.mapper';
 export * from './common/bigint';
+export * from './common/masking';
 export * from './common/pagination';
 export * from './context/request-context';
 export * from './context/jwt-claims';

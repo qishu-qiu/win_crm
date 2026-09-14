@@ -1,6 +1,6 @@
 # CODEBUDDY.md This file provides guidance to CodeBuddy when working with code in this repository.
 
-> 本项目是**文档驱动（spec-driven）**的销售 CRM 系统。当前处于「**M1（A 域登录）已提交、M2（B 域建档/查重）待开工**」阶段：**真相源是文档，不是代码**。动手前先按本文与 `README.md` 的规则锁定口径。
+> 本项目是**文档驱动（spec-driven）**的销售 CRM 系统。当前处于「**M1（A 域登录）已提交、M2（B 域建档/查重）后端已落地（差前端建档页）**」阶段：**真相源是文档，不是代码**。动手前先按本文与 `README.md` 的规则锁定口径。
 
 > **★ 动工前必读（AI 行为约束）**：`技术决策/AI协作铁律与踩坑复盘.md`（现行 **V1.4**）—— **AI 协作元规则的唯一落点**（AI 行为硬约束 / 踩坑复盘 / 通例）。**凡写文件 / 装依赖 / 跑命令 / 调用有副作用工具前，先读它**；今后 WorkBuddy 与 CodeBuddy 新增同类规则一律追加到该文档。
 >

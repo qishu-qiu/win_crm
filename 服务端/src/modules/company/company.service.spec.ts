@@ -1,0 +1,436 @@
+// =============================================================================
+// B 域服务用例（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）
+//
+// 判据逐字（《开发计划-V1》）：
+//   M2-08「单测：命中高度疑似 → 需确认；正常 → 建成」
+//   M2-09「单测：分级正确」· M2-10「单测：重复手机号 → 409，message **不含 `Duplicate entry`**」
+//
+// ★ 本文件用**真 service ＋ 假 repository**（与 A 域同姿势）：
+//   判级 / 归一 / 打码都是真函数（在 `domain/` 与 `kernel/`），只有「库」是假的 ——
+//   于是「服务编排对了没有」和「规则算对了没有」在同一层被验证。
+// ★ P2002 假件按**真库实测形状**造（`meta.driverAdapterError.cause.constraint.index`）：
+//   手造 `meta.target` 会让映射器走别名兜底 —— 看着绿、真链路却是另一条路（→ M0-23 假绿教训）。
+// ★ 建档要写 `created_by` ⇒ 必须先有请求上下文（`runWithContext`）；
+//   「拿不到上下文」本身就是一条要钉住的失败路径（→ 文件末）。
+// =============================================================================
+import { AppError, ErrorCode, runWithContext, type RequestContext } from '../../kernel/index';
+import { type PrismaService } from '../../prisma/prisma.service';
+import { CompanyRepository, type CreateCompanyData } from './company.repository';
+import { CompanyService } from './company.service';
+import type { CreateCompanyDto, CreateContactDto } from './dto/company-request.dto';
+
+const OPERATOR_ID = 7n;
+
+/** 请求上下文（建档者的身份来源） */
+const CONTEXT: RequestContext = {
+  employeeId: OPERATOR_ID,
+  deptIds: [1n],
+  roleCodes: ['sale'],
+  dataScope: { type: 'self', deptIds: [] },
+};
+
+/** 真库实测的 P2002 形状（Prisma 7 ＋ driver adapter）：约束名在最里面那层 */
+function p2002(constraint: string): Error & { code: string; meta: unknown } {
+  const error = new Error('Invalid `prisma.contact.create()` invocation: Unique constraint failed') as Error & {
+    code: string;
+    meta: unknown;
+  };
+  error.code = 'P2002';
+  error.meta = { driverAdapterError: { cause: { constraint: { index: constraint } } } };
+  return error;
+}
+
+interface CompanyRowFixture {
+  id: bigint;
+  full_name: string;
+  name_core: string | null;
+  credit_code: string | null;
+  industry_l1: string | null;
+  industry_l2: string | null;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  scale: string | null;
+  website: string | null;
+  address: string | null;
+  bank_name: string | null;
+  invoice_title: string | null;
+  tax_no: string | null;
+  registered_capital: { toString(): string } | null;
+  legal_person: string | null;
+  longitude: { toString(): string } | null;
+  latitude: { toString(): string } | null;
+  aliases: unknown;
+  merged_into: bigint | null;
+  updated_at: Date;
+}
+
+function companyRow(overrides: Partial<CompanyRowFixture> = {}): CompanyRowFixture {
+  return {
+    id: 1n,
+    full_name: '安徽鑫中网信息技术有限公司',
+    name_core: '鑫中网',
+    credit_code: null,
+    industry_l1: null,
+    industry_l2: null,
+    province: null,
+    city: null,
+    district: null,
+    scale: null,
+    website: null,
+    address: null,
+    bank_name: null,
+    invoice_title: null,
+    tax_no: null,
+    registered_capital: null,
+    legal_person: null,
+    longitude: null,
+    latitude: null,
+    aliases: null,
+    merged_into: null,
+    updated_at: new Date('2026-09-15T10:00:00+08:00'),
+    ...overrides,
+  };
+}
+
+interface ContactRowFixture {
+  id: bigint;
+  name: string;
+  phone: string;
+  decision_role: string | null;
+  status: string;
+  merged_into: bigint | null;
+}
+
+function contactRow(overrides: Partial<ContactRowFixture> = {}): ContactRowFixture {
+  return { id: 11n, name: '张伟', phone: '13800000000', decision_role: null, status: 'active', merged_into: null, ...overrides };
+}
+
+interface FakeOptions {
+  candidates?: CompanyRowFixture[];
+  byCreditCode?: CompanyRowFixture | null;
+  companyById?: CompanyRowFixture | null;
+  companiesByPhone?: CompanyRowFixture[];
+  contactByPhone?: ContactRowFixture | null;
+  createdCompany?: CompanyRowFixture;
+  createdContact?: ContactRowFixture;
+  createCompanyError?: unknown;
+  createContactError?: unknown;
+  historyOwner?: { id: bigint; name: string } | null;
+  contacts?: ContactRowFixture[];
+  companyContacts?: { is_current: boolean; position: string | null; contact: ContactRowFixture }[];
+}
+
+function createRepository(options: FakeOptions = {}) {
+  return {
+    createCompany: jest.fn(async (data: CreateCompanyData) =>
+      options.createCompanyError === undefined
+        ? companyRow({ ...options.createdCompany, full_name: data.full_name, name_core: data.name_core })
+        : Promise.reject(options.createCompanyError),
+    ),
+    findCompanyById: jest.fn(async () => options.companyById ?? null),
+    findCompanyByCreditCode: jest.fn(async () => options.byCreditCode ?? null),
+    findCompanyCandidatesByCore: jest.fn(async () => options.candidates ?? []),
+    findCompaniesByContactPhone: jest.fn(async () => options.companiesByPhone ?? []),
+    listCompanies: jest.fn(async () => [] as CompanyRowFixture[]),
+    createContact: jest.fn(async (data?: unknown) => {
+      void data; // 入参只用于断言（`mock.calls`），这里不参与造值
+      return options.createContactError === undefined
+        ? (options.createdContact ?? contactRow())
+        : Promise.reject(options.createContactError);
+    }),
+    createCompanyContact: jest.fn(async () => ({ id: 1n })),
+    findContactByPhone: jest.fn(async () => options.contactByPhone ?? null),
+    findHistoricalPhoneOwner: jest.fn(async () =>
+      options.historyOwner === undefined || options.historyOwner === null ? null : { contact: options.historyOwner },
+    ),
+    listContacts: jest.fn(async () => options.contacts ?? []),
+    findCompanyContacts: jest.fn(async () => options.companyContacts ?? []),
+  };
+}
+
+/** Prisma 假件：只需 `$transaction`（把回调喂进去）—— 事务里用哪个 client 由被测代码决定 */
+function createPrisma() {
+  // 先建空壳再挂方法：`jest.fn(async () => fn(client))` 直接写在字面量里会让 TS 抱怨
+  // 「client 的类型引用到自己」（TS7022）
+  const client: Record<string, unknown> = {};
+  client['$transaction'] = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(client));
+  return client as unknown as PrismaService;
+}
+
+function createService(options: FakeOptions = {}) {
+  const repository = createRepository(options);
+  return { service: new CompanyService(repository as unknown as CompanyRepository, createPrisma()), repository };
+}
+
+async function captureAppError(run: () => Promise<unknown>): Promise<AppError> {
+  try {
+    await run();
+  } catch (error) {
+    expect(error).toBeInstanceOf(AppError);
+    return error as AppError;
+  }
+  throw new Error('预期抛错，但调用成功返回了');
+}
+
+describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
+  describe('M2-08 createCompany', () => {
+    it('正常建档：服务端生成 `name_core` 并落库（不是把全称当核心词）', async () => {
+      const { service, repository } = createService({});
+      const dto: CreateCompanyDto = { full_name: '安徽鑫中网信息技术有限公司' };
+
+      const created = await runWithContext(CONTEXT, () => service.createCompany(dto));
+
+      expect(repository.createCompany).toHaveBeenCalledTimes(1);
+      expect(repository.createCompany.mock.calls[0]?.[0]).toMatchObject({
+        full_name: '安徽鑫中网信息技术有限公司',
+        name_core: '鑫中网',
+        created_by: OPERATOR_ID,
+      });
+      expect(created.name_core).toBe('鑫中网');
+    });
+
+    it('信用代码撞码 → 409「请使用已有档案」（预检就拦住，不靠异常兜）', async () => {
+      const { service, repository } = createService({
+        byCreditCode: companyRow({ credit_code: '91340000MA2T0000XX' }),
+      });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() =>
+          service.createCompany({ full_name: '安徽鑫中网信息技术有限公司', credit_code: '91340000MA2T0000XX' }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.code).toBe(ErrorCode.UNIQUE_CONFLICT);
+      expect(error.message).toBe('该统一社会信用代码已存在，请使用已有档案');
+      // 预检命中就不该再插入（少一次必然失败的写）
+      expect(repository.createCompany).not.toHaveBeenCalled();
+    });
+
+    it('并发下预检漏过 → 靠 DB 约束兜底，仍映射成同一句人话（P2002 真形状）', async () => {
+      const { service } = createService({ createCompanyError: p2002('uk_credit_code') });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() =>
+          service.createCompany({ full_name: '安徽鑫中网信息技术有限公司', credit_code: '91340000MA2T0000XX' }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.message).toBe('该统一社会信用代码已存在，请使用已有档案');
+    });
+
+    it('**疑似重复不拦建档**（需求 §12.1 分支 4 的「强行新建」出口）', async () => {
+      const { service, repository } = createService({
+        candidates: [companyRow({ id: 9n, full_name: '合肥鑫中网网络有限公司', name_core: '鑫中网' })],
+      });
+
+      const created = await runWithContext(CONTEXT, () =>
+        service.createCompany({ full_name: '安徽鑫中网信息技术有限公司' }),
+      );
+
+      expect(created.full_name).toBe('安徽鑫中网信息技术有限公司');
+      expect(repository.createCompany).toHaveBeenCalledTimes(1);
+    });
+
+    it('出参：`Decimal` 显式转字符串、`address_maintained` 按 address / 坐标派生', async () => {
+      const { service } = createService({
+        createdCompany: companyRow({
+          registered_capital: { toString: () => '5000000.00' },
+          address: '合肥市高新区某路 1 号',
+          longitude: { toString: () => '117.227239' },
+        }),
+      });
+
+      const created = await runWithContext(CONTEXT, () =>
+        service.createCompany({ full_name: '安徽鑫中网信息技术有限公司' }),
+      );
+
+      expect(created.registered_capital).toBe('5000000.00');
+      expect(created.address_maintained).toBe(true);
+    });
+
+    it('拿不到请求上下文 → 401（不写一条没有 `created_by` 的档案）', async () => {
+      const { service, repository } = createService({});
+
+      const error = await captureAppError(() => service.createCompany({ full_name: '安徽鑫中网信息技术有限公司' }));
+
+      expect(error.httpStatus).toBe(401);
+      expect(repository.createCompany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('M2-09 searchDup（分级）', () => {
+    it('名称两段式：核心词完全相同 → `same`；字形差一字 → `high_sim`；长度差太多 → 不进候选', async () => {
+      const { service } = createService({
+        candidates: [
+          companyRow({ id: 1n, full_name: '合肥鑫中网网络有限公司', name_core: '鑫中网' }),
+          companyRow({ id: 2n, full_name: '安徽鑫中网络技术有限公司', name_core: '鑫中网络' }),
+          companyRow({ id: 3n, full_name: '鑫中网信息技术（合肥）有限公司', name_core: '鑫中网信息技术' }),
+        ],
+      });
+
+      const result = await service.searchDup({ name: '安徽鑫中网信息技术有限公司' });
+
+      expect(result.candidates.map((item) => [item.id, item.match_type])).toEqual([
+        [1n, 'same'],
+        [2n, 'high_sim'],
+      ]);
+      expect(result.suggest).toBe('use_exists');
+    });
+
+    it('手机号精确命中 → `same`，且信用代码**打码**出参（不泄露他人档案全码）', async () => {
+      const { service } = createService({
+        companiesByPhone: [companyRow({ id: 5n, credit_code: '91340000MA2T0000XX' })],
+      });
+
+      const result = await service.searchDup({ phone: '138 0000 0000' });
+
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]).toMatchObject({ id: 5n, match_type: 'same', similarity: 1 });
+      expect(result.candidates[0]?.credit_code_masked).toBe('9134****00XX');
+    });
+
+    it('同一家公司被两路命中只出一条，且判级取更高（`same` 不被 `high_sim` 盖掉）', async () => {
+      const row = companyRow({ id: 8n, full_name: '安徽鑫中网信息技术有限公司', name_core: '鑫中网' });
+      const { service } = createService({ byCreditCode: row, candidates: [{ ...row, name_core: '鑫中网络' }] });
+
+      const result = await service.searchDup({
+        credit_code: '91340000MA2T0000XX',
+        name: '安徽鑫中网信息技术有限公司',
+      });
+
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]?.match_type).toBe('same');
+    });
+
+    it('一条候选都没有 → `create_new`（只在此时才建议新建）', async () => {
+      const { service } = createService({});
+
+      await expect(service.searchDup({ name: '完全没见过科技有限公司' })).resolves.toEqual({
+        candidates: [],
+        suggest: 'create_new',
+      });
+    });
+
+    it('三个参数都没给 → 400 / 20001（不猜、也不空跑一遍候选查询）', async () => {
+      const { service, repository } = createService({});
+
+      const error = await captureAppError(() => service.searchDup({}));
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.code).toBe(ErrorCode.PARAM_INVALID);
+      expect(repository.findCompanyCandidatesByCore).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('M2-10 / M2-13 createContact', () => {
+    it('主号**先归一后入库**（`138 0000 0000` → `13800000000`），并在事务里写就职关系', async () => {
+      const { service, repository } = createService({ companyById: companyRow({ id: 3n }) });
+      const dto: CreateContactDto = { name: '张伟', phone: '138 0000 0000', company_id: '3', position: '采购总监' };
+
+      const created = await runWithContext(CONTEXT, () => service.createContact(dto));
+
+      expect(created.phone).toBe('13800000000');
+      expect(repository.createContact.mock.calls[0]?.[0]).toMatchObject({ phone: '13800000000', name: '张伟' });
+      expect(repository.createCompanyContact).toHaveBeenCalledWith(
+        { company_id: 3n, contact_id: 11n, position: '采购总监' },
+        expect.anything(),
+      );
+    });
+
+    it('重复手机号 → 409 且**人话不含 DB 原话**（判据本体）', async () => {
+      const { service } = createService({ contactByPhone: contactRow() });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.createContact({ name: '李四', phone: '13800000000' })),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.message).toBe('该手机号已存在');
+      expect(error.message).not.toContain('Duplicate entry');
+      expect(JSON.stringify(error)).not.toContain('Duplicate entry');
+    });
+
+    it('并发撞号（预检漏过）→ P2002 真形状仍映射成同一句人话', async () => {
+      const { service } = createService({ createContactError: p2002('uk_phone_active') });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.createContact({ name: '李四', phone: '13800000000' })),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      // **与预检路径同一句**：两条路径（日常预检 / 并发兜底）不许各写一套文案
+      expect(error.message).toBe('该手机号已存在');
+    });
+
+    it('命中**历史号**只提示、不拦截（→ B6「提示不拦截」）', async () => {
+      const { service } = createService({ historyOwner: { id: 20n, name: '王五' } });
+
+      const created = await runWithContext(CONTEXT, () => service.createContact({ name: '张伟', phone: '13900000000' }));
+
+      expect(created.phone_history_hint).toBe('该号曾属于 王五');
+    });
+
+    it('空号 / 只有分隔符 → 400（归一后为空等于没填）', async () => {
+      const { service } = createService({});
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.createContact({ name: '张伟', phone: '-' })),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.code).toBe(ErrorCode.PARAM_INVALID);
+    });
+
+    it('`company_id` 指向不存在的公司 → 400（不写出一条挂着空气的就职关系）', async () => {
+      const { service, repository } = createService({ companyById: null });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.createContact({ name: '张伟', phone: '13800000000', company_id: '999' })),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(repository.createContact).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('M2-13 / M2-14 列表出参', () => {
+    it('公司联系人：**一律 `phone_masked`**、含历史就职标记（→ §2.8 出参形态）', async () => {
+      const { service } = createService({
+        companyById: companyRow({ id: 3n }),
+        companyContacts: [
+          { is_current: true, position: '采购总监', contact: contactRow({ id: 11n }) },
+          { is_current: false, position: '已离职', contact: contactRow({ id: 12n, phone: '13911112222' }) },
+        ],
+      });
+
+      const briefs = await service.listCompanyContacts('3');
+
+      expect(briefs.map((item) => [item.id, item.phone_masked, item.is_current])).toEqual([
+        [11n, '138****0000', true],
+        [12n, '139****2222', false],
+      ]);
+      expect(briefs.every((item) => item.phone_locked === false)).toBe(true);
+    });
+
+    it('联系人列表：打码形态与角色无关（本批未接 M5 的锁，`phone_locked` 恒 false）', async () => {
+      const { service } = createService({ contacts: [contactRow({ id: 11n })] });
+
+      const briefs = await service.listContacts();
+
+      expect(briefs).toHaveLength(1);
+      expect(briefs[0]?.phone_masked).toBe('138****0000');
+    });
+
+    it('公司不存在 → 400（「列表空」与「公司不存在」是两种状态，不能混成一种）', async () => {
+      const { service } = createService({ companyById: null });
+
+      const error = await captureAppError(() => service.listCompanyContacts('999'));
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.message).toContain('公司不存在');
+    });
+  });
+});

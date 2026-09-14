@@ -26,7 +26,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 
-import { ACCESS_TOKEN_TTL, ContextModule } from '../kernel/index';
+import { ACCESS_TOKEN_TTL, ContextModule, requireJwtSecret } from '../kernel/index';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AllExceptionsFilter } from './filters/all-exceptions.filter';
 import { ResponseInterceptor } from './interceptors/response.interceptor';
@@ -34,23 +34,9 @@ import { DataScopeInterceptor } from './interceptors/data-scope.interceptor';
 import { DesensitizeInterceptor } from './interceptors/desensitize.interceptor';
 import { AppValidationPipe } from './pipes/validation.pipe';
 
-/** `JWT_SECRET` 最短长度：太短的密钥可被暴力枚举（→ 架构 §8.1 硬口径「用真随机」） */
-const JWT_SECRET_MIN_LENGTH = 32;
-
-/**
- * 取 JWT 密钥：**缺失或过短直接抛错、拒绝启动**。
- * ★ 绝不设默认值兜底 —— 带默认密钥的服务一旦被部署，任何人都能自己签一枚「总经理」令牌进来，
- *   而这类事故在日志里**看不出异常**。宁可起不来，也不带默认密钥跑。
- */
-function requireJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (typeof secret !== 'string' || secret.trim().length < JWT_SECRET_MIN_LENGTH) {
-    throw new Error(
-      `缺少 JWT_SECRET 或长度不足 ${JWT_SECRET_MIN_LENGTH} 位：请在 .env 里配置真随机串（→ 架构说明 §8.1）`,
-    );
-  }
-  return secret;
-}
+// ⚠ 密钥口径 `requireJwtSecret` 已于 M1-01 **上移进 kernel**（`kernel/context/jwt-settings.ts`）：
+//   登录签发（`modules/org`）也要签 `JwtService` 令牌，而业务域**不许 import 本文件**（M0-44c 硬卡），
+//   若在此处留一份、在 org 再抄一份，就成了「密钥强度」的第二真相源。故**唯一一份**放在第 0 层 kernel。
 
 @Module({
   imports: [

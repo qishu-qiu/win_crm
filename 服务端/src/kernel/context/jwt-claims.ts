@@ -25,6 +25,23 @@ import { type DataScope, type DataScopeType, type RequestContext } from './reque
 /** 访问令牌有效期（→ API §2.2「建议 2h」）：签发（M1）与守卫共用这一处，避免两处各写一个数 */
 export const ACCESS_TOKEN_TTL = '2h';
 
+/**
+ * 刷新令牌有效期。
+ * ⚠ 规格**只写了「登录返回 `refresh_token`」，没写它多长**（API §2.2 只对 access 给了「建议 2h」），
+ *   故此处是本项目的技术口径：**14 天** —— 短于常见的「30 天」以缩小被窃令牌的有效窗口，
+ *   长于「7 天」以覆盖一次完整年假。→ 已记入 M1 完成报告「规格缺口」待确认。
+ */
+export const REFRESH_TOKEN_TTL = '14d';
+
+/**
+ * 刷新令牌的**判别位**（写进声明 `tk`）。
+ *
+ * ★ 为什么必须有它：access 与 refresh **用同一把密钥签发**，故 `jwt.verify()` 对两者**一视同仁**。
+ *   若刷新接口只看「签名验得过」，那么一枚 2h 的 access_token 就能一直换新令牌 = **无限续期**。
+ *   `tk` 让刷新接口能一句话把 access 挡在门外（access 侧不带 `tk`，且守卫会忽略它，故 access 契约不变）。
+ */
+export const REFRESH_TOKEN_MARK = 'refresh';
+
 /** 数据范围档位白名单（→ 架构 §7.2；`DATA_SCOPE_TYPES` 同时用于校验令牌内容） */
 const DATA_SCOPE_TYPES: readonly DataScopeType[] = ['self', 'dept', 'all'];
 

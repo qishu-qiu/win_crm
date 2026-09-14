@@ -80,6 +80,45 @@ describe('统一响应拦截器（M0-33）', () => {
     expect(envelope.request_id).toMatch(/^r-/);
   });
 
+  // ===========================================================================
+  // M1 补漏：出参过一遍 `toJsonSafe`。
+  // ⚠ M0-33 当时只验了「四个字段」与「void → null」，**漏了 bigint**；M1 第一个真数据接口
+  //   （`/account/login` 返回 `UserVO.id`）立刻暴露：`JSON.stringify(1n)` 直接抛 TypeError → 500。
+  //   注意这两个用例的顺序意义：**先证明不转真会炸**，再证明转了能用 —— 否则这条断言只是「跟着实现写」。
+  // ===========================================================================
+  it('出参 bigint → 十进制字符串（不转就是 500；转了还不能丢精度）', async () => {
+    const { context } = createHttpContext({});
+    // `9007199254740993` 是 2^53 + 1：落进 Number 会变成 `...992`，正好是丢精度的那条线
+    const data = { id: 9007199254740993n, name: '张三', nested: { ref: 7n }, list: [1n] };
+
+    expect(() => JSON.stringify(data)).toThrow(TypeError);
+
+    const envelope = await firstValueFrom(interceptor.intercept(context, callHandlerReturning(data)));
+
+    expect(envelope.data).toEqual({
+      id: '9007199254740993',
+      name: '张三',
+      nested: { ref: '7' },
+      list: ['1'],
+    });
+    // 真序列化一遍：这才是前端收到的 JSON，精度一位都不能少
+    const serialized = JSON.parse(JSON.stringify(envelope)) as { data: { id: string; nested: { ref: string } } };
+    expect(serialized.data.id).toBe('9007199254740993');
+    expect(serialized.data.nested.ref).toBe('7');
+  });
+
+  it('出参 Date / Decimal 等「非普通对象」不被展开成 `{}`（只动 bigint，其余交给 JSON.stringify）', async () => {
+    const { context } = createHttpContext({});
+    const createdAt = new Date('2026-09-14T10:00:00.000Z');
+
+    const envelope = await firstValueFrom(
+      interceptor.intercept(context, callHandlerReturning({ id: 1n, created_at: createdAt })),
+    );
+
+    const serialized = JSON.parse(JSON.stringify(envelope)) as { data: { created_at: string } };
+    expect(serialized.data.created_at).toBe('2026-09-14T10:00:00.000Z');
+  });
+
   // 本拦截器不依赖任何 DI（无 Prisma / 无 ContextService）；顺手证明它不会误读上下文
   it('不依赖 Reflector 等外部注入即可构造（构造签名只有零个参数）', () => {
     expect(new ResponseInterceptor()).toBeInstanceOf(ResponseInterceptor);

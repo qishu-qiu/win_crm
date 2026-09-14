@@ -30,25 +30,39 @@ export class CompanyVoDto {
   @ApiProperty({ example: '安徽鑫中网信息技术有限公司' })
   full_name!: string;
 
-  @ApiProperty({ description: '标准化核心词（服务端生成，供两段式查重第一段）', example: '鑫中网' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '标准化核心词（服务端生成，供两段式查重第一段）',
+    example: '鑫中网',
+  })
   name_core!: string | null;
 
-  @ApiPropertyOptional({ description: '城市' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: '城市' })
   city!: string | null;
 
-  @ApiPropertyOptional({ description: '行业一级' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: '行业一级' })
   industry_l1!: string | null;
 
-  @ApiPropertyOptional({ description: '规模' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: '规模' })
   scale!: string | null;
 
-  @ApiPropertyOptional({ description: '统一社会信用代码（**列表给全量**；查重候选才用 `credit_code_masked`）' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: '统一社会信用代码（**列表给全量**；查重候选才用 `credit_code_masked`）',
+  })
   credit_code!: string | null;
 
-  @ApiPropertyOptional({ description: '注册资本（单位＝元；前端按「万元」展示）', example: '5000000' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: '注册资本（单位＝元；前端按「万元」展示）',
+    example: '5000000',
+  })
   registered_capital!: string | null;
 
-  @ApiPropertyOptional({ description: '法定代表人' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: '法定代表人' })
   legal_person!: string | null;
 
   @ApiProperty({ description: '地址是否维护（`address` 或坐标为空 → false）；派生展示，不落表' })
@@ -66,7 +80,11 @@ export class DupCandidateVoDto {
   @ApiProperty({ description: '公司全称（**给全**：销售要认出是不是这家）' })
   full_name!: string;
 
-  @ApiPropertyOptional({ description: '信用代码**打码**形态（→ §2.8；规格未给形态，暂为前 4 ＋ `****` ＋ 后 4）' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: '信用代码**打码**形态（→ §2.8；规格未给形态，暂为前 4 ＋ `****` ＋ 后 4）',
+  })
   credit_code_masked!: string | null;
 
   @ApiProperty({ description: '相似度 0~1（`same` 恒为 1）', example: 0.5 })
@@ -96,7 +114,7 @@ export class ContactBriefVoDto {
   @ApiProperty({ example: '张伟' })
   name!: string;
 
-  @ApiPropertyOptional({ description: '职位（来自 `company_contact.position`）' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: '职位（来自 `company_contact.position`）' })
   position!: string | null;
 
   @ApiProperty({ description: '打码手机号（列表 / 卡片出参形态，**不是权限**，→ §2.8）', example: '138****0000' })

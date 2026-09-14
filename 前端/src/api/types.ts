@@ -164,6 +164,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 公司档案列表
+         * @description 按 id 倒序（**分页 / 筛选属 M6 列表页**，本批给最近 100 条）。⚠ 接口 §5.4 列表项里的 `relation_count` / `old_customer` 属 C / E 域，跨域不许查表 ⇒ 待 M3/M4 提供
+         */
+        get: operations["CompanyController_listCompanies"];
+        put?: never;
+        /**
+         * 建档公司
+         * @description 服务端生成 `name_core`（供两段式查重第一段）。`credit_code` 撞码 → **409「请使用已有档案」**；**疑似重复不拦建档**（需求 §12.1 分支 4：保留「强行新建」出口）
+         */
+        post: operations["CompanyController_createCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/search-dup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 撞库查重
+         * @description `phone` / `credit_code` 精确命中 → `same`；`name` 走两段式（`name_core` 前缀收缩 → 编辑距离判级 → `same` / `high_sim`）。**有候选即 `suggest=use_exists`**（疑似默认选现有），无候选才 `create_new`
+         */
+        post: operations["CompanyController_searchDup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 联系人列表
+         * @description **列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）
+         */
+        get: operations["CompanyController_listContacts"];
+        put?: never;
+        /**
+         * 建档联系人
+         * @description 主号先归一（去空格 / `+86` / `-`）再入库；**重复手机号 → 409**（软删后同号可再建）；命中历史号只提示 `phone_history_hint`、**不拦截**
+         */
+        post: operations["CompanyController_createContact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{id}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 公司联系人
+         * @description 含**历史就职 / 已离职标记**（`is_current`，→ B5）
+         */
+        get: operations["CompanyController_listCompanyContacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -354,6 +442,207 @@ export interface components {
              */
             level: string;
         };
+        CompanyVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @example 安徽鑫中网信息技术有限公司 */
+            full_name: string;
+            /**
+             * @description 标准化核心词（服务端生成，供两段式查重第一段）
+             * @example 鑫中网
+             */
+            name_core: string | null;
+            /** @description 城市 */
+            city?: string | null;
+            /** @description 行业一级 */
+            industry_l1?: string | null;
+            /** @description 规模 */
+            scale?: string | null;
+            /** @description 统一社会信用代码（**列表给全量**；查重候选才用 `credit_code_masked`） */
+            credit_code?: string | null;
+            /**
+             * @description 注册资本（单位＝元；前端按「万元」展示）
+             * @example 5000000
+             */
+            registered_capital?: string | null;
+            /** @description 法定代表人 */
+            legal_person?: string | null;
+            /** @description 地址是否维护（`address` 或坐标为空 → false）；派生展示，不落表 */
+            address_maintained: boolean;
+            /** @example 2026-09-15T10:00:00+08:00 */
+            updated_at: string;
+        };
+        CreateCompanyDto: {
+            /**
+             * @description 公司全称（服务端据此生成 `name_core` 供查重）
+             * @example 安徽鑫中网信息技术有限公司
+             */
+            full_name: string;
+            /** @description 统一社会信用代码（可空；**撞码 → 409，请用已有档案**） */
+            credit_code?: string;
+            /** @description 行业一级 */
+            industry_l1?: string;
+            /** @description 行业二级 */
+            industry_l2?: string;
+            /** @description 省 */
+            province?: string;
+            /** @description 市 */
+            city?: string;
+            /** @description 区 / 县 */
+            district?: string;
+            /** @description 规模 */
+            scale?: string;
+            /** @description 官网 */
+            website?: string;
+            /** @description 注册地址（同时是签约校验清单「注册地址」项的落点） */
+            address?: string;
+            /** @description 开户行 */
+            bank_name?: string;
+            /** @description 发票抬头 */
+            invoice_title?: string;
+            /** @description 税号 */
+            tax_no?: string;
+            /**
+             * @description **注册资本（单位＝元**；前端按「万元」录入并各做一次换算）。可选扩展字段，不参与签约强制与完善度
+             * @example 5000000
+             */
+            registered_capital?: string;
+            /** @description 法定代表人（可选扩展字段） */
+            legal_person?: string;
+            /**
+             * @description 经度 GCJ-02
+             * @example 117.227239
+             */
+            longitude?: string;
+            /**
+             * @description 纬度 GCJ-02
+             * @example 31.820587
+             */
+            latitude?: string;
+            /** @description 曾用名 / 别名（合并时自动收进） */
+            aliases?: string[];
+        };
+        SearchDupDto: {
+            /** @description 按**联系人手机号**查（撞库第 ① 个触发点，→ 需求 §12.1） */
+            phone?: string;
+            /** @description 按**统一社会信用代码**查（撞码 → 强制使用已有档案） */
+            credit_code?: string;
+            /** @description 按**公司名**查（两段式：`name_core` 收缩候选 → 编辑距离判级） */
+            name?: string;
+        };
+        DupCandidateVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @description 公司全称（**给全**：销售要认出是不是这家） */
+            full_name: string;
+            /** @description 信用代码**打码**形态（→ §2.8；规格未给形态，暂为前 4 ＋ `****` ＋ 后 4） */
+            credit_code_masked?: string | null;
+            /**
+             * @description 相似度 0~1（`same` 恒为 1）
+             * @example 0.5
+             */
+            similarity: number;
+            /**
+             * @description 判级：`same`＝核心词完全相同；`high_sim`＝高度疑似
+             * @enum {string}
+             */
+            match_type: "same" | "high_sim";
+        };
+        SearchDupResultVoDto: {
+            /** @description 候选清单（可空数组） */
+            candidates: components["schemas"]["DupCandidateVoDto"][];
+            /**
+             * @description 建议：**有候选一律 `use_exists`**（需求 §12.1 分支 4：疑似默认选现有），无候选才 `create_new`
+             * @enum {string}
+             */
+            suggest: "use_exists" | "create_new";
+        };
+        ContactBriefVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @example 张伟 */
+            name: string;
+            /** @description 职位（来自 `company_contact.position`） */
+            position?: string | null;
+            /**
+             * @description 打码手机号（列表 / 卡片出参形态，**不是权限**，→ §2.8）
+             * @example 138****0000
+             */
+            phone_masked: string;
+            /** @description 是否被 owner 上锁（M5 前恒为 false：锁的实现属 M5） */
+            phone_locked: boolean;
+            /**
+             * @description 决策角色
+             * @enum {string}
+             */
+            decision_role?: "decision" | "influence" | "execute";
+            /** @description 是否当前在职（`company_contact.is_current`；历史就职给 false） */
+            is_current: boolean;
+        };
+        ExtraPhoneDto: {
+            /**
+             * @description 类型
+             * @example mobile
+             * @enum {string}
+             */
+            type: "mobile" | "tel" | "wechat";
+            /**
+             * @description 号码
+             * @example 13900000000
+             */
+            number: string;
+            /** @description 备注 */
+            note?: string;
+        };
+        CreateContactDto: {
+            /**
+             * @description 姓名
+             * @example 张伟
+             */
+            name: string;
+            /**
+             * @description 主号（撞单校验核心；服务端会先做归一：去空格 / `+86` / `-`）
+             * @example 13800000000
+             */
+            phone: string;
+            /** @description 附加号（可多个；不参与撞单） */
+            extra_phones?: components["schemas"]["ExtraPhoneDto"][];
+            /** @description 微信 */
+            wechat?: string;
+            /** @description 邮箱 */
+            email?: string;
+            /** @description 性别 */
+            gender?: string;
+            /**
+             * @description 生日 `YYYY-MM-DD`
+             * @example 1985-06-01
+             */
+            birthday?: string;
+            /**
+             * @description 决策角色
+             * @enum {string}
+             */
+            decision_role?: "decision" | "influence" | "execute";
+            /** @description 个人自由标签 */
+            tags?: string[];
+            /** @description 就职公司 id（十进制字符串）；给了就同时写一条 `company_contact` */
+            company_id?: string;
+            /** @description 职位（配合 `company_id` 一起给） */
+            position?: string;
+        };
+        ContactCreatedVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @example 张伟 */
+            name: string;
+            /**
+             * @description 归一后的主号（**详情给全号**，与角色无关，→ §2.8）
+             * @example 13800000000
+             */
+            phone: string;
+            /** @description 命中历史号时的提示（**提示不拦截**，→ §5.5） */
+            phone_history_hint?: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -522,6 +811,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionVoDto"][];
+                };
+            };
+        };
+    };
+    CompanyController_listCompanies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyVoDto"][];
+                };
+            };
+        };
+    };
+    CompanyController_createCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCompanyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyVoDto"];
+                };
+            };
+        };
+    };
+    CompanyController_searchDup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchDupDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchDupResultVoDto"];
+                };
+            };
+        };
+    };
+    CompanyController_listContacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactBriefVoDto"][];
+                };
+            };
+        };
+    };
+    CompanyController_createContact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateContactDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactCreatedVoDto"];
+                };
+            };
+        };
+    };
+    CompanyController_listCompanyContacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 公司 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactBriefVoDto"][];
                 };
             };
         };

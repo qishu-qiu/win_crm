@@ -1,16 +1,16 @@
 # CODEBUDDY.md This file provides guidance to CodeBuddy when working with code in this repository.
 
-> 本项目是**文档驱动（spec-driven）**的销售 CRM 系统。当前处于「**M1（A 域登录）已提交、M2（B 域建档/查重）后端已落地（差前端建档页）**」阶段：**真相源是文档，不是代码**。动手前先按本文与 `README.md` 的规则锁定口径。
+> 本项目是**文档驱动（spec-driven）**的销售 CRM 系统。当前处于「**M2 已闭环（A 域登录 ＋ B 域建档/查重，含前端建档页），下一步 M3（C 域：业务关系 / 私海 / 公海）**」阶段：**真相源是文档，不是代码**。动手前先按本文与 `README.md` 的规则锁定口径。
 
-> **★ 动工前必读（AI 行为约束）**：`技术决策/AI协作铁律与踩坑复盘.md`（现行 **V1.4**）—— **AI 协作元规则的唯一落点**（AI 行为硬约束 / 踩坑复盘 / 通例）。**凡写文件 / 装依赖 / 跑命令 / 调用有副作用工具前，先读它**；今后 WorkBuddy 与 CodeBuddy 新增同类规则一律追加到该文档。
+> **★ 动工前必读（AI 行为约束）**：`技术决策/AI协作铁律与踩坑复盘.md`（现行 **V1.6**）—— **AI 协作元规则的唯一落点**（AI 行为硬约束 / 踩坑复盘 / 通例）。**凡写文件 / 装依赖 / 跑命令 / 调用有副作用工具前，先读它**；今后 WorkBuddy 与 CodeBuddy 新增同类规则一律追加到该文档。
 >
 > **★ 下个窗口开工前**：先读 `过程产出/交接说明-M1（2026-09-14 窗口）.md` —— 「状态 / 证据 / 缺口 / 踩坑」的唯一落点（本文不复述）。
 
 ## 一、当前状态（务必先读）
 
-- **后端 `服务端/src/` 已成形**（NestJS 12 ＋ Prisma 7.10.0）：`main.ts` / `worker.ts` / `app.module.ts`、`kernel/`（context / events / audit / errors / common）、`shared/`（guards / interceptors / filters / pipes）、`modules/org/`（A 域四层，**M1 全绿**）。已跑通：登录（**手机号 / 账号名双通道**）、刷新、`/account/me`、`/org/departments|employees|roles|permissions`（**`/org/employees` 按 G7 收敛**）。
-- **库**：真库 `win_crm`，3 份 migration 全部已应用（`0001_init` baseline / `0002_company_capital_legal_person` / `0003_username_and_phone_lock`）；种子 `服务端/prisma/seed/001_dev_seed.sql`（6 账号 / 5 部门 / 3 产品线 / 18 行权限矩阵，幂等）；**`dict_item` 仍 0 条**（M2 前置）。
-- **前端 `前端/` 已有真实页面**：`views/LoginView.vue`（一个输入框＝手机号或账号名）＋ `views/WorkbenchView.vue`（首屏空壳）；`api/types.ts` 由 `gen:types` 生成；**未引 vue-router / pinia**（视图切换在 `App.vue`）。
+- **后端 `服务端/src/` 已成形**（NestJS 12 ＋ Prisma 7.10.0）：`main.ts` / `worker.ts` / `app.module.ts`、`kernel/`（context / events / audit / errors / common）、`shared/`（guards / interceptors / filters / pipes）、`modules/org/`（A 域四层，**M1 全绿**）、`modules/company/`（B 域四层，**M2-01~M2-15 全绿**）。已跑通：登录（**手机号 / 账号名双通道**）、刷新、`/account/me`、`/org/departments|employees|roles|permissions`（**`/org/employees` 按 G7 收敛**）、`GET/POST /companies`、`POST /companies/search-dup`、`GET/POST /contacts`、`GET /companies/:id/contacts`。
+- **库**：真库 `win_crm`，3 份 migration 全部已应用（`0001_init` baseline / `0002_company_capital_legal_person` / `0003_username_and_phone_lock`）；种子 **2 份**：`001_dev_seed.sql`（6 账号 / 5 部门 / 3 产品线 / 18 行权限矩阵，幂等，**先清后插**）＋ `002_dict_seed.sql`（**18 个内置字典 / 101 项**，幂等，**不删行只更新**）。
+- **前端 `前端/` 已有真实页面**：`views/LoginView.vue`（一个输入框＝手机号或账号名）＋ `views/WorkbenchView.vue`（首屏空壳）＋ `views/EntryView.vue`（**M2-17 建档页**：查重 → 建档 / 用现有 → 建联系人）；`api/types.ts` 由 `gen:types` 生成；**未引 vue-router / pinia**（顶栏 ＋ 视图切换在 `App.vue`）。
 - `归档/` 内是被取代的旧代码与旧文档，**移动未删除**；根目录 `.ignore` 已让 ripgrep 默认跳过 `归档/`（查历史需显式指定路径或 `--no-ignore`）。
 - ⚠ **`服务端/src/generated/`（Prisma Client）被 `.gitignore` 忽略**：改 `schema.prisma` 后 `git status` 看不出它过期，**必须显式 `npm run prisma:generate`（或 `npm run build`，它会带跑）**，否则 `select` 新列直接编译报错。
 - ⚠ **端口**：后端默认 **3000**、前端 `npm run dev` **5173**；vite 只监听 `::1` → 探针请用 `http://localhost:5173`（`127.0.0.1` 会连不上）。
@@ -156,7 +156,7 @@ cd 前端 && npm run build   # vue-tsc 类型检查 ＋ 打包
 
 ### 7. 开工顺序（竖切一条动线，非按域横向做完）
 
-已定案：**竖切一条完整动线** —— 登录 → 建公司/联系人 → 建业务关系 → 写一条跟单 → 工作台看到它（穿透 A/B/C/D 四域）。8 步：**0** ✅ 打地基（kernel + Prisma + OpenAPI + ESLint 边界）→ **1** ✅ A 域登录（含 `/account/me`、四个组织只读接口、登录页）→ **2** ⏳ B 域建档/查重（**下一步**；开工前先按数据架构 §十三填字典）→ **3** C 域建关系/私海 → **4** D 域写跟单/时间线/工作台 → **5** 横切层（数据范围+脱敏+审计）→ **6** 接前端（`gen:types`）→ **7** Worker 骨架（掉海预警先只告警）→ **8** 验收。每步＝一次可提交的还原点（架构说明 §九）。
+已定案：**竖切一条完整动线** —— 登录 → 建公司/联系人 → 建业务关系 → 写一条跟单 → 工作台看到它（穿透 A/B/C/D 四域）。8 步：**0** ✅ 打地基（kernel + Prisma + OpenAPI + ESLint 边界）→ **1** ✅ A 域登录（含 `/account/me`、四个组织只读接口、登录页）→ **2** ✅ B 域建档/查重（含前端建档页；字典已按数据架构 §十三落库）→ **3** ⏳ C 域建关系/私海（**下一步**）→ **4** D 域写跟单/时间线/工作台 → **5** 横切层（数据范围+脱敏+审计）→ **6** 接前端（`gen:types`）→ **7** Worker 骨架（掉海预警先只告警）→ **8** 验收。每步＝一次可提交的还原点（架构说明 §九）。
 
 ### 8. Git 约定
 

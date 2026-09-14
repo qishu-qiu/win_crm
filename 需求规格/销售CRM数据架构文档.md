@@ -70,7 +70,7 @@ commitment ─< daily_agenda（今日动线，ref 承诺/预约/节奏）
 cadence_rule（节奏规则：经理配；含掉海/新客/S级客情/灰度）
 competitor（竞品名册：经理维护，销售只读引用）
 review（出口复盘 ★转已合作 / 判死 / 流失）
-approval（转交 / 协同 / 手机号变更 / 联系方式解锁 四型一单）
+approval（转交 / 协同 / 手机号变更 / 联系方式解锁 / 关系重分配 五型一单）
 notification（站内/微信预留）｜ dict_type ─< dict_item
 action_event ─< stat_daily（日级行为汇总·派生预聚合）
 operation_log（★全局审计日志）｜ job_run_log（定时任务执行日志）｜ visit_log（外出登记：纯行政考勤）
@@ -87,7 +87,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 ### A2 employee 员工
 `work_no` UNIQUE、`name`、`phone` UNIQUE、**`username` UNIQUE（可空）**、`password_hash`、`primary_dept_id`、`extra_dept_ids` JSON、`product_line_ids` JSON、`direct_manager_id`(直属经理/审批链)、`status`(active/resigned/disabled)
 
-> **★ `username`（2026-09-14 新增 · migration `0003`）**：**登录账号名** —— 员工自定、**可空**（为空则只能手机号登录）、**全局唯一**（MySQL 唯一索引允许多个 NULL，故"可空 + 唯一"成立）、大小写不敏感。登录＝**手机号 或 账号名 二选一 ＋ 密码**，两通道共用 `password_hash`（`→需求§4.3` / 接口 §5.2）。V1 由管理员在员工编辑里维护，**不做员工自助改名**。
+> **★ `username`（2026-09-14 新增 · migration `0003`）**：**登录账号名** —— 员工自定、**可空**（为空则只能手机号登录）、**全局唯一**（MySQL 唯一索引允许多个 NULL，故"可空 + 唯一"成立）、大小写不敏感。登录＝**手机号 或 账号名 二选一 ＋ 密码**，两通道共用 `password_hash`（`→需求§7.1` / 接口 §5.2）。V1 由管理员在员工编辑里维护，**不做员工自助改名**。
 
 ### A3 dept_manager 管辖部门（经理查数范围 = 本表集合）
 `dept_id + employee_id` 联合唯一
@@ -107,7 +107,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | `relation_timeline` | 跨部门跟单全文 | denied | denied | denied | **visible**（只读） | denied | visible |
 | `contract_amount` | 跨部门合同金额 | masked | masked | masked | masked | masked | visible |
 
-- 旧 key `cross_dept_private`（看他人私海）/ `phone_unlock`（手机号解锁）**已废止**（`→《废止口径登记表》#30`）。
+- 旧 key `cross_dept_private`（看他人私海）/ `phone_unlock`（手机号解锁）**已废止**（`→《废止口径登记表》#31`）。
 - **联系方式「锁」不进矩阵** —— 由 `contact.phone_locked_at / phone_locked_by` 单独管（`→B3`）。
 - `level` 语义：`visible`＝原文 / `masked`＝打码（`amount: null` + `amount_masked`）/ `denied`＝字段不返回。
 
@@ -490,16 +490,16 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 ---
 
-## 九、域 G：审批中心（四型一单；报销一期不做，`→需求§7.9`）
+## 九、域 G：审批中心（五型一单；报销一期不做，`→需求§7.9`）
 
 ### G1 approval
-`type`：**transfer** 转交（含离职批量转交）/ **collaborate** 协同 / **phone_change** 手机号变更 / **phone_unlock** 联系方式解锁
+`type`：**transfer** 转交（单人换主责）/ **collaborate** 协同 / **phone_change** 手机号变更 / **phone_unlock** 联系方式解锁 / **relation_reassign** 关系重分配（**离职批量转交**，2026-09-14 定：**经理发起**、**一单多关系**、可分派不同业务员）
 
 | 字段 | 说明 |
 |---|---|
 | type / applicant_id / approver_id | 申请人≠审批人（DB CHECK + 应用双拦） |
 | target_type / target_id | 对象（关系/联系人） |
-| payload JSON | 转交目标人（含批量清单）/新旧手机号/协同人与有效期/解锁目标（含 `locked_by`） |
+| payload JSON | 转交目标人（单人）/ 新旧手机号 / 协同人与有效期 / 解锁目标（含 `locked_by`）/ **`relation_reassign`：`items:[{relation_id, to_employee_id\|null}]`（`null` ＝ 回公海）**（2026-09-14 定） |
 | status | pending/approved/rejected |
 | comment / handled_at | 驳回必填原因 |
 
@@ -642,7 +642,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 **③ 金额（跨业务线）** —— 判定**按部门**、可见范围与例外见 `→需求§4.3 四`；出参形态：**不可见者一律 `amount: null` ＋ `amount_masked: "***"`**（库内永远明文）。**脱敏只作用于「销售看他人私海 / 跨部门关系」的列表与详情；报表 / 看板 / 汇总一律真实金额**（经理 / 老板出口，2026-09-11 定）。
 
-- 数据范围：销售可见客户全集 = **本人 owner 私海 ∪ 我作为 collaborator 的关系（含正式协同 collaborate 与 @求助 ask_help，valid_until 未过期）∪ 公海**；经理=dept_manager 管辖部门；总经理=全部；他人私海不可见（除非协同/@求助授权）。客户列表提供"@我 / 我协同 / 全部关联"筛选视图，底层即 relation_member 中 employee_id=当前用户 的 collaborator 集合，与 owner 私海取并集后按筛选裁剪（口径见 §十七 A.3）
+- 数据范围：销售可见客户全集 = **本人 owner 私海 ∪ 我作为 collaborator 的关系（含正式协同 collaborate 与 @求助 ask_help，valid_until 未过期）∪ 公海**；经理=dept_manager 管辖部门；总经理=全部；**交付/客服＝仅「在合同服务期内」的客户（只读、不进公海；2026-09-14 定）**；**管理员＝可查看业务数据，但一律只读、每次查看写 `operation_log`、不解除金额脱敏（2026-09-11 定）**；他人私海不可见（除非协同/@求助授权）。客户列表提供"@我 / 我协同 / 全部关联"筛选视图，底层即 relation_member 中 employee_id=当前用户 的 collaborator 集合，与 owner 私海取并集后按筛选裁剪（口径见 §十七 A.3）
 - 赢单弹药库（review published）：**默认本部门可见**；gm 经 system_config(ammo_scope=company) 改全公司；未收录的（open/dismissed）仅本人+直属经理可见
 - 坐标属公司档案基础信息（非敏感）；将来做地图时必须走同一套权限过滤
 - 协同 / 转交 / **上锁 / 解锁申请 / 手机号变更** 均走审批且留痕（`phone_unlock` 的**审批人＝落锁人** ＋ 知会其直属上级，口径 `→需求§4.3 二`）；**公海看号留痕（`sea.phone.view`，不设次数上限）**；合同水印、**公海页水印**、操作日志为应用层责任
@@ -718,7 +718,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | D6 review | 需求 §11.2 出口复盘 | win/loss/churn 三型 |
 | 域 E 交易服务 | 需求 §7.6 / §7.7 / §6.4 | 合同、台账、工单 |
 | 域 F 公海 | 需求 §6.3 / §12 | 掉落规则与撞单 |
-| 域 G 审批 | 需求 §7.9 | 四型一单 |
+| 域 G 审批 | 需求 §7.9 | 五型一单 |
 | §11 权限脱敏 | 需求 §4.3 | 联系方式（全可见＋锁）/ 跟单 / 金额三段口径一致 |
 | 前端交互 | 需求 §13 全局交互规范 | **《销售CRM前端页面与交互文档》**（需求规格/）：页面清单 / 页面级交互 / 角色矩阵；**视觉 / 组件 / 状态 / 响应式已独立成册 →《销售CRM设计规范》**；实体可点铁律、一层抽屉、悬浮卡 |
 

@@ -29,8 +29,8 @@ try {
   // .env 不存在（如 CI 只注入真实环境变量）→ 交给环境变量本身兜底
 }
 
-/** OpenAPI 文档版本：口径来源《销售CRM接口API文档》V1.14（★ 与接口文档同号，便于对照） */
-const API_DOC_VERSION = 'V1.14';
+/** OpenAPI 文档版本：口径来源《销售CRM接口API文档》V1.15（★ 与接口文档同号，便于对照） */
+const API_DOC_VERSION = 'V1.15';
 
 /** 授权方案名：Swagger UI 右上角 Authorize 填入 Bearer token 后带到全部接口（→ 接口文档 §2.2） */
 const BEARER_SCHEME_NAME = 'bearer';
@@ -55,7 +55,7 @@ function setupOpenApi(app: INestApplication): void {
   const config = new DocumentBuilder()
     .setTitle('销售 CRM 接口')
     .setDescription(
-      '口径来源：《销售CRM接口API文档》V1.14 —— 统一响应包 / 错误码 / 鉴权口径一律以其为准。',
+      '口径来源：《销售CRM接口API文档》V1.15 —— 统一响应包 / 错误码 / 鉴权口径一律以其为准。',
     )
     .setVersion(API_DOC_VERSION)
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, BEARER_SCHEME_NAME)

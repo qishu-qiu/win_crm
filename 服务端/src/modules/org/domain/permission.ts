@@ -2,7 +2,7 @@
 // A 域纯规则（M1-05 / M1-10 的配套）—— 权限矩阵行 → `UserVO.permissions`
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.14 §5.2：`UserVO.permissions = {"perm_key":"level"}`。
+//   · 《销售CRM接口API文档》V1.15 §5.2：`UserVO.permissions = {"perm_key":"level"}`。
 //   · 《销售CRM数据架构文档》A6 `permission_matrix(perm_key, role_code, level)`，
 //     `level ∈ visible / masked / denied`。
 //

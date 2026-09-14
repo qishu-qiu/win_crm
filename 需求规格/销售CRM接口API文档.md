@@ -1,10 +1,10 @@
-# 销售 CRM 接口 API 文档 V1.14
+# 销售 CRM 接口 API 文档 V1.15
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据。
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》**V1.25**、《销售CRM数据架构文档》**V1.30**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.16**（均 需求规格/）。
+> 配套真相源：《销售CRM业务需求文档》**V1.26**、《销售CRM数据架构文档》**V1.30**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.16**（均 需求规格/）。
 > **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22），沿革查 `git log --follow -- 需求规格/销售CRM接口API文档.md`。
-> 生效日期：2026-09-15 ｜ 状态：**V1.14**（成功响应一律 200；联系方式默认全可见 ＋ 联系人可上锁；登录＝手机号 / 账号名双通道 · 紧随需求 V1.25 / 数据架构 V1.30 / 前端 V1.16）。
+> 生效日期：2026-09-15 ｜ 状态：**V1.15**（成功响应一律 200；`urgency` 码与数据架构对齐；refresh 出参定案；联系方式默认全可见 ＋ 联系人可上锁；登录＝手机号 / 账号名双通道 · 紧随需求 V1.26 / 数据架构 V1.30 / 前端 V1.16）。
 
 ---
 
@@ -78,7 +78,7 @@
 - 入参出参 **snake_case**；时间字段 `_at` 后缀。
 - **枚举一律英文码**（示例）：
   - 阶段 `stage`：`first_contact` / `need_confirm` / `demo` / `objection` / `closing` / `cooperated`（成交 · 终态）/ **`churned`（流失 · 终态）** —— 即 **6 个推进阶段 ＋ 1 个流失终态**（`→需求§8.1`）。
-  - 紧迫 `urgency`：`week_key` / `month_key` / `quarter_follow` / `long_term` / `gray`（默认）。
+  - 紧迫 `urgency`：`weekly` / `monthly` / `quarterly` / `long_term` / `gray`（默认）—— **2026-09-15 与《数据架构文档》§四 · §十三 对齐**（原 `week_key` / `month_key` / `quarter_follow` **作废**，见《废止口径登记表》#36）。
   - 公海 `sea_status`：`private` / `company_sea`（两态，`→架构F`）。
   - 竞争 `competition`：`none` / `in_use` / `comparing`。
   - 审批 `approval_type`：**`transfer` / `collaborate` / `phone_change` / `phone_unlock`**（四型）＋ **`relation_reassign`（关系重分配 · 离职批量转交，2026-09-14 定：由该员工直属经理发起、一单多关系、可分派不同业务员）** —— **合称「五型一单」**（`→需求§7.9`）。
@@ -388,6 +388,7 @@
   - **`account` ＝ 手机号 或 登录账号名**（`employee.username`），**二选一**；**服务端判别**（11 位手机号格式按手机号查，否则按账号名查）。**两种通道共用同一个 `password_hash`**。
   - ⚠ **2026-09-14 变更**：入参由 `{phone,password}` 扩为 `{account,password}`；**前端只给一个输入框**（`→《前端页面与交互文档》登录页`）。
   - 账号不存在 / 密码错 → **一律 401 / 20002**「手机号或密码不正确」（**不泄露账号是否存在，也不区分是账号名错还是密码错**）。
+- `POST /account/refresh` req `{refresh_token}` → resp **`{access_token,refresh_token}`** —— **不带 `user`**（2026-09-15 定；刷新只负责换令牌，前端要用户信息就调 `GET /account/me`，避免两个出口各带一份用户信息）。
 - `GET /account/me` → `UserVO` ＝ `{id,name,username?,role,dept:{id,name},managed_dept_ids:[],permissions:{"perm_key":"level"}}`
 - `PUT /account/preferences` req `{theme:"light"|"dark",notif?:{...}}`
   - ⚠ 登录账号名**随员工编辑维护**（`PUT /org/employees`，管理员操作）；**V1 不做员工自助改名**。

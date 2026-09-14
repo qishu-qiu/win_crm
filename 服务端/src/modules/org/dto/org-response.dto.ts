@@ -2,7 +2,7 @@
 // A 域出参 DTO（M1-11 / M1-12 / M1-13）—— **只服务于 Swagger 文档**，不参与运行时转换
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.14 §5.2：
+//   · 《销售CRM接口API文档》V1.15 §5.2：
 //       `POST /account/login` → `{access_token, refresh_token, user: UserVO}`
 //       `GET /account/me` → `UserVO = {id, name, username?, role, dept:{id,name}, managed_dept_ids:[],
 //                                      permissions:{"perm_key":"level"}}`

@@ -135,6 +135,24 @@ npx prisma format   --schema prisma/schema.prisma
 
 > ⚠ **已知未清**：`0001_init` 第 93 行 `permission_matrix.perm_key` 的列 `COMMENT` 里仍举着两个**已废止**的 key（`cross_dept_private` / `phone_unlock`）。按上文「注释修正走新增量」本该再开 `0004` 只改注释 —— **本批未做**（不在本次授权范围），待指令。
 
+### ✅ 字典种子 002_dict_seed（2026-09-15 · MySQL 8.0.12 实跑取证）
+
+方式：以 `source` 执行 `prisma/seed/002_dict_seed.sql`（七叔 2026-09-15「执行」）。
+**幂等策略**：`dict_type` 撞 `uk_code`、`dict_item` 撞 `uk_type_item` 时**只更新** `label / sort / builtin / status / updated_at`，**不删行、不改 id**。
+⚠ **与 A 域 `001_dev_seed.sql` 的「先清后插」取舍不同**：字典会被业务行（如 `action_event.action_type`）以**码值**引用，清空重建会让历史行指向不存在的码。
+
+| 验收项 | 期望 | 实测 |
+|---|---|---|
+| 字典类型 | 18 个（＝《数据架构文档》§十三） | **18** ✅ |
+| 字典项 | 每条 `builtin=1` / `status=active` | **101 条；builtin 101；status 全 `active`** ✅ |
+| `urgency` 取值 | 数据架构那套（2026-09-15 裁定；《废止口径登记表》#36） | **`weekly / monthly / quarterly / long_term / gray`** ✅ |
+| 幂等（**跑第二遍**） | 行数不变、`(type_id,item_code)` 无重复 | **items 101 ／ distinct 101 ／ types 18** ✅ |
+| 每字典条数 | 见 §十三 | action_type 11 ／ pain_point 8 ／ urgency 5 ／ value_tier 4 ／ customer_level 5 ／ party 3 ／ commitment_ctype 9 ／ identity_tag 6 ／ policy_tag 4 ／ decision_chain 4 ／ contact_trait 7 ／ risk_label 5 ／ workflow_stage 7 ／ competition 3 ／ review_type 3 ／ win 5 ／ loss 6 ／ churn 6 ✅ |
+
+> ⚠ **两处待确认（写在种子文件头，别当既定口径）**：
+> ① **`workflow_stage` 码**：本文件用 **`1`~`7`**（＝ `business_relation.stage` 的数值列口径 ＋ §十三 的编号写法），而《接口API文档》V1.15 §2.6 的 `stage` 举例是**英文码**（`first_contact … churned`）—— 两套并存，**需裁一次**；
+> ② **AI 起草的码**：`company_identity_tag / company_policy_tag / decision_chain / contact_trait / relation_risk_label / review_win_reason` 的 `item_code` 规格里**只给了中文**，现由 AI 按语义起草（全站要求「枚举一律英文码」）；**业务确认后可改码**（改前先 grep 引用）。
+
 ## ★ 必须「手写 migration」的部分（数据架构 §十五.5，Prisma 表达不了）
 
 | # | 场景 | 做法 |

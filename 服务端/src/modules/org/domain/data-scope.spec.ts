@@ -1,6 +1,8 @@
 // =============================================================================
 // A 域纯规则用例（M1-06）
 // 判据逐字（《开发计划》M1-06）：「单测：销售 / 经理 / 总经理 → 三种结果」。
+// ★ 2026-09-14 扩为**四档**（补 `serving` ＝ 交付·客服「仅服务中客户」，→ 架构 §7.2 / 登记表 #35）：
+//   判据本体的三种结果仍在，另加 `serving` 与多角色合成用例。
 // =============================================================================
 import {
   BUILTIN_ROLE_CODES,
@@ -23,11 +25,11 @@ describe('数据范围纯规则（M1-06 · 架构 §7.2）', () => {
     expect(BUILTIN_ROLE_CODES).not.toContain('sales');
   });
 
-  describe('resolveDataScope：三档（判据本体）', () => {
+  describe('resolveDataScope：四档（判据本体）', () => {
     it.each([
-      ['销售 → self', ['sale'], 'self'],
-      ['客服 → self', ['service'], 'self'],
-      ['交付 → self', ['delivery'], 'self'],
+      ['销售 → self（本人私海 ∪ 有效协同 ∪ 公海）', ['sale'], 'self'],
+      ['客服 → serving（仅「服务中」客户，2026-09-14 定）', ['service'], 'serving'],
+      ['交付 → serving（同上）', ['delivery'], 'serving'],
       ['部门经理 → dept', ['dept_manager'], 'dept'],
       ['总经理 → all', ['gm'], 'all'],
       ['管理员 → all（2026-09-11 定：管理员可查看业务数据）', ['admin'], 'all'],
@@ -43,12 +45,28 @@ describe('数据范围纯规则（M1-06 · 架构 §7.2）', () => {
       expect(resolveDataScope(['some_custom_role'])).toBe('self');
     });
 
-    it('多角色取**范围更大**者：经理 ＋ 销售 → dept（不被销售角色拉低）', () => {
+    it('多角色取**范围更大**者（顺序＝宽窄序）：经理 ＋ 销售 → dept（不被销售角色拉低）', () => {
       expect(resolveDataScope(['sale', 'dept_manager'])).toBe('dept');
     });
 
-    it('多角色取**范围更大**者：经理 ＋ 总经理 → all', () => {
+    it('多角色：经理 ＋ 客服 → dept（`dept` 宽于 `serving`）', () => {
+      expect(resolveDataScope(['service', 'dept_manager'])).toBe('dept');
+    });
+
+    it('多角色：经理 ＋ 总经理 → all', () => {
       expect(resolveDataScope(['dept_manager', 'gm'])).toBe('all');
+    });
+
+    it('多角色：总经理 ＋ 交付 → all', () => {
+      expect(resolveDataScope(['delivery', 'gm'])).toBe('all');
+    });
+
+    it('多角色：**销售 ＋ 交付 → self**（技术口径，规格未定义；放 `serving` 会让销售看不到自己私海）', () => {
+      expect(resolveDataScope(['sale', 'delivery'])).toBe('self');
+    });
+
+    it('多角色：客服 ＋ 交付 → serving（两个 `serving` 角色不叠加成别的档）', () => {
+      expect(resolveDataScope(['service', 'delivery'])).toBe('serving');
     });
   });
 
@@ -97,9 +115,10 @@ describe('数据范围纯规则（M1-06 · 架构 §7.2）', () => {
     });
   });
 
-  it('isDeptScopedScope 只对 `dept` 为真（`all` 不等于「按部门过滤」）', () => {
+  it('isDeptScopedScope 只对 `dept` 为真（`all` / `serving` 都不等于「按部门过滤」）', () => {
     expect(isDeptScopedScope('dept')).toBe(true);
     expect(isDeptScopedScope('self')).toBe(false);
+    expect(isDeptScopedScope('serving')).toBe(false);
     expect(isDeptScopedScope('all')).toBe(false);
   });
 });

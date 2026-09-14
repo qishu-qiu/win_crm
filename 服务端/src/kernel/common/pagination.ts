@@ -2,7 +2,7 @@
 // 分页（M0-24）—— `page/pageSize` → `skip/take` ＋ 统一分页 VO
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.12 §2.7：查询统一 `page`（默认 1）/ `page_size`（默认 20、**最大 100**）。
+//   · 《销售CRM接口API文档》V1.13 §2.7：查询统一 `page`（默认 1）/ `page_size`（默认 20、**最大 100**）。
 //   · 同 §2.3 / §五 PageResult：分页固定字段 `list / total / page / page_size`（G2）。
 //   · 同 §2.6：**入参出参 snake_case** —— 故 VO 的键名是 `page_size`，不是 `pageSize`。
 //

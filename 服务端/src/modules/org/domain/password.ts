@@ -4,7 +4,7 @@
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM数据架构文档》A2 `employee.password_hash VARCHAR(255)`：
 //     只存**哈希**、绝不存明文（故哈希串长度必须留在 255 内 —— 本实现的串长约 130 字符，安全）。
-//   · 《销售CRM架构设计说明》V1.1 §5.4：`domain/**` 须与框架 / ORM 解耦。
+//   · 《销售CRM架构设计说明》V1.3 §5.4：`domain/**` 须与框架 / ORM 解耦。
 //
 // ★ 为什么用 Node 内置 `node:crypto` 的 `scrypt`，而不是新装 `bcrypt`：
 //   ① `scrypt` 是**内存硬（memory-hard）**算法，抗 GPU 暴力枚举，强度不低于 bcrypt；

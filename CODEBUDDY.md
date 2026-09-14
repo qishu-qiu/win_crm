@@ -1,14 +1,19 @@
 # CODEBUDDY.md This file provides guidance to CodeBuddy when working with code in this repository.
 
-> 本项目是**文档驱动（spec-driven）**的销售 CRM 系统。当前处于「文档定稿 + 后端骨架起步」阶段：**真相源是文档，不是代码**。动手前先按本文与 `README.md` 的规则锁定口径。
+> 本项目是**文档驱动（spec-driven）**的销售 CRM 系统。当前处于「**M1（A 域登录）已提交、M2（B 域建档/查重）待开工**」阶段：**真相源是文档，不是代码**。动手前先按本文与 `README.md` 的规则锁定口径。
 
-> **★ 动工前必读（AI 行为约束）**：`技术决策/AI协作铁律与踩坑复盘.md` —— **AI 协作元规则的唯一落点**（AI 行为硬约束 / 踩坑复盘 / 通例）。**凡写文件 / 装依赖 / 跑命令 / 调用有副作用工具前，先读它**；今后 WorkBuddy 与 CodeBuddy 新增同类规则一律追加到该文档。
+> **★ 动工前必读（AI 行为约束）**：`技术决策/AI协作铁律与踩坑复盘.md`（现行 **V1.4**）—— **AI 协作元规则的唯一落点**（AI 行为硬约束 / 踩坑复盘 / 通例）。**凡写文件 / 装依赖 / 跑命令 / 调用有副作用工具前，先读它**；今后 WorkBuddy 与 CodeBuddy 新增同类规则一律追加到该文档。
+>
+> **★ 下个窗口开工前**：先读 `过程产出/交接说明-M1（2026-09-14 窗口）.md` —— 「状态 / 证据 / 缺口 / 踩坑」的唯一落点（本文不复述）。
 
 ## 一、当前状态（务必先读）
 
-- `服务端/` 下**尚无 `src/`**；现有 **9 个文件**：`package.json`（**2026-09-13 创建，同日升级为 Prisma `7.10.0` 版本锚点**：`devDependencies.prisma` 钉死 `7.10.0` —— 不钉版本 `npx prisma` 拉到的是 `latest` ＝ `8.0.0-rc.14`（一个 RC）；**NestJS 12 / ESLint / Jest 等其余依赖仍属 M0-01 / M0-02，未装**）、**`package-lock.json`（同日 `npm install` 产生，已入 git —— 版本真钉死的锚点）**、**`prisma.config.ts`（新增 —— Prisma 7 的连接串中枢：`datasource.url` ＋ `process.loadEnvFile('.env')`，见 `prisma/README.md`「★ Prisma 7 升级」）**、`prisma/schema.prisma`（46 张表；**generator 已按 v7 换成 `prisma-client` ＋ `output=../src/generated/prisma` ＋ `moduleFormat="cjs"`；`datasource` 已删掉 `url`（v7 保留会报 P1012）**）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、`prisma/README.md`（落库口径 ＋ 真库验收表 ＋ Prisma 7 升级口径）、`.env.example` / `.env`（本地，不入 git）；**`node_modules/` 已装**（被根 `.gitignore` 忽略）。前端代码尚未创建（将落在 `前端/`）。
+- **后端 `服务端/src/` 已成形**（NestJS 12 ＋ Prisma 7.10.0）：`main.ts` / `worker.ts` / `app.module.ts`、`kernel/`（context / events / audit / errors / common）、`shared/`（guards / interceptors / filters / pipes）、`modules/org/`（A 域四层，**M1 全绿**）。已跑通：登录（**手机号 / 账号名双通道**）、刷新、`/account/me`、`/org/departments|employees|roles|permissions`（**`/org/employees` 按 G7 收敛**）。
+- **库**：真库 `win_crm`，3 份 migration 全部已应用（`0001_init` baseline / `0002_company_capital_legal_person` / `0003_username_and_phone_lock`）；种子 `服务端/prisma/seed/001_dev_seed.sql`（6 账号 / 5 部门 / 3 产品线 / 18 行权限矩阵，幂等）；**`dict_item` 仍 0 条**（M2 前置）。
+- **前端 `前端/` 已有真实页面**：`views/LoginView.vue`（一个输入框＝手机号或账号名）＋ `views/WorkbenchView.vue`（首屏空壳）；`api/types.ts` 由 `gen:types` 生成；**未引 vue-router / pinia**（视图切换在 `App.vue`）。
 - `归档/` 内是被取代的旧代码与旧文档，**移动未删除**；根目录 `.ignore` 已让 ripgrep 默认跳过 `归档/`（查历史需显式指定路径或 `--no-ignore`）。
-- 因此下文命令分两类：**现已可跑**（Prisma 相关）与**骨架搭好后按文档执行**（NestJS / 前端脚本）。
+- ⚠ **`服务端/src/generated/`（Prisma Client）被 `.gitignore` 忽略**：改 `schema.prisma` 后 `git status` 看不出它过期，**必须显式 `npm run prisma:generate`（或 `npm run build`，它会带跑）**，否则 `select` 新列直接编译报错。
+- ⚠ **端口**：后端默认 **3000**、前端 `npm run dev` **5173**；vite 只监听 `::1` → 探针请用 `http://localhost:5173`（`127.0.0.1` 会连不上）。
 
 ## 二、常用命令
 
@@ -27,33 +32,40 @@ npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script >
 ⚠ 该命令**只在「首建基线」时用一次**。**`0001_init` 已 `migrate resolve --applied` 登记为基线 → 此后任何表结构变更一律「新增量 migration」（如 `0002_company_capital_legal_person`），严禁重生成 / 改动 `0001_init`**（改基线文件会与 `_prisma_migrations` 的校验和不一致）。产物需再手工补「生成列 / 分区表 / 视图 / CHECK」段落，**且必须在真实 MySQL 8 上首次执行并逐条核对**（重点：生成列表达式、分区键与主键扩列、ERROR 1503）。
 ⚠ **`migrate diff` 的输出只作核对，绝不能直接执行**：它会把「设计使然」的差异也生成成 SQL（实测方向 B 输出含 `ALTER TABLE stat_daily/operation_log/job_run_log DROP PRIMARY KEY, ADD PRIMARY KEY (id)` 和 `DROP INDEX uk_active_rel/uk_owner/uk_phone_active`）—— 前者会把分区表主键改坏（分区表主键必须含分区列，ERROR 1503），后者会拆掉生成列的唯一约束。
 
-**Lint（含模块边界硬卡）** — 骨架搭好后
+**Lint（含模块边界硬卡）** — 现已可跑
 ```bash
 npm run lint
 ```
 在 `服务端/` 内执行。ESLint 的 `no-restricted-imports` 强制「模块边界」，**故意写一个跨域 import 必须报错**（架构说明 §5.4）。提交前必跑。
 
-**测试** — 骨架搭好后
+**测试** — 现已可跑（当前基线：**25 suites · 290 tests**）
 ```bash
 npm test                              # 全量
 npm test -- <文件名或 -t 名称>        # 跑单个用例
 ```
 每条业务铁律（公海掉落、撞单、状态机、脱敏口径等）都应写单测；`domain/` 层为纯函数，用假数据单测即可，无需真库。
 
-**启动进程** — 骨架搭好后
+**启动进程** — 现已可跑
 ```bash
-npm run start:web       # Web 进程（HTTP，监听端口）
+npm run start:web       # Web 进程（HTTP，监听端口；PORT=3100 可指定端口避免抢）
 npm run start:worker    # Worker 进程（定时/异步，不监听端口）
-npm run start:prod:web  # node dist/main.js
+npm run start:prod:web  # node dist/main.js（先 npm run build）
 npm run start:prod:worker # node dist/worker.js
 ```
 Web 可多开实例；**Worker 全局只能跑 1 个**，否则定时任务重复执行（架构说明 §六）。
 
-**生成前端共享类型** — 前端接入时
+**生成前端共享类型** — 现已可跑（**需后端在线**）
 ```bash
-npm run gen:types
+npm run gen:types       # openapi-typescript http://localhost:3000/docs-json -o ../前端/src/api/types.ts
 ```
-从后端 OpenAPI（Swagger）用 `openapi-typescript` 生成 `前端/src/api/types.ts`。**禁止手写对接、禁止前后端各维护一份接口类型**（双真相源是 AI 出错重灾区）。
+从后端 OpenAPI（Swagger）生成 `前端/src/api/types.ts`。**禁止手写对接、禁止前后端各维护一份接口类型**（双真相源是 AI 出错重灾区）。
+⚠ 入参 DTO **必须带 `@ApiProperty`**，否则 OpenAPI 里会退化成空对象（实测 `LoginDto: Record<string, never>`），前端类型不可用。接口一改就重跑一次，diff ＝ 接口变更证据（M0-57）。
+
+**前端**
+```bash
+cd 前端 && npm run dev     # 5173；/api 代理到后端 3000（vite.config.ts）
+cd 前端 && npm run build   # vue-tsc 类型检查 ＋ 打包
+```
 
 ## 三、代码架构（大图景）
 
@@ -63,14 +75,14 @@ npm run gen:types
 
 | 层 | 文档（位置） | 管什么 |
 | --- | --- | --- |
-| ① | 《销售CRM业务需求文档》V1.24（需求规格/） | 业务规则 / 流程 / 权限口径 |
-| ② | 《销售CRM数据架构文档》V1.29（需求规格/） | 表 / 字段 / 索引 / 字典 / 数据权限 |
-| ③ | 《销售CRM接口API文档》V1.12（需求规格/） | 接口入参/出参 / 错误码 |
-| ④ | 《销售CRM前端页面与交互文档》V1.15（需求规格/） | 页面 / 交互 / 角色矩阵 |
+| ① | 《销售CRM业务需求文档》V1.25（需求规格/） | 业务规则 / 流程 / 权限口径 |
+| ② | 《销售CRM数据架构文档》V1.30（需求规格/） | 表 / 字段 / 索引 / 字典 / 数据权限 |
+| ③ | 《销售CRM接口API文档》V1.13（需求规格/） | 接口入参/出参 / 错误码 |
+| ④ | 《销售CRM前端页面与交互文档》V1.16（需求规格/） | 页面 / 交互 / 角色矩阵 |
 | ④-a | 《销售CRM设计规范》V1.0（需求规格/） | 视觉 / 组件 / token / 主题 |
-| ⑤ | 《销售CRM架构设计说明》V1.1（技术决策/） | 代码目录 / 模块边界 / 进程 / 扩展 |
+| ⑤ | 《销售CRM架构设计说明》V1.3（技术决策/） | 代码目录 / 模块边界 / 进程 / 扩展 |
 
-**动手前必读《需求规格/废止口径登记表》**（现行 **V1.7**）—— 被推翻的 **29 条**旧口径集中登记，正文若仍出现旧说法以它为准。**`归档/` 内容默认不得作为实现依据。**
+**动手前必读《需求规格/废止口径登记表》**（现行 **V1.9**）—— 被推翻的 **35 条**旧口径集中登记，正文若仍出现旧说法以它为准。**`归档/` 内容默认不得作为实现依据。**
 
 **关键鉴别**：文档里标「**索引·非规范**」的章节（速查表、接口总目录、追溯索引、README 文档地图）**只作导航**，实现一律以**正文**为准；需求 **§十六《否决与后置清单》是★规范级**，收录全部「不做 / 已砍 / 后置 / 不是那样」，**"表里没有"才代表"允许"**。改文档时负面约束必须收全在 §十六。
 
@@ -123,8 +135,8 @@ npm run gen:types
 ### 4. 横切层（最易出事，必须收口）
 
 - **请求上下文**：鉴权守卫解析「我是谁、管哪些部门、什么角色、数据范围」，横切层**只读上下文、不查库**（避免 A 域与权限互相依赖）。
-- **数据范围注入**：所有列表查询必须经过拦截器；**禁止在 repository 手写 `where owner_id = ...`**。销售＝本人 ∪ 有效协同人 ∪ 公海；经理＝管辖部门；总经理＝不过滤。
-- **脱敏渲染**：出口统一处理。**报表 / 看板 / 汇总出口不脱敏**（经理/老板看真实金额）；脱敏只作用于「销售看他人私海 / 跨部门关系」。
+- **数据范围注入**：所有列表查询必须经过拦截器；**禁止在 repository 手写 `where owner_id = ...`**。**四档**（架构 §7.2）：销售 `self`＝本人 ∪ 有效协同人 ∪ 公海；**交付/客服 `serving`＝仅"服务中"（在合同服务期内）客户，只读、不进公海**；经理 `dept`＝管辖部门；总经理/管理员 `all`＝不过滤（管理员另加只读 ＋ 每次查看写 `operation_log` ＋ 不解除金额脱敏）。一人多角色**取更宽的一档**（`all > dept > self > serving`）。⚠ M5 之前，`shared/interceptors/data-scope.interceptor.ts` 仍是占位（只有 A 域 `/org/employees` 先行按 G7 收敛）。
+- **脱敏渲染**：出口统一处理。**2026-09-14 口径重写**（→ 废止口径 #30）：**联系方式不再按角色分档** —— 详情给全号、**列表/卡片给 `phone_masked`**（出参形态，不是权限）、被 owner **上锁**时非 owner 只见 `phone_locked` ＋ `phone_locked_by`（**锁跟人：主号与备用号一并锁**）；跨部门跟单不返全文、跨部门金额 `amount:null` ＋ `amount_masked`。**报表 / 看板 / 汇总出口不脱敏**（经理/老板看真实金额）。M5 落地前 `desensitize.interceptor.ts` 仍是占位。
 - **审计留痕**：敏感动作在**业务事务内**写 `operation_log`，业务失败一起回滚。
 - **异常映射**：Prisma 唯一冲突是 **`P2002`**（不是 MySQL `1062`）→ 409/422，约束名从 `meta.driverAdapterError.cause.constraint.index` 取（**非 `meta.target`** —— v7 ＋ driver adapter 实测，→ 废止口径 #29）回人话提示。
 
@@ -144,7 +156,7 @@ npm run gen:types
 
 ### 7. 开工顺序（竖切一条动线，非按域横向做完）
 
-已定案：**竖切一条完整动线** —— 登录 → 建公司/联系人 → 建业务关系 → 写一条跟单 → 工作台看到它（穿透 A/B/C/D 四域）。8 步：**0** 打地基（kernel + Prisma + OpenAPI + ESLint 边界）→ **1** A 域登录 → **2** B 域建档/查重 → **3** C 域建关系/私海 → **4** D 域写跟单/时间线/工作台 → **5** 横切层（数据范围+脱敏+审计）→ **6** 接前端（`gen:types`）→ **7** Worker 骨架（掉海预警先只告警）→ **8** 验收。每步＝一次可提交的还原点（架构说明 §九）。
+已定案：**竖切一条完整动线** —— 登录 → 建公司/联系人 → 建业务关系 → 写一条跟单 → 工作台看到它（穿透 A/B/C/D 四域）。8 步：**0** ✅ 打地基（kernel + Prisma + OpenAPI + ESLint 边界）→ **1** ✅ A 域登录（含 `/account/me`、四个组织只读接口、登录页）→ **2** ⏳ B 域建档/查重（**下一步**；开工前先按数据架构 §十三填字典）→ **3** C 域建关系/私海 → **4** D 域写跟单/时间线/工作台 → **5** 横切层（数据范围+脱敏+审计）→ **6** 接前端（`gen:types`）→ **7** Worker 骨架（掉海预警先只告警）→ **8** 验收。每步＝一次可提交的还原点（架构说明 §九）。
 
 ### 8. Git 约定
 
@@ -153,6 +165,7 @@ npm run gen:types
 ## 四、导航速查
 
 - 项目章程与全部对齐铁律：`README.md`（根，唯一不归子目录的文档）。
+- **状态 / 证据 / 缺口 / 踩坑（★ 下个窗口开工前必读）**：`过程产出/交接说明-M1（2026-09-14 窗口）.md`。
 - **AI 协作铁律与踩坑复盘（★ 动工前必读）**：`技术决策/AI协作铁律与踩坑复盘.md`（AI 行为约束 / 踩坑复盘 / 元规则唯一落点）。
 - 代码结构 / 模块边界 / 进程 / 扩展路线：`技术决策/销售CRM架构设计说明.md`。
 - 数据落库口径（生成列/分区/视图/CHECK）：`服务端/prisma/README.md`。

@@ -52,6 +52,21 @@ describe('令牌声明契约（kernel/context/jwt-claims）', () => {
       expect(fromClaims(claims)).toEqual(CONTEXT);
     });
 
+    it('四档全都往返得回来（含 2026-09-14 新增的 `serving`）—— 漏一档就是「签得出来、解不回来」的令牌', () => {
+      const cases: ReadonlyArray<{ type: RequestContext['dataScope']['type']; deptIds: bigint[] }> = [
+        { type: 'self', deptIds: [] },
+        { type: 'serving', deptIds: [] },
+        { type: 'dept', deptIds: [1n] },
+        { type: 'all', deptIds: [] },
+      ];
+
+      for (const { type, deptIds } of cases) {
+        const context: RequestContext = { ...CONTEXT, dataScope: { type, deptIds } };
+
+        expect(fromClaims(toClaims(context))).toEqual(context);
+      }
+    });
+
     // 形状非法一律 401 / 20002：令牌的问题＝调用方的问题，抛 500 会把「伪造 token」记成系统故障
     const invalidCases: ReadonlyArray<{ readonly name: string; readonly payload: unknown }> = [
       { name: '载荷不是对象', payload: 'not-an-object' },
@@ -63,7 +78,7 @@ describe('令牌声明契约（kernel/context/jwt-claims）', () => {
       { name: 'dept_ids 不是数组', payload: { ...toClaims(CONTEXT), dept_ids: '1,2' } },
       { name: 'roleCodes 含空串', payload: { ...toClaims(CONTEXT), roles: [''] } },
       { name: '缺 scope', payload: { sub: '1', dept_ids: [], roles: [] } },
-      { name: 'scope.type 不在 self/dept/all 内', payload: { ...toClaims(CONTEXT), scope: { type: 'company', dept_ids: [] } } },
+      { name: 'scope.type 不在 self/serving/dept/all 四档内', payload: { ...toClaims(CONTEXT), scope: { type: 'company', dept_ids: [] } } },
       { name: 'scope.dept_ids 缺失（缺字段≠空数组）', payload: { ...toClaims(CONTEXT), scope: { type: 'all' } } },
     ];
 

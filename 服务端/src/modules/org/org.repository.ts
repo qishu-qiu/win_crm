@@ -6,13 +6,16 @@
 //   故此处不做「是不是经理」「角色该给什么范围」这类判断，只把行取回来、把 JSON 列**拉直**。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.29 域 A（A1~A7）。
-//   · 出参字段形状 →《销售CRM接口API文档》V1.12 §5.3：
+//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.30 域 A（A1~A7）。
+//   · 出参字段形状 →《销售CRM接口API文档》V1.13 §5.3：
 //       部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`
-//       员工 `{id,work_no,name,phone,primary_dept:{id,name},extra_depts:[],product_lines:[],
+//       员工 `{id,work_no,name,phone,username?,primary_dept:{id,name},extra_depts:[],product_lines:[],
 //              direct_manager:{id,name},roles:["sale"],status}`
 //       角色 `{code,name,is_builtin}` / 权限矩阵行 `{perm_key,role_code,level}`
 //   · 逻辑删除一律 `deleted_at IS NULL`（数据架构 §二 总则）。
+//
+// ★ 2026-09-14：登录改**双通道**（手机号 或 账号名，→ 接口 §5.2 / 登记表 #32），
+//   故此处提供两个查询入口，**通道判别不在这里**（判别是业务规则 → `domain/login-account.ts`）。
 // =============================================================================
 import { Injectable } from '@nestjs/common';
 
@@ -27,6 +30,8 @@ const EMPLOYEE_AUTH_SELECT = {
   work_no: true,
   name: true,
   phone: true,
+  // 登录账号名：登录路径要把它带出来（`UserVO.username`，→ 接口 §5.2），且它也是**双通道之一**
+  username: true,
   password_hash: true,
   primary_dept_id: true,
   extra_dept_ids: true,
@@ -41,6 +46,7 @@ const EMPLOYEE_LIST_SELECT = {
   work_no: true,
   name: true,
   phone: true,
+  username: true,
   primary_dept_id: true,
   extra_dept_ids: true,
   product_line_ids: true,
@@ -78,12 +84,28 @@ function uniqueBigints(ids: readonly bigint[]): bigint[] {
 export class OrgRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ===== M1-03 取员工（登录唯一入口：手机号） =====
+  // ===== M1-03 取员工（登录双通道：手机号 / 登录账号名） =====
 
   /** 按手机号取**未删除**员工（含密码哈希，仅供登录路径使用） */
   findEmployeeByPhone(phone: string) {
     return this.prisma.employee.findFirst({
       where: { phone, deleted_at: null },
+      select: EMPLOYEE_AUTH_SELECT,
+    });
+  }
+
+  /**
+   * 按**登录账号名**取**未删除**员工（双通道的第二条，→ 接口 §5.2）。
+   *
+   * ★ 大小写不敏感由**库的排序规则**（`utf8mb4_unicode_ci`）完成，此处**刻意不做** `toLowerCase`：
+   *   → A2 / `0003_username_and_phone_lock` 注释原文「不区分大小写（跟随库 / 表 `utf8mb4_unicode_ci`，
+   *   **登录时无需额外处理**）」。若将来排序规则改成区分大小写，应在此层统一改写两侧
+   *   （既改查询值、也依赖库侧规则），而**不是**在 domain 里改输入值 —— 那会让「库里存的是
+   *   大写形式」这类数据永远查不到。
+   */
+  findEmployeeByUsername(username: string) {
+    return this.prisma.employee.findFirst({
+      where: { username, deleted_at: null },
       select: EMPLOYEE_AUTH_SELECT,
     });
   }

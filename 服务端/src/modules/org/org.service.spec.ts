@@ -36,12 +36,22 @@ const SECRET = 'unit-test-secret-'.padEnd(48, 'x');
 const PLAIN_PASSWORD = 'Passw0rd!';
 const PHONE = '13800000000';
 
+/** 总经理上下文（`all` 档 → 员工列表**不过滤**）：只验「装配」、不验「收敛」的用例用它 */
+const ALL_SCOPE_CONTEXT: RequestContext = {
+  employeeId: 7n,
+  deptIds: [1n],
+  roleCodes: ['gm'],
+  dataScope: { type: 'all', deptIds: [] },
+};
+
 /** 员工行（形状＝仓储 `EMPLOYEE_AUTH_SELECT` 的返回） */
 interface EmployeeFixture {
   id: bigint;
   work_no: string;
   name: string;
   phone: string;
+  /** 登录账号名（可空：为空则只能手机号登录，→ 接口 §5.2） */
+  username: string | null;
   password_hash: string;
   primary_dept_id: bigint;
   extra_dept_ids: unknown;
@@ -55,6 +65,7 @@ interface EmployeeRowFixture {
   work_no: string;
   name: string;
   phone: string;
+  username: string | null;
   primary_dept_id: bigint;
   extra_dept_ids: unknown;
   product_line_ids: unknown;
@@ -82,6 +93,7 @@ interface FakeRepositories {
 function createRepository(options: FakeRepositories = {}) {
   return {
     findEmployeeByPhone: jest.fn(async (): Promise<EmployeeFixture | null> => options.employee ?? null),
+    findEmployeeByUsername: jest.fn(async (): Promise<EmployeeFixture | null> => options.employee ?? null),
     findEmployeeById: jest.fn(async (): Promise<EmployeeFixture | null> => options.employee ?? null),
     findRoleCodes: jest.fn(async (): Promise<string[]> => options.roleCodes ?? []),
     findManagedDeptIds: jest.fn(async (): Promise<bigint[]> => options.managedDeptIds ?? []),
@@ -147,6 +159,7 @@ function employeeFixture(overrides: Partial<EmployeeFixture> = {}): EmployeeFixt
     work_no: 'A007',
     name: '张三',
     phone: PHONE,
+    username: 'zhangsan',
     password_hash: '',
     primary_dept_id: 1n,
     extra_dept_ids: null,
@@ -193,11 +206,12 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         ],
       });
 
-      const result = await service.login({ phone: PHONE, password: PLAIN_PASSWORD });
+      const result = await service.login({ account: PHONE, password: PLAIN_PASSWORD });
 
       expect(result.user).toEqual({
         id: 7n,
         name: '张三',
+        username: 'zhangsan',
         role: 'sale',
         dept: { id: 1n, name: '华东一部' },
         managed_dept_ids: [],
@@ -231,7 +245,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         departments: [{ id: 1n, name: '华东一部' }],
       });
 
-      await service.login({ phone: PHONE, password: PLAIN_PASSWORD }, { ip: '10.0.0.8', user_agent: 'jest' });
+      await service.login({ account: PHONE, password: PLAIN_PASSWORD }, { ip: '10.0.0.8', user_agent: 'jest' });
 
       expect(prisma.client.$transaction).toHaveBeenCalledTimes(1);
       expect(audit.records).toHaveLength(1);
@@ -255,7 +269,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         departments: [{ id: 1n, name: '华东一部' }],
       });
 
-      const result = await service.login({ phone: PHONE, password: PLAIN_PASSWORD });
+      const result = await service.login({ account: PHONE, password: PLAIN_PASSWORD });
 
       expect(fromClaims(verifier.verify(result.access_token))).toEqual({
         employeeId: 7n,
@@ -267,10 +281,59 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
       expect(result.user.managed_dept_ids).toEqual([3n, 4n]);
     });
 
+    it('**账号名通道**（双通道）：`account` 非手机号格式 → 查 `username`、**不查手机号**，结果与手机号通道同形', async () => {
+      const { service, repository, verifier } = createService({
+        employee: employeeFixture({ password_hash: passwordHash }),
+        roleCodes: ['sale'],
+        departments: [{ id: 1n, name: '华东一部' }],
+      });
+
+      const result = await service.login({ account: 'ZhangSan', password: PLAIN_PASSWORD });
+
+      expect(repository.findEmployeeByUsername).toHaveBeenCalledWith('ZhangSan');
+      expect(repository.findEmployeeByPhone).not.toHaveBeenCalled();
+      expect(result.user.username).toBe('zhangsan');
+      // 通道只是「怎么找到人」，签发出来的令牌与手机号通道**没有任何区别**
+      expect(fromClaims(verifier.verify(result.access_token))).toEqual({
+        employeeId: 7n,
+        deptIds: [1n],
+        roleCodes: ['sale'],
+        dataScope: { type: 'self', deptIds: [] },
+      });
+    });
+
+    it('**手机号通道**：`account` 是 11 位手机号 → 只查 `phone`、**不查账号名**（判别是确定性的，不靠「查不到再回退」）', async () => {
+      const { service, repository } = createService({
+        employee: employeeFixture({ password_hash: passwordHash }),
+        roleCodes: ['sale'],
+      });
+
+      await service.login({ account: PHONE, password: PLAIN_PASSWORD });
+
+      expect(repository.findEmployeeByPhone).toHaveBeenCalledWith(PHONE);
+      expect(repository.findEmployeeByUsername).not.toHaveBeenCalled();
+    });
+
+    it('账号名不存在 → 401 / 20002；审计原因按**通道**区分（`username_not_found`），对外仍是同一句人话', async () => {
+      const { service, audit } = createService({});
+
+      const error = await captureAppError(() =>
+        service.login({ account: 'nobody_here', password: PLAIN_PASSWORD }),
+      );
+
+      expect(error.httpStatus).toBe(401);
+      expect(error.message).toBe('手机号或密码不正确');
+      expect(audit.records[0]?.input).toMatchObject({
+        action: ORG_AUDIT_ACTIONS.loginFail,
+        operator_id: 0n,
+        detail: { account: 'nobody_here', channel: 'username', reason: 'username_not_found' },
+      });
+    });
+
     it('手机号不存在 → 401 / 20002，人话与「密码错」**完全一致**（这个接口不能当手机号枚举器）', async () => {
       const { service, audit } = createService({});
 
-      const error = await captureAppError(() => service.login({ phone: PHONE, password: PLAIN_PASSWORD }));
+      const error = await captureAppError(() => service.login({ account: PHONE, password: PLAIN_PASSWORD }));
 
       expect(error.message).toBe('手机号或密码不正确');
       expect(error.constraint).toBe('account.login.credentials');
@@ -279,7 +342,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
       expect(audit.records[0]?.input).toMatchObject({
         action: ORG_AUDIT_ACTIONS.loginFail,
         operator_id: 0n, // A10：系统动作 = 0（此处表示「无对应员工」，绝不用 undefined）
-        detail: { phone: PHONE, reason: 'phone_not_found' },
+        detail: { account: PHONE, channel: 'phone', reason: 'phone_not_found' },
       });
     });
 
@@ -288,7 +351,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         employee: employeeFixture({ password_hash: passwordHash }),
       });
 
-      const error = await captureAppError(() => service.login({ phone: PHONE, password: 'WrongOne!' }));
+      const error = await captureAppError(() => service.login({ account: PHONE, password: 'WrongOne!' }));
 
       expect(error.httpStatus).toBe(401);
       expect(error.code).toBe(ErrorCode.UNAUTHENTICATED);
@@ -315,7 +378,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         employee: employeeFixture({ password_hash: passwordHash, status: 'disabled' }),
       });
 
-      const error = await captureAppError(() => service.login({ phone: PHONE, password: PLAIN_PASSWORD }));
+      const error = await captureAppError(() => service.login({ account: PHONE, password: PLAIN_PASSWORD }));
 
       expect(error.httpStatus).toBe(403);
       expect(error.code).toBe(ErrorCode.FORBIDDEN);
@@ -330,7 +393,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         employee: employeeFixture({ password_hash: 'not-a-valid-hash' }),
       });
 
-      const error = await captureAppError(() => service.login({ phone: PHONE, password: PLAIN_PASSWORD }));
+      const error = await captureAppError(() => service.login({ account: PHONE, password: PLAIN_PASSWORD }));
 
       expect(error.httpStatus).toBe(401);
     });
@@ -485,6 +548,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
       await expect(runWithContext(context, () => service.me())).resolves.toEqual({
         id: 7n,
         name: '张三',
+        username: 'zhangsan',
         role: 'dept_manager',
         dept: { id: 1n, name: '华东一部' },
         managed_dept_ids: [3n],
@@ -559,6 +623,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
             work_no: 'A007',
             name: '张三',
             phone: PHONE,
+            username: 'zhangsan',
             primary_dept_id: 1n,
             extra_dept_ids: [2],
             product_line_ids: [5],
@@ -575,7 +640,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         employeeRefs: [{ id: 9n, name: '李四' }],
       });
 
-      const employees = await service.listEmployees();
+      const employees = await runWithContext(ALL_SCOPE_CONTEXT, () => service.listEmployees());
 
       expect(employees).toEqual([
         {
@@ -583,6 +648,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
           work_no: 'A007',
           name: '张三',
           phone: PHONE,
+          username: 'zhangsan',
           primary_dept: { id: 1n, name: '华东' },
           extra_depts: [{ id: 2n, name: '一部' }],
           product_lines: [{ id: 5n, name: '标准线' }],
@@ -603,6 +669,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
             work_no: 'A007',
             name: '张三',
             phone: PHONE,
+            username: null,
             primary_dept_id: 1n,
             extra_dept_ids: [99],
             product_line_ids: [],
@@ -613,11 +680,105 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         departments: [{ id: 1n, name: '华东' }],
       });
 
-      const employees = await service.listEmployees();
+      const employees = await runWithContext(ALL_SCOPE_CONTEXT, () => service.listEmployees());
 
       expect(employees[0]?.direct_manager).toBeNull();
       expect(employees[0]?.extra_depts).toEqual([]);
       expect(employees[0]?.roles).toEqual([]);
+      // `username` 可空（→ §5.2）：无账号名时给 `null`，**不是**把它当异常
+      expect(employees[0]?.username).toBeNull();
+    });
+
+    it('**G7 收敛**（→ 接口 §4.2）：`all` 一条不少 / `dept` 只留管辖部门 / `self` 只留同部门（**兼部门命中也算**）', async () => {
+      /** 四条员工：本部门 / 同部门 / 靠兼部门命中的异地员工 / 完全不相干的部门 */
+      const rows: EmployeeRowFixture[] = [
+        {
+          id: 7n,
+          work_no: 'A007',
+          name: '我（主部门 1）',
+          phone: PHONE,
+          username: null,
+          primary_dept_id: 1n,
+          extra_dept_ids: null,
+          product_line_ids: [],
+          direct_manager_id: null,
+          status: 'active',
+        },
+        {
+          id: 8n,
+          work_no: 'A008',
+          name: '同部门（主部门 2）',
+          phone: '13800000001',
+          username: null,
+          primary_dept_id: 2n,
+          extra_dept_ids: null,
+          product_line_ids: [],
+          direct_manager_id: null,
+          status: 'active',
+        },
+        {
+          id: 9n,
+          work_no: 'A009',
+          name: '主部门 9、兼部门 1',
+          phone: '13800000002',
+          username: null,
+          primary_dept_id: 9n,
+          extra_dept_ids: [1],
+          product_line_ids: [],
+          direct_manager_id: null,
+          status: 'active',
+        },
+        {
+          id: 10n,
+          work_no: 'A010',
+          name: '别的部门（主部门 3）',
+          phone: '13800000003',
+          username: null,
+          primary_dept_id: 3n,
+          extra_dept_ids: null,
+          product_line_ids: [],
+          direct_manager_id: null,
+          status: 'active',
+        },
+      ];
+      const { service } = createService({ employeeRows: rows });
+
+      // 总经理 / 管理员（all）：不过滤
+      const all = await runWithContext(ALL_SCOPE_CONTEXT, () => service.listEmployees());
+      expect(all.map((employee) => employee.id)).toEqual([7n, 8n, 9n, 10n]);
+
+      // 销售（self，所属部门 1 / 2）：同部门可见 —— 9 号靠**兼部门** 1 命中，不能漏
+      const self = await runWithContext(
+        {
+          employeeId: 7n,
+          deptIds: [1n, 2n],
+          roleCodes: ['sale'],
+          dataScope: { type: 'self', deptIds: [] },
+        },
+        () => service.listEmployees(),
+      );
+      expect(self.map((employee) => employee.id)).toEqual([7n, 8n, 9n]);
+
+      // 经理（dept，管辖部门 3）：只看 10 号 —— 管辖部门与我所属部门是两回事
+      const dept = await runWithContext(
+        {
+          employeeId: 7n,
+          deptIds: [1n, 3n],
+          roleCodes: ['dept_manager'],
+          dataScope: { type: 'dept', deptIds: [3n] },
+        },
+        () => service.listEmployees(),
+      );
+      expect(dept.map((employee) => employee.id)).toEqual([10n]);
+    });
+
+    it('**G7 收敛**：拿不到上下文 → 401 / 20002（**绝不兜底成全量** —— 兜底＝越权读全公司通讯录）', async () => {
+      const { service } = createService({ employeeRows: [] });
+
+      const error = await captureAppError(() => service.listEmployees());
+
+      expect(error.httpStatus).toBe(401);
+      expect(error.constraint).toBe('org.employees.no_context');
     });
 
     it('角色列表与权限矩阵：直接透传仓储结果（这一层不该有加工，加工了就是双真相源）', async () => {
@@ -644,7 +805,7 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
       roleCodes: ['sale'],
     });
 
-    await service.login({ phone: PHONE, password: PLAIN_PASSWORD }, meta);
+    await service.login({ account: PHONE, password: PLAIN_PASSWORD }, meta);
 
     expect(audit.records[0]?.input.ip).toBe('10.0.0.8');
     expect(audit.records[0]?.input.user_agent).toBeUndefined();

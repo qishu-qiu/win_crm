@@ -24,6 +24,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/account/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 登录
+         * @description `account`（**手机号 或 登录账号名，二选一、服务端判别**）＋ 密码 → 双令牌 ＋ 当前人信息。失败一律 401 / 20002 且**不区分**「账号不存在」与「密码错」
+         */
+        post: operations["OrgController_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 刷新令牌
+         * @description 用 `refresh_token` 换一对新令牌；**重新装载**最新角色与管辖部门（撤销经理后立即收窄数据范围）
+         */
+        post: operations["OrgController_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 当前登录人
+         * @description 返回角色 ＋ 管辖部门集合 ＋ 权限矩阵 ＋ 数据范围；`managed_dept_ids` 为空 = 非经理
+         */
+        get: operations["OrgController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/org/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 部门列表
+         * @description 树形关系由 `parent_id` 自带，前端自行组树（含经理与关联产品线）
+         */
+        get: operations["OrgController_listDepartments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/org/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 员工列表
+         * @description **不含密码哈希**；含主/兼部门、关联产品线、直属经理与角色码。**服务端按数据范围收敛**（管理员/总经理=全部；经理=管辖部门；销售=同部门，→ §4.2 G7）
+         */
+        get: operations["OrgController_listEmployees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/org/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 角色列表
+         * @description 内置 6 条（`is_builtin`，内置不可删）
+         */
+        get: operations["OrgController_listRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/org/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 权限矩阵
+         * @description `perm_key × role_code → level` 全量矩阵行
+         */
+        get: operations["OrgController_listPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -39,6 +179,180 @@ export interface components {
              * @example up
              */
             db: string;
+        };
+        LoginDto: {
+            /**
+             * @description 登录标识：**手机号 或 登录账号名**（二选一，服务端判别）；前端只有一个输入框
+             * @example 13800000003
+             */
+            account: string;
+            /**
+             * @description 密码明文（仅本次请求内存，不入库、不进日志）
+             * @example Dev@123456
+             */
+            password: string;
+        };
+        EntityRefDto: {
+            /**
+             * @description 主键（十进制字符串，防 JSON 精度丢失）
+             * @example 1
+             */
+            id: string;
+            /**
+             * @description 名称
+             * @example 华东销售一部
+             */
+            name: string;
+        };
+        UserVoDto: {
+            /** @example 7 */
+            id: string;
+            /** @example 张三 */
+            name: string;
+            /**
+             * @description 登录账号名（**可空**：为空则只能手机号登录；→ §5.2）。服务端**始终下发该键**，无值给 `null`
+             * @example zhangsan
+             */
+            username: string | null;
+            /**
+             * @description 主角色码（一人多角色时取权限最大者；内置码见 A4）
+             * @example sale
+             */
+            role: string;
+            /** @description 主部门；无部门数据时为 null */
+            dept: components["schemas"]["EntityRefDto"] | null;
+            /**
+             * @description 管辖部门集合；**空数组 = 非经理**
+             * @example [
+             *       "1",
+             *       "2"
+             *     ]
+             */
+            managed_dept_ids: string[];
+            /**
+             * @description 权限矩阵（perm_key → level），level ∈ visible / masked / denied
+             * @example {
+             *       "customer.view": "visible"
+             *     }
+             */
+            permissions: {
+                [key: string]: string;
+            };
+        };
+        LoginResultDto: {
+            /** @description 访问令牌（Bearer JWT，建议 2h） */
+            access_token: string;
+            /** @description 刷新令牌 */
+            refresh_token: string;
+            /** @description 当前登录人（前端据此渲染菜单 / 数据范围） */
+            user: components["schemas"]["UserVoDto"];
+        };
+        RefreshDto: {
+            /** @description 登录时下发的 `refresh_token`（JWT 串） */
+            refresh_token: string;
+        };
+        RefreshResultDto: {
+            /** @description 新的访问令牌 */
+            access_token: string;
+            /** @description 新的刷新令牌 */
+            refresh_token: string;
+        };
+        DepartmentVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @example 华东分公司 */
+            name: string;
+            /**
+             * @description 上级部门 id；`0` = 根（自引用不建外键）
+             * @example 0
+             */
+            parent_id: string;
+            /**
+             * @description 客服开关
+             * @example false
+             */
+            service_enabled: boolean;
+            /**
+             * @description 状态（active / disabled）
+             * @example active
+             */
+            status: string;
+            /** @description 部门经理集合（→ A3 `dept_manager`，多对多） */
+            manager_ids: string[];
+            /** @description 关联产品线集合（由 A7 的 `dept_ids` 反向索引而来） */
+            product_line_ids: string[];
+        };
+        EmployeeVoDto: {
+            /** @example 7 */
+            id: string;
+            /**
+             * @description 工号
+             * @example A007
+             */
+            work_no: string;
+            /** @example 张三 */
+            name: string;
+            /**
+             * @description 手机号（主入口唯一键）
+             * @example 13800000000
+             */
+            phone: string;
+            /**
+             * @description 登录账号名（可空：为空则只能手机号登录）
+             * @example zhangsan
+             */
+            username: string | null;
+            /** @description 主部门 */
+            primary_dept: components["schemas"]["EntityRefDto"] | null;
+            /** @description 兼部门 */
+            extra_depts: components["schemas"]["EntityRefDto"][];
+            /** @description 关联产品线 */
+            product_lines: components["schemas"]["EntityRefDto"][];
+            /** @description 直属经理（审批链） */
+            direct_manager: components["schemas"]["EntityRefDto"] | null;
+            /**
+             * @description 角色码集合（→ A5）
+             * @example [
+             *       "sale"
+             *     ]
+             */
+            roles: string[];
+            /**
+             * @description 状态（active / resigned / disabled）
+             * @example active
+             */
+            status: string;
+        };
+        RoleVoDto: {
+            /**
+             * @description 角色码（内置 6 条）
+             * @example sale
+             */
+            code: string;
+            /** @example 销售 */
+            name: string;
+            /**
+             * @description 是否内置（内置不可删）
+             * @example true
+             */
+            is_builtin: boolean;
+        };
+        PermissionVoDto: {
+            /**
+             * @description 权限键
+             * @example customer.view
+             */
+            perm_key: string;
+            /**
+             * @description 角色码
+             * @example sale
+             */
+            role_code: string;
+            /**
+             * @description 档位（visible / masked / denied）
+             * @example visible
+             */
+            level: string;
         };
     };
     responses: never;
@@ -64,6 +378,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthDto"];
+                };
+            };
+        };
+    };
+    OrgController_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginDto"];
+            };
+        };
+        responses: {
+            /** @description 统一响应包的 `data` 即本结构 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResultDto"];
+                };
+            };
+        };
+    };
+    OrgController_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshDto"];
+            };
+        };
+        responses: {
+            /** @description 统一响应包的 `data` 即本结构 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshResultDto"];
+                };
+            };
+        };
+    };
+    OrgController_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 统一响应包的 `data` 即 `UserVO` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserVoDto"];
+                };
+            };
+        };
+    };
+    OrgController_listDepartments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentVoDto"][];
+                };
+            };
+        };
+    };
+    OrgController_listEmployees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeVoDto"][];
+                };
+            };
+        };
+    };
+    OrgController_listRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleVoDto"][];
+                };
+            };
+        };
+    };
+    OrgController_listPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionVoDto"][];
                 };
             };
         };

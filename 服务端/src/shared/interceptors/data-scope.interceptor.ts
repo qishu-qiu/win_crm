@@ -2,8 +2,9 @@
 // 数据范围拦截器（M0-36）—— ★★ 本批次**只做占位**，真实注入在 M5 ★★
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM架构设计说明》V1.1 §7.2 数据范围注入：
-//       销售 ＝ 本人 ∪ 有效协同人 ∪ 公海；经理 ＝ 管辖部门；总经理 ＝ 不过滤；
+//   · 《销售CRM架构设计说明》V1.3 §7.2 数据范围注入（**四档**）：
+//       销售 `self` ＝ 本人 ∪ 有效协同人 ∪ 公海；**交付·客服 `serving` ＝ 仅「服务中」客户**
+//       （＝在合同服务期内，只读、**不进公海**）；经理 `dept` ＝ 管辖部门；总经理 / 管理员 `all` ＝ 不过滤；
 //       ★「所有列表查询**必须**经过拦截器」；★「**禁止**在 repository 手写 `where owner_id = ...`」。
 //   · 同 §7.1：横切层**只读上下文、不查数据库**。
 //
@@ -38,7 +39,13 @@ export function readDataScope(request: unknown): DataScope | undefined {
     return undefined;
   }
   const candidate = attached as { type?: unknown; deptIds?: unknown };
-  if (candidate.type !== 'self' && candidate.type !== 'dept' && candidate.type !== 'all') {
+  // 四档白名单（→ 架构 §7.2；与 `kernel/context/request-context.ts` 的 `DataScopeType` 同集合）
+  if (
+    candidate.type !== 'self' &&
+    candidate.type !== 'serving' &&
+    candidate.type !== 'dept' &&
+    candidate.type !== 'all'
+  ) {
     return undefined;
   }
   return {

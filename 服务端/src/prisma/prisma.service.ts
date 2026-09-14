@@ -4,7 +4,7 @@
 // 口径来源（★ 真相源，勿自造）：
 //   · 《过程产出/开发计划-V1.md》M0-46：`src/prisma/prisma.service.ts`（`onModuleInit` → `$connect`）；
 //     判据逐字＝「起服后 `$queryRaw select 1` 成功」。
-//   · 《销售CRM架构设计说明》V1.1 §5.4：`domain/**` 与业务域**不许** import Prisma ——
+//   · 《销售CRM架构设计说明》V1.3 §5.4：`domain/**` 与业务域**不许** import Prisma ——
 //     Client 只允许出现在数据访问层（`*.repository.ts` 与本文所在这类基础设施）。
 //   · 《服务端/prisma/README.md》「★ Prisma 7 升级」：**v7 的 `PrismaClient` 必须显式传 driver adapter**
 //     （MySQL → `@prisma/adapter-mariadb`；**`@prisma/adapter-mysql2` 这个包不存在**）。

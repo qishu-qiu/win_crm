@@ -5,13 +5,13 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**（故本文件零 `if` 业务分支）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.12 §三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
+//   · 《销售CRM接口API文档》V1.13 §三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
 //     ·`GET /account/me`（G）·`GET /org/departments|employees|roles|permissions`（G）。
 //   · 同 §2.2：除登录 / 刷新外**一律带** `Authorization: Bearer <access_token>` ——
 //     故本文件只给 login / refresh 打 `@Public()`（守卫自 M0-38 起全局生效，不打就被 401 挡死）。
 //   · 同 §2.4：401 / 20002（未认证）、403 / 20003（无权限）、400 / 20001（参数错）由横切层统一出口，
 //     **controller 不自己拼错误响应**。
-//   · 《销售CRM架构设计说明》V1.1 §7.4：审计要记 IP / UA / req_id → 由本文件从请求头取，交给 service。
+//   · 《销售CRM架构设计说明》V1.3 §7.4：审计要记 IP / UA / req_id → 由本文件从请求头取，交给 service。
 //
 // ⚠ 一处**规格缺口**（已记入 M1 完成报告，未自行补规格）：HTTP 状态码。
 //   《接口API文档》§2.3 只定义响应体四字段、§2.4 只定义**失败**状态码，**没有写成功用 200 还是 201**。
@@ -74,7 +74,9 @@ export class OrgController {
   @Post('account/login')
   @ApiOperation({
     summary: '登录',
-    description: '手机号 ＋ 密码 → 双令牌 ＋ 当前人信息。失败一律 401 / 20002 且**不区分**「手机号不存在」与「密码错」',
+    description:
+      '`account`（**手机号 或 登录账号名，二选一、服务端判别**）＋ 密码 → 双令牌 ＋ 当前人信息。' +
+      '失败一律 401 / 20002 且**不区分**「账号不存在」与「密码错」',
   })
   @ApiOkResponse({ type: LoginResultDto, description: '统一响应包的 `data` 即本结构' })
   login(
@@ -126,7 +128,9 @@ export class OrgController {
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: '员工列表',
-    description: '**不含密码哈希**；含主/兼部门、关联产品线、直属经理与角色码',
+    description:
+      '**不含密码哈希**；含主/兼部门、关联产品线、直属经理与角色码。' +
+      '**服务端按数据范围收敛**（管理员/总经理=全部；经理=管辖部门；销售=同部门，→ §4.2 G7）',
   })
   @ApiOkResponse({ type: [EmployeeVoDto] })
   listEmployees(): ReturnType<OrgService['listEmployees']> {

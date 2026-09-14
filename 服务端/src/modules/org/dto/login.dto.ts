@@ -1,31 +1,47 @@
 // =============================================================================
-// 登录入参 DTO（M1-14）—— `POST /account/login`
+// 登录入参 DTO（M1-14 / M1-03 双通道）—— `POST /account/login`
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.12 §5.2：`POST /account/login` req `{phone, password}`。
-//     ⚠ **是 `phone` 不是 `username`** —— 数据架构 A2 `employee` 只有 `work_no` / `phone`，
-//      **没有 `username` 列**；《开发计划》M1-03 那句「按 `username` 查员工」是与规格冲突的笔误
-//      （按铁律「以规格为准」，此处实现取 `phone`，冲突已记入 M1 完成报告）。
+//   · 《销售CRM接口API文档》V1.13 §5.2：`POST /account/login` req **`{account,password}`**。
+//     **`account` ＝ 手机号 或 登录账号名**（`employee.username`），**二选一**；
+//     **服务端判别**（11 位手机号格式按手机号查，否则按账号名查）；两通道**共用同一 `password_hash`**。
+//     ⚠ 2026-09-14 变更：由 `{phone,password}` 扩为 `{account,password}`；**前端只给一个输入框**。
 //   · 同 §2.4：坏入参 → **400 / 20001**（由 `AppValidationPipe` 统一映射，本文件只声明规则）。
 //
-// ★ 手机号为什么用**严格国内号**正则：`phone` 是本系统的**主入口唯一键**（需求 §6.3
-//   「手机 UNIQUE 为主入口」），非法格式根本不可能命中任何员工 —— 与其放行再让它在库里白跑一趟
-//   并返回「密码不正确」（误导用户去改密码），不如在入参阶段就报**参数错**。
+// ★ 为什么本文件**不做「手机号格式」校验**（旧版曾用 `@Matches(PHONE_PATTERN)`）：
+//   一个输入框既可能是手机号、也可能是账号名，**用手机号正则当入参校验 = 把账号名通道挡在门外**
+//   （＝《废止口径登记表》#32 点名的风险：「照旧口径实现 = 前端一个输入框提交账号名直接 400」）。
+//   判别属**业务规则**，落在 `domain/login-account.ts`，由 service 调用。
+//   → 本文件只管「是个非空字符串、长度不离谱」，把「是哪种通道」留给判别函数。
+//
+// ★ 为什么上限是 64：`employee.username` 是 `VARCHAR(64)`（→ A2 / migration 0003），
+//   对入参放更宽只会浪费一次查库；而密码上限 64 是因为 `scrypt` 对超长输入无额外收益，
+//   却会被用来做 CPU 放大攻击。
+//
+// ★ 为什么入参 DTO 也要写 `@ApiProperty`：不写，Swagger 会把该 DTO 生成为**空对象**
+//   （实测前端生成物里是 `LoginDto: Record<string, never>`），前端类型等于不可用 →
+//   会被迫手写对接（违反 M0-57「禁止手写对接」）。
 // =============================================================================
-import { IsString, Length, Matches } from 'class-validator';
-
-/** 国内手机号（11 位、1 开头、第 2 位 3~9） */
-export const PHONE_PATTERN = /^1[3-9]\d{9}$/;
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, Length } from 'class-validator';
 
 export class LoginDto {
-  /** 手机号（→ A2 `employee.phone`，主入口唯一键） */
-  @Matches(PHONE_PATTERN, { message: '手机号格式不正确' })
-  phone!: string;
+  /**
+   * 登录标识：**手机号 或 登录账号名**（→ A2 `employee.phone` / `employee.username`）。
+   * 具体走哪条通道由服务端判别（`classifyLoginAccount`），客户端**不指定**。
+   */
+  @ApiProperty({
+    description: '登录标识：**手机号 或 登录账号名**（二选一，服务端判别）；前端只有一个输入框',
+    example: '13800000003',
+  })
+  @IsString({ message: '账号必须是字符串' })
+  @Length(1, 64, { message: '账号长度需为 1~64 位' })
+  account!: string;
 
   /**
    * 密码明文（**只在本次请求内存里存在**，绝不入库、绝不进日志）。
-   * 上限 64 位：`scrypt` 对超长输入无额外收益，却会被用来做 CPU 放大攻击。
    */
+  @ApiProperty({ description: '密码明文（仅本次请求内存，不入库、不进日志）', example: 'Dev@123456' })
   @IsString({ message: '密码必须是字符串' })
   @Length(6, 64, { message: '密码长度需为 6~64 位' })
   password!: string;

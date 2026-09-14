@@ -5,17 +5,20 @@
 //   **不写业务规则**（口径在 `domain/`）、**不写 SQL**（在 `*.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.12 §5.2：`POST /account/login` req `{phone,password}`、
+//   · 《销售CRM接口API文档》V1.13 §5.2：`POST /account/login` req **`{account,password}`**
+//     （`account` ＝ 手机号 或 登录账号名，**服务端判别**，→ 登记表 #32）、
 //     resp `{access_token, refresh_token, user: UserVO}`；`GET /account/me` → `UserVO`
-//     ＝ `{id,name,role,dept:{id,name},managed_dept_ids:[],permissions:{}}`。
+//     ＝ `{id,name,username?,role,dept:{id,name},managed_dept_ids:[],permissions:{}}`。
+//   · 同 §4.2：`GET /org/employees` **服务端按 `managed_dept_ids` 收敛**（G7）、**销售只能看同部门**
+//     → 收敛规则在 `domain/employee-visibility.ts`（纯函数）。
 //   · 同 §2.2：`access_token` Bearer JWT（建议 2h）＋ `refresh_token`；§2.4：401/20002、403/20003。
-//   · 《销售CRM架构设计说明》V1.1 §7.1：`RequestContext` 随令牌带进请求，
+//   · 《销售CRM架构设计说明》V1.3 §7.1：`RequestContext` 随令牌带进请求，
 //     **横切层只读上下文、不查库** —— 故登录时把「我是谁、管哪些部门、什么角色、什么范围」一次性签进令牌。
 //   · 同 §7.4：登录是**敏感动作**，须在业务事务内写 `operation_log`（→ M0-30 的 `AuditService`）。
 //
-// ⚠ 与《开发计划》M1-03 的一处冲突（按铁律「以规格为准」，已记入 M1 完成报告）：
-//   计划写「按 `username` 查员工」，但数据架构 A2 `employee` **没有 `username` 列**，
-//   登录唯一键是 `phone`（API §5.2 req 亦为 `{phone,password}`）→ 实现取 `phone`。
+// ★ 2026-09-14 收口：原先记在 M1 完成报告里的「计划写 `username`、而规格写 `phone`」冲突**已消解** ——
+//   数据架构 A2 已加 `employee.username`、接口 §5.2 已定为 `{account,password}` 双通道
+//   （→ 登记表 #32），故本文件按**双通道**实现，`domain/login-account.ts` 负责判别。
 // =============================================================================
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -35,6 +38,8 @@ import {
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveDataScope, resolvePrimaryRole } from './domain/data-scope';
+import { isEmployeeVisible, visibleEmployeeDeptIds } from './domain/employee-visibility';
+import { classifyLoginAccount } from './domain/login-account';
 import { verifyPassword } from './domain/password';
 import { mergePermissionLevels } from './domain/permission';
 import type { LoginDto } from './dto/login.dto';
@@ -47,6 +52,8 @@ type EmployeeAuthRow = NonNullable<Awaited<ReturnType<OrgRepository['findEmploye
 export interface UserVo {
   id: bigint;
   name: string;
+  /** 登录账号名（可空：为空则只能手机号登录，→ §5.2）；**始终下发该键**（无值给 `null`，不给 `undefined`） */
+  username: string | null;
   role: string;
   dept: { id: bigint; name: string } | null;
   managed_dept_ids: bigint[];
@@ -60,7 +67,12 @@ export interface LoginResult {
   user: UserVo;
 }
 
-/** 刷新出参（→ API §三 `/account/refresh`；规格未给字段名，与 §2.2 的键名保持一致） */
+/**
+ * 刷新出参（→ API §三 `/account/refresh`；规格未给字段名，与 §2.2 的键名保持一致）。
+ *
+ * ★ **不带 `user`**（2026-09-14 拍板）：刷新只负责换令牌；前端要用户信息就调 `GET /account/me`
+ *   —— 避免「刷新」与「我是谁」两个出口各带一份用户信息（双真相源）。
+ */
 export interface RefreshResult {
   access_token: string;
   refresh_token: string;
@@ -119,14 +131,23 @@ export class OrgService {
   // ===== M1-08 / M1-09 登录 =====
 
   /**
-   * 登录：手机号 + 密码 → 双令牌 + `UserVO`。
+   * 登录：**手机号 或 登录账号名** ＋ 密码 → 双令牌 ＋ `UserVO`（→ 接口 §5.2 **双通道**）。
    *
-   * ★ 「手机号不存在」与「密码不对」**对外同一句人话、同一个错误码** ——
-   *   否则这个接口就是一台**手机号枚举器**（能据此判断某手机号是不是本司员工）。
+   * ★ 走哪条通道由**服务端**按格式判别（`classifyLoginAccount`），客户端**不指定** ——
+   *   前端只有一个输入框（→ §5.2 /《前端页面与交互文档》登录页）。
+   *   两通道**共用同一个 `password_hash`**：没有任何一条通道有「额外验证」。
+   * ★ 「账号不存在」与「密码不对」**对外同一句人话、同一个错误码** ——
+   *   否则这个接口就是一台**账号枚举器**（能据此判断某手机号 / 某账号名是不是本司员工）。
    *   真实原因只写进审计 `detail`，供安全排查。
+   * ⚠ 对外人话**保持规格原文**「手机号或密码不正确」（§5.2 逐字），不因通道是账号名就改文案
+   *   —— 改了就等于告诉探测者「这个输入走的是账号名通道」，且会与前端文案 / 规格脱钩。
    */
   async login(input: LoginDto, meta: RequestMeta = {}): Promise<LoginResult> {
-    const employee = await this.repository.findEmployeeByPhone(input.phone);
+    const channel = classifyLoginAccount(input.account);
+    const employee =
+      channel === 'phone'
+        ? await this.repository.findEmployeeByPhone(input.account)
+        : await this.repository.findEmployeeByUsername(input.account);
     const passwordOk =
       employee !== null && (await verifyPassword(input.password, employee.password_hash));
 
@@ -138,8 +159,11 @@ export class OrgService {
         operator_id: employee?.id ?? UNKNOWN_OPERATOR_ID,
         operator_name: employee?.name,
         detail: {
-          phone: input.phone,
-          reason: employee === null ? 'phone_not_found' : 'bad_password',
+          account: input.account,
+          channel,
+          // 原因按**通道**区分（`phone_not_found` / `username_not_found`）：搜日志时才分得清
+          // 「手机号打错」与「账号名打错」—— 对外的文案是一句，对内必须能分辨。
+          reason: employee === null ? `${channel}_not_found` : 'bad_password',
         },
         ...meta,
       });
@@ -278,9 +302,32 @@ export class OrgService {
     }));
   }
 
-  /** 员工列表（→ API §5.4；**不含密码哈希**） */
+  /**
+   * 员工列表（→ API §4.2 / §5.3；**不含密码哈希**）。
+   *
+   * ★ **G7 收敛**（→ 接口 §4.2）：「服务端按 `managed_dept_ids` 收敛；**销售只能看同部门**」——
+   *   收敛规则以纯函数落在 `domain/employee-visibility.ts`，本层只做「取上下文 → 调规则 → 套用」。
+   * ★ 为什么在 **service** 而不是仓储里收敛：范围条件是**业务口径**，且入口不止一处；
+   *   写进仓储就变成「每个查询各自记一遍」（正是 §7.2 禁止的「repository 手写范围条件」）。
+   * ⚠ 拿不到上下文**绝不兜底成全量**（＝越权读全公司通讯录）：正常链路上守卫已 401 在前，
+   *   走到这里还没有上下文＝装配出了问题，按 401 暴露（宁可不给数据）。
+   */
   async listEmployees() {
-    const employees = await this.repository.listEmployees();
+    const context = getRequestContext();
+    if (context === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+        constraint: 'org.employees.no_context',
+      });
+    }
+
+    const allowedDeptIds = visibleEmployeeDeptIds(context.dataScope, context.deptIds);
+    const employees = (await this.repository.listEmployees()).filter((employee) =>
+      // 主部门 ＋ 兼部门一起参与判断：兼部门员工也是「本部门的人」，漏掉会让他在列表里凭空消失
+      isEmployeeVisible(allowedDeptIds, [
+        employee.primary_dept_id,
+        ...parseIdList(employee.extra_dept_ids),
+      ]),
+    );
     const ids = employees.map((employee) => employee.id);
 
     const [rolesByEmployee, departments, productLines, managers] = await Promise.all([
@@ -319,6 +366,7 @@ export class OrgService {
         work_no: employee.work_no,
         name: employee.name,
         phone: employee.phone,
+        username: employee.username,
         primary_dept: toRef(employee.primary_dept_id),
         extra_depts: parseIdList(employee.extra_dept_ids)
           .map((id) => toRef(id))
@@ -421,6 +469,7 @@ export class OrgService {
     return {
       id: facts.employee.id,
       name: facts.employee.name,
+      username: facts.employee.username,
       role: resolvePrimaryRole(facts.roleCodes),
       dept: primaryDept === undefined ? null : { id: primaryDept.id, name: primaryDept.name },
       managed_dept_ids: facts.managedDeptIds,

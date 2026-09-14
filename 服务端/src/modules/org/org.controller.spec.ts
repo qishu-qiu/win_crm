@@ -101,7 +101,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
 
     /** 每个 handler 的最小合法入参（位置与运行时装饰器注入顺序一致：body → ip → ua → req_id） */
     const HANDLER_ARGS: Record<HandlerName, unknown[]> = {
-      login: [{ phone: '13800000000', password: 'Passw0rd!' }, '10.0.0.8', 'jest-agent', 'req-1'],
+      login: [{ account: '13800000000', password: 'Passw0rd!' }, '10.0.0.8', 'jest-agent', 'req-1'],
       refresh: [{ refresh_token: 'opaque-token' }],
       me: [],
       listDepartments: [],
@@ -120,7 +120,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
 
     it('login 把 body 与「IP / UA / req_id」两件东西一起交给 service（controller 不自己拼审计入参）', async () => {
       const { controller, stub } = createController();
-      const body = { phone: '13800000000', password: 'Passw0rd!' };
+      const body = { account: '13800000000', password: 'Passw0rd!' };
 
       await controller.login(body, '10.0.0.8', 'jest-agent', 'req-0001');
 

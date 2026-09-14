@@ -2,12 +2,12 @@
 // A 域出参 DTO（M1-11 / M1-12 / M1-13）—— **只服务于 Swagger 文档**，不参与运行时转换
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.12 §5.2：
+//   · 《销售CRM接口API文档》V1.13 §5.2：
 //       `POST /account/login` → `{access_token, refresh_token, user: UserVO}`
-//       `GET /account/me` → `UserVO = {id, name, role, dept:{id,name}, managed_dept_ids:[],
+//       `GET /account/me` → `UserVO = {id, name, username?, role, dept:{id,name}, managed_dept_ids:[],
 //                                      permissions:{"perm_key":"level"}}`
 //   · 同 §5.3：部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`；
-//       员工 `{id,work_no,name,phone,primary_dept:{id,name},extra_depts:[],product_lines:[],
+//       员工 `{id,work_no,name,phone,username?,primary_dept:{id,name},extra_depts:[],product_lines:[],
 //              direct_manager:{id,name},roles:["sale"],status}`；
 //       角色 `{code,name,is_builtin}`；权限矩阵行 `{perm_key,role_code,level}`。
 //   · 同 §2.6：入参出参 **snake_case**。
@@ -40,6 +40,14 @@ export class UserVoDto {
 
   @ApiProperty({ example: '张三' })
   name!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '登录账号名（**可空**：为空则只能手机号登录；→ §5.2）。服务端**始终下发该键**，无值给 `null`',
+    example: 'zhangsan',
+  })
+  username!: string | null;
 
   @ApiProperty({
     description: '主角色码（一人多角色时取权限最大者；内置码见 A4）',
@@ -124,6 +132,14 @@ export class EmployeeVoDto {
 
   @ApiProperty({ description: '手机号（主入口唯一键）', example: '13800000000' })
   phone!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '登录账号名（可空：为空则只能手机号登录）',
+    example: 'zhangsan',
+  })
+  username!: string | null;
 
   @ApiProperty({ type: EntityRefDto, nullable: true, description: '主部门' })
   primary_dept!: EntityRefDto | null;

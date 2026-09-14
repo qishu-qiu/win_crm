@@ -2,13 +2,14 @@
 // 访问令牌（JWT）声明契约（M0-32 前置）—— 签发方（M1 登录）与校验方（鉴权守卫）的唯一事实源
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.12 §2.2：登录返回 `access_token`（Bearer JWT，**建议 2h**）
+//   · 《销售CRM接口API文档》V1.13 §2.2：登录返回 `access_token`（Bearer JWT，**建议 2h**）
 //     ＋ `refresh_token`；请求头 `Authorization: Bearer <access_token>`。
-//   · 《销售CRM架构设计说明》V1.1 §7.1：`RequestContext = { employeeId, deptIds, roleCodes,
+//   · 《销售CRM架构设计说明》V1.3 §7.1：`RequestContext = { employeeId, deptIds, roleCodes,
 //     dataScope: { type, deptIds } }`，且 ★ 「横切层只读上下文、**不查数据库**」——
 //     故「我是谁」必须**随令牌带进来**，守卫里绝不许回查 org 域（否则就是「A 域调权限、
 //     权限查 A 域」的循环依赖）。
-//   · 同 §7.2：dataScope 三档 `self` / `dept` / `all`。
+//   · 同 §7.2：dataScope **四档** `self` / `serving` / `dept` / `all`（2026-09-14 补齐
+//     `serving`＝交付·客服「仅服务中客户」）。
 //   · 《数据架构文档》：主键一律 `BigInt @db.UnsignedBigInt` —— 令牌里的 id **一律十进制字符串**
 //     （与 M0-25 同一条口径：JSON 的 number 存不下 bigint，落了 Number 就永久丢精度）。
 //
@@ -42,13 +43,18 @@ export const REFRESH_TOKEN_TTL = '14d';
  */
 export const REFRESH_TOKEN_MARK = 'refresh';
 
-/** 数据范围档位白名单（→ 架构 §7.2；`DATA_SCOPE_TYPES` 同时用于校验令牌内容） */
-const DATA_SCOPE_TYPES: readonly DataScopeType[] = ['self', 'dept', 'all'];
+/**
+ * 数据范围档位白名单（→ 架构 §7.2；`DATA_SCOPE_TYPES` 同时用于校验令牌内容）。
+ * ★ 这是「档位」的**第二处**落点（第一处＝`request-context.ts` 的类型）：两边必须同增同减 ——
+ *   漏一处就会变成「签得出来、解不回来」的令牌（校验方拒收 → 用户莫名 401），故用 `satisfies`
+ *   把「本数组恰好覆盖 `DataScopeType`」钉成**编译期事实**：少一个值编译不过。
+ */
+const DATA_SCOPE_TYPES = ['self', 'serving', 'dept', 'all'] as const satisfies readonly DataScopeType[];
 
 /** 令牌里的「我能看到谁」（→ §7.1） */
 export interface AccessTokenScopeClaims {
   type: DataScopeType;
-  /** `type='dept'` 时＝管辖部门集合；`self` / `all` 时为空数组（**空数组与缺字段不是一回事**：后者视为非法令牌） */
+  /** **仅 `type='dept'`** 时＝管辖部门集合；其余档位为空数组（**空数组与缺字段不是一回事**：后者视为非法令牌） */
   dept_ids: string[];
 }
 
@@ -114,8 +120,8 @@ function normalizeScope(value: unknown): AccessTokenScopeClaims {
     throw unauthorized('令牌声明 scope 缺失或不是对象');
   }
   const raw = value as { type?: unknown; dept_ids?: unknown };
-  if (typeof raw.type !== 'string' || !DATA_SCOPE_TYPES.includes(raw.type as DataScopeType)) {
-    throw unauthorized('令牌声明 scope.type 不是 self / dept / all');
+  if (typeof raw.type !== 'string' || !(DATA_SCOPE_TYPES as readonly string[]).includes(raw.type)) {
+    throw unauthorized(`令牌声明 scope.type 不是 ${DATA_SCOPE_TYPES.join(' / ')}`);
   }
   return {
     type: raw.type as DataScopeType,

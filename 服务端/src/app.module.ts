@@ -5,7 +5,7 @@
 //   · 《过程产出/开发计划-V1.md》M0-49：`app.module.ts`（**组装 kernel ＋ shared ＋ prisma**）；
 //     判据逐字＝「`start:web` 起且 `/docs` 有」。
 //     ★ M1-01 判据：`modules/org`（`OrgModule`）被本文件 import 后**起服正常**。
-//   · 《销售CRM架构设计说明》V1.1 §四 目录树：`app.module.ts` ＝ Web 组装全部域的那一层。
+//   · 《销售CRM架构设计说明》V1.3 §四 目录树：`app.module.ts` ＝ Web 组装全部域的那一层。
 //     ⚠ 七域（`modules/*`）自 M1 起逐个进来；M1 只到 A 域（org）。
 //
 // ★ 各 import 的角色（顺序＝依赖方向，别写反）：

@@ -4,7 +4,7 @@
 // 口径来源（★ 真相源，勿自造）：
 //   · 《过程产出/开发计划-V1.md》M1-01：建 `modules/org/` 四层目录 ＋ `org.module.ts`；
 //     判据逐字＝「`app.module` import 后起服正常」。
-//   · 《销售CRM架构设计说明》V1.1 §5.1：org(A) 是**第 1 层**，只能依赖更低的 `kernel`；
+//   · 《销售CRM架构设计说明》V1.3 §5.1：org(A) 是**第 1 层**，只能依赖更低的 `kernel`；
 //     它**不许** import 任何业务域（同层 / 更高层），由 ESLint `no-restricted-imports` 硬卡（M0-44 系列）。
 //   · 同 §5.2 跨域协作：A 域对外只 exports **service**，**绝不 exports repository**
 //     （跨域直连仓储被 ESLint 拦死；此处不 exports 仓储也就无从违反）。

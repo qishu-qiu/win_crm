@@ -17,17 +17,33 @@
 --   │                        │ ✅ 已确认（由该模块同参数算法生成，非手写）    │
 --   ├────────────────────────┼──────────────────────────────────────────────┤
 --   │ department / employee  │ 无规格约束，DEV 自造（仅求自洽）               │
---   │ product_line           │ ⚠ 规格只说「7 条线各一色」，**未给名称清单**  │
---   │                        │ ⚠ DEV 占位，业务确认后必须替换                │
+--   │ employee.username      │ ✅ 2026-09-14 七叔拍板：员工自定、可空、唯一    │
+--   │                        │ （列由 migration `0003` 新增；本文件给 6 人补号）│
+--   │ product_line           │ ⚠ 名称清单七叔已给，**本批未替换**（见文末 ★）  │
+--   │                        │ ⚠ 且 `product_line` 表**没有 `color_key` 列**， │
+--   │                        │   而接口 §5.3 / §5 实体引用却要求返回它        │
 --   ├────────────────────────┼──────────────────────────────────────────────┤
---   │ permission_matrix      │ ⚠⚠ 规格**只给了 3 个 perm_key 举例**         │
---   │ （level 取值）         │ （cross_dept_private/contract_amount/         │
---   │                        │   phone_unlock），**未给出 level 矩阵**        │
---   │                        │ ⚠⚠ 本文件 level **一律取最保守的 denied**，   │
---   │                        │    只为让接口有数据可返回（验证 JSON/合并逻辑）│
---   │                        │    **绝不代表最终口径** —— M5 脱敏实现前       │
---   │                        │    必须由七叔按需求 §4.3 定这张表。            │
+--   │ permission_matrix      │ ✅ 2026-09-14 七叔拍板，**不再是占位**（见文末 ★）│
+--   │ （3 key × 6 角色）     │   · contact_phone     全部 visible             │
+--   │                        │   · relation_timeline 仅 admin/gm visible      │
+--   │                        │   · contract_amount   仅 gm visible，其余 masked│
 --   └────────────────────────┴──────────────────────────────────────────────┘
+--
+-- ★ 2026-09-14 口径变更（七叔拍板 · 本文件已按此更新）：
+--   ① `employee.username`（migration `0003` 新增）：**员工自定、可空、唯一** →
+--      下表 6 个账号已补账号名；登录＝**手机号 或 账号名 二选一 ＋ 密码**（共用同一 `password_hash`）。
+--   ② `permission_matrix` 由「一律 denied 占位」升级为**正式口径**（3 key × 6 角色 ＝ 18 行）：
+--        · `contact_phone`     → **全部 visible**（联系方式默认全可见；「锁」由
+--          `contact.phone_locked_at / phone_locked_by` 单独管，**不进矩阵**）
+--        · `relation_timeline` → 仅 `admin` / `gm` 为 visible，其余 denied（跨部门跟单全文互不可见）
+--        · `contract_amount`   → 仅 `gm` 为 visible，其余 masked（跨部门金额脱敏）
+--      旧 key `cross_dept_private`（看他人私海）/ `phone_unlock`（手机号解锁）**已废止**，不再写入。
+--      ⚠ 矩阵是**角色级兜底档**：「经理**管辖内**可见」由**数据范围**承担，不走本表。
+--   ③ ⚠ **本批未做**（不在执行范围，待指令）：`product_line` 仍是 3 条 DEV 占位 ——
+--      七叔已给 7 条名称清单（法务 / 财税 / 招聘 / 房产 / 网站建设 / 短视频 / GEO推广），
+--      但发现 `product_line` 表**没有 `color_key` 列**（接口 API §5.3、§5「实体引用」
+--      的 `product_line:{id,name,color_key}` 却要求返回它）→ 属**新缺口**，等拍板后与名称一并替换。
+--   ④ `permission_matrix` 的**行数基线仍是 18**（3 key × 6 角色）—— 旧 key 换新 key，行数不变。
 --
 -- ⚠ 字段陷阱（真库实测，改本文件时必看）：
 --   ① `updated_at` 是 `datetime NOT NULL` **且无默认值**（Prisma 的 @updatedAt 只
@@ -38,6 +54,8 @@
 --      → 顶级部门写 0，不要写 NULL；
 --   ④ `operation_log` 是**按月分区**表（实测分区覆盖 p202609~p202712 + pmax），
 --      当前月份有分区，审计写入不会失败 —— 本文件**不碰**该表。
+--   ⑤ `employee.username` 是 **migration `0003`（2026-09-14）新增**列，**可空 + 唯一**：
+--      库若仍停在 0002，本文件会报 `Unknown column 'username'` → 先 `npx prisma migrate deploy`。
 -- =============================================================================
 
 SET NAMES utf8mb4;
@@ -88,27 +106,29 @@ INSERT INTO product_line (id, name, code, dept_ids, service_cycle_days, status, 
 -- 4) employee：6 个验证账号
 --    初始密码统一 `Dev@123456`（由 `domain/password.ts` 同参数算法生成，非手写）
 --    status='active' / deleted_at=NULL → 才能通过 `requireActiveEmployee`
+--    `username`：2026-09-14 新增（migration `0003`）—— 员工自定、可空、唯一；
+--               本表按姓名拼音起（**DEV 占位，可改**）；两种登录通道共用同一密码。
 -- ---------------------------------------------------------------------------
 INSERT INTO employee (
-  id, work_no, name, phone, password_hash, primary_dept_id,
+  id, work_no, name, phone, username, password_hash, primary_dept_id,
   extra_dept_ids, product_line_ids, direct_manager_id, status, created_at, updated_at
 ) VALUES
-  (1, 'E001', '陈志远', '13800000001',
+  (1, 'E001', '陈志远', '13800000001', 'chenzhiyuan',
    'scrypt$16384$8$1$caPOsotz7YAhGQKZSRpc8w==$7bjHg30nAnppdhkJ2C6tDBTNZXVXXVMLbOr7ngZN2I3MKkp2x4B397nPbgQXlZNvrWbZInNHj+0RPUbi5bRAYQ==',
    1, NULL,  '[1,2,3]', NULL, 'active', NOW(), NOW()),
-  (2, 'E002', '刘敏',   '13800000002',
+  (2, 'E002', '刘敏',   '13800000002', 'liumin',
    'scrypt$16384$8$1$xygeVrVqtScTvKsAOIjNMw==$4rFVhqfzskxqyHhkCAbiK6f/GQmK8HT0AUQbW8KCRjCF2hwc42DotBggLc48xp5jjRcX03mVQP5Q9LIZ6LnKVw==',
    2, '[3]',  '[1,2]',   1,    'active', NOW(), NOW()),
-  (3, 'E003', '王海涛', '13800000003',
+  (3, 'E003', '王海涛', '13800000003', 'wanghaitao',
    'scrypt$16384$8$1$QHHQu2tV/x0589MoMR39jw==$FyppTDelr5FBxceQP9z9GpqLiFY3Nyqb/xcy2Z4OSJBqSVRtwINSeoTPrvtBH60LjuhL9Icwgxk1eeieSYXXGg==',
    2, NULL,  '[1,2]',   2,    'active', NOW(), NOW()),
-  (4, 'E004', '赵晓雯', '13800000004',
+  (4, 'E004', '赵晓雯', '13800000004', 'zhaoxiaowen',
    'scrypt$16384$8$1$uUrMzZZCpiL4e3mNfp5mDA==$nvl1sYqQU4leqy3CScXdptw09w2I8HlK/zG07ktNNC8ma4un4RVE7Fb9OLbriPcpa9ar0nD1tQb2R/BKM/m4Rw==',
    4, NULL,  '[1]',     1,    'active', NOW(), NOW()),
-  (5, 'E005', '孙立国', '13800000005',
+  (5, 'E005', '孙立国', '13800000005', 'sunliguo',
    'scrypt$16384$8$1$VAIBMGVBBXhAiTSWzkjpRw==$U/Ss7FV1Mk3feUw8+IyuNAptPJUz16qy1XJMYeSZuui/eCFDmfDSCGeleO7uGDruhj/gDdFEeVk7JZk1ajIZNw==',
    5, NULL,  '[3]',     1,    'active', NOW(), NOW()),
-  (6, 'E006', '周静',   '13800000006',
+  (6, 'E006', '周静',   '13800000006', 'zhoujing',
    'scrypt$16384$8$1$Cv7GK4i8ZqJbGX98HZo1Eg==$9D0hhxTzQ7dukVIjpyiYrgz4ANYJwGUqp5o0V/HPFAW0oPVL+IdHE+9rWAnHXwvcN1ystU7t+wuajPy+jmR0Ag==',
    1, NULL,  NULL,      1,    'active', NOW(), NOW());
 
@@ -137,28 +157,33 @@ INSERT INTO dept_manager (dept_id, employee_id, created_at, updated_at) VALUES
   (3, 2, NOW(), NOW());
 
 -- ---------------------------------------------------------------------------
--- 7) permission_matrix：⚠⚠ level 一律 denied（保守占位，非最终口径，见文件头）
---    perm_key 只用规格**明确举例**的 3 个，不自造新的。
+-- 7) permission_matrix：**2026-09-14 正式口径**（3 key × 6 角色 ＝ 18 行）
+--    ⚠ 矩阵是「**越出本分范围**时的兜底档」（level：visible 原文 / masked 打码 / denied 不返回）；
+--      「经理**管辖内**可见」「销售看**自己**的」都由**数据范围**承担，**不走本表**。
+--    ⚠ 联系方式「锁」**不进矩阵** —— 它由 `contact.phone_locked_at / phone_locked_by` 单独管。
 -- ---------------------------------------------------------------------------
 INSERT INTO permission_matrix (perm_key, role_code, level, created_at, updated_at) VALUES
-  ('contract_amount',      'sale',         'denied', NOW(), NOW()),
-  ('contract_amount',      'service',      'denied', NOW(), NOW()),
-  ('contract_amount',      'delivery',     'denied', NOW(), NOW()),
-  ('contract_amount',      'admin',        'denied', NOW(), NOW()),
-  ('contract_amount',      'dept_manager', 'denied', NOW(), NOW()),
-  ('contract_amount',      'gm',           'denied', NOW(), NOW()),
-  ('cross_dept_private',   'sale',         'denied', NOW(), NOW()),
-  ('cross_dept_private',   'service',      'denied', NOW(), NOW()),
-  ('cross_dept_private',   'delivery',     'denied', NOW(), NOW()),
-  ('cross_dept_private',   'admin',        'denied', NOW(), NOW()),
-  ('cross_dept_private',   'dept_manager', 'denied', NOW(), NOW()),
-  ('cross_dept_private',   'gm',           'denied', NOW(), NOW()),
-  ('phone_unlock',         'sale',         'denied', NOW(), NOW()),
-  ('phone_unlock',         'service',      'denied', NOW(), NOW()),
-  ('phone_unlock',         'delivery',     'denied', NOW(), NOW()),
-  ('phone_unlock',         'admin',        'denied', NOW(), NOW()),
-  ('phone_unlock',         'dept_manager', 'denied', NOW(), NOW()),
-  ('phone_unlock',         'gm',           'denied', NOW(), NOW());
+  -- ① 联系方式（详情）：**全部 visible** —— 2026-09-14 起号码默认全可见
+  ('contact_phone',     'sale',         'visible', NOW(), NOW()),
+  ('contact_phone',     'service',      'visible', NOW(), NOW()),
+  ('contact_phone',     'delivery',     'visible', NOW(), NOW()),
+  ('contact_phone',     'admin',        'visible', NOW(), NOW()),
+  ('contact_phone',     'dept_manager', 'visible', NOW(), NOW()),
+  ('contact_phone',     'gm',           'visible', NOW(), NOW()),
+  -- ② 跨部门跟单全文：**仅 admin / gm visible**（销售/客服/交付/经理跨管辖 → 不可见）
+  ('relation_timeline', 'sale',         'denied',  NOW(), NOW()),
+  ('relation_timeline', 'service',      'denied',  NOW(), NOW()),
+  ('relation_timeline', 'delivery',     'denied',  NOW(), NOW()),
+  ('relation_timeline', 'admin',        'visible', NOW(), NOW()),
+  ('relation_timeline', 'dept_manager', 'denied',  NOW(), NOW()),
+  ('relation_timeline', 'gm',           'visible', NOW(), NOW()),
+  -- ③ 跨部门合同金额：**仅 gm visible**，其余 masked（amount 置 null + amount_masked）
+  ('contract_amount',   'sale',         'masked',  NOW(), NOW()),
+  ('contract_amount',   'service',      'masked',  NOW(), NOW()),
+  ('contract_amount',   'delivery',     'masked',  NOW(), NOW()),
+  ('contract_amount',   'admin',        'masked',  NOW(), NOW()),
+  ('contract_amount',   'dept_manager', 'masked',  NOW(), NOW()),
+  ('contract_amount',   'gm',           'visible', NOW(), NOW());
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -168,7 +193,8 @@ SET FOREIGN_KEY_CHECKS = 1;
 --                employee_role=7 dept_manager=2 permission_matrix=18
 --    Q2 role.code 与 `BUILTIN_ROLE_CODES` 是否同一个集合
 --    Q3 悬空引用：employee_role / permission_matrix / dept_manager / 部门 / 上级
---    Q4 登录可用性：6 人均为 active、未删、都有角色、哈希格式正确
+--    Q4 登录可用性：6 人均为 active、未删、都有角色、哈希格式正确、账号名齐备
+--    Q5 矩阵：key 集合恰为 contact_phone / relation_timeline / contract_amount，每 key 6 行
 -- ---------------------------------------------------------------------------
 SELECT 'Q1 行数' AS chk, 'role' AS t, COUNT(*) AS n FROM role
 UNION ALL SELECT 'Q1 行数', 'department', COUNT(*) FROM department
@@ -196,13 +222,19 @@ UNION ALL SELECT 'Q3-5 悬空dept_manager', COUNT(*) FROM dept_manager dm
 UNION ALL SELECT 'Q3-6 无角色员工', COUNT(*) FROM employee e
   WHERE NOT EXISTS (SELECT 1 FROM employee_role er WHERE er.employee_id = e.id);
 
-SELECT 'Q4 可登录账号' AS chk, e.work_no, e.name, e.phone, e.status,
+SELECT 'Q4 可登录账号' AS chk, e.work_no, e.name, e.phone, e.username, e.status,
        COUNT(er.role_code) AS role_cnt,
        (e.password_hash LIKE 'scrypt$16384$8$1$%' AND LENGTH(e.password_hash) > 100) AS hash_ok
   FROM employee e LEFT JOIN employee_role er ON er.employee_id = e.id
  WHERE e.deleted_at IS NULL
- GROUP BY e.id, e.work_no, e.name, e.phone, e.status, e.password_hash
+ GROUP BY e.id, e.work_no, e.name, e.phone, e.username, e.status, e.password_hash
  ORDER BY e.id;
+
+-- Q5 矩阵：key 集合与每 key 的取值分布（期望 3 个 key × 6 角色 ＝ 18 行）
+SELECT 'Q5 矩阵key集合' AS chk, GROUP_CONCAT(DISTINCT perm_key ORDER BY perm_key) AS key_list
+  FROM permission_matrix;
+SELECT 'Q5 矩阵取值分布' AS chk, perm_key, level, COUNT(*) AS n
+  FROM permission_matrix GROUP BY perm_key, level ORDER BY perm_key, level;
 
 -- =============================================================================
 -- 执行方式（在 `服务端/` 目录下）：

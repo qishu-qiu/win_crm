@@ -87,10 +87,15 @@
 - 时间范围 `start_at` / `end_at`（ISO8601，Asia/Shanghai）。
 - 模糊搜 `keyword`（公司名走 ngram 全文索引，`→架构§十`）。
 
-### 2.8 脱敏规则（[铁律] G4/G5）
-- **金额跨业务线**：响应返回 `amount: null` + `amount_masked: "***"`，仅露非金额信息（已合作 + 签约日期）。库内永远明文（`→需求§4.3` `→架构§十一`）。
-- **手机号**：非归属部门联系人返回 `phone_masked: "****1234"`（后4位），`phone` 字段缺省；归属本人/协同返回全号。申请解锁走 `L05` 审批，批后限时（24h）可见全号（`→需求§13.2`）。
-- **报表 / 看板不脱敏**：经理 / 老板出口（`/reports/*`、`/targets/progress`）**返回真实金额**——脱敏只作用于"销售看他人私海 / 跨部门关系"的列表与详情（`→需求§4.3`）。
+### 2.8 联系方式 / 脱敏规则（[铁律] G4/G5）
+
+> **★ 2026-09-14 重写**：联系方式**不再按角色 / 场景分档脱敏** —— 改为「**详情默认全可见 ＋ 联系人可上锁**」（`→需求§4.3`）。
+
+- **联系方式（手机号）**：**凡是「详情」出参都给全号**（`phone`），**与角色无关**；**只有「列表 / 卡片」出参给 `phone_masked`**（`xxx****xxxx`）—— **这是出参形态、不是权限**，目的是防"一眼扫走一列号"的批量截图。
+- **联系人「锁」**：被 owner **上锁**的联系人，**非 owner 看详情时**给 `phone_locked:true` ＋ `phone_locked_by:{id,name}`、**不给 `phone`**；申请走 `POST /phone-unlock/apply` → **审批人 ＝ 落锁人**（⚠ 例外于 §7.9，**并知会其直属上级**）→ 批后 **24h** 内出参带 `phone` ＋ `unlocked_until`（`→需求§4.3 二`）。
+- **金额跨业务线**：非归属 / 跨管辖响应返回 `amount: null` + `amount_masked: "***"`，仅露非金额信息（已合作 + 签约日期）。库内永远明文（`→需求§4.3 四` `→架构§十一`）。
+- **跨部门跟单全文**：销售 / 客服 / 交付 / 经理跨管辖 → **不返跟单全文**，仅"近 30 天 N 次"概览（`→需求§4.3 三`）。
+- **报表 / 看板不脱敏**：经理 / 老板出口（`/reports/*`、`/targets/progress`）**返回真实金额**——金额脱敏只作用于"销售看他人私海 / 跨部门关系"的列表与详情（`→需求§4.3`）。
 
 ### 2.9 时间与时区
 - 服务端统一 `Asia/Shanghai`；出入参 ISO8601（`2026-09-05T09:30:00+08:00`）。
@@ -131,6 +136,7 @@
 | 公司 | company | /companies/:id/merge | P ★ | 撞码**墓碑合并**（单事务 6 步，`→需求§7.3`）|
 | 公司 | company | /companies/:id/contacts | G ★ | 公司联系人（含历史/已离职标记，`→架构B5`）|
 | 联系人 | contact | /contacts | G/P/U | 联系人 |
+| 联系人 | contact | /contacts/:id/phone-lock | P/D ★ | **联系方式上锁/解锁**（仅 owner 可锁，`→需求§4.3 二`）|
 | 联系人 | contact | /contacts/:id | **D** ★ | 删除（**经理权限**，销售不可，`→需求§7.2`）|
 | 联系人 | contact | /contacts/:id/traits | U | 谈判特质（≤3，部门可配）|
 | 联系人 | contact | /contacts/:id/merge | P ★ | **墓碑合并**（经理权限，traits 并集、子记录零改动）|
@@ -172,7 +178,7 @@
 | 台账 | field | /product-lines/:id/field-templates | G/P/U | 字段模板（先登记后写）|
 | 审批 | approval | /approvals/todo , /approvals/mine | G | 待我审批/我发起 |
 | 审批 | approval | /approvals/:id/approve , /reject | P | 通过/驳回（驳回必填原因）|
-| 审批 | approval | /phone-unlock/apply | P | 手机号解锁申请（L05）|
+| 审批 | approval | /phone-unlock/apply | P | 联系方式解锁申请（L05，**落锁人审批**）|
 | 报表 | report | /reports/dashboard , /reports/sales , /reports/dept | G | 看板/个人日报/部门月报 |
 | 报表 | report | /reports/company | G ★ | 全公司月报（总经理）|
 | 报表 | report | /reports/sea | G ★ | 公海报表（停留/领取率/流失原因）|
@@ -201,8 +207,8 @@
 > 每模块只列「最易错 / 已拍板」的硬约束；完整字段以 `→架构表Y` 为准。
 
 ### 4.1 认证 account
-- `POST /account/login`：`{phone, password}` → `{access_token, refresh_token, user:{id,name,role,dept_id,managed_dept_ids[]}}`。
-- `GET /account/me`：返回角色 + 管辖部门集合（前端据此渲染菜单/数据范围）；`managed_dept_ids` 空 = 非经理。
+- `POST /account/login` 的入参、以及 `UserVO` 的完整结构：**唯一权威落点见 §5.2**（本节只留指针，不复制字段，防双真相源）。
+- `GET /account/me`：返回 `UserVO`（结构同 §5.2）＋ 角色 + 管辖部门集合（前端据此渲染菜单/数据范围）；`managed_dept_ids` 空 = 非经理。
 
 ### 4.2 组织与权限 org / dict
 - `GET /org/employees`：**服务端按 `managed_dept_ids` 收敛**（G7）；销售只能看同部门。
@@ -211,7 +217,7 @@
 
 ### 4.3 公司档案 company / 联系人 contact
 - `POST /companies/search-dup`：入 `{phone?, credit_code?, name?}` → 返回相似候选（手机 UNIQUE 为主入口；公司名归一化去噪声词后比字号，`→需求§6.3`）。命中分支（**4 分支**，逐条文案 / 按钮 / 落点见 `→需求§12.1`）：① **公海可直领**；② **本部门已激活**（联系本人 / 申请转交 / 申请协同）；③ **跨部门可并行激活**（只显部门名 ＋ 日期，不露跟单）；④ **挂现有公司**（使用已有 / 确认新建，**疑似重复必须给强行新建出口**，防乱填公司名）。
-- `GET /companies/:id`：出参含 `profile_tags`（身份/制度/决策链，`→架构B2`）、`contacts[]`（非归属部门 `phone_masked`）、`relations_summary`（各业务线签约日期，跨线金额 `amount_masked`）、**`registered_capital`（注册资本，单位＝元）/ `legal_person`（法定代表人）——可选扩展字段，不做签约强制**（`→需求§7.3`）。
+- `GET /companies/:id`：出参含 `profile_tags`（身份/制度/决策链，`→架构B2`）、`contacts[]`（**默认全号**；被 owner 上锁时给 `phone_locked`）、`relations_summary`（各业务线签约日期，跨线金额 `amount_masked`）、**`registered_capital`（注册资本，单位＝元）/ `legal_person`（法定代表人）——可选扩展字段，不做签约强制**（`→需求§7.3`）。
 - `GET /companies`：列表支持**注册资本区间筛选** `min_registered_capital` / `max_registered_capital`（**单位＝元**；如"注册资金 > 100 万"→ `min_registered_capital=1000000`）。
 - `PUT /contacts/:id/traits`：超过 `contact_trait_max` → **422 / 20402**；未配部门走默认3（`→需求§9` `→架构B4`）。
 
@@ -250,7 +256,8 @@
 
 ### 4.11 审批中心 approval（四型一单）
 - 审批人默认 = 直属上级；跨部门转交 = 双方上级双签；缺失上溯（`→需求§7.9`）。
-- `POST /phone-unlock/apply`：L05，经理批后限时全号（`→需求§13.2`）。
+- ⚠ **联系方式解锁是例外**：`POST /phone-unlock/apply` 的审批人 ＝ **落锁人本人**（并知会其直属上级）—— 锁是**个人自我保护**、不是组织流程（`→需求§4.3 二` / §7.9）。
+- `POST /phone-unlock/apply`：L05，批后 **24h** 内可见全号（`→需求§4.3 二`）。
 - 驳回必填 `reject_reason`（前端弹窗强制）。
 
 ### 4.12 报表 / 目标 report / target
@@ -271,7 +278,7 @@
 **4.14.1 组织与权限（原只有 G，补 CRUD，`→需求§7.1`）**
 - `POST/PUT/DELETE /org/departments`：部门增/改/**停用不删**（名称、上级、关联产品线、启用客服开关、状态）。
 - `GET/POST/DELETE /org/departments/:id/managers`：部门经理**多对多**（`dept_manager`，决定经理查数范围 `→架构A3`）。
-- `POST/PUT /org/employees`：员工入职 / 改主部门·兼部门·关联产品线·**直属经理（审批链）**；`status` ∈ `active`/`resigned`/`disabled`。**离职用 `resigned`，物理不删**（历史业绩照常显示）。
+- `POST/PUT /org/employees`：员工入职 / 改主部门·兼部门·关联产品线·**直属经理（审批链）**·**登录账号名 `username`（可空、全局唯一，`→§5.3`）**；`status` ∈ `active`/`resigned`/`disabled`。**离职用 `resigned`，物理不删**（历史业绩照常显示）。
 - `PUT /org/employees/:id/roles`：角色多选分配（`employee_role` `→架构A5`）。
 - `POST /org/employees/:id/offboard`：**离职批量转交**——管理员发起，把该员工名下关系批量转交接任人，走 `relation_reassign` 审批（直接上级批 `→需求§7.9`）；幂等。
 - `POST/PUT /org/product-lines`：产品线（含 `color_key` 7 线固定配色、承接部门、服务周期）。
@@ -361,24 +368,32 @@
 ```jsonc
 // 跨业务线金额：amount 置 null + 掩码，仅露非金额信息
 { "amount": null, "amount_masked": "***", "cooperated": true, "sign_date": "2026-08-01" }
-// 非归属部门手机号
-{ "phone_masked": "****1234" }   // 不给 phone
-// 公海列表/卡片：脱敏（防"一眼扫走一列号"）
+// 列表 / 卡片（任何场景）：号码一律给掩码、不给 phone（防批量截图；是出参形态，不是权限）
 { "phone_masked": "138****5678" }
-// 公海详情（未领取）：返全号可拨 + 概览，但不返跟单全文；本次查看写 operation_log(sea.phone.view)
+// 详情（默认，与角色无关）：给全号
+{ "phone": "13800001111" }
+// 详情（该联系人被 owner 上锁、且查看者不是 owner）：不给 phone，给锁信息 +「申请解锁」入口
+{ "phone_locked": true, "phone_locked_by": { "id": "3", "name": "王海涛" } }
+// 公海详情（未领取）：号码可见（锁随掉公海自动消失）+ 概览，但不返跟单全文；写 operation_log(sea.phone.view)
 { "phone": "13800001111", "try_count_30d": 5, "last_summary": "客户说下周答复", "stuck_stage": 3 }
 ```
 **派生字段（出参算、库不存）**：`old_customer`（有历史合同）、`address_maintained`（address 或坐标为空→false）、`drop_in_x_days`、`overdue`、`is_weekly`、`pay_progress`、`expire_level`、`stat_unit`（`relation`｜`company`）。
 
 ### 5.2 认证 account
-- `POST /account/login` req `{phone,password}` → resp `{access_token,refresh_token,user:UserVO}`
-- `GET /account/me` → `UserVO` ＝ `{id,name,role,dept:{id,name},managed_dept_ids:[],permissions:{"perm_key":"level"}}`
+- `POST /account/login` req `{account,password}` → resp `{access_token,refresh_token,user:UserVO}`
+  - **`account` ＝ 手机号 或 登录账号名**（`employee.username`），**二选一**；**服务端判别**（11 位手机号格式按手机号查，否则按账号名查）。**两种通道共用同一个 `password_hash`**。
+  - ⚠ **2026-09-14 变更**：入参由 `{phone,password}` 扩为 `{account,password}`；**前端只给一个输入框**（`→《前端页面与交互文档》登录页`）。
+  - 账号不存在 / 密码错 → **一律 401 / 20002**「手机号或密码不正确」（**不泄露账号是否存在，也不区分是账号名错还是密码错**）。
+- `GET /account/me` → `UserVO` ＝ `{id,name,username?,role,dept:{id,name},managed_dept_ids:[],permissions:{"perm_key":"level"}}`
 - `PUT /account/preferences` req `{theme:"light"|"dark",notif?:{...}}`
+  - ⚠ 登录账号名**随员工编辑维护**（`PUT /org/employees`，管理员操作）；**V1 不做员工自助改名**。
+- **登录账号名规则**：`employee.username`、**可空**（为空则只能手机号登录）、**全局唯一**、大小写不敏感、建议 4~32 位字母 / 数字 / 下划线。
 
 ### 5.3 组织与权限 org / dict
 - 部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`
-- 员工 `{id,work_no,name,phone,primary_dept:{id,name},extra_depts:[],product_lines:[],direct_manager:{id,name},roles:["sale"],status}`
-- `POST/PUT /org/employees` req `{name,phone,work_no?,primary_dept_id,extra_dept_ids?:[],product_line_ids?:[],direct_manager_id?,role_codes:[],password?}`
+- 员工 `{id,work_no,name,phone,username?,primary_dept:{id,name},extra_depts:[],product_lines:[],direct_manager:{id,name},roles:["sale"],status}`
+- `POST/PUT /org/employees` req `{name,phone,username?,work_no?,primary_dept_id,extra_dept_ids?:[],product_line_ids?:[],direct_manager_id?,role_codes:[],password?}`
+  - `username` **可空、全局唯一**（撞唯一约束 → **409**，提示「该账号名已被占用」）；留空＝只能手机号登录。
 - 部门规则 `{dept_id,level_tiers:[{level,min_amount}],gray_remind_days,s_social_days,newbie_first_follow_hours,ask_help_days,contact_trait_max,updated_at}`
 - 产品线 `{id,name,code,color_key,dept_ids:[],service_cycle_days,status}`
 - 角色 `{code,name,is_builtin}`；权限矩阵行 `{perm_key,role_code,level}`
@@ -395,8 +410,11 @@
 - `GET /companies/:id/contacts` → `[ContactBrief]`（含历史/已离职标记）
 
 ### 5.5 联系人 contact
-- `ContactBrief` `{id,name,position?,phone|phone_masked,decision_role,is_current}`
-- 详情 `{id,name,phone|phone_masked,extra_phones:[{type,number,note}],wechat,email,gender,birthday,decision_role,tags:[],traits:[{trait_id,trait_code,label}],status,employments:[{company_id,company_name,position,joined_at,left_at,is_current}]}`
+- `ContactBrief` `{id,name,position?,phone|phone_masked,phone_locked?,decision_role,is_current}`（**列表 / 卡片出参一律 `phone_masked`**）
+- 详情 `{id,name,phone?,phone_locked,phone_locked_by?:{id,name},extra_phones:[{type,number,note}],wechat,email,gender,birthday,decision_role,tags:[],traits:[{trait_id,trait_code,label}],status,employments:[{company_id,company_name,position,joined_at,left_at,is_current}]}`
+  - **`phone` 只在一种情况下缺省**：该联系人**已被 owner 上锁**、且查看者不是 owner → 此时给 `phone_locked:true` ＋ `phone_locked_by`（`→需求§4.3 二`）。**其余情况一律全号，与角色无关**。
+- `POST /contacts/:id/phone-lock` → 上锁（**仅该联系人归属关系的 owner**；非 owner → **403**）；幂等。
+- `DELETE /contacts/:id/phone-lock` → 手动解锁（**仅落锁人本人**；**总经理 / 管理员可强制解锁，须留痕**）。
 - 建档/改 req `{name,phone,extra_phones?:[],wechat?,email?,gender?,birthday?,decision_role?,tags?:[],company_id?,position?}`
 - `PUT /contacts/:id/traits` req `{trait_ids:[]}`（**上限校验只拦「新增」**：更新后数量 > 当前已有数量且超 `contact_trait_max` → **422/20402**；不增量则放行）
 - `POST /contacts/:id/merge` req `{winner_id}`（经理权限）
@@ -454,9 +472,9 @@
 
 ### 5.12 审批中心 approval
 - 待办项 `{id,type,title,applicant:{id,name},target:{type,id},payload,waiting_hours,urgent:bool}`
-- **payload 分型**：`transfer{to_employee_id,reason?}`｜`collaborate{employee_id,valid_until?}`｜`phone_change{contact_id,old_phone,new_phone}`｜`phone_unlock{contact_id,relation_id?}`
+- **payload 分型**：`transfer{to_employee_id,reason?}`｜`collaborate{employee_id,valid_until?}`｜`phone_change{contact_id,old_phone,new_phone}`｜`phone_unlock{contact_id,relation_id?,locked_by:{id,name}}`
 - `POST /approvals/:id/approve` req `{comment?}`；`POST /approvals/:id/reject` req `{comment}`（**必填**）
-- `POST /phone-unlock/apply` req `{contact_id,relation_id?}` → resp `{approval_id}`；批准后目标联系人出参带 `phone` 与 `unlocked_until`
+- `POST /phone-unlock/apply` req `{contact_id,relation_id?}` → resp `{approval_id}`；**`approver_id` ＝ 该联系人的落锁人**（`phone_unlock.locked_by`，**例外于"默认直属上级"**，`→需求§4.3 二`）；**审批通过后 24h 内**目标联系人出参带 `phone` 与 `unlocked_until`
 
 ### 5.13 报表 / 目标 report / target
 - 看板 `GET /reports/dashboard` → `{kpi:{today_new,today_todo,month_signed:{amount,chain_ratio}},pending_todo:[],warnings:[{type,...}],dept_compare:[],top_sales:[],zombie_weekly:[],sea_todo:[]}`
@@ -489,7 +507,7 @@
 1. **撞单**：激活 `uk_active_rel` 撞 → 409/20401 → 前端提示「已有归属」并给转交/协同入口；同部门显归属人、跨部门只说「已有其他部门跟进」不露名（`→需求§6.3`）。
 2. **协同**：`collaborator`（审批通过，可带 `valid_until`）可共同写跟单+看全文；`ask_help`（轻量临时，默认7天自动收回，不授读权）——两码事（`→需求§13` `→架构C2`）。
 3. **领取公海**：幂等 + 继承全文；部门公海 = 公司公海映射视图（非独立一层，`→需求§6.3`）。
-4. **脱敏口径**：跨线金额 `amount_masked`、非归属手机 `phone_masked`、**公海列表/卡片 `phone_masked`（详情返全号，逐次留痕 `sea.phone.view`）**；公海未领**仍不返跟单全文**（`→需求§4.3`）。
-5. **解锁**：非归属手机 → `phone-unlock/apply`（L05）→ 批后限时全号，留痕 `operation_log`（不新增表）。
+4. **联系方式 / 脱敏口径（2026-09-14 重写）**：**详情一律给全号**（与角色无关）；**只有列表 / 卡片给 `phone_masked`**（含公海，防批量截图）；跨线金额给 `amount_masked`；非归属**被锁**联系人给 `phone_locked` 而不给 `phone`；跨部门**仍不返跟单全文**（`→需求§4.3`）。
+5. **锁与解锁**：上锁 `POST /contacts/:id/phone-lock`（**仅 owner**）；解锁申请 `phone-unlock/apply` → **落锁人审批**（＋知会其直属上级）→ **批后 24h 可见全号**，留痕 `operation_log`（不新增表）。**掉公海 / 离职 / 转岗 → 锁自动消失**；**总经理 / 管理员可强制解锁（须留痕）**。
 
 

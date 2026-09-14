@@ -1,6 +1,6 @@
 # 服务端 / Prisma（新后端起点）
 
-> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、**`prisma.config.ts`（2026-09-13 新增 —— Prisma 7 的连接串中枢，见下节）**、**`package.json`（2026-09-13 创建，同日升级为 Prisma `7.10.0`）＋ `package-lock.json`（同日 `npm install` 产生，**已入 git** —— 它才是版本真钉死的锚点）**；**依赖已装**（`node_modules/`，被根 `.gitignore` 忽略）：`prisma` / `@prisma/client` / `@prisma/adapter-mariadb` 均 **`7.10.0`** ＋ `typescript` **`5.9.3`**。**`src/` 已建成（2026-09-14 复验）** —— `kernel` / `shared` / `prisma` / `health` / `app.module` / `main` / `worker` 全部落地（**18 个 spec、160 条单测全绿**，`tsc --noEmit` 与 `npm run lint` 均 0 error，`dist/` 可产出）；**未做**：M0-51（冒烟留档）、M0-52（提交）、M0-54 ~ M0-57（前端）。骨架逐条状态见《过程产出/开发计划-V1.md》「M0 现状」段。
+> 本目录是新后端（NestJS + Prisma）的起点。当前含 `prisma/schema.prisma`（46 表）、`prisma/migrations/0001_init/migration.sql`（baseline ＋ 手工补充段，**已在真库 `win_crm` 跑通，并已 `migrate resolve` 登记基线**）、`prisma/migrations/0002_company_capital_legal_person/migration.sql`（**增量：`company` 加注册资本 / 法定代表人两列 ＋ 注释口径收口，✅ 已于 2026-09-13 在真库执行**）、`prisma/migrations/0003_username_and_phone_lock/migration.sql`（**增量：`employee` 加 `username`（登录账号名）＋ `contact` 加联系方式「锁」两列，✅ 已于 2026-09-14 在真库执行**）、**`prisma.config.ts`（2026-09-13 新增 —— Prisma 7 的连接串中枢，见下节）**、**`package.json`（2026-09-13 创建，同日升级为 Prisma `7.10.0`）＋ `package-lock.json`（同日 `npm install` 产生，**已入 git** —— 它才是版本真钉死的锚点）**；**依赖已装**（`node_modules/`，被根 `.gitignore` 忽略）：`prisma` / `@prisma/client` / `@prisma/adapter-mariadb` 均 **`7.10.0`** ＋ `typescript` **`5.9.3`**。**`src/` 已建成（2026-09-14 复验）** —— `kernel` / `shared` / `prisma` / `health` / `app.module` / `main` / `worker` 全部落地（**18 个 spec、160 条单测全绿**，`tsc --noEmit` 与 `npm run lint` 均 0 error，`dist/` 可产出）；**未做**：M0-51（冒烟留档）、M0-52（提交）、M0-54 ~ M0-57（前端）。骨架逐条状态见《过程产出/开发计划-V1.md》「M0 现状」段。
 
 ## ★ Prisma 7 升级（2026-09-13：6.19.3 → 7.10.0）
 
@@ -105,6 +105,36 @@ npx prisma format   --schema prisma/schema.prisma
 
 > ⚠ **执行前自证**：先用 `D:\ITtool\phpstudy_pro\Extensions\MySQL8.0.12\bin\mysql.exe` 跑 `select version()` → **`8.0.12`**（本机三版本并存，见上文「多版本 MySQL 并存」）。
 
+## migrations / 0003_username_and_phone_lock / migration.sql（增量 · 2026-09-14）
+
+- **做什么**：① `employee` 加 `username`（登录账号名 `VARCHAR(64) NULL` ＋ **`uk_username` 唯一索引**）；② `contact` 加 `phone_locked_at` / `phone_locked_by`（**联系方式「锁」**）。
+- **为什么**：需求 **§4.3** 2026-09-14 拍板 —— ① 登录通道由「手机号 ＋ 密码」扩为「**手机号 / 账号名 二选一 ＋ 密码**」（员工自定、**可空**、**唯一**、两通道共用同一 `password_hash`）；② 联系方式**不再分档脱敏**，改为「**详情默认全可见 ＋ 联系人可上锁**」（`→《废止口径登记表》#30 / #31`）。
+- **「可空 + 唯一」怎么共存**：MySQL 唯一索引**允许多个 NULL** —— 所以"老员工可以没有账号名"与"账号名不许重"两件事同时成立。
+- **锁为什么不建外键**：`phone_locked_by` 与 `created_by` 等审计列口径一致（**不建外键**），避免"删员工被引用挡住"。**锁的消失条件由应用层实现**（落锁人不再是该联系人任一活跃关系的 owner —— 离职 / 转岗 / 掉公海 → 锁自动消失），**DB 不加触发器、不加约束**。
+- **✅ 2026-09-14 已在真库执行**（`npx prisma migrate deploy` → `Applying migration 0003_username_and_phone_lock` → **`All migrations have been successfully applied.`**）；属纯 `ALTER TABLE` 加列 ＋ 加唯一索引，**不回填数据、无破坏性**（`username` 与两个锁列初始全为 NULL）。
+- **⚠ 不要改 `0001_init` / `0002`**：两份均已登记 → **注释 / 结构修正一律走新增量**（本目录已是第二次实践）。
+- **重建库顺序**：`0001_init` → `0002_company_capital_legal_person` → `0003_username_and_phone_lock`（再**各自** `migrate resolve --applied`）。
+- 表数不变（仍 **46 张业务表**）；**新增 1 个索引**：`employee.uk_username`。
+
+### ✅ 0003 验收结果（2026-09-14 · MySQL 8.0.12 实跑取证）
+
+方式：`npx prisma migrate deploy --schema prisma/schema.prisma`（**钉 `prisma@7.10.0`**，不钉版本会拉到 `8.0.0-rc.14`）。下表「实测」列均为 `information_schema` 实查值。
+
+| 验收项 | 期望 | 实测 |
+|---|---|---|
+| `employee.username` | `varchar(64)` / NULL | **`varchar(64)` / YES** ✅ |
+| `employee.uk_username` | 唯一、单列 | **`NON_UNIQUE=0`、列 `username`、`SEQ_IN_INDEX=1`** ✅ |
+| `contact.phone_locked_at` | `datetime` / NULL | **`datetime` / YES** ✅ |
+| `contact.phone_locked_by` | `bigint unsigned` / NULL | **`bigint(20) unsigned` / YES** ✅ |
+| 三列中文 `COMMENT` | 3 / 3 | **3 / 3 已带** ✅ |
+| `prisma migrate status` | `3 migrations found` ＋ 无 pending | **`3 migrations found` ＋ `Database schema is up to date!`** ✅ |
+| `migrate diff` 核对（**只作核对**） | 仅 3 列 ＋ `uk_username` 为真差异；其余是 4 类"设计使然" | **diff 里只有 `ADD COLUMN ×3` ＋ `CREATE UNIQUE INDEX uk_username`，其余 6 条（`DROP INDEX uk_active_rel / uk_phone_active / uk_owner` ＋ `DROP PRIMARY KEY` 三张分区表）全是"设计使然"，执行即破坏** ✅ |
+| 种子重跑（幂等） | Q1~Q5 自检全通过 | **Q1 行数不变（矩阵仍 18 行）／Q4 六人账号名齐备／Q5 key 集合＝`contact_phone,contract_amount,relation_timeline`** ✅ |
+| 三绿 | `tsc --noEmit` / `lint` / `test` 全过 | **tsc 0 error ／ lint 0 error ／ 23 suites · 254 tests 全绿**（与改动前一致） ✅ |
+| 表数 / 其余索引 | 仍 46 业务表；除 `uk_username` 无新增 | **不变** ✅（全库 47 基表 ＝ 46 业务表 ＋ 1 元数据表） |
+
+> ⚠ **已知未清**：`0001_init` 第 93 行 `permission_matrix.perm_key` 的列 `COMMENT` 里仍举着两个**已废止**的 key（`cross_dept_private` / `phone_unlock`）。按上文「注释修正走新增量」本该再开 `0004` 只改注释 —— **本批未做**（不在本次授权范围），待指令。
+
 ## ★ 必须「手写 migration」的部分（数据架构 §十五.5，Prisma 表达不了）
 
 | # | 场景 | 做法 |
@@ -173,7 +203,7 @@ npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prism
 
 **关键结论**：**无缺表 / 无缺列 / 无缺索引** —— 即 `migration.sql` 与 `schema.prisma` 的**结构一致**，上文「46 表 / 索引 / 外键」的验收结论不受 drift 影响。
 
-> ⚠ **重建提醒（必读）**：日后若 `DROP DATABASE win_crm` 重灌 `migration.sql`，**必须重跑 `npx prisma migrate resolve --applied 0001_init`**。否则库内没有 `_prisma_migrations` 记录，`migrate status` 会把它判为「未应用」并试图**重跑整份 baseline**（在已有表上执行 → 必炸）。**2026-09-13 起**：重灌＝**两份都要跑**（`0001_init` → `0002_company_capital_legal_person`）并**分别 `migrate resolve --applied`**（否则 `migrate status` 会报 `0002` 未应用）。
+> ⚠ **重建提醒（必读）**：日后若 `DROP DATABASE win_crm` 重灌 `migration.sql`，**必须重跑 `npx prisma migrate resolve --applied 0001_init`**。否则库内没有 `_prisma_migrations` 记录，`migrate status` 会把它判为「未应用」并试图**重跑整份 baseline**（在已有表上执行 → 必炸）。**2026-09-14 起**：重灌＝**三份都要跑**（`0001_init` → `0002_company_capital_legal_person` → `0003_username_and_phone_lock`）并**分别 `migrate resolve --applied`**（否则 `migrate status` 会报 `0002` / `0003` 未应用）。
 
 ## ✅ 基线登记（M0-21 · 2026-09-12 取证）
 
@@ -193,7 +223,7 @@ npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prism
 | 3 | **docker-compose** | 本机无 Docker，**从未跑过**（M0-07 只做 YAML 语法自检） | 首次部署跑 `docker compose config` ＋ `up`，确认 `mysql:8`（**≥8.0.16**）/ `redis:7` 起得来 |
 | 4 | **Redis 版本** | phpStudy **3.0.504**（**无密码**） | 换 **Redis 7**；代码里「禁用 6/7 专有命令」的临时红线（`UNLINK` / `EXPIRE … NX｜GT｜LT` / ACL）**可解禁**；**必须设密码** |
 | 5 | **密钥 / 口令** | `.env` 里 DB / Redis **均无强口令**、`JWT_SECRET` 为本地随机值 | 换生产密钥与强口令；`.env` 不入库 |
-| 6 | **migration 全量重放** | 已应用 `0001_init` ＋ `0002` | 空库上按序 `0001_init` → `0002` → 逐份 `migrate resolve --applied`（口径见上文「重建提醒」），再 `migrate status` 断言 **`up to date!`** |
+| 6 | **migration 全量重放** | 已应用 `0001_init` ＋ `0002` ＋ `0003` | 空库上按序 `0001_init` → `0002` → `0003` → 逐份 `migrate resolve --applied`（口径见上文「重建提醒」），再 `migrate status` 断言 **`up to date!`** |
 | 7 | **`/docs` OpenAPI 暴露** | 开发环境**默认开放**（`/docs` ＋ `/docs-json`） | **生产已默认关闭** —— `main.ts` 的 `openApiEnabled()`：`NODE_ENV=production` 且未设 `OPENAPI_ENABLED=true` 时**跳过挂载**（`/docs` 是中间件直出、不经守卫，开了即等同公开全部接口定义）。确需保留必须**自加访问控制**。**部署后必查**：`curl -o /dev/null -w '%{http_code}' http://<host>/docs` 应为 **404**（2026-09-14 立） |
 | 8 | **构建链路（尤其 `npm ci --omit=dev`）** | `package.json` 已含 `prisma:generate` / `build` / `postinstall`；本机 `npm run build` **已实测通过** | `npm ci` 会自动跑 `postinstall → prisma generate`；⚠ 但 **`--omit=dev` 时 `prisma` CLI 不在 → `postinstall` 会失败**：改用**多阶段构建**（构建阶段装 devDeps 跑 `npm run build`，运行阶段只带 `dist/` ＋ prod deps ＋ 已生成的 client），或 `npm ci --ignore-scripts` 后自行 `npm run prisma:generate`。**首次部署必跑 `npm run build` 验证**（2026-09-14 立） |
 | 9 | **分区预置月数 / 滚动** | 建库时预置到 `p202712`（真实上界 `202801`）＋ `pmax(MAXVALUE)` | **有 `pmax` 兜底 → 绝不会插失败**；但 **2028-01 起全部新行落入单一 `pmax`**，且老分区**无法 `DROP PARTITION` 清理** → 生产建库**预置月数 ≥ 3 年**，并把「分区滚动」纳入定时任务（→ 数据架构 §十二 末行，2026-09-14 补录） |

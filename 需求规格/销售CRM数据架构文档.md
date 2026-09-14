@@ -70,7 +70,7 @@ commitment ─< daily_agenda（今日动线，ref 承诺/预约/节奏）
 cadence_rule（节奏规则：经理配；含掉海/新客/S级客情/灰度）
 competitor（竞品名册：经理维护，销售只读引用）
 review（出口复盘 ★转已合作 / 判死 / 流失）
-approval（转交 / 协同 / 手机号变更 / 手机号解锁 四型一单）
+approval（转交 / 协同 / 手机号变更 / 联系方式解锁 四型一单）
 notification（站内/微信预留）｜ dict_type ─< dict_item
 action_event ─< stat_daily（日级行为汇总·派生预聚合）
 operation_log（★全局审计日志）｜ job_run_log（定时任务执行日志）｜ visit_log（外出登记：纯行政考勤）
@@ -85,7 +85,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 `name`、`parent_id`(0=根)、`service_enabled`(客服开关)、`status`(active/disabled)
 
 ### A2 employee 员工
-`work_no` UNIQUE、`name`、`phone` UNIQUE、`password_hash`、`primary_dept_id`、`extra_dept_ids` JSON、`product_line_ids` JSON、`direct_manager_id`(直属经理/审批链)、`status`(active/resigned/disabled)
+`work_no` UNIQUE、`name`、`phone` UNIQUE、**`username` UNIQUE（可空）**、`password_hash`、`primary_dept_id`、`extra_dept_ids` JSON、`product_line_ids` JSON、`direct_manager_id`(直属经理/审批链)、`status`(active/resigned/disabled)
+
+> **★ `username`（2026-09-14 新增 · migration `0003`）**：**登录账号名** —— 员工自定、**可空**（为空则只能手机号登录）、**全局唯一**（MySQL 唯一索引允许多个 NULL，故"可空 + 唯一"成立）、大小写不敏感。登录＝**手机号 或 账号名 二选一 ＋ 密码**，两通道共用 `password_hash`（`→需求§4.3` / 接口 §5.2）。V1 由管理员在员工编辑里维护，**不做员工自助改名**。
 
 ### A3 dept_manager 管辖部门（经理查数范围 = 本表集合）
 `dept_id + employee_id` 联合唯一
@@ -95,7 +97,19 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 - employee_role：`employee_id + role_code` 联合唯一（一人多角色）
 
 ### A6 permission_matrix 权限矩阵
-`perm_key`(如 cross_dept_private / contract_amount / phone_unlock) × `role_code` → `level`(visible/masked/denied)
+`perm_key` × `role_code` → `level`(visible/masked/denied)。**⚠ 矩阵表达的是「越出本分范围时的兜底档」**；「经理管辖内可见」「销售看自己的」由**数据范围**承担，**不走本表**。
+
+**★ 2026-09-14 重定（3 key × 6 角色 ＝ 18 行）**：
+
+| perm_key | 管什么 | sale | service | delivery | admin | dept_manager | gm |
+|---|---|---|---|---|---|---|---|
+| `contact_phone` | 详情里的联系方式 | visible | visible | visible | visible | visible | visible |
+| `relation_timeline` | 跨部门跟单全文 | denied | denied | denied | **visible**（只读） | denied | visible |
+| `contract_amount` | 跨部门合同金额 | masked | masked | masked | masked | masked | visible |
+
+- 旧 key `cross_dept_private`（看他人私海）/ `phone_unlock`（手机号解锁）**已废止**（`→《废止口径登记表》#30`）。
+- **联系方式「锁」不进矩阵** —— 由 `contact.phone_locked_at / phone_locked_by` 单独管（`→B3`）。
+- `level` 语义：`visible`＝原文 / `masked`＝打码（`amount: null` + `amount_masked`）/ `denied`＝字段不返回。
 
 ### A7 product_line 产品线
 `name/code` UNIQUE、`dept_ids` JSON(承接部门)、`service_cycle_days`、`status`
@@ -200,6 +214,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | status | active/left/freelance |
 | merged_into | **联系人级合并墓碑**：自引用 FK（`contact.id`，可空）。非 NULL = 本联系人已并入该 winner；物理不删、traits **并集**、子记录零改动；统一视图聚合（见 `→需求§7.2` 合并联系人） |
 | phone_frozen_until | 手机号变更审核冻结期（24h） |
+| **phone_locked_at / phone_locked_by** | ★ 2026-09-14 新增（migration `0003`）：**联系方式「锁」**。`phone_locked_at` NULL=未锁；`phone_locked_by`＝**落锁人**（＝解锁申请审批人）。锁**全局生效**（A 部门锁了 B 部门也看不到）、**仅该联系人归属关系的 owner 可上锁**（协同人 / 经理不能）；**落锁人不再持有该联系人任一活跃关系（离职 / 转岗 / 掉公海）→ 锁自动消失**；总经理 / 管理员可强制解锁（须留痕）。**无外键**（与 `created_by` 等审计列口径一致）（`→需求§4.3 二`） |
 
 ### B4 contact_trait 联系人谈判特质（默认 ≤3，部门可配）
 `contact_id` + `trait_id/trait_code` + `marked_by/marked_at`；联合唯一；**每人上限 = 所属部门 `dept_rule.contact_trait_max`（默认 3，范围 1~5）**（超出 **422+20402**）；**★ 2026-09-11 明确：422 只拦「新增」——更新后数量 ≤ 当前已有数量则放行**（否则经理调小上限后，存量超限特质连编辑都做不了）；**经理调小上限后存量超限特质保留**；特质跟着人走（换公司保留）
@@ -478,17 +493,17 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 ## 九、域 G：审批中心（四型一单；报销一期不做，`→需求§7.9`）
 
 ### G1 approval
-`type`：**transfer** 转交（含离职批量转交）/ **collaborate** 协同 / **phone_change** 手机号变更 / **phone_unlock** 手机号解锁
+`type`：**transfer** 转交（含离职批量转交）/ **collaborate** 协同 / **phone_change** 手机号变更 / **phone_unlock** 联系方式解锁
 
 | 字段 | 说明 |
 |---|---|
 | type / applicant_id / approver_id | 申请人≠审批人（DB CHECK + 应用双拦） |
 | target_type / target_id | 对象（关系/联系人） |
-| payload JSON | 转交目标人（含批量清单）/新旧手机号/协同人与有效期/解锁目标 |
+| payload JSON | 转交目标人（含批量清单）/新旧手机号/协同人与有效期/解锁目标（含 `locked_by`） |
 | status | pending/approved/rejected |
 | comment / handled_at | 驳回必填原因 |
 
-- 手机号解锁：跨业务线/非归属部门看到 `****{后4位}` 可申请；经理批后**限时可见全号**（出参 unlockedUntil）；申请/批准留痕 operation_log 防批量捞号
+- **联系方式解锁（`phone_unlock`，2026-09-14 重写）**：联系人被 owner **上锁**后，他人查看详情只见 `phone_locked` → 可申请；**`approver_id` ＝ 该联系人的落锁人**（⚠ **例外于"默认直属上级"**，并**知会其直属上级**）；批后 **24h** 内可见全号（出参 `unlocked_until`）；申请 / 批准留痕 `operation_log` 防批量捞号。落锁人已离职 / 转岗 / 关系已掉公海 → **锁自动消失，无需审批**
 - 手机号变更：审核通过后冻结 24h（contact.phone_frozen_until）才生效
 
 ---
@@ -516,7 +531,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 表 | 索引 |
 |---|---|
 | department | `idx_parent_id`（部门树） |
-| employee | **`uk_work_no`**、**`uk_phone`**、`idx_primary_dept_id`、`idx_direct_manager_id` |
+| employee | **`uk_work_no`**、**`uk_phone`**、**`uk_username`**（可空唯一，2026-09-14 加）、`idx_primary_dept_id`、`idx_direct_manager_id` |
 | dept_manager | **`uk_dept_emp(dept_id, employee_id)`**、`idx_employee_id` |
 | role | **`uk_code`** |
 | employee_role | **`uk_emp_role(employee_id, role_code)`**、`idx_role_code` |
@@ -610,22 +625,41 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 ## 十一、数据权限与脱敏（实现口径，业务规则见 `→需求§4`）
 
-**库中永远明文全量**；脱敏在应用层按 permission_matrix 渲染。
+**库中永远明文全量**；脱敏在应用层按 `permission_matrix` 渲染。
 
-| 查看场景 | 联系方式 | 事件可见度 |
-|---|---|---|
-| 归属本人 | 完整手机号 | 全文（可写） |
-| 协同人（正式协同 / @求助有效期内） | 完整手机号 | 全文（可共同写） |
-| 公司抽屉·非归属部门联系人 | `****{后4位}` +「申请解锁」 | 不显示具体事件 |
-| 公海卡片/列表 | **列表/卡片脱敏 `xxx****xxxx`**；**详情返全号**（可拨，逐次留痕 `sea.phone.view`） | 仅「近 30 天 N 次」概览 |
-| 跨业务线金额 | 完全脱敏 | 仅"N 个工单进行中"概览 |
+> **★ 2026-09-14 口径重写**：联系方式**不再按角色 / 场景分档脱敏** → 改为「**详情默认全可见 ＋ 联系人可上锁**」（`→需求§4.3`）。
 
-> ★ **脱敏口径只作用于「销售看他人私海 / 跨部门关系」的列表与详情**；**报表 / 看板 / 汇总不脱敏**（经理、老板出口返回真实金额，2026-09-11 定）。
+**① 联系方式（手机号）**
+
+| 出参形态 | 规则 |
+|---|---|
+| **详情** | **一律全号 `phone`** —— 与角色 / 场景无关 |
+| **列表 / 卡片**（含公海、公司抽屉内的联系人列表） | 一律 `phone_masked`（`xxx****xxxx`）—— **是出参形态、不是权限**，防"一眼扫走一列号"的批量截图 |
+| **详情 · 该联系人被 owner 上锁、且查看者不是 owner** | 给 `phone_locked:true` ＋ `phone_locked_by`，**不给 `phone`** |
+| 公海未领**详情** | 全号（**锁随掉公海自动消失**）＋ 概览，**不返跟单全文**；逐次写 `operation_log`(`sea.phone.view`) |
+
+**② 跟单内容（跨部门互不可见）**
+
+| 角色 | 跨部门 / 非归属 跟单全文 |
+|---|---|
+| 归属本人 / 协同人 | 全文（协同可共同写） |
+| 销售 / 客服 / 交付 / 部门经理·**跨管辖** | **不可见**（仅"近 30 天 N 次"概览） |
+| 部门经理·**管辖内** / 总经理 | 全文 |
+| 管理员 | 全文，但**只读**，且每次查看写 `operation_log` |
+
+**③ 金额（跨业务线）**
+
+| 角色 | 跨业务线金额 |
+|---|---|
+| 归属本人 / 协同人 / 部门经理·**管辖内** / 总经理 | 真实金额 |
+| 部门经理·**跨管辖** / 销售 / 客服 / 交付 / 管理员 | `amount: null` + `amount_masked: "***"` |
+
+> ★ **金额脱敏只作用于「销售看他人私海 / 跨部门关系」的列表与详情**；**报表 / 看板 / 汇总不脱敏**（经理、老板出口返回真实金额，2026-09-11 定）。
 
 - 数据范围：销售可见客户全集 = **本人 owner 私海 ∪ 我作为 collaborator 的关系（含正式协同 collaborate 与 @求助 ask_help，valid_until 未过期）∪ 公海**；经理=dept_manager 管辖部门；总经理=全部；他人私海不可见（除非协同/@求助授权）。客户列表提供"@我 / 我协同 / 全部关联"筛选视图，底层即 relation_member 中 employee_id=当前用户 的 collaborator 集合，与 owner 私海取并集后按筛选裁剪（口径见 §十七 A.3）
 - 赢单弹药库（review published）：**默认本部门可见**；gm 经 system_config(ammo_scope=company) 改全公司；未收录的（open/dismissed）仅本人+直属经理可见
 - 坐标属公司档案基础信息（非敏感）；将来做地图时必须走同一套权限过滤
-- 协同/转交走审批；解锁/变更走审批且留痕；**公海看号留痕（`sea.phone.view`，不设次数上限）**；合同水印、**公海页水印**、操作日志为应用层责任
+- 协同/转交走审批；**上锁 / 解锁申请走审批且留痕**（`phone_unlock` 的**审批人＝落锁人**，并知会其直属上级，`→需求§4.3 二`）；手机号变更走审批且留痕；**公海看号留痕（`sea.phone.view`，不设次数上限）**；合同水印、**公海页水印**、操作日志为应用层责任
 
 ---
 
@@ -699,7 +733,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 域 E 交易服务 | 需求 §7.6 / §7.7 / §6.4 | 合同、台账、工单 |
 | 域 F 公海 | 需求 §6.3 / §12 | 掉落规则与撞单 |
 | 域 G 审批 | 需求 §7.9 | 四型一单 |
-| §11 权限脱敏 | 需求 §4.3 | 分档口径一致 |
+| §11 权限脱敏 | 需求 §4.3 | 联系方式（全可见＋锁）/ 跟单 / 金额三段口径一致 |
 | 前端交互 | 需求 §13 全局交互规范 | **《销售CRM前端页面与交互文档》**（需求规格/）：页面清单 / 页面级交互 / 角色矩阵；**视觉 / 组件 / 状态 / 响应式已独立成册 →《销售CRM设计规范》**；实体可点铁律、一层抽屉、悬浮卡 |
 
 > **L0 执行提示**：需求文档任一小节变更 → 按本表反查受影响的表 → 同批改本文件并升版。

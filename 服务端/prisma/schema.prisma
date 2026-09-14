@@ -73,6 +73,7 @@ model Employee {
   work_no           String    @unique(map: "uk_work_no") @db.VarChar(32)
   name              String    @db.VarChar(50)
   phone             String    @unique(map: "uk_phone") @db.VarChar(32)
+  username          String?   @unique(map: "uk_username") @db.VarChar(64) // ★ 2026-09-14 新增：登录账号名（员工自定、可空、唯一；登录＝手机号 或 账号名 二选一）
   password_hash     String    @db.VarChar(255)
   primary_dept_id   BigInt    @db.UnsignedBigInt
   extra_dept_ids    Json? // 兼部门 JSON
@@ -152,7 +153,8 @@ model EmployeeRole {
 /// A6 权限矩阵（perm_key × role_code → level）
 model PermissionMatrix {
   id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  perm_key   String   @db.VarChar(64) // cross_dept_private / contract_amount / phone_unlock ...
+  perm_key   String   @db.VarChar(64) // ★ 2026-09-14 重定：contact_phone / relation_timeline / contract_amount
+  // 旧值 cross_dept_private（看他人私海）/ phone_unlock（手机号解锁）已随「联系方式默认全可见 ＋ 联系人可上锁」口径废止
   role_code  String   @db.VarChar(32)
   level      String   @db.VarChar(32) // visible / masked / denied
   created_at DateTime @default(now()) @db.DateTime(0)
@@ -403,7 +405,7 @@ model CompanyProfileTag {
   @@map("company_profile_tag")
 }
 
-/// B3 联系人（手机号唯一改走生成列 phone_active；软删/换号自动释放）
+/// B3 联系人（手机号唯一改走生成列 phone_active；软删/换号自动释放；联系方式「锁」见 phone_locked_*）
 model Contact {
   id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   name               String    @db.VarChar(50)
@@ -420,6 +422,8 @@ model Contact {
   status             String    @default("active") @db.VarChar(16) // active / left / freelance
   merged_into        BigInt?   @db.UnsignedBigInt // 联系人合并墓碑（自引用）
   phone_frozen_until DateTime? @db.DateTime(0) // 手机号变更冻结期（24h）
+  phone_locked_at    DateTime? @db.DateTime(0) // ★ 2026-09-14 新增：联系方式上锁时间（NULL=未锁；全局锁：任一部门被 owner 上锁后全部部门都看不到）
+  phone_locked_by    BigInt?   @db.UnsignedBigInt // ★ 2026-09-14 新增：落锁人（＝解锁申请的审批人；其离职/转岗或不再持有任一活跃关系 → 锁自动消失）
   created_by         BigInt?   @db.UnsignedBigInt
   created_at         DateTime  @default(now()) @db.DateTime(0)
   updated_by         BigInt?   @db.UnsignedBigInt

@@ -41,7 +41,7 @@
 
 ## schema.prisma
 
-- **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.29**（§三~§九 表、§十 索引、§十五 落库口径）。
+- **46 张表**，真相源＝**《需求规格/销售CRM数据架构文档》V1.30**（§三~§九 表、§十 索引、§十五 落库口径）。
 - ✅ **已通过 Prisma 校验**：`The schema at prisma\schema.prisma is valid 🚀`（**2026-09-12 于 `6.19.3`；2026-09-13 升级到 `7.10.0` 后再次复验通过**）。
 - ⚠ **两次 P1012（都已修，值得记住）**：
   1. **2026-09-12 · 关系未双向声明**：`SignChecklist.product_line` 缺 `ProductLine` 侧的对向字段 → 已在 `ProductLine` 补一行 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**（`sign_checklist` 表与其外键，`migration.sql` 里一直是对的）。**教训：Prisma 关系字段是双向的 —— 加表/加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败（骨架一搭好就会撞）。**
@@ -144,7 +144,7 @@ npx prisma format   --schema prisma/schema.prisma
 | 3 | **CHECK 约束** | 如 `approval` 申请人 ≠ 审批人（DB CHECK ＋ 应用双拦）。**⚠ 需 MySQL 8.0.16+**：8.0.12 会解析后静默忽略（见上方「环境版本门槛」） |
 | 4 | **视图** | `v_contract_performance` ＝ `contract × contract_split`（无 split 则 `signer_id` 占 100%）——**业绩统计一律读此视图**，避免口径漂移。**⚠ 视图不能带 `COMMENT`**（MySQL `CREATE VIEW` 无该子句，ERROR 1064），口径说明只写在脚本里其上方 SQL 注释 |
 | 5 | **键约束** | 手机号唯一、公司信用代码唯一为**数据库级约束**（撞单兜底） |
-| 6 | **表 / 字段中文 `COMMENT`** | **Prisma 无法表达 MySQL `COMMENT`**（`schema.prisma` 不写、`db pull` 不读）。故 `migration.sql` 里 **46 张表全部带表级 `COMMENT='…'` ＋ 每个字段行尾 `COMMENT '…'`**，让 DBA / Navicat / `SHOW CREATE TABLE` 直接可读（口径来源＝《数据架构文档》V1.29 各表字段说明）。**⚠ 用 `prisma migrate diff` 重新生成 baseline 会把这批 COMMENT 全部抹掉** —— 重生成后必须补回，或改用「手写增量 migration」承载注释。**视图列不受此覆盖**（视图无 COMMENT，且表达式列 `employee_id` / `percent` / `performance_amount` 在 `information_schema` 里 `COLUMN_COMMENT` 为空属正常） |
+| 6 | **表 / 字段中文 `COMMENT`** | **Prisma 无法表达 MySQL `COMMENT`**（`schema.prisma` 不写、`db pull` 不读）。故 `migration.sql` 里 **46 张表全部带表级 `COMMENT='…'` ＋ 每个字段行尾 `COMMENT '…'`**，让 DBA / Navicat / `SHOW CREATE TABLE` 直接可读（口径来源＝《数据架构文档》V1.30 各表字段说明）。**⚠ 用 `prisma migrate diff` 重新生成 baseline 会把这批 COMMENT 全部抹掉** —— 重生成后必须补回，或改用「手写增量 migration」承载注释。**视图列不受此覆盖**（视图无 COMMENT，且表达式列 `employee_id` / `percent` / `performance_amount` 在 `information_schema` 里 `COLUMN_COMMENT` 为空属正常） |
 
 ## 口径约定（写代码前先读）
 

@@ -21,6 +21,10 @@ import type { CreateCompanyDto, CreateContactDto } from './dto/company-request.d
 
 const OPERATOR_ID = 7n;
 
+/** M5-04：另一个人的 id（＝「不是落锁人」的那一侧）＋ 一个上锁时刻（值本身不重要，只表达「锁开着」） */
+const LOCKER_ID = 3n;
+const LOCKED_AT = new Date('2026-09-15T10:00:00+08:00');
+
 /** 请求上下文（建档者的身份来源） */
 const CONTEXT: RequestContext = {
   employeeId: OPERATOR_ID,
@@ -97,13 +101,28 @@ interface ContactRowFixture {
   id: bigint;
   name: string;
   phone: string;
+  extra_phones: { type: string; number: string; note?: string }[] | null;
   decision_role: string | null;
   status: string;
+  /** M5-04：联系方式「锁」的两列（NULL ＝ 未锁；`by` ＝ 落锁人，→ 数据架构 B3） */
+  phone_locked_at: Date | null;
+  phone_locked_by: bigint | null;
   merged_into: bigint | null;
 }
 
 function contactRow(overrides: Partial<ContactRowFixture> = {}): ContactRowFixture {
-  return { id: 11n, name: '张伟', phone: '13800000000', decision_role: null, status: 'active', merged_into: null, ...overrides };
+  return {
+    id: 11n,
+    name: '张伟',
+    phone: '13800000000',
+    extra_phones: null,
+    decision_role: null,
+    status: 'active',
+    phone_locked_at: null,
+    phone_locked_by: null,
+    merged_into: null,
+    ...overrides,
+  };
 }
 
 interface FakeOptions {
@@ -406,7 +425,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         ],
       });
 
-      const briefs = await service.listCompanyContacts('3');
+      const briefs = await runWithContext(CONTEXT, () => service.listCompanyContacts('3'));
 
       expect(briefs.map((item) => [item.id, item.phone_masked, item.is_current])).toEqual([
         [11n, '138****0000', true],
@@ -415,19 +434,65 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       expect(briefs.every((item) => item.phone_locked === false)).toBe(true);
     });
 
-    it('联系人列表：打码形态与角色无关（本批未接 M5 的锁，`phone_locked` 恒 false）', async () => {
+    it('联系人列表：打码形态与角色无关（**未上锁时 `phone_locked` ＝ false**，不是「恒 false」）', async () => {
       const { service } = createService({ contacts: [contactRow({ id: 11n })] });
 
-      const briefs = await service.listContacts();
+      const briefs = await runWithContext(CONTEXT, () => service.listContacts());
 
       expect(briefs).toHaveLength(1);
       expect(briefs[0]?.phone_masked).toBe('138****0000');
+      expect(briefs[0]?.phone_locked).toBe(false);
+    });
+
+    it('★ M5-04：被上锁 ＋ 查看者**不是落锁人** → `phone_locked:true`（列表仍打码，**不因上锁改形态**）', async () => {
+      const { service } = createService({
+        contacts: [
+          contactRow({ id: 11n, phone_locked_at: LOCKED_AT, phone_locked_by: LOCKER_ID }),
+          contactRow({ id: 12n, phone: '13911112222', phone_locked_at: LOCKED_AT, phone_locked_by: OPERATOR_ID }),
+        ],
+      });
+
+      const briefs = await runWithContext(CONTEXT, () => service.listContacts());
+
+      // ① 别人锁的 → 我看到「已上锁」；② 我自己锁的 → 照常（锁是自我保护，不挡自己，→ §4.3 二）
+      expect(briefs.map((item) => [item.id, item.phone_masked, item.phone_locked])).toEqual([
+        [11n, '138****0000', true],
+        [12n, '139****2222', false],
+      ]);
+    });
+
+    it('★ M5-04：公司联系人出口**同一套**锁判定（两个列表共用一段装配，不许各写一遍）', async () => {
+      const { service } = createService({
+        companyById: companyRow({ id: 3n }),
+        companyContacts: [
+          {
+            is_current: true,
+            position: '采购总监',
+            contact: contactRow({ id: 11n, phone_locked_at: LOCKED_AT, phone_locked_by: LOCKER_ID }),
+          },
+        ],
+      });
+
+      const briefs = await runWithContext(CONTEXT, () => service.listCompanyContacts('3'));
+
+      expect(briefs.map((item) => [item.id, item.phone_locked])).toEqual([[11n, true]]);
+    });
+
+    it('没有请求上下文 → 401：锁的可见性取决于「我是谁」，**没有身份就不猜**（不静默按「未锁」渲染）', async () => {
+      const { service } = createService({ contacts: [contactRow({ id: 11n })] });
+
+      const error = await captureAppError(() => service.listContacts());
+
+      expect(error.httpStatus).toBe(401);
+      expect(error.code).toBe(ErrorCode.UNAUTHENTICATED);
     });
 
     it('公司不存在 → 400（「列表空」与「公司不存在」是两种状态，不能混成一种）', async () => {
       const { service } = createService({ companyById: null });
 
-      const error = await captureAppError(() => service.listCompanyContacts('999'));
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.listCompanyContacts('999')),
+      );
 
       expect(error.httpStatus).toBe(400);
       expect(error.message).toContain('公司不存在');

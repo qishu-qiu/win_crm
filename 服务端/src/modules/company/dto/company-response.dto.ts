@@ -120,7 +120,11 @@ export class ContactBriefVoDto {
   @ApiProperty({ description: '打码手机号（列表 / 卡片出参形态，**不是权限**，→ §2.8）', example: '138****0000' })
   phone_masked!: string;
 
-  @ApiProperty({ description: '是否被 owner 上锁（M5 前恒为 false：锁的实现属 M5）' })
+  @ApiProperty({
+    description:
+      '手机号是否**对当前查看者**处于上锁态（＝锁开着、且查看者不是落锁人，→ 需求 §4.3 二）。' +
+      '⚠ 列表**本就一律 `phone_masked`**：本字段是「已上锁 ＋ 申请解锁」的提示，不是权限开关',
+  })
   phone_locked!: boolean;
 
   @ApiPropertyOptional({ description: '决策角色', enum: ['decision', 'influence', 'execute'] })

@@ -60,7 +60,8 @@ import { AppValidationPipe } from './pipes/validation.pipe';
     // ③ 数据范围：只把范围**打标到请求上**（M0-36）。★ 判定与注入**不在本拦截器**：
     //     唯一判定＝`kernel/data-scope/data-scope-target.ts`（M5-02），各域 repository 拼 where（M5-03）
     { provide: APP_INTERCEPTOR, useClass: DataScopeInterceptor },
-    // ④ 脱敏：M0 占位放行（M0-37），真实规则在 M5
+    // ④ 脱敏：**只做出口豁免标记**（M5-06）—— 字段级渲染在各域出口组装出参时完成，
+    //     本层**不逐字段改写**（M5-04 定稿，见 desensitize.interceptor.ts 文件头 ★ 段）
     { provide: APP_INTERCEPTOR, useClass: DesensitizeInterceptor },
     // ⑤ 异常映射：所有失败出口收成统一包（M0-34）
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -33,6 +33,7 @@ import {
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
 import { compareCompanyNameCore, type CompanyMatchType } from './domain/company-name-similarity';
+import { isPhoneLockedForViewer } from './domain/contact-lock';
 import { toNameCore } from './domain/company-name';
 import { isEmptyPhone, normalizeContactPhone } from './domain/contact-phone';
 import { CompanyRepository, type CompanyTxClient, type CreateCompanyData } from './company.repository';
@@ -320,25 +321,25 @@ export class CompanyService {
     };
   }
 
-  /** 联系人列表（→ §5.5 `ContactBrief`；列表一律 `phone_masked`） */
+  /**
+   * 联系人列表（→ §5.5 `ContactBrief`；列表一律 `phone_masked`）。
+   *
+   * ★ M5-04：`phone_locked` 从「恒 false 的占位」改为**真判定** —— 判据＝「锁开着 **且** 查看者不是落锁人」
+   *   （唯一判定点＝`domain/contact-lock.ts`；**落锁人＝上锁时的归属 owner**，等价性论证见该文件头 ★ 段）。
+   * ⚠ 本接口因此**必须先有身份**：拿不到上下文 → 401（`requireOperatorId`）——
+   *   锁的可见性取决于「我是谁」，**没有身份就不能猜**（猜「没锁」会把「已上锁」这条提示吞掉）。
+   */
   async listContacts(): Promise<ContactBriefVo[]> {
+    const viewerId = this.requireOperatorId();
     const rows = await this.repository.listContacts();
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      position: null,
-      phone_masked: maskPhone(row.phone),
-      // ⚠ M5 前恒为 false：锁的判定要读「查看者是不是 owner」，属 M5 的脱敏出口
-      phone_locked: false,
-      decision_role: row.decision_role,
-      is_current: true,
-    }));
+    return rows.map((row) => toContactBrief(row, viewerId, { position: null, is_current: true }));
   }
 
   // ===== M2-14 公司联系人 =====
 
-  /** 该公司下的联系人（**含历史就职 / 已离职标记**，→ B5） */
+  /** 该公司下的联系人（**含历史就职 / 已离职标记**，→ B5；`phone_locked` 同 `listContacts`） */
   async listCompanyContacts(companyId: string): Promise<ContactBriefVo[]> {
+    const viewerId = this.requireOperatorId();
     const id = jsonToBigint(companyId, 'id');
     const company = await this.repository.findCompanyById(id);
     if (company === null) {
@@ -348,15 +349,9 @@ export class CompanyService {
     }
 
     const rows = await this.repository.findCompanyContacts(id);
-    return rows.map((row) => ({
-      id: row.contact.id,
-      name: row.contact.name,
-      position: row.position,
-      phone_masked: maskPhone(row.contact.phone),
-      phone_locked: false,
-      decision_role: row.contact.decision_role,
-      is_current: row.is_current,
-    }));
+    return rows.map((row) =>
+      toContactBrief(row.contact, viewerId, { position: row.position, is_current: row.is_current }),
+    );
   }
 
   /** 当前登录人 id；拿不到 → 401（正常链路上守卫已在前，走到这里还没有上下文＝装配问题） */
@@ -373,6 +368,34 @@ export class CompanyService {
 
 /** 仓储读出的公司行（结构取自 `COMPANY_SELECT`，不手抄字段） */
 type CompanyRow = Awaited<ReturnType<CompanyRepository['createCompany']>>;
+
+/** 仓储读出的联系人行（结构取自 `CONTACT_SELECT`，不手抄字段） */
+type ContactRow = Awaited<ReturnType<CompanyRepository['listContacts']>>[number];
+
+/**
+ * 联系人行 → 简卡（两个列表共用一段装配，**别写两遍**：脱敏口径一散开就会「改一处漏两处」）。
+ *
+ * ★ 出参形态（→ 数据架构 §十一 ①）：
+ *   · `phone_masked` —— **列表 / 卡片一律打码**，是**出参形态、不是权限**（防「一眼扫走一列号」）；
+ *   · `phone_locked` —— 锁开着、且查看者**不是落锁人**时为 `true`（→ `domain/contact-lock.ts`）。
+ * ⚠ `extra_phones`（备用号）**不进简卡**：它只出现在**联系人详情**，而详情接口本批未建；
+ *   「锁跟人：主号与备用号一并隐藏」随详情接口一起落地（已登记 → 交接说明「欠账」）。
+ */
+function toContactBrief(
+  row: ContactRow,
+  viewerId: bigint,
+  extras: { position: string | null; is_current: boolean },
+): ContactBriefVo {
+  return {
+    id: row.id,
+    name: row.name,
+    position: extras.position,
+    phone_masked: maskPhone(row.phone),
+    phone_locked: isPhoneLockedForViewer(row, viewerId),
+    decision_role: row.decision_role,
+    is_current: extras.is_current,
+  };
+}
 
 /** 公司行 → 出参（`Decimal` 显式转字符串：别指望 JSON 序列化替我们做） */
 function toCompanyVo(row: CompanyRow): CompanyVo {

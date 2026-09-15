@@ -53,7 +53,13 @@ const COMPANY_SELECT = {
   updated_at: true,
 } as const;
 
-/** 联系人读出的列（**不含 `phone_active`** —— 它是生成列，Prisma 侧为 `@ignore`，读不出来也不该读） */
+/**
+ * 联系人读出的列（**不含 `phone_active`** —— 它是生成列，Prisma 侧为 `@ignore`，读不出来也不该读）。
+ *
+ * ★ M5-04 起带上 `phone_locked_at / phone_locked_by`：联系人出口要在**查询阶段**就把
+ *   「这条记录有没有被上锁、落锁人是谁」**一并带出** —— 脱敏判定**不许回头再查库**
+ *   （→ 架构 §7.1 / `desensitize.interceptor.ts` 文件头 ★ 段）。
+ */
 const CONTACT_SELECT = {
   id: true,
   name: true,
@@ -66,6 +72,8 @@ const CONTACT_SELECT = {
   decision_role: true,
   tags: true,
   status: true,
+  phone_locked_at: true,
+  phone_locked_by: true,
   merged_into: true,
 } as const;
 

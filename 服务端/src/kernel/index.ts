@@ -20,11 +20,15 @@ export * from './errors/app-error';
 export * from './errors/prisma-error.mapper';
 export * from './common/bigint';
 export * from './common/masking';
+// M5-05：跨业务线脱敏判定（「按部门比」的**唯一入口**）＋ 打码形态常量
+export * from './common/desensitize';
 export * from './common/pagination';
 export * from './context/request-context';
 export * from './context/jwt-claims';
 export * from './context/jwt-settings';
 export * from './context/public.decorator';
+// M5-06：出口豁免脱敏标记（报表 / 看板 / 汇总）—— 要写在**域 controller** 上，故与 `@Public()` 同居 kernel/context
+export * from './context/desensitize-exempt.decorator';
 export * from './context/context.module';
 // M5-02：数据范围判定（「我能看到谁」的**唯一入口**）—— 各域一律调它，**别自己判 `scope.type`**。
 // ⚠ `domain/**` 例外：只能用深路径 `kernel/data-scope/data-scope-target` —— 本桶文件会连带

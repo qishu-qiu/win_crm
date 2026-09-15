@@ -18,6 +18,8 @@
 //   ⑥ `CompanyModule` —— 第 2 层业务域（B 域 / 客户资产）：**M2 起逐个接入**（M2-01 先立骨架）。
 //   ⑦ `RelationModule`—— 第 3 层业务域（C 域 / 业务关系）：**M3 接入** —— 私海 / 公海列表、
 //      激活（撞单 409）、改属性（非灰度必标开发价值）、成员（一关系一 owner）。
+//   ⑧ `EngineModule`  —— 第 4 层业务域（D 域 / 跟单引擎）：**M4 接入** —— 跟单事件（有效沟通
+//      vs 快速标记）、承诺、工作台。⚠ M4-01 只建骨架（**无 controller**，M4-12 才挂接口）。
 //
 // · `ContextModule` 内部已被 `SharedModule` import（为让横切层自给自足）。此处**再显式列一次**：
 //   Nest 按**模块类**去重，不会产生第二个实例，但能让「本进程装了 kernel」在根模块**一眼可见**
@@ -31,6 +33,7 @@ import { Module } from '@nestjs/common';
 import { HealthController } from './health/health.controller';
 import { AuditModule, ContextModule } from './kernel/index';
 import { CompanyModule } from './modules/company/company.module';
+import { EngineModule } from './modules/engine/engine.module';
 import { OrgModule } from './modules/org/org.module';
 import { RelationModule } from './modules/relation/relation.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -45,6 +48,7 @@ import { SharedModule } from './shared/shared.module';
     OrgModule,
     CompanyModule,
     RelationModule,
+    EngineModule,
   ],
   controllers: [HealthController],
 })

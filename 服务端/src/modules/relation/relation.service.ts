@@ -50,6 +50,7 @@ import {
   checkActivateScope,
   checkRelationRead,
   checkRelationWrite,
+  isRelationWriteRole,
   resolveRelationListScope,
   type RelationListTab,
   type RelationViewer,
@@ -225,6 +226,56 @@ export class RelationService {
 
     const refs = await this.loadRefs([row]);
     return { ...this.buildVo(row, refs), members: buildMemberVos(row, refs) };
+  }
+
+  // ===== M4-07 D 域（跟单 / 承诺）的跨域出口 =====
+
+  /**
+   * **D 域写跟单 / 建承诺前的准入校验**（→ §5.2 路之①：跨域只能调对方 exports 的 service，
+   * D 域**不许**查 `business_relation` 这张表，也不许自己判范围 —— 范围规则只有本域有）。
+   *
+   * 判据＝两条叠加：
+   *   ① **看得见**（`checkRelationRead`）：owner ∪ **有效协同人** ∪ 部门档管辖 ∪ `all` 档；
+   *   ② **可写角色**（`isRelationWriteRole`）：`sale` / `dept_manager` / `gm`
+   *      —— 管理员（`all` 档但只读）与交付 · 客服（`serving` 档）一律拒（→ §2.2 / 交接说明 §五 #14）。
+   *
+   * ★ 为什么用**读**口径而不用 `checkRelationWrite`（那条只认 **owner**）：
+   *   《销售CRM业务需求文档》§10.2 原文「可见性继承业务关系权限（本人全文 / **协同可读写** /
+   *   他人私海不可见）」—— **协同人对跟单是可读写的**，而 `checkRelationWrite` 为了 M3 的
+   *   「改关系属性」刻意只放到 owner（协同的**其余**写权推迟到 M5，见 `relation-scope.ts` 注释）。
+   *   跟单是**另一件事**，按需求原文走读口径 ＋ 写角色，**不与 M5 的那次收口冲突**。
+   *
+   * @returns 关系 id ＋ **当前 owner**（D 域要拿它填 `action_event.owner_snapshot`、
+   *          并判时间线里哪条是「主线」，→ D2 / 接口 §5.7 `branch`）
+   * @throws 400 关系不存在 ｜ 403 越界（`out_of_scope`）或只读角色（`read_only`）
+   */
+  async requireWritableRelation(id: string): Promise<{ id: bigint; ownerId: bigint | null }> {
+    const viewer = requireViewer();
+    const row = await this.requireRelation(id);
+
+    const readVerdict = checkRelationRead(memberInputOf(row), viewer, new Date());
+    if (!readVerdict.ok) throw scopeError(readVerdict);
+
+    if (!isRelationWriteRole(viewer.roleCodes)) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '当前角色对业务关系只读（管理员 / 交付 · 客服）', {
+        constraint: 'relation.read_only',
+      });
+    }
+
+    const owner = findActiveOwner(row.members.map(toMemberLike));
+    return { id: row.id, ownerId: owner?.employeeId ?? null };
+  }
+
+  /**
+   * 回写「最近一次**有效沟通**时间」（→ C1 `last_event_at`；由 **D 域**在写完事件后调用，M4-07）。
+   *
+   * ★ 调用方**已经**判过「是不是有效沟通」（`domain/last-event.ts` 的 `decideLastEventUpdate`）
+   *   —— 本方法**不再重复判**，避免同一个规则落两处（改一处漏一处＝双真相源）。
+   * ⚠ **不进 D 域的事务**：`business_relation` 是**本域（C 域）**的表，
+   *   跨两个域开事务是明令禁止的（§5.2 ③），故由 D 域**提交后**再调这里。
+   */
+  async touchLastEventAt(relationId: bigint, eventAt: Date): Promise<void> {
+    await this.repository.updateLastEventAt(relationId, eventAt);
   }
 
   /**

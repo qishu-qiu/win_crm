@@ -120,9 +120,9 @@ npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script >
 | `001_dev_seed.sql` | **先清后插** | A 域开发数据，可重建 |
 | `002_dict_seed.sql` | **不删行只更新**（撞 `uk_code` / `uk_type_item` 时只更新 `label / sort / builtin / status / updated_at`，**不删行、不改 id**） | 字典会被业务行（如 `action_event.action_type`）以**码值**引用 —— 清空重建会让历史行指向不存在的码 |
 
-**002 字典种子的两个 ⚠ 待裁项（别当既定口径）**：
+**002 字典种子的 ⚠ 待裁项（别当既定口径）—— 第 1 项已裁定，第 2 项仍待裁**：
 
-1. **`workflow_stage` 码**：种子用 **`1`~`7`**（＝ `business_relation.stage` 数值列口径 ＋ 数据架构 §十三 编号写法），而《接口API文档》V1.16 §2.6 的 `stage` 举例是**英文码**（`first_contact … churned`）—— **两套并存，需裁一次**。
+1. ✅ **`workflow_stage` 码 —— 已裁定（2026-09-15，七叔）：数字 `1`~`7`**（＝ `business_relation.stage` 数值列口径 ＋ 数据架构 §十三 编号写法）。原《接口API文档》§2.6 举例的英文码（`first_contact … churned`）**已作废**，接口文档同步升 **V1.17**，登记见《废止口径登记表》**#37**。**中文名仍由本种子的 `label` 出**（接口只传数字）。
 2. **AI 起草的码**：`company_identity_tag` / `company_policy_tag` / `decision_chain` / `contact_trait` / `relation_risk_label` / `review_win_reason` 的 `item_code` 规格里**只给了中文**，现由 AI 按语义起草（全站要求「枚举一律英文码」）。**业务确认后可改码**（改前先 grep 引用）。
 
 ## 六、必须「手写 migration」的部分（数据架构 §十五.5，Prisma 表达不了）

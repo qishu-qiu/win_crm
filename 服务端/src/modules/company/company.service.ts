@@ -146,6 +146,17 @@ export class CompanyService {
     return rows.map((row) => ({ id: row.id, name: row.full_name }));
   }
 
+  /**
+   * 联系人 `{id, name}` 引用（**D 域时间线的跨域出口**，M4-08 用）。
+   *
+   * ★ 为什么由本域提供：`contact` 是 B 域的表，跨域**不许查表**（§5.2）——
+   *   D 域只该问「这些 id 对应哪几个人、叫什么」，**取数方式不外泄**。
+   * ⚠ 只回**未删除、未合并**的联系人（与 `getCompanyRefs` 同口径）。
+   */
+  async getContactRefs(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    return this.repository.findContactRefsByIds(ids);
+  }
+
   // ===== M2-09 撞库查重 =====
 
   /**

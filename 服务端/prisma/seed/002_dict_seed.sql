@@ -20,12 +20,12 @@
 --                  **业务确认后可直接改 `item_code`**（改前先 grep 引用，见 prisma/README「字典维护」）。
 --   [标签]       一律中文；`customer_level` 的 `S 级` 等写法为展示用，可改。
 --
--- ★ 待拍板（本文件已按现有最强证据落，但口径未定，已登记）：
---   ① `workflow_stage` 的码：本节用 **`1`~`7`**（＝ `business_relation.stage` 的**数值列**口径，
---      §十三 也是「1 初步建联 → 7 已流失」的编号写法）；
---      而《接口API文档》V1.16 §2.6 的 `stage` 举例是英文码
---      （`first_contact / need_confirm / demo / objection / closing / cooperated / churned`）。
---      **两处并存** → 需七叔裁一次（英文码 or 数字码），裁定后本文件与接口同步。
+-- ★ 已裁定（2026-09-15，七叔）：
+--   ① `workflow_stage` 的码 ＝ **数字 `1`~`7`**（＝ `business_relation.stage` 的**数值列**口径，
+--      §十三 也是「1 初步建联 → 7 已流失」的编号写法）。
+--      原《接口API文档》§2.6 举例的英文码（`first_contact / need_confirm / demo / objection /
+--      closing / cooperated / churned`）**已作废**，接口文档同步升 **V1.17**，
+--      登记见《废止口径登记表》**#37**。**中文名仍由本文件的 `label` 出**（接口只传数字）。
 --   ② `urgency` 已按 2026-09-15 裁定取**数据架构**那套（`weekly/monthly/quarterly/long_term/gray`；
 --      接口 §2.6 原 `week_key/month_key/quarter_follow` 作废，见《废止口径登记表》#36）。
 -- ----------------------------------------------------------------------------

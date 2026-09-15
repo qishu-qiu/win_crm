@@ -150,6 +150,21 @@ export class CompanyRepository {
     });
   }
 
+  /**
+   * 联系人 `{id, name}` 引用（**M4-08 为 D 域时间线新增**：跟单事件上的 `contact_id` 属 B 域，
+   * 跨域**不许查表**（§5.2）—— D 域只该问「这些 id 对应哪几个人、叫什么」）。
+   *
+   * ⚠ 与 `findCompanyRefsByIds` **同口径**：只回**未删除、未合并**的联系人 ——
+   *   合并墓碑 / 已删联系人**不给引用**，免得时间线上冒出一个「已并入别人的那个联系人」。
+   */
+  async findContactRefsByIds(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.contact.findMany({
+      where: { id: { in: [...new Set(ids)] }, deleted_at: null, merged_into: null },
+      select: { id: true, name: true },
+    });
+  }
+
   // ===== M2-03 查重（公司）=====
 
   /**

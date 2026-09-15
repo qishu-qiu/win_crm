@@ -291,6 +291,24 @@ export class RelationRepository {
   }
 
   /**
+   * 回写「最近一次**有效沟通**时间」（→ C1 `last_event_at`；**M4-07 由 D 域触发**）。
+   *
+   * ★ 为什么单独一个方法（而不是复用 `updateRelation`）：
+   *   ① 调用方是 **D 域**（`EngineService`），它要的是「把时间改掉」，
+   *      `last_event_at` **不在** `UpdateRelationData` 的白名单里（销售**不能手改**这个字段）；
+   *   ② 本域其它动作（领取 / 转交）将来也可能要改它，收在本域仓储里最省事。
+   * ⚠ **不写 `updated_at` 之外的审计**：`updated_at` 由 Prisma `@updatedAt` 自动维护；
+   *   `updated_by` **不动**（回写人是系统行为，不是某个员工主动改的，写了会污染审计）。
+   */
+  updateLastEventAt(id: bigint, eventAt: Date) {
+    return this.prisma.businessRelation.update({
+      where: { id },
+      data: { last_event_at: eventAt },
+      select: { id: true, last_event_at: true },
+    });
+  }
+
+  /**
    * 竞品是否在名册里（C7 `competitor`）—— 关系上的 `competitor_id` 是外键，先查再写免得 FK 报 500。
    * ⚠ C7 **没有 `deleted_at` 列**（竞品名册是「轻量主数据」，停用走 `status`）——
    *   别照其它表的习惯加 `deleted_at: null`，Prisma 会直接编译不过。

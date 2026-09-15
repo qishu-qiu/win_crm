@@ -174,6 +174,16 @@ describe('relation-scope（M3-07 / M3-08 的范围收敛）', () => {
       });
     });
 
+    it('★ 协同人（不是 owner）→ 拒：改关系属性 / 加成员**归 owner**（2026-09-15 七叔拍板「维持」）', () => {
+      // 口径锚点：协同人**只写跟单**（D 域走读口径），改属性 / 加成员不给。
+      // ★ 注意本函数的入参**故意不含 `members`** ——「我参与（owner ∪ 有效协同）」是**读**口径，
+      //   不许直接拿来当写判定（那会把协同误放行）。真放开过：先改签名，再改这条。
+      expect(checkRelationWrite({ deptId: 2n, ownerId: 8n }, viewer('self'))).toEqual({
+        ok: false,
+        kind: 'out_of_scope',
+      });
+    });
+
     it('销售：无 owner（公海）的关系 → 拒（领取要走公海动作，不是直接改）', () => {
       expect(checkRelationWrite({ deptId: 2n, ownerId: null }, viewer('self'))).toEqual({
         ok: false,

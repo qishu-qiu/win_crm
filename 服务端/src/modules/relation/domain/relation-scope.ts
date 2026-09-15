@@ -165,8 +165,13 @@ export function checkActivateScope(
  *
  * ★ 与「激活」的差别：这里判的是**已有关系**——除了范围，还要看**我是不是它的 owner**：
  *   `all` 档（总经理）不过滤；`dept` 档＝管辖部门内的关系；`mine` 档＝**我 owner** 的关系。
- *   ⚠ **有效协同人**也算「和我有关」，但本批只交付 owner 判定：协同的写权（读写权 ＋ 全号）
- *     在规格里与 owner 同级（→ C2），**尚未排期**（M5 横切层不含此项改动）—— 待裁，别照「M5 会做」读。
+ *
+ * ★★ **协同人不能改 —— 已定口径（2026-09-15 七叔拍板「维持」），不是待办**：
+ *   协同人**只写跟单**（走读口径 ＋ 写角色，→ `relation.service.ts` 的 `requireWritableRelation`）；
+ *   **改关系属性（紧迫档 / 价值档 / 下一步提示 / 竞品）与加成员，一律归 owner**（经理 / 总经理可兜底）。
+ *   ⚠ 规格 C2「协同与 owner 同级」讲的是**跟单的读写**，**不含**本函数管辖的写动作 ——
+ *     下个窗口读到那句**不要**据此放开这里；真要放开，必须先改签名（入参补 `members`）
+ *     并同时改 `relation-scope.spec.ts` 里那条「★ 协同人 → 拒」的锚点用例。
  */
 export function checkRelationWrite(
   input: { deptId: bigint; ownerId: bigint | null },

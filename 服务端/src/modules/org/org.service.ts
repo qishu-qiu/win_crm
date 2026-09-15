@@ -394,6 +394,37 @@ export class OrgService {
     return this.repository.listPermissionMatrix();
   }
 
+  // ===== 跨域引用出口（架构 §5.2 路之①：同步调对方 exports 的 service）=====
+  //
+  // ★ 为什么要有这一段：C 域（`modules/relation`）的出参里有 `company:{id,name}` /
+  //   `dept:{id,name}` / `product_line:{id,name}` / `owner:{id,name}` —— 但**跨域不许查对方的表**
+  //   （§5.2），所以「把 id 翻成名字」这件事**必须由拥有该表的域提供**。
+  //   A 域在这里只做三件最薄的事：按 id 批量取名、按 id 取部门集合；**不含任何业务判断**。
+  // ⚠ 全部是**批量**接口：列表页一行一次查询会变成 N+1（几十行就是几十次往返）。
+
+  /** 员工 `{id,name}` 引用（供 `owner` / `members.employee` 装配） */
+  getEmployeeRefs(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    return this.repository.findEmployeesByIds(ids);
+  }
+
+  /** 部门 `{id,name}` 引用（供 `dept` 装配） */
+  getDeptRefs(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    return this.repository.findDepartmentsByIds(ids);
+  }
+
+  /** 产品线 `{id,name}` 引用（⚠ `color_key` 无数据源，见仓储注释） */
+  getProductLineRefs(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    return this.repository.findProductLinesByIds(ids);
+  }
+
+  /**
+   * 某员工的**部门集合（主 ＋ 兼）** —— 供 C 域判「@求助限同部门」（→ 需求 §4.3）。
+   * 员工不存在 / 已删除 → 空数组（调用方按「不是同部门」处理，**不默认放行**）。
+   */
+  getEmployeeDeptIds(employeeId: bigint): Promise<bigint[]> {
+    return this.repository.findEmployeeDeptIds(employeeId);
+  }
+
   // ===== 私有：装载 / 装配 / 签发 / 审计 =====
 
   /** 按主键装载**在职**员工；不存在或非在职一律拒绝（刷新与 me 共用） */

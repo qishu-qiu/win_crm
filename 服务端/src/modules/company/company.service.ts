@@ -130,6 +130,22 @@ export class CompanyService {
     return rows.map(toCompanyVo);
   }
 
+  // ===== 跨域引用出口（架构 §5.2 路之①：同步调对方 exports 的 service）=====
+
+  /**
+   * 公司 `{id, name}` 引用（供 C 域 `company:{id,name}` / `relations_summary` 装配）。
+   *
+   * ★ 为什么由本域提供：`company` 是 B 域的表，跨域**不许查表**（§5.2）——
+   *   C 域只该问「这些 id 对应哪几家、叫什么」，**取数方式不外泄**。
+   * ⚠ 只回**未删除、未合并**的公司：合并墓碑 / 已删档案**不给引用**（与详情同口径，
+   *   免得列表上出现「已并入别家的那家」）。
+   */
+  async getCompanyRefs(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    const rows = await this.repository.findCompanyRefsByIds(ids);
+    // 出参名按调用方（C 域出参）的键名给 `name`，但**不改 B 域自己的 `full_name` 口径**
+    return rows.map((row) => ({ id: row.id, name: row.full_name }));
+  }
+
   // ===== M2-09 撞库查重 =====
 
   /**

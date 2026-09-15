@@ -252,6 +252,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 业务关系列表
+         * @description `tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly` 属其它域（M4/M7/E），本批**不返回**（不填假值）；分页属 M6
+         */
+        get: operations["RelationController_listRelations"];
+        put?: never;
+        /**
+         * 激活业务关系
+         * @description `{company_id, dept_id, product_line_id}` → 归属**发起人自己**（换人走 `transfer` 审批）。同 公司 × 部门 × 产品线 已有活跃关系 → **409 / 20401**（撞单）；`dept_id` 必须落在我可建范围内（销售＝我所属部门含兼职；经理＝管辖部门），否则 403
+         */
+        post: operations["RelationController_createRelation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/relations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 业务关系详情
+         * @description 列表项 ＋ `members`（本批范围；`stage_logs` / `labels` / `competitors` / `rounds` 属后续里程碑）
+         */
+        get: operations["RelationController_getRelation"];
+        /**
+         * 改关系属性
+         * @description `{urgency?, value_tier?, next_action_hint?, competition?, competitor_id?}`。⚠ **非灰度关系必标开发价值**（未标 / 仅 `pending` → **422 / 20403**，→ 数据架构 C1）。⚠ 规格 §5.6 是 **`PUT`**（计划行写 PATCH，按铁律以规格为准）
+         */
+        put: operations["RelationController_updateRelation"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/relations/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 关系成员
+         * @description 含**已撤销**的留痕行（→ C2）
+         */
+        get: operations["RelationController_listMembers"];
+        put?: never;
+        /**
+         * 加关系成员
+         * @description `{employee_id, member_type, source?, valid_until?}`。`owner` **一关系仅一人**（第二位 → 409）；`collaborator` 的 `source` 必填：`ask_help`（@求助）**限同部门**（跨部门 403，走正式协同审批），未给 `valid_until` 时默认 **7 天**。出参＝**加完之后的成员列表**
+         */
+        post: operations["RelationController_addMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -643,6 +715,196 @@ export interface components {
             /** @description 命中历史号时的提示（**提示不拦截**，→ §5.5） */
             phone_history_hint?: string;
         };
+        RelationRefDto: {
+            /**
+             * @description id（十进制字符串）
+             * @example 3
+             */
+            id: string;
+            /**
+             * @description 名称快照（生成引用那一刻的库值）
+             * @example 安徽鑫中网信息技术有限公司
+             */
+            name: string;
+        };
+        RelationVoDto: {
+            /**
+             * @description 业务关系 id
+             * @example 1
+             */
+            id: string;
+            /** @description 公司档案（档案被逻辑删时取不到引用 → `null`） */
+            company: components["schemas"]["RelationRefDto"] | null;
+            /** @description 承接部门（`dept_id` 恒定不可变，→ C1） */
+            dept: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线（⚠ 规格的 `color_key` 无数据源，见文件头） */
+            product_line: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description 工作流阶段：1~6 ＋ 7＝已流失
+             * @example 1
+             */
+            stage: number;
+            /**
+             * @description 紧迫档
+             * @enum {string}
+             */
+            urgency: "weekly" | "monthly" | "quarterly" | "long_term" | "gray";
+            /**
+             * @description 开发价值档（非灰度关系**必标**，→ C1）
+             * @enum {string|null}
+             */
+            value_tier: "high" | "medium" | "low" | "pending" | null;
+            /** @description 客户等级（**系统按滚动 12 个月回款自动算、不手填** → E 域未接，本批恒 `null`） */
+            customer_level: string | null;
+            /** @description 主责销售（**公海关系为 `null`**） */
+            owner: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description `private`＝私海（有 owner）/ `company_sea`＝公海（无 owner）
+             * @enum {string}
+             */
+            sea_status: "private" | "company_sea";
+            /** @description 最近一次**有效沟通**时间（快速标记不计入，→ C1） */
+            last_event_at: string | null;
+            /** @description 一句话「上次说好下次干嘛」 */
+            next_action_hint: string | null;
+            /**
+             * @description 竞品态势快照（`null`＝未知）
+             * @enum {string|null}
+             */
+            competition: "none" | "in_use" | "comparing" | null;
+            /** @description 建档时间（ISO） */
+            created_at: string;
+            /** @description 最近更新时间（ISO） */
+            updated_at: string;
+        };
+        CreateRelationDto: {
+            /**
+             * @description 公司档案 id（→ B1）
+             * @example 3
+             */
+            company_id: string;
+            /**
+             * @description 承接部门 id —— **必须落在我可建范围内**（销售＝我所属部门含兼职；经理＝管辖部门；总经理＝任意）；⚠ `dept_id` 恒定不可变（→ 数据架构 C1），别部门想接＝自己激活一条
+             * @example 2
+             */
+            dept_id: string;
+            /**
+             * @description 产品线 id（→ A7）
+             * @example 1
+             */
+            product_line_id: string;
+        };
+        RelationMemberVoDto: {
+            /** @description 成员员工（员工被停用时取不到引用 → `null`） */
+            employee: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description `owner`＝主责销售（一关系仅一人）/ `collaborator`＝协同人
+             * @enum {string}
+             */
+            member_type: "owner" | "collaborator";
+            /** @description `collaborate` 正式协同 / `ask_help` @求助；owner 为 `null` */
+            source: string | null;
+            /** @description 协同有效期（`null`＝长期，仅正式协同，→ C2） */
+            valid_until: string | null;
+        };
+        RelationDetailVoDto: {
+            /**
+             * @description 业务关系 id
+             * @example 1
+             */
+            id: string;
+            /** @description 公司档案（档案被逻辑删时取不到引用 → `null`） */
+            company: components["schemas"]["RelationRefDto"] | null;
+            /** @description 承接部门（`dept_id` 恒定不可变，→ C1） */
+            dept: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线（⚠ 规格的 `color_key` 无数据源，见文件头） */
+            product_line: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description 工作流阶段：1~6 ＋ 7＝已流失
+             * @example 1
+             */
+            stage: number;
+            /**
+             * @description 紧迫档
+             * @enum {string}
+             */
+            urgency: "weekly" | "monthly" | "quarterly" | "long_term" | "gray";
+            /**
+             * @description 开发价值档（非灰度关系**必标**，→ C1）
+             * @enum {string|null}
+             */
+            value_tier: "high" | "medium" | "low" | "pending" | null;
+            /** @description 客户等级（**系统按滚动 12 个月回款自动算、不手填** → E 域未接，本批恒 `null`） */
+            customer_level: string | null;
+            /** @description 主责销售（**公海关系为 `null`**） */
+            owner: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description `private`＝私海（有 owner）/ `company_sea`＝公海（无 owner）
+             * @enum {string}
+             */
+            sea_status: "private" | "company_sea";
+            /** @description 最近一次**有效沟通**时间（快速标记不计入，→ C1） */
+            last_event_at: string | null;
+            /** @description 一句话「上次说好下次干嘛」 */
+            next_action_hint: string | null;
+            /**
+             * @description 竞品态势快照（`null`＝未知）
+             * @enum {string|null}
+             */
+            competition: "none" | "in_use" | "comparing" | null;
+            /** @description 建档时间（ISO） */
+            created_at: string;
+            /** @description 最近更新时间（ISO） */
+            updated_at: string;
+            /** @description 成员（含已撤销的留痕行，按加入先后） */
+            members: components["schemas"]["RelationMemberVoDto"][];
+        };
+        UpdateRelationDto: {
+            /**
+             * @description 紧迫档（纯手动，无自动降级）
+             * @enum {string}
+             */
+            urgency?: "weekly" | "monthly" | "quarterly" | "long_term" | "gray";
+            /**
+             * @description 开发价值档。⚠ 非灰度关系**必标**（且须已定档），否则 **422 / 20403**
+             * @enum {string}
+             */
+            value_tier?: "high" | "medium" | "low" | "pending";
+            /**
+             * @description 一句话「上次说好下次干嘛」
+             * @example 周四带样机再谈
+             */
+            next_action_hint?: string;
+            /**
+             * @description 竞品态势快照（录入在事件侧，此处为修正）
+             * @enum {string}
+             */
+            competition?: "none" | "in_use" | "comparing";
+            /**
+             * @description 竞品名册 id（→ C7）
+             * @example 1
+             */
+            competitor_id?: string;
+        };
+        AddRelationMemberDto: {
+            /**
+             * @description 员工 id
+             * @example 3
+             */
+            employee_id: string;
+            /**
+             * @description `owner` 一关系仅一人（已有归属 → 409）；`collaborator` 可多人
+             * @enum {string}
+             */
+            member_type: "owner" | "collaborator";
+            /**
+             * @description 仅协同人需要：`collaborate`＝正式协同（审批通过）／`ask_help`＝@求助（**限同部门**，未给 `valid_until` 时默认 7 天）
+             * @enum {string}
+             */
+            source?: "collaborate" | "ask_help";
+            /** @description 协同有效期（ISO 日期；`null` / 缺省＝长期，仅正式协同） */
+            valid_until?: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -940,6 +1202,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactBriefVoDto"][];
+                };
+            };
+        };
+    };
+    RelationController_listRelations: {
+        parameters: {
+            query?: {
+                /** @description `private`＝私海（我参与 / 管辖部门 / 全部）；`sea`＝公海（＝无 owner 的关系） */
+                tab?: "private" | "sea";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationVoDto"][];
+                };
+            };
+        };
+    };
+    RelationController_createRelation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRelationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationVoDto"];
+                };
+            };
+        };
+    };
+    RelationController_getRelation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationDetailVoDto"];
+                };
+            };
+        };
+    };
+    RelationController_updateRelation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRelationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationVoDto"];
+                };
+            };
+        };
+    };
+    RelationController_listMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationMemberVoDto"][];
+                };
+            };
+        };
+    };
+    RelationController_addMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRelationMemberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationMemberVoDto"][];
                 };
             };
         };

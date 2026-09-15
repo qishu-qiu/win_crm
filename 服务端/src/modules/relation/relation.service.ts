@@ -1,0 +1,595 @@
+// =============================================================================
+// C 域服务（M3-06 / M3-07 / M3-08 / M3-10 / M3-11）
+//
+// 分层约束（架构 §5.4）：service **只做编排**（多步、开事务、跨域取引用），
+//   **不写业务规则**（唯一键 / 范围 / owner / 开发价值校验全在 `domain/`）、
+//   **不写 SQL**（在 `relation.repository.ts`）。
+//
+// 口径来源（★ 真相源，勿自造）：
+//   · 《销售CRM接口API文档》V1.15 §5.6（关系入参出参）、§2.2（数据范围四档）、§2.4（错误码）。
+//     ⚠ 计划行 M3-10 写的是 `PATCH /relations/:id`，而 §5.6 写的是 **`PUT`** ——
+//       按铁律 A（与规格冲突以规格为准）**实现 PUT**，冲突已记入本批报告与交接说明 §五。
+//   · 《销售CRM数据架构文档》V1.30 C1 / C2（表与校验）、C7（竞品名册）。
+//   · 《销售CRM架构设计说明》V1.3 §5.2 跨域三条路：
+//       ① 同步调对方 **exports 的 service** —— 本文件取公司 / 部门 / 产品线 / 员工引用走这条
+//          （**禁止**查对方的表）；③ 改多表必须一起成功 → **本域 `$transaction`**
+//          （激活＝「关系 ＋ owner 成员」两步，必须同生共死）。
+//   · 同 §7.4 敏感动作清单（登录 / 改手机号 / 审批 / 公海操作 / 金额改动）：
+//       **激活 / 改属性 / 加成员都不在其中** ⇒ 本服务**不写审计**（别顺手加，加了就是自造口径）。
+//       公海**写**动作（领取 / 经理决策）到 M7 做，届时按清单补审计。
+//   · 同 §7.5：`P2002` + `uk_active_rel` / `uk_owner` → **409**，人话由 `mapPrismaError` 给。
+//
+// ★ P2002 的处理姿势（与 B 域同款，两条都要）：
+//   ① **预检**（先查一次）→ 覆盖 99% 的「销售手快」，给人话；
+//   ② **catch 再映射**（`mapPrismaError`）→ 覆盖并发下预检漏过的竞态。
+//   ⚠ 两条路径的**文案必须逐字一致**：否则同一件事（同键撞单）日常一句、并发另一句，
+//     前端 / 客服话术就成了两套。单测同时钉住两条（→ `relation.service.spec.ts`）。
+// =============================================================================
+import { Injectable } from '@nestjs/common';
+
+import {
+  AppError,
+  ErrorCode,
+  getRequestContext,
+  jsonToBigint,
+  mapPrismaError,
+} from '../../kernel/index';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CompanyService } from '../company/company.service';
+import { OrgService } from '../org/org.service';
+import { checkValueTierForUrgency } from './domain/relation-attributes';
+import {
+  COLLABORATOR_MEMBER_TYPE,
+  OWNER_MEMBER_TYPE,
+  checkOwnerSlot,
+  findActiveOwner,
+  isSameDeptForAskHelp,
+  type RelationMemberLike,
+} from './domain/relation-owner';
+import {
+  checkActivateScope,
+  checkRelationRead,
+  checkRelationWrite,
+  resolveRelationListScope,
+  type RelationListTab,
+  type RelationViewer,
+} from './domain/relation-scope';
+import { RelationRepository, type RelationTxClient } from './relation.repository';
+import type {
+  AddRelationMemberDto,
+  CreateRelationDto,
+  UpdateRelationDto,
+} from './dto/relation-request.dto';
+
+/** 关系列表项出参（→ §5.6；未落地字段见 `dto/relation-response.dto.ts` 文件头清单） */
+export interface RelationVo {
+  id: bigint;
+  company: { id: bigint; name: string } | null;
+  dept: { id: bigint; name: string } | null;
+  product_line: { id: bigint; name: string } | null;
+  stage: number;
+  urgency: string;
+  value_tier: string | null;
+  customer_level: string | null;
+  owner: { id: bigint; name: string } | null;
+  sea_status: string;
+  last_event_at: string | null;
+  next_action_hint: string | null;
+  competition: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 关系成员出参（→ §5.6 `members[]`） */
+export interface RelationMemberVo {
+  employee: { id: bigint; name: string } | null;
+  member_type: string;
+  source: string | null;
+  valid_until: string | null;
+}
+
+/** 关系详情 ＝ 列表项 ＋ 成员 */
+export interface RelationDetailVo extends RelationVo {
+  members: RelationMemberVo[];
+}
+
+/**
+ * 与 `kernel/errors/prisma-error.mapper.ts` 的 `uk_active_rel` / `uk_owner` 两条**逐字一致**。
+ * ★ 抽成常量是为了让「预检」和「兜底」两处**不可能**写出两句话（改一处即两处生效）。
+ */
+const RELATION_DUPLICATED_MESSAGE = '该公司在该部门·产品线下已有归属，请走转交或协同';
+const OWNER_OCCUPIED_MESSAGE = '该业务关系已有归属销售';
+
+/** 列表上限（M3 最小列表；分页 / 筛选属 M6，→ 接口 §2.7） */
+const LIST_LIMIT = 100;
+
+/** @求助默认 7 天（→ C2：`dept_rule.ask_help_days` 可配，M5 接配置，本批取规格默认值） */
+const ASK_HELP_DEFAULT_DAYS = 7;
+
+@Injectable()
+export class RelationService {
+  constructor(
+    private readonly repository: RelationRepository,
+    private readonly org: OrgService,
+    private readonly company: CompanyService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  // ===== M3-06 激活（关系 ＋ owner 成员，本域事务）=====
+
+  /**
+   * 激活业务关系（→ §5.6 `POST /relations`）。
+   *
+   * 顺序＝**先范围、再存在性、再唯一键、最后落库**：
+   *   ① 范围（越权 / 只读角色）—— 最早拦，别让人用错误信息探出「这个 dept 存在不存在」；
+   *   ② 三元组存在性 —— 跨域走 service 取引用（§5.2 路之①），不存在给 **400 参数错误**；
+   *   ③ 活跃唯一预检 —— 命中给 **409 / 20401**（含「请走转交或协同」的下一步动作）；
+   *   ④ 事务：关系 ＋ owner 成员一起写（架构 §5.2 路之③）。
+   * ★ owner ＝ **发起人自己**（激活即归属；换人走 `transfer` 审批，→ C2「主责变更」）。
+   */
+  async createRelation(dto: CreateRelationDto): Promise<RelationVo> {
+    const viewer = requireViewer();
+    const triple = {
+      companyId: jsonToBigint(dto.company_id, 'company_id'),
+      deptId: jsonToBigint(dto.dept_id, 'dept_id'),
+      productLineId: jsonToBigint(dto.product_line_id, 'product_line_id'),
+    };
+
+    const activateVerdict = checkActivateScope(triple.deptId, viewer);
+    if (!activateVerdict.ok) throw scopeError(activateVerdict);
+
+    await this.requireTripleExists(triple);
+
+    const duplicated = await this.repository.findActiveRelation(triple);
+    if (duplicated !== null) {
+      throw new AppError(ErrorCode.RELATION_DUPLICATED, 409, RELATION_DUPLICATED_MESSAGE, {
+        constraint: 'uk_active_rel',
+      });
+    }
+
+    const created = await this.prisma
+      .$transaction(async (tx) => {
+        const client: RelationTxClient = tx;
+        const relation = await this.repository.createRelation(
+          {
+            company_id: triple.companyId,
+            dept_id: triple.deptId,
+            product_line_id: triple.productLineId,
+            created_by: viewer.employeeId,
+          },
+          client,
+        );
+        await this.repository.createMember(
+          {
+            relation_id: relation.id,
+            employee_id: viewer.employeeId,
+            member_type: OWNER_MEMBER_TYPE,
+            added_by: viewer.employeeId,
+          },
+          client,
+        );
+        return relation;
+      })
+      .catch((error: unknown) => {
+        // 并发下预检漏过 → DB 的 `uk_active_rel` / `uk_owner` 兜底，映射成**同一句**人话
+        throw mapPrismaError(error) ?? error;
+      });
+
+    // ⚠ 必须**读回一次**：事务里 `createRelation` 的那次 RETURNING 发生在**写 owner 成员之前**，
+    //   它的 `members` 是空的 —— 拿它去装配引用会得到一个「owner 为 null」的出参
+    //   （真库实测踩到过；单测的假对象也要按这个阶段造，否则抓不出来）。
+    const row = await this.requireRelationRow(created.id);
+    return this.buildVo(row, await this.loadRefs([row]));
+  }
+
+  // ===== M3-07 / M3-08 列表（私海 / 公海）=====
+
+  /**
+   * 关系列表（→ §5.6 `GET /relations`）。
+   *
+   * ★ 范围由 `domain/relation-scope.ts` 判定，本层只做「按范围选一个仓储方法」——
+   *   判断与取数分开，将来 M5 把判定搬进拦截器时，这里只剩一行。
+   * ★ 交付 / 客服看**公海** → **403**（§2.2「不进公海」）：返回空列表是**静默错误**。
+   */
+  async listRelations(tab: RelationListTab): Promise<RelationVo[]> {
+    const viewer = requireViewer();
+    const scope = resolveRelationListScope(tab, viewer);
+    if (scope.kind === 'denied') {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权限：交付 / 客服不进公海', {
+        constraint: 'relation.sea.denied',
+      });
+    }
+
+    const now = new Date();
+    const rows =
+      scope.kind === 'all'
+        ? await this.listAll(tab)
+        : scope.kind === 'dept'
+          ? await this.listByDepts(tab, scope.deptIds)
+          : await this.repository.listPrivateRelationsOfEmployee(viewer.employeeId, now, LIST_LIMIT);
+
+    const refs = await this.loadRefs(rows);
+    return rows.map((row) => this.buildVo(row, refs));
+  }
+
+  // ===== M3-10 详情 / 改属性 =====
+
+  /** 关系详情（→ §5.6；本批 ＝ 列表项 ＋ 成员） */
+  async getRelation(id: string): Promise<RelationDetailVo> {
+    const viewer = requireViewer();
+    const row = await this.requireRelation(id);
+
+    const readVerdict = checkRelationRead(memberInputOf(row), viewer, new Date());
+    if (!readVerdict.ok) throw scopeError(readVerdict);
+
+    const refs = await this.loadRefs([row]);
+    return { ...this.buildVo(row, refs), members: buildMemberVos(row, refs) };
+  }
+
+  /**
+   * 改关系属性（→ §5.6 `PUT /relations/:id`）。
+   *
+   * ★ 「非灰度必标开发价值」判的是**合并后的最终态**（`urgency` / `value_tier` 各自取改完的样子）：
+   *   只改 `urgency` 的关系，若库里**已经**标过价值，就该放行 —— 否则销售每次都得把两个字段
+   *   一起提交一遍（→ `domain/relation-attributes.ts` 文件头 ★）。
+   */
+  async updateRelation(id: string, dto: UpdateRelationDto): Promise<RelationVo> {
+    const viewer = requireViewer();
+    const row = await this.requireRelation(id);
+
+    const writeVerdict = checkRelationWrite(writeInputOf(row), viewer);
+    if (!writeVerdict.ok) throw scopeError(writeVerdict);
+
+    const urgency = dto.urgency ?? row.urgency;
+    const valueTier = dto.value_tier ?? row.value_tier;
+    const tierVerdict = checkValueTierForUrgency(urgency, valueTier);
+    if (!tierVerdict.ok) {
+      throw new AppError(
+        ErrorCode.REQUIRED_MISSING,
+        422,
+        '非灰度关系必须标注开发价值，请先选一个开发价值档',
+        { constraint: 'relation.value_tier_required' },
+      );
+    }
+
+    let competitorId: bigint | undefined;
+    if (dto.competitor_id !== undefined) {
+      competitorId = jsonToBigint(dto.competitor_id, 'competitor_id');
+      const competitor = await this.repository.findCompetitorById(competitorId);
+      if (competitor === null) {
+        throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：competitor_id 指向的竞品不存在', {
+          constraint: 'relation.competitor_missing',
+        });
+      }
+    }
+
+    const updated = await this.repository
+      .updateRelation(row.id, {
+        updated_by: viewer.employeeId,
+        ...(dto.urgency === undefined ? {} : { urgency: dto.urgency }),
+        ...(dto.value_tier === undefined ? {} : { value_tier: dto.value_tier }),
+        ...(dto.next_action_hint === undefined ? {} : { next_action_hint: dto.next_action_hint }),
+        ...(dto.competition === undefined ? {} : { competition: dto.competition }),
+        ...(competitorId === undefined ? {} : { competitor_id: competitorId }),
+      })
+      .catch((error: unknown) => {
+        throw mapPrismaError(error) ?? error;
+      });
+
+    return this.buildVo(updated, await this.loadRefs([updated]));
+  }
+
+  // ===== M3-11 成员 =====
+
+  /** 关系成员列表（→ §5.6；含**已撤销**的留痕行） */
+  async listMembers(id: string): Promise<RelationMemberVo[]> {
+    const viewer = requireViewer();
+    const row = await this.requireRelation(id);
+
+    const readVerdict = checkRelationRead(memberInputOf(row), viewer, new Date());
+    if (!readVerdict.ok) throw scopeError(readVerdict);
+
+    return buildMemberVos(row, await this.loadRefs([row]));
+  }
+
+  /**
+   * 加关系成员（→ §5.6 `POST /relations/:id/members`）。
+   *
+   * ★ owner：走 `checkOwnerSlot`（一关系一 owner）→ 别人占位 **409 + `uk_owner` 那句人话**。
+   * ★ collaborator：`source` 必填；`ask_help`（@求助）**限同部门**（需求 §4.3 / 废止口径 #10），
+   *   跨部门 → **403**（⚠ 规格没给这条规则的错误码，取「数据权限越界 20003」最近的一档，
+   *   已登记待确认）；`ask_help` 未给 `valid_until` 时按 C2 默认 **7 天**。
+   * ⚠ 正式协同的**审批流**不在本批：本批只落「审批通过之后的那一行」——
+   *   审批中心（M5/approval）接上时，本方法就是它的执行出口，届时需补「审批单号」字段落库。
+   */
+  async addMember(id: string, dto: AddRelationMemberDto): Promise<RelationMemberVo[]> {
+    const viewer = requireViewer();
+    const row = await this.requireRelation(id);
+
+    const writeVerdict = checkRelationWrite(writeInputOf(row), viewer);
+    if (!writeVerdict.ok) throw scopeError(writeVerdict);
+
+    const employeeId = jsonToBigint(dto.employee_id, 'employee_id');
+    const employeeRefs = await this.org.getEmployeeRefs([employeeId]);
+    if (employeeRefs.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：employee_id 指向的员工不存在', {
+        constraint: 'relation.employee_missing',
+      });
+    }
+
+    const existed = await this.repository.findMember({
+      relation_id: row.id,
+      employee_id: employeeId,
+      member_type: dto.member_type,
+    });
+    if (existed !== null) {
+      // ⚠ 不复用 `uk_member` 的兜底文案（那句只说明「撞了唯一键」）：这里能说清是哪种情况
+      throw new AppError(
+        ErrorCode.UNIQUE_CONFLICT,
+        409,
+        existed.revoked_at === null ? '该成员已在关系中' : '该成员曾被移除，暂不支持再次加入',
+        { constraint: 'uk_member' },
+      );
+    }
+
+    let source: string | undefined;
+    let validUntil: Date | undefined;
+
+    if (dto.member_type === OWNER_MEMBER_TYPE) {
+      const ownerVerdict = checkOwnerSlot(row.members.map(toMemberLike), employeeId);
+      if (!ownerVerdict.ok) {
+        throw ownerVerdict.kind === 'already_owner'
+          ? new AppError(ErrorCode.UNIQUE_CONFLICT, 409, '该成员已是该关系的主责销售', {
+              constraint: 'uk_member',
+            })
+          : new AppError(ErrorCode.UNIQUE_CONFLICT, 409, OWNER_OCCUPIED_MESSAGE, {
+              constraint: 'uk_owner',
+            });
+      }
+    } else if (dto.member_type === COLLABORATOR_MEMBER_TYPE) {
+      source = dto.source;
+      if (source === undefined) {
+        throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：新增协同人必须给出 source', {
+          constraint: 'relation.member.source_required',
+        });
+      }
+      if (source === 'ask_help') {
+        const mentionedDeptIds = await this.org.getEmployeeDeptIds(employeeId);
+        if (!isSameDeptForAskHelp(viewer.myDeptIds, mentionedDeptIds)) {
+          throw new AppError(ErrorCode.FORBIDDEN, 403, '@求助仅限同部门，跨部门请走正式协同审批', {
+            constraint: 'relation.ask_help.cross_dept',
+          });
+        }
+      }
+      if (dto.valid_until !== undefined) {
+        validUntil = new Date(dto.valid_until);
+      } else if (source === 'ask_help') {
+        validUntil = addDays(new Date(), ASK_HELP_DEFAULT_DAYS);
+      }
+    } else {
+      // DTO 的白名单已经挡过（`member_type ∈ owner / collaborator`）；走到这里说明 **DTO 与
+      // domain 常量脱钩**（有人加了第三种成员类型却只改了一处）—— 宁可 400，也不许静默落库
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：member_type 取值不合法', {
+        constraint: 'relation.member.type_invalid',
+      });
+    }
+
+    await this.repository
+      .createMember({
+        relation_id: row.id,
+        employee_id: employeeId,
+        member_type: dto.member_type,
+        added_by: viewer.employeeId,
+        ...(source === undefined ? {} : { source }),
+        ...(validUntil === undefined ? {} : { valid_until: validUntil }),
+      })
+      .catch((error: unknown) => {
+        throw mapPrismaError(error) ?? error;
+      });
+
+    // 读回整条关系再出参：**成员列表要含刚加的那一行**，且引用（员工姓名）也必须按**读回后**
+    // 的成员集合去取 —— 用加成员之前那份 `row` 取引用，新成员就会显示成 `employee: null`。
+    const refreshed = await this.requireRelationRow(row.id);
+    return buildMemberVos(refreshed, await this.loadRefs([refreshed]));
+  }
+
+  // ===== 私有：取数 / 装配 =====
+
+  /** 私海 / 公海 × `all` 档 */
+  private listAll(tab: RelationListTab) {
+    return tab === 'private'
+      ? this.repository.listPrivateRelations(LIST_LIMIT)
+      : this.repository.listSeaRelations(LIST_LIMIT);
+  }
+
+  /** 私海 / 公海 × `dept` 档（部门公海＝本部门的关系集合，→ C1） */
+  private listByDepts(tab: RelationListTab, deptIds: readonly bigint[]) {
+    return tab === 'private'
+      ? this.repository.listPrivateRelationsOfDepts(deptIds, LIST_LIMIT)
+      : this.repository.listSeaRelationsOfDepts(deptIds, LIST_LIMIT);
+  }
+
+  /** 解析 url 上的关系 id → 取行；不存在给 **400 参数错误**（与 B 域同款，→ §2.4） */
+  private async requireRelation(id: string): Promise<RelationRow> {
+    const relationId = jsonToBigint(id, 'id');
+    return this.requireRelationRow(relationId);
+  }
+
+  private async requireRelationRow(id: bigint): Promise<RelationRow> {
+    const row = await this.repository.findRelationById(id);
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：业务关系不存在', {
+        constraint: 'relation.not_found',
+      });
+    }
+    return row;
+  }
+
+  /**
+   * 三元组的存在性校验（公司 / 部门 / 产品线）。
+   * ★ 三样都走**跨域出口**（§5.2 路之①）：`company` 属 B 域、`department` / `product_line` 属 A 域，
+   *   C 域**不许查它们的表**；拿不到引用＝不存在（被逻辑删的档案同样视为不存在）。
+   */
+  private async requireTripleExists(triple: {
+    companyId: bigint;
+    deptId: bigint;
+    productLineId: bigint;
+  }): Promise<void> {
+    const [companies, departments, productLines] = await Promise.all([
+      this.company.getCompanyRefs([triple.companyId]),
+      this.org.getDeptRefs([triple.deptId]),
+      this.org.getProductLineRefs([triple.productLineId]),
+    ]);
+
+    if (companies.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：company_id 指向的公司不存在', {
+        constraint: 'relation.company_missing',
+      });
+    }
+    if (departments.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：dept_id 指向的部门不存在', {
+        constraint: 'relation.dept_missing',
+      });
+    }
+    if (productLines.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：product_line_id 指向的产品线不存在', {
+        constraint: 'relation.product_line_missing',
+      });
+    }
+  }
+
+  /**
+   * 批量取跨域引用（**一次列表一次往返**，别按行查）。
+   * ★ 四个来源都是别人的域：公司（B）＋ 部门 / 产品线 / 员工（A），故**只能**走对方的 service。
+   */
+  private async loadRefs(rows: readonly RelationRow[]): Promise<RefMaps> {
+    const [companies, departments, productLines, employees] = await Promise.all([
+      this.company.getCompanyRefs(uniqueBigints(rows.map((row) => row.company_id))),
+      this.org.getDeptRefs(uniqueBigints(rows.map((row) => row.dept_id))),
+      this.org.getProductLineRefs(uniqueBigints(rows.map((row) => row.product_line_id))),
+      this.org.getEmployeeRefs(
+        uniqueBigints(rows.flatMap((row) => row.members.map((member) => member.employee_id))),
+      ),
+    ]);
+
+    return {
+      companies: toNameMap(companies),
+      departments: toNameMap(departments),
+      productLines: toNameMap(productLines),
+      employees: toNameMap(employees),
+    };
+  }
+
+  /** 行 → 列表项出参（纯装配；范围 / 唯一键等判断都不在这一层做） */
+  private buildVo(row: RelationRow, refs: RefMaps): RelationVo {
+    const owner = findActiveOwner(row.members.map(toMemberLike));
+    return {
+      id: row.id,
+      company: refOf(refs.companies, row.company_id),
+      dept: refOf(refs.departments, row.dept_id),
+      product_line: refOf(refs.productLines, row.product_line_id),
+      stage: row.stage_id,
+      urgency: row.urgency,
+      value_tier: row.value_tier,
+      // ⚠ 客户等级＝按回款自动算（→ C1）：E 域未接，本批恒 null（**不手填、也不假装有**）
+      customer_level: row.customer_level,
+      owner: owner === undefined ? null : refOf(refs.employees, owner.employeeId),
+      sea_status: row.sea_status,
+      last_event_at: row.last_event_at === null ? null : row.last_event_at.toISOString(),
+      next_action_hint: row.next_action_hint,
+      competition: row.competition,
+      created_at: row.created_at.toISOString(),
+      updated_at: row.updated_at.toISOString(),
+    };
+  }
+}
+
+/** 仓储读出的关系行（结构取自 `RELATION_SELECT`，**不手抄字段**） */
+type RelationRow = NonNullable<Awaited<ReturnType<RelationRepository['findRelationById']>>>;
+
+/** 跨域引用表（id 十进制串 → 名字）；取不到就是「没有」（呼叫方给 null，**不编名字**） */
+interface RefMaps {
+  companies: Map<string, string>;
+  departments: Map<string, string>;
+  productLines: Map<string, string>;
+  employees: Map<string, string>;
+}
+
+/** 关系成员（→ §5.6 `members[]`；员工被停用时引用取不到 → `employee: null`） */
+function buildMemberVos(row: RelationRow, refs: RefMaps): RelationMemberVo[] {
+  return row.members.map((member) => ({
+    employee: refOf(refs.employees, member.employee_id),
+    member_type: member.member_type,
+    source: member.source,
+    valid_until: member.valid_until === null ? null : member.valid_until.toISOString(),
+  }));
+}
+
+/** 当前登录人 → `RelationViewer`（**只从令牌/上下文来**，不查库，→ 架构 §7.1） */
+function requireViewer(): RelationViewer {
+  const context = getRequestContext();
+  if (context === undefined) {
+    throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+      constraint: 'relation.no_context',
+    });
+  }
+  return {
+    employeeId: context.employeeId,
+    roleCodes: context.roleCodes,
+    dataScope: context.dataScope,
+    myDeptIds: context.deptIds,
+  };
+}
+
+/** 权限判定 → `AppError`（403：只读角色 / 超出数据范围**分开说**，别给一句糊的） */
+function scopeError(verdict: { kind: 'read_only' | 'out_of_scope' }): AppError {
+  return verdict.kind === 'read_only'
+    ? new AppError(ErrorCode.FORBIDDEN, 403, '当前角色对业务关系只读（管理员 / 交付 · 客服）', {
+        constraint: 'relation.read_only',
+      })
+    : new AppError(ErrorCode.FORBIDDEN, 403, '无权限：该业务关系不在你的数据范围内', {
+        constraint: 'relation.out_of_scope',
+    });
+}
+
+/** 域内成员形状（camelCase）← 仓储行（snake_case）：**翻译只在这一处** */
+function toMemberLike(member: RelationRow['members'][number]): RelationMemberLike {
+  return {
+    employeeId: member.employee_id,
+    memberType: member.member_type,
+    source: member.source,
+    validUntil: member.valid_until,
+    revokedAt: member.revoked_at,
+  };
+}
+
+/** 读 / 写判定入参（部门 ＋ 当前 owner，两者都取自**这一行**） */
+function memberInputOf(row: RelationRow): { deptId: bigint; members: RelationMemberLike[] } {
+  return { deptId: row.dept_id, members: row.members.map(toMemberLike) };
+}
+
+function writeInputOf(row: RelationRow): { deptId: bigint; ownerId: bigint | null } {
+  const owner = findActiveOwner(row.members.map(toMemberLike));
+  return { deptId: row.dept_id, ownerId: owner === undefined ? null : owner.employeeId };
+}
+
+function uniqueBigints(ids: readonly bigint[]): bigint[] {
+  return [...new Set(ids)];
+}
+
+function toNameMap(refs: readonly { id: bigint; name: string }[]): Map<string, string> {
+  return new Map(refs.map((ref) => [ref.id.toString(), ref.name]));
+}
+
+/** id → `{id,name}`；引用取不到 → `null`（跨域出口只回未删除的行：已删档案 / 已停用员工取不到） */
+function refOf(map: Map<string, string>, id: bigint): { id: bigint; name: string } | null {
+  const name = map.get(id.toString());
+  return name === undefined ? null : { id, name };
+}
+
+/** 日期加天数（@求助默认 7 天；不用第三方库，够了） */
+function addDays(base: Date, days: number): Date {
+  const next = new Date(base);
+  next.setDate(next.getDate() + days);
+  return next;
+}

@@ -16,6 +16,8 @@
 //      ⚠ 业务域**不许 import 它**（M0-44c 硬卡），所以「挂上去」这件事只能在根模块发生 —— 本行即唯一入口。
 //   ⑤ `OrgModule`     —— 第 1 层业务域（A 域 / 组织与权限）：登录 / 刷新 / me ＋ 四个组织只读接口。
 //   ⑥ `CompanyModule` —— 第 2 层业务域（B 域 / 客户资产）：**M2 起逐个接入**（M2-01 先立骨架）。
+//   ⑦ `RelationModule`—— 第 3 层业务域（C 域 / 业务关系）：**M3 接入** —— 私海 / 公海列表、
+//      激活（撞单 409）、改属性（非灰度必标开发价值）、成员（一关系一 owner）。
 //
 // · `ContextModule` 内部已被 `SharedModule` import（为让横切层自给自足）。此处**再显式列一次**：
 //   Nest 按**模块类**去重，不会产生第二个实例，但能让「本进程装了 kernel」在根模块**一眼可见**
@@ -30,11 +32,20 @@ import { HealthController } from './health/health.controller';
 import { AuditModule, ContextModule } from './kernel/index';
 import { CompanyModule } from './modules/company/company.module';
 import { OrgModule } from './modules/org/org.module';
+import { RelationModule } from './modules/relation/relation.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SharedModule } from './shared/shared.module';
 
 @Module({
-  imports: [ContextModule, PrismaModule, AuditModule, SharedModule, OrgModule, CompanyModule],
+  imports: [
+    ContextModule,
+    PrismaModule,
+    AuditModule,
+    SharedModule,
+    OrgModule,
+    CompanyModule,
+    RelationModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

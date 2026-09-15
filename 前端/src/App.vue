@@ -6,6 +6,7 @@ import { UNAUTHORIZED_EVENT, clearTokens, getAccessToken } from './api/request'
 import { homeNameOf, roleNameOf } from './home'
 import EntryView from './views/EntryView.vue'
 import LoginView from './views/LoginView.vue'
+import RelationListView from './views/RelationListView.vue'
 import WorkbenchView from './views/WorkbenchView.vue'
 
 /**
@@ -22,7 +23,7 @@ import WorkbenchView from './views/WorkbenchView.vue'
  * ★ 顶栏放在**外壳**而不是各页面里：页面只管自己的正文，身份 / 导航只写一处
  *   （写两处必然出现「一个页面的导航比另一个少一项」）。
  */
-type ViewKey = 'workbench' | 'entry'
+type ViewKey = 'workbench' | 'entry' | 'relations'
 
 const user = ref<UserVo | null>(null)
 const booting = ref(true)
@@ -32,6 +33,7 @@ const view = ref<ViewKey>('workbench')
 const navItems = computed<Array<{ key: ViewKey; label: string }>>(() => [
   { key: 'workbench', label: homeNameOf(user.value?.role ?? '') },
   { key: 'entry', label: '建档' },
+  { key: 'relations', label: '业务关系' },
 ])
 
 const roleName = computed(() => roleNameOf(user.value?.role ?? ''))
@@ -105,7 +107,8 @@ onUnmounted(() => {
 
     <main class="shell-body">
       <WorkbenchView v-if="view === 'workbench'" :user="user" />
-      <EntryView v-else />
+      <EntryView v-else-if="view === 'entry'" />
+      <RelationListView v-else />
     </main>
   </div>
 </template>

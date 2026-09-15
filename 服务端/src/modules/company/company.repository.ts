@@ -134,6 +134,22 @@ export class CompanyRepository {
     });
   }
 
+  /**
+   * 按 id 批量取公司引用（**只取 id / 全称**）—— 供 C 域 `company:{id,name}` 装配。
+   *
+   * ★ 跨域只走出口（§5.2）：关系列表要显示公司名，但 `company` 是 B 域的表，
+   *   C 域**不许自己查**，所以由本域提供一个「只够装配引用」的窄查询（不暴露整行）。
+   */
+  async findCompanyRefsByIds(
+    ids: readonly bigint[],
+  ): Promise<{ id: bigint; full_name: string }[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.company.findMany({
+      where: { id: { in: [...new Set(ids)] }, deleted_at: null, merged_into: null },
+      select: { id: true, full_name: true },
+    });
+  }
+
   // ===== M2-03 查重（公司）=====
 
   /**

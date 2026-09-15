@@ -185,6 +185,36 @@ export class OrgRepository {
     });
   }
 
+  /**
+   * 按 id 批量取**产品线**引用（供 C 域 `product_line:{id,name}` 装配，→ 接口 §5.6）。
+   *
+   * ⚠ 规格 §5.3 / §5.6 的出参是 `product_line:{id,name,color_key}`，但 **`product_line` 表没有
+   *   `color_key` 列**、种子里也没有 —— 即「7 线固定配色」**至今没有数据源**（`/org/product-lines`
+   *   同样没给出该字段）。故本方法**只取 id/name**，不编 `color_key`；缺口已记入交接说明 §五。
+   */
+  async findProductLinesByIds(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.productLine.findMany({
+      where: { id: { in: uniqueBigints(ids) }, deleted_at: null },
+      select: { id: true, name: true },
+    });
+  }
+
+  /**
+   * 取某员工的**部门集合（主部门 ＋ 兼部门）** —— 供 C 域判「@求助是否同部门」（→ 需求 §4.3）。
+   *
+   * ★ 为什么由 A 域提供、C 域不自己查：`employee` 是 A 域的表，跨域查表被架构 §5.2 禁止；
+   *   C 域只该问「这个人有哪些部门」，**怎么取**是 A 域的事（主 / 兼的存储形状不外泄）。
+   */
+  async findEmployeeDeptIds(employeeId: bigint): Promise<bigint[]> {
+    const row = await this.prisma.employee.findFirst({
+      where: { id: employeeId, deleted_at: null },
+      select: { primary_dept_id: true, extra_dept_ids: true },
+    });
+    if (row === null) return [];
+    return [row.primary_dept_id, ...parseIdList(row.extra_dept_ids)];
+  }
+
   /** 批量取员工角色码（`/org/employees` 的 `roles` 列），返回 员工 id → 角色码数组 */
   async findRolesByEmployeeIds(
     employeeIds: readonly bigint[],

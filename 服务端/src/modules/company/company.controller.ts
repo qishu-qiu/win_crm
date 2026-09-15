@@ -15,7 +15,15 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
-import { CompanyService, type CompanyVo, type ContactBriefVo, type CreatedContactVo, type SearchDupResult } from './company.service';
+import { Audit, AuditSkip } from '../../kernel/index';
+import {
+  COMPANY_AUDIT_ACTIONS,
+  CompanyService,
+  type CompanyVo,
+  type ContactBriefVo,
+  type CreatedContactVo,
+  type SearchDupResult,
+} from './company.service';
 import { CreateCompanyDto, CreateContactDto, SearchDupDto } from './dto/company-request.dto';
 import {
   CompanyVoDto,
@@ -44,6 +52,7 @@ export class CompanyController {
     return this.company.listCompanies();
   }
 
+  @Audit(COMPANY_AUDIT_ACTIONS.createCompany, 'company')
   @Post('companies')
   @HttpCode(200)
   @ApiBearerAuth('bearer')
@@ -60,6 +69,7 @@ export class CompanyController {
 
   // ===== M2-12 撞库查重 =====
 
+  @AuditSkip() // ★ 语义是**读**（只查重、不改库）—— 不写 operation_log（→ kernel/audit/audit.decorator.ts）
   @Post('companies/search-dup')
   @HttpCode(200)
   @ApiBearerAuth('bearer')
@@ -84,6 +94,7 @@ export class CompanyController {
     return this.company.listContacts();
   }
 
+  @Audit(COMPANY_AUDIT_ACTIONS.createContact, 'contact')
   @Post('contacts')
   @HttpCode(200)
   @ApiBearerAuth('bearer')

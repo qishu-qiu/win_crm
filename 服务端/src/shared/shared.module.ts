@@ -32,6 +32,7 @@ import { AllExceptionsFilter } from './filters/all-exceptions.filter';
 import { ResponseInterceptor } from './interceptors/response.interceptor';
 import { DataScopeInterceptor } from './interceptors/data-scope.interceptor';
 import { DesensitizeInterceptor } from './interceptors/desensitize.interceptor';
+import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 import { AppValidationPipe } from './pipes/validation.pipe';
 
 // ⚠ 密钥口径 `requireJwtSecret` 已于 M1-01 **上移进 kernel**（`kernel/context/jwt-settings.ts`）：
@@ -63,9 +64,15 @@ import { AppValidationPipe } from './pipes/validation.pipe';
     // ④ 脱敏：**只做出口豁免标记**（M5-06）—— 字段级渲染在各域出口组装出参时完成，
     //     本层**不逐字段改写**（M5-04 定稿，见 desensitize.interceptor.ts 文件头 ★ 段）
     { provide: APP_INTERCEPTOR, useClass: DesensitizeInterceptor },
-    // ⑤ 异常映射：所有失败出口收成统一包（M0-34）
+    // ⑤ 写操作留痕（M5-07）：**增删改一处收口** —— 所有 POST/PUT/PATCH/DELETE 成功后写 `operation_log`
+    //     （2026-09-15 七叔口径「符合等保：所有增删改都有迹可查」→ 架构 §7.4）。
+    //     ★ 必须**最后注册**：响应阶段倒序执行 ⇒ 它最先跑，拿到的 `data` 是 handler 原始返回值
+    //       （还没被 ② 包成 `{code,message,request_id,data}`），才能取出参里的 `id` 当 `target_id`。
+    //     ⚠ 只写库、**不改出参**；动作名由域 controller 的 `@Audit('模块.动词')` 给（→ kernel/audit/audit.decorator.ts）。
+    { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
+    // ⑥ 异常映射：所有失败出口收成统一包（M0-34）
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
-    // ⑥ 入参校验：坏 DTO → 400 / 20001 ＋ 字段级人话（M0-35）
+    // ⑦ 入参校验：坏 DTO → 400 / 20001 ＋ 字段级人话（M0-35）
     { provide: APP_PIPE, useClass: AppValidationPipe },
   ],
 })

@@ -11,8 +11,11 @@
 //   · 《销售CRM数据架构文档》V1.32 B1：`credit_code` 「**撞码强制使用已有档案**」；
 //     B3：`phone_active` 生成列让「软删 / 换号自动释放」；B5：`company_contact` 含历史。
 //   · 架构 §5.2 跨域三条路之③：改多表必须一起成功 → **本域 `$transaction`**（禁止跨域大事务）。
-//   · 架构 §7.4 敏感动作清单（登录 / 改手机号 / 审批 / 公海 / 金额）：**建档不在其中**
-//     ⇒ 本服务**不写审计**（别顺手加，加了就是自造口径）。
+//   · 架构 §7.4：**所有增删改都要留痕**（2026-09-15 七叔口径：「**符合等保标准，所有的增删改
+//     都有迹可查**」）—— 本域两个写动作（公司建档 / 联系人建档）由**统一审计切面**
+//     （`shared/interceptors/audit-log.interceptor.ts`）在端点成功后自动写 `operation_log`，
+//     动作名＝本文件导出的 `COMPANY_AUDIT_ACTIONS`，由 controller 的 `@Audit(...)` 声明。
+//     ⚠ 原文「建档不在 §7.4 清单里 ⇒ 不写审计」**作废**：那份括号是**举例，不是穷尽清单**。
 //
 // ★ P2002 的处理姿势（两条都要）：
 //   ① **预检**（先查一次）→ 给明确人话，覆盖 99% 的「销售手快」场景；
@@ -38,6 +41,18 @@ import { toNameCore } from './domain/company-name';
 import { isEmptyPhone, normalizeContactPhone } from './domain/contact-phone';
 import { CompanyRepository, type CompanyTxClient, type CreateCompanyData } from './company.repository';
 import type { CreateCompanyDto, CreateContactDto, SearchDupDto } from './dto/company-request.dto';
+
+/**
+ * B 域写动作的审计动作名（→ A10 口径 `模块.动词`；2026-09-15 定）。
+ * ★ 集中一处导出（同 `ORG_AUDIT_ACTIONS` / `RELATION_AUDIT_ACTIONS`）：动作名是检索键，**只增不改**。
+ * ⚠ 撞库查重 `POST /companies/search-dup` **语义是读**（不改库），故标 `@AuditSkip()` 不留痕。
+ */
+export const COMPANY_AUDIT_ACTIONS = {
+  /** 建档公司档案 → `POST /companies` */
+  createCompany: 'company.create',
+  /** 建档联系人 → `POST /contacts` */
+  createContact: 'contact.create',
+} as const;
 
 /** 公司出参（→ §5.4 列表项；跨域字段 `relation_count` / `old_customer` 待 M3/M4） */
 export interface CompanyVo {

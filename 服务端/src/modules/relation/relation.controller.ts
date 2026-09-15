@@ -19,6 +19,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
+import { Audit } from '../../kernel/index';
 import type { RelationListTab } from './domain/relation-scope';
 import {
   AddRelationMemberDto,
@@ -32,6 +33,7 @@ import {
   RelationVoDto,
 } from './dto/relation-response.dto';
 import {
+  RELATION_AUDIT_ACTIONS,
   RelationService,
   type RelationDetailVo,
   type RelationMemberVo,
@@ -61,6 +63,7 @@ export class RelationController {
     return this.relation.listRelations(query.tab === 'sea' ? 'sea' : ('private' as RelationListTab));
   }
 
+  @Audit(RELATION_AUDIT_ACTIONS.activate, 'business_relation')
   @Post('relations')
   @HttpCode(200)
   @ApiBearerAuth('bearer')
@@ -91,6 +94,7 @@ export class RelationController {
     return this.relation.getRelation(id);
   }
 
+  @Audit(RELATION_AUDIT_ACTIONS.update, 'business_relation')
   @Put('relations/:id')
   @ApiBearerAuth('bearer')
   @ApiOperation({
@@ -117,6 +121,7 @@ export class RelationController {
     return this.relation.listMembers(id);
   }
 
+  @Audit(RELATION_AUDIT_ACTIONS.addMember, 'business_relation')
   @Post('relations/:id/members')
   @HttpCode(200)
   @ApiBearerAuth('bearer')

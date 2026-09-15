@@ -14,9 +14,12 @@
 //       ① 同步调对方 **exports 的 service** —— 本文件取公司 / 部门 / 产品线 / 员工引用走这条
 //          （**禁止**查对方的表）；③ 改多表必须一起成功 → **本域 `$transaction`**
 //          （激活＝「关系 ＋ owner 成员」两步，必须同生共死）。
-//   · 同 §7.4 敏感动作清单（登录 / 改手机号 / 审批 / 公海操作 / 金额改动）：
-//       **激活 / 改属性 / 加成员都不在其中** ⇒ 本服务**不写审计**（别顺手加，加了就是自造口径）。
-//       公海**写**动作（领取 / 经理决策）到 M7 做，届时按清单补审计。
+//   · 同 §7.4：**所有增删改都要留痕**（2026-09-15 七叔口径：「**符合等保标准，所有的增删改
+//     都有迹可查**」）—— 本域三个写动作（激活 / 改属性 / 加成员）由**统一审计切面**
+//     （`shared/interceptors/audit-log.interceptor.ts`）在端点成功后自动写 `operation_log`，
+//     动作名＝本文件导出的 `RELATION_AUDIT_ACTIONS`，由 controller 的 `@Audit(...)` 声明。
+//     ⚠ 原文「激活 / 改属性 / 加成员都不在其中 ⇒ 本服务不写审计」**作废**：§7.4 括号里那五个
+//       动作是**举例、不是穷尽清单**（把它当穷尽读＝把规格读窄，→ 铁律 §二 坑 23 同类错误）。
 //   · 同 §7.5：`P2002` + `uk_active_rel` / `uk_owner` → **409**，人话由 `mapPrismaError` 给。
 //
 // ★ P2002 的处理姿势（与 B 域同款，两条都要）：
@@ -106,6 +109,21 @@ export interface RelationDetailVo extends RelationVo {
  */
 const RELATION_DUPLICATED_MESSAGE = '该公司在该部门·产品线下已有归属，请走转交或协同';
 const OWNER_OCCUPIED_MESSAGE = '该业务关系已有归属销售';
+
+/**
+ * C 域写动作的审计动作名（→ A10 口径 `模块.动词`；2026-09-15 定）。
+ * ★ 与 `ORG_AUDIT_ACTIONS` 同一理由**集中一处导出**：动作名是「谁在何时干了什么」的检索键，
+ *   写歪一次就再也查不到那条记录（双真相源＝本项目一号坑）。
+ * ★ **只增不改**：改名＝历史审计断链；将来新增写动作时在此追加，并同步数据架构 A10 的清单。
+ */
+export const RELATION_AUDIT_ACTIONS = {
+  /** 激活关系（＋ owner 成员）→ `POST /relations` */
+  activate: 'relation.activate',
+  /** 改关系属性（紧迫 / 价值档 / 下一步 / 竞品）→ `PUT /relations/:id` */
+  update: 'relation.update',
+  /** 加关系成员（owner / 协同 / @求助）→ `POST /relations/:id/members` */
+  addMember: 'relation.add_member',
+} as const;
 
 /** 列表上限（M3 最小列表；分页 / 筛选属 M6，→ 接口 §2.7） */
 const LIST_LIMIT = 100;

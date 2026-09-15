@@ -24,6 +24,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
+import { Audit } from '../../kernel/index';
 import {
   CreateCommitmentDto,
   CreateEventDto,
@@ -32,6 +33,7 @@ import {
 } from './dto/engine-request.dto';
 import { ActionEventVoDto, AgendaItemVoDto, CommitmentVoDto } from './dto/engine-response.dto';
 import {
+  ENGINE_AUDIT_ACTIONS,
   EngineService,
   type ActionEventVo,
   type AgendaItemVo,
@@ -62,6 +64,7 @@ export class EngineController {
     return this.engine.listEvents(id, query.range === 'all' ? 'all' : ('1m' as EventRange));
   }
 
+  @Audit(ENGINE_AUDIT_ACTIONS.eventCreate, 'action_event')
   @Post('relations/:id/events')
   @HttpCode(200)
   @ApiBearerAuth('bearer')
@@ -93,6 +96,7 @@ export class EngineController {
     return this.engine.listCommitments(id);
   }
 
+  @Audit(ENGINE_AUDIT_ACTIONS.commitmentCreate, 'commitment')
   @Post('relations/:id/commitments')
   @HttpCode(200)
   @ApiBearerAuth('bearer')
@@ -112,6 +116,7 @@ export class EngineController {
     return this.engine.createCommitment(id, body);
   }
 
+  @Audit(ENGINE_AUDIT_ACTIONS.commitmentUpdate, 'commitment')
   @Put('relations/:id/commitments')
   @HttpCode(200)
   @ApiBearerAuth('bearer')

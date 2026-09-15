@@ -11,12 +11,21 @@
 // ⚠ M0-38 判据原文写「/docs 响应符合统一包」：/docs 由 M0-48 的 Swagger 提供，且它是中间件直出
 //   的 HTML、不经拦截器。本套件先证「统一包对**所有 API 处理器**生效」，/docs 到 M0-48 再核对。
 // =============================================================================
-import { Body, Controller, type INestApplication, Get, Module, Post } from '@nestjs/common';
+import { Body, Controller, type INestApplication, Get, Global, Module, Post } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IsInt, IsString, Min } from 'class-validator';
 
-import { ACCESS_TOKEN_TTL, AppError, ContextService, ErrorCode, Public, toClaims, type RequestContext } from '../kernel/index';
+import {
+  ACCESS_TOKEN_TTL,
+  AppError,
+  AuditService,
+  ContextService,
+  ErrorCode,
+  Public,
+  toClaims,
+  type RequestContext,
+} from '../kernel/index';
 import { SharedModule } from './shared.module';
 
 // 必须在建应用之前设好：SharedModule 的 JwtModule 工厂在 DI 初始化期读它（缺失会拒绝启动）
@@ -86,7 +95,23 @@ class ProbeController {
   }
 }
 
-@Module({ imports: [SharedModule], controllers: [ProbeController] })
+/**
+ * ★ M5-07：写操作审计切面（`AuditLogInterceptor`）依赖 `AuditService`。
+ *   生产里它由 **`@Global()` 的 `AuditModule`** 提供（→ app.module.ts）；本 spec 只验
+ *   「四件套全局生效」，**不为审计拉真 Prisma**（真 `AuditService` 依赖 `PrismaService`，
+ *   构造它就要求 `DATABASE_URL`）。
+ *   ⚠ 必须用 `@Global()` 的**假模块**、不能在 `ProbeAppModule.providers` 里给 ——
+ *     拦截器住在 `SharedModule` 内，**父模块的 provider 对子模块不可见**（Nest 的模块可见性规则），
+ *     放错地方＝起服直接「依赖解析失败」。
+ */
+@Global()
+@Module({
+  providers: [{ provide: AuditService, useValue: { recordStandalone: async () => true } }],
+  exports: [AuditService],
+})
+class StubAuditModule {}
+
+@Module({ imports: [StubAuditModule, SharedModule], controllers: [ProbeController] })
 class ProbeAppModule {}
 
 interface ProbeResponse {

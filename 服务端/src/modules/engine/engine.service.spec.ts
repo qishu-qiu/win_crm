@@ -15,6 +15,8 @@
 // =============================================================================
 import {
   AppError,
+  type AuditLogInput,
+  type AuditService,
   DomainEventName,
   ErrorCode,
   createDomainEvent,
@@ -175,6 +177,10 @@ function createService(options: FakeOptions = {}) {
     ),
   };
   const prisma = { $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn({ tx: true })) };
+  /** 审计替身（M5-07）：只替掉落库动作 —— 供「管理员查看留痕」用例断言「记了什么 / 有没有记」 */
+  const audit = {
+    recordStandalone: jest.fn<Promise<boolean>, [AuditLogInput]>(async () => true),
+  };
 
   const service = new EngineService(
     repository as unknown as EngineRepository,
@@ -182,9 +188,10 @@ function createService(options: FakeOptions = {}) {
     org as unknown as OrgService,
     company as unknown as CompanyService,
     prisma as unknown as PrismaService,
+    audit as unknown as AuditService,
   );
 
-  return { service, repository, relation, org, company, prisma };
+  return { service, repository, relation, org, company, prisma, audit };
 }
 
 function contextOf(
@@ -797,5 +804,46 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
 
       expect(repository.createEvent).not.toHaveBeenCalled();
     });
+  });
+});
+
+// =============================================================================
+// M5-07 管理员查看留痕（→ 需求 §4.2 ★ / §4.3 三：「管理员可查看业务数据，
+//   但**每次查看写 `operation_log`**」）——走 `recordStandalone`（读路径无业务事务、best-effort）
+// =============================================================================
+describe('EngineService（M5-07 管理员查看留痕）', () => {
+  it('管理员看跟单全文 → 写一条 `event.view`（谁 / 何时 / 看哪条关系）', async () => {
+    const { service, audit } = createService();
+
+    await runWithContext(contextOf({ type: 'all', roleCodes: ['admin'] }), () =>
+      service.listEvents(RELATION_ID.toString()),
+    );
+
+    expect(audit.recordStandalone).toHaveBeenCalledTimes(1);
+    expect(audit.recordStandalone.mock.calls[0]?.[0]).toMatchObject({
+      action: 'event.view',
+      target_type: 'business_relation',
+      target_id: RELATION_ID,
+    });
+  });
+
+  it('销售看自己的跟单 → **不留痕**（留痕是特权账号的护栏，不是全量访问日志）', async () => {
+    const { service, audit } = createService();
+
+    await runWithContext(contextOf({ type: 'self', roleCodes: ['sale'] }), () =>
+      service.listEvents(RELATION_ID.toString()),
+    );
+
+    expect(audit.recordStandalone).not.toHaveBeenCalled();
+  });
+
+  it('留痕**不影响出参**：写了审计，跟单照常返回（读接口不被审计拖累）', async () => {
+    const { service } = createService();
+
+    const list = await runWithContext(contextOf({ type: 'all', roleCodes: ['admin'] }), () =>
+      service.listEvents(RELATION_ID.toString()),
+    );
+
+    expect(list).toHaveLength(1);
   });
 });

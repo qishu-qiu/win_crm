@@ -68,6 +68,7 @@ L0 kernel → L1 org(A) → L2 company(B) → L3 relation(C) → L4 engine(D)/tr
 - ⚠ **`服务端/src/generated/`（Prisma Client）被 `.gitignore` 忽略**：改了 `schema.prisma` 必须显式 `npm run prisma:generate`（`npm run build` 会带跑），否则 `select` 新列直接编译报错。
 - ⚠ **端口**：后端 **3000**，前端 dev **5173**；vite 只监听 `::1` → 探针用 `http://localhost:5173`（`127.0.0.1` 连不上）。
 - ⚠ **入参 DTO 必须带 `@ApiProperty`**，否则 OpenAPI 退化为 `Record<string, never>`，`gen:types` 产出的前端类型不可用。
+- ⚠ **新增写端点必须标留痕**：`@Audit('模块.动词', '对象类型')`；语义是读的写方法（如撞库查重）标 `@AuditSkip()`。**所有增删改都要留痕（等保）**（→ 架构 §7.4）；漏标由 `shared/audit-coverage.spec.ts` 机械卡红，动作名走各域 `*_AUDIT_ACTIONS` 常量（**只增不改**）。
 
 ## 8. Git 约定
 

@@ -21,7 +21,7 @@
 import { Body, Controller, Get, Headers, HttpCode, Ip, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { Public } from '../../kernel/index';
+import { AuditSkip, Public } from '../../kernel/index';
 import { LoginDto } from './dto/login.dto';
 import {
   DepartmentVoDto,
@@ -70,6 +70,8 @@ export class OrgController {
 
   // ===== M1-11 登录 =====
 
+  @AuditSkip() // ★ 登录**已有专门审计**（成功 / 凭据错 / 账号不可登录 三条，含 detail 与操作人兜底）——
+  //   再让切面写一条就是同一动作两条记录（→ org.service.ts 的 ORG_AUDIT_ACTIONS）
   @Public()
   @Post('account/login')
   @HttpCode(200) // 成功 200（→ §2.3；不写就是 Nest 对 POST 的默认 201）
@@ -91,6 +93,7 @@ export class OrgController {
 
   // ===== M1-12 刷新 =====
 
+  @AuditSkip() // ★ 刷新令牌**不是增删改**（只签发新令牌，不动业务数据）—— 不留痕
   @Public()
   @Post('account/refresh')
   @HttpCode(200) // 成功 200（→ §2.3）

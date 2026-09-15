@@ -13,6 +13,11 @@
 //       ① 同步调对方 **exports 的 service** —— 本文件取「关系在不在 / 归谁 / 我能不能写」、
 //         以及回写 `last_event_at` 全走 **C 域 `RelationService`** 这一个跨域出口
 //         （**禁止**查 C 域的表）；③ 本域多表一致性 → **本域 `$transaction`**。
+//   · 同 §7.4：**所有增删改都要留痕**（2026-09-15 七叔口径：「**符合等保标准，所有的增删改
+//     都有迹可查**」）—— 本域三个写动作（写跟单 / 建承诺 / 改承诺）由**统一审计切面**
+//     （`shared/interceptors/audit-log.interceptor.ts`）自动留痕，动作名＝ `ENGINE_AUDIT_ACTIONS`。
+//     ⚠ **本文件里唯一例外**是 `listEvents` 的**查看留痕**：查看是 GET（不在切面范围），
+//       且只对**管理员**触发（→ 需求 §4.2 ★ / §4.3 三「管理员每次查看写 operation_log」）。
 //
 // ★ `last_event_at` 为什么不和事件写进**同一个**事务（与计划 M4-07 字面表述的差别，已登记）：
 //   计划行写「**事务**：写事件 + 条件回写 `last_event_at`」，但 `last_event_at` 在
@@ -33,6 +38,9 @@ import { Injectable } from '@nestjs/common';
 
 import {
   AppError,
+  // ⚠ 必须是**值导入**（不能写 `type AuditService`）：Nest 靠 `design:paramtypes` 元数据注入，
+  //   类型导入会被编译期擦除 → 元数据退化成 `Function` → 启动即报「依赖解析失败」（→ 铁律坑 31）
+  AuditService,
   type DomainEvent,
   ErrorCode,
   getRequestContext,
@@ -57,6 +65,21 @@ import { isSummaryRequired } from './domain/event-effective';
 import { buildEventIdempotencyKey } from './domain/event-idempotency';
 import { decideLastEventUpdate } from './domain/last-event';
 import { EngineRepository, type EngineTxClient } from './engine.repository';
+
+/**
+ * D 域写动作 ＋ 查看留痕的动作名（→ A10 口径 `模块.动词`；2026-09-15 定）。
+ * ★ 集中一处导出（同 A / B / C 域）：动作名是检索键，**只增不改**。
+ */
+export const ENGINE_AUDIT_ACTIONS = {
+  /** 记一条跟单 → `POST /relations/:id/events`（写动作，由统一切面留痕） */
+  eventCreate: 'event.create',
+  /** 建承诺 → `POST /relations/:id/commitments`（写动作，由统一切面留痕） */
+  commitmentCreate: 'commitment.create',
+  /** 改承诺（兑现 / 取消 / 豁免 / 改期）→ `PUT /relations/:id/commitments`（写动作，由统一切面留痕） */
+  commitmentUpdate: 'commitment.update',
+  /** ★ 查看跟单全文 → `GET /relations/:id/events`：**读路径**，只对**管理员**写（本文件手工调 `recordStandalone`） */
+  eventView: 'event.view',
+} as const;
 
 /** 跟单事件出参（→ §5.7；未落地字段见 `dto/engine-response.dto.ts` 文件头清单） */
 export interface ActionEventVo {
@@ -149,6 +172,8 @@ export class EngineService {
     private readonly org: OrgService,
     private readonly company: CompanyService,
     private readonly prisma: PrismaService,
+    /** 审计留痕（M5-07）—— **只用于 `listEvents` 的管理员查看留痕**；写动作的留痕由统一切面负责 */
+    private readonly audit: AuditService,
   ) {}
 
   // ===== M4-07 写跟单事件 =====
@@ -266,8 +291,30 @@ export class EngineService {
    *   （→ 需求 §10.2），不在 D 域另写一套。
    */
   async listEvents(relationId: string, range: EventRange = '1m'): Promise<ActionEventVo[]> {
-    requireViewer();
+    const viewer = requireViewer();
     const relation = await this.relation.getRelation(relationId);
+
+    // ★ 管理员查看留痕（→ 需求 §4.2 ★ / §4.3 三：「管理员可查看业务数据，但**每次查看写
+    //   `operation_log`**」「全文，但只读，且每次查看写 `operation_log`」）。
+    //
+    // 三条口径说明（★ 别改成「所有角色都记」或「记进业务事务」）：
+    //   ① **只记管理员**：查看留痕是**特权账号的护栏**（防"无痕看全公司"）；销售看自己的客户
+    //      每次都记＝把审计表变成访问日志，反而淹掉真敏感项（→ P2 拍板时的取舍）。
+    //   ② **走 `recordStandalone`**：读路径**没有业务事务**，硬造一个只会污染语义；
+    //      且它是 best-effort —— 审计表抖动**不能让谁看不了跟单**。
+    //   ③ **看不见的关系不记**：留痕发生在 `getRelation` 的**可见性校验之后**（越权早已 403）。
+    //
+    // ⚠ 判定用「持有 `admin` 角色」—— 与 C 域 `isRelationWriteRole`（多角色**取宽**、可写性）
+    //   刻意不同：可写性是「给不给权利」，留痕是「加不加监控」，故按**字面从严**（admin ＋ 销售
+    //   的人，用管理员身份看别人客户也要留痕）。规格未定义多角色叠加，本处属**从严不越权**，
+    //   已登记（→ 交接说明）。
+    if (viewer.roleCodes.includes('admin')) {
+      await this.audit.recordStandalone({
+        action: ENGINE_AUDIT_ACTIONS.eventView,
+        target_type: 'business_relation',
+        target_id: relation.id,
+      });
+    }
 
     const since =
       range === 'all' ? undefined : addDays(new Date(), -DEFAULT_RANGE_DAYS);
@@ -538,16 +585,17 @@ interface RefMaps {
 
 /**
  * 当前登录人（**只从令牌 / 上下文来**，不查库，→ 架构 §7.1）。
- * 本批只用它取 `actor_id`，权限由 C 域出口判 —— 但**没有上下文就必须 401**（守卫没跑＝编程错误）。
+ * 用它取 `actor_id`；权限由 C 域出口判 —— 但**没有上下文就必须 401**（守卫没跑＝编程错误）。
+ * ★ M5-07 起多带 `roleCodes`：`listEvents` 要按它判「是不是管理员」（查看留痕，→ 需求 §4.2 ★）。
  */
-function requireViewer(): { employeeId: bigint } {
+function requireViewer(): { employeeId: bigint; roleCodes: readonly string[] } {
   const context = getRequestContext();
   if (context === undefined) {
     throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
       constraint: 'engine.no_context',
     });
   }
-  return { employeeId: context.employeeId };
+  return { employeeId: context.employeeId, roleCodes: context.roleCodes };
 }
 
 function toNameMap(refs: readonly { id: bigint; name: string }[]): Map<string, string> {

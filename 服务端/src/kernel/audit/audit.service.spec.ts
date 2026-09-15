@@ -1,8 +1,22 @@
 import type { OperationLogUncheckedCreateInput } from '../../generated/prisma/models/OperationLog';
+import type { PrismaService } from '../../prisma/prisma.service';
 import { runWithContext, type RequestContext } from '../context/request-context';
 import { ErrorCode } from '../errors/app-error';
 import { AuditService } from './audit.service';
 import { runInTransaction, type TransactionClient } from './transaction-context';
+
+/**
+ * `PrismaService` 假件：**只实现 `recordStandalone` 真正用到的那一个方法**
+ * （`operationLog.create`）—— 假件按真实用到的形状造，多给字段只会让用例假绿（→ 铁律坑 16 / 21）。
+ */
+function standalonePrismaOf(
+  create: (args: { data: OperationLogUncheckedCreateInput }) => Promise<unknown>,
+): PrismaService {
+  return { operationLog: { create } } as unknown as PrismaService;
+}
+
+/** 默认假件：写成功 */
+const fakePrisma = standalonePrismaOf(() => Promise.resolve({ id: 1n }));
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -36,7 +50,7 @@ function makeFakeTx(): { tx: TransactionClient; created: OperationLogUncheckedCr
 
 describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   it('计划判据：无事务上下文时抛错（500 / 20099，防审计逃逸）', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     await expect(service.record({ action: 'phone.unlock.view' })).rejects.toThrow(
       expect.objectContaining({
         httpStatus: 500,
@@ -47,7 +61,7 @@ describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   });
 
   it('有事务上下文：字段 1:1 写进 operation_log（Json / req_id / ip / ua 全透传）', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     const { tx, created } = makeFakeTx();
     const occurredAt = new Date('2026-09-14T10:00:00.000Z');
 
@@ -92,7 +106,7 @@ describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   });
 
   it('未给的列不赋值（occurred_at 交给 DB 默认 now()，不自己造时间）', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     const { tx, created } = makeFakeTx();
 
     await runWithContext(makeContext(), () =>
@@ -106,7 +120,7 @@ describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   });
 
   it('操作人：显式 operator_id 优先 —— 系统动作 0n 不会被记成当前登录用户', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     const { tx, created } = makeFakeTx();
 
     await runWithContext(makeContext(1001n), () =>
@@ -117,7 +131,7 @@ describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   });
 
   it('系统动作合法路径：无请求上下文时显式传 0n 可以正常写（定时 / Worker 用）', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     const { tx, created } = makeFakeTx();
 
     await runInTransaction(tx, () => service.record({ action: 'sea.auto_release', operator_id: 0n }));
@@ -127,7 +141,7 @@ describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   });
 
   it('无法确定操作人 → 抛错且**不写入**（不猜、不静默记成系统动作）', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     const { tx, created } = makeFakeTx();
 
     await expect(
@@ -143,7 +157,7 @@ describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   });
 
   it('两条并发事务互不串：各写各的 tx（审计用的是「当前事务」而非全局变量）', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     const first = makeFakeTx();
     const second = makeFakeTx();
 
@@ -165,7 +179,7 @@ describe('M0-30 审计留痕（架构 §7.4 / CONSTRAINTS §二.4）', () => {
   });
 
   it('审计写入失败 → 直接抛给调用方（业务事务一起回滚，不吞异常）', async () => {
-    const service = new AuditService();
+    const service = new AuditService(fakePrisma);
     const failing = {
       operationLog: { create: () => Promise.reject(new Error('写审计失败')) },
     } as unknown as TransactionClient;

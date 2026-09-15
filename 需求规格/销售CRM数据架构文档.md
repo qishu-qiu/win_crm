@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.32（现行有效）
+# 销售 CRM 数据架构文档 V1.33（现行有效）
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
@@ -12,8 +12,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.32（现行有效）** / 2026-09-15 |
-| 上游 | 《销售CRM业务需求文档》**V1.27**（业务规则唯一来源） |
+| 版本 / 日期 | **V1.33（现行有效）** / 2026-09-15 |
+| 上游 | 《销售CRM业务需求文档》**V1.28**（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》**V1.18**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.16** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
@@ -143,13 +143,16 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | req_id | 请求链路 id（一次操作多行可关联；与系统运行日志的 req_id 打通） |
 | operator_id / operator_name | 操作人（**快照冗余**，防离职/改名后查不到人）；系统动作 `operator_id=0` |
 | dept_id / product_line_id | 操作时所处上下文（供经理按部门查） |
-| action | 统一编码 `模块.动词`：`approval.approve` / `phone.unlock.view` / `event.create` / `tag.update` / **`sea.phone.view`（公海看号）** … |
+| action | 统一编码 `模块.动词`。**★ 已实现清单（与代码同源，只增不改 —— 改名＝历史审计断链）**：`account.login.success` / `account.login.fail` / `account.login.rejected`（A 域登录）· `relation.activate` · `relation.update` · `relation.add_member` · `company.create` · `contact.create` · `event.create` · `commitment.create` · `commitment.update`；**查看类** `event.view`（管理员看跟单全文）。**待落（随各自接口）**：`sea.phone.view`（公海看号）· `phone.unlock.*` · `approval.approve` · `company.merge` · `tag.update` · 系统配置 / 字典 / 部门规则修改 |
 | target_type / target_id | 操作对象（多态） |
 | before / after JSON | **本次变更前/后快照**（审计核心；新增/删除时一端为 null） |
 | detail JSON | 补充说明（保留原设计） |
 | ip / user_agent | 来源（**解锁看号 / 公海看号 / 导出类必记**，防批量捞号） |
 
-- **写入**：由应用层统一审计切面（如 `@Audit('模块.动作')`）在**业务事务内**写入——业务成功日志才落、业务回滚日志一并回滚；**不靠 DB 触发器**（拿不到操作人上下文）。
+- **写入（2026-09-15 口径扩写 → 架构 §7.4）**——**三条并存、别互相替代**：
+  ① **所有增删改**（需求 §4.2 ★ 全量留痕：符合等保、有迹可查）由**统一审计切面**（域 controller 标 `@Audit('模块.动词')` ＋ 全局拦截器）在端点**成功后**自动写：业务成功才落、业务失败不留；**不靠 DB 触发器**（拿不到操作人上下文）。
+  ② **敏感动作**（登录 / 改手机号 / 审批 / 公海操作 / 金额改动）**额外**在**业务事务内**写（带 `before/after` 快照）——业务回滚日志一并回滚。
+  ③ **查看类**（管理员「每次查看」）走**独立写入**（无业务事务、best-effort、写失败不阻断读）——读路径本就没有业务事务。
 - **不可篡改**：**只 INSERT/SELECT，DB 账号无 UPDATE/DELETE 权限**。
 - **保留策略**：普通操作日志热存 12 个月 → 冷归档；**敏感动作（`phone.unlock.*`、`sea.phone.view`、导出类）永久保留（≥3 年）**，查询本身也需经理级以上权限。
 - **边界**：本表是"谁对什么做了什么"的**审计**，**不替代**领域状态史表（relation_stage_log / contact_change_log / workorder_log / sea_record，那些是业务页面时间线）。两者都写、语义与权限不同，**不合并**。

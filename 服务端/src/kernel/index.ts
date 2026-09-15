@@ -41,3 +41,6 @@ export * from './events/event-bus.module';
 export * from './audit/transaction-context';
 export * from './audit/audit.service';
 export * from './audit/audit.module';
+// M5-07：写操作留痕标记（`@Audit('模块.动词')` / `@AuditSkip()`）—— 要写在**域 controller** 上，
+// 故与 `@Public()` / `@DesensitizeExempt()` 同居 kernel（域不许直连 shared，→ §5.4）。
+export * from './audit/audit.decorator';

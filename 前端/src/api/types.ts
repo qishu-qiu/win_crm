@@ -290,7 +290,7 @@ export interface paths {
         get: operations["RelationController_getRelation"];
         /**
          * 改关系属性
-         * @description `{urgency?, value_tier?, next_action_hint?, competition?, competitor_id?}`。⚠ **非灰度关系必标开发价值**（未标 / 仅 `pending` → **422 / 20403**，→ 数据架构 C1）。⚠ 规格 §5.6 是 **`PUT`**（计划行写 PATCH，按铁律以规格为准）
+         * @description `{urgency?, value_tier?, next_action_hint?, competition?, competitor_id?}`。⚠ **非灰度关系必标开发价值**：「已标」＝**有值且合法即可，`pending` 也算标过**（2026-09-15 拍板）；**完全没标**的非灰度关系 → **422 / 20403**（→ 数据架构 C1）。⚠ 规格 §5.6 是 **`PUT`**（计划行写 PATCH，按铁律以规格为准）
          */
         put: operations["RelationController_updateRelation"];
         post?: never;
@@ -955,7 +955,7 @@ export interface components {
              */
             urgency?: "weekly" | "monthly" | "quarterly" | "long_term" | "gray";
             /**
-             * @description 开发价值档。⚠ 非灰度关系**必标**（且须已定档），否则 **422 / 20403**
+             * @description 开发价值档。⚠ 非灰度关系**必标** ——「已标」＝**有值且合法即可，`pending` 也算标过**（2026-09-15 拍板），**完全没标**才 **422 / 20403**
              * @enum {string}
              */
             value_tier?: "high" | "medium" | "low" | "pending";

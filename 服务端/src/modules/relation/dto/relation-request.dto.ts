@@ -74,7 +74,9 @@ export class UpdateRelationDto {
 
   @ApiPropertyOptional({
     enum: VALUE_TIER_VALUES,
-    description: '开发价值档。⚠ 非灰度关系**必标**（且须已定档），否则 **422 / 20403**',
+    description:
+      '开发价值档。⚠ 非灰度关系**必标** ——「已标」＝**有值且合法即可，`pending` 也算标过**（2026-09-15 拍板），' +
+      '**完全没标**才 **422 / 20403**',
   })
   @IsOptional()
   @IsIn([...VALUE_TIER_VALUES], { message: 'value_tier 取值不合法' })

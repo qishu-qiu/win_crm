@@ -4,9 +4,27 @@
 // =============================================================================
 import { type ArgumentsHost, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 
-import { AppError, ErrorCode } from '../../kernel/index';
+import { AppError, type AuditLogInput, type AuditService, ErrorCode, runWithContext } from '../../kernel/index';
 import { REQUEST_ID_HEADER } from '../interceptors/response.interceptor';
 import { AllExceptionsFilter, resolveException } from './all-exceptions.filter';
+
+/**
+ * 审计替身（M5 收尾）：只替掉落库动作，并把入参记下来。
+ * ⚠ 刻意写成**同步 push**（返回 Promise 前就记录）—— 真实 `recordStandalone` 是异步的，
+ *   但被测代码是 `void` fire-and-forget，同步记录省掉用例里的 flush（断言"记了什么"不受影响）。
+ */
+function createAudit(): { audit: AuditService; records: AuditLogInput[] } {
+  const records: AuditLogInput[] = [];
+  return {
+    audit: {
+      recordStandalone: (input: AuditLogInput): Promise<boolean> => {
+        records.push(input);
+        return Promise.resolve(true);
+      },
+    } as unknown as AuditService,
+    records,
+  };
+}
 
 /** 造 P2002 假错误（鸭子类型即可，映射器刻意不依赖真实 Prisma 客户端） */
 function fakeP2002(target: unknown): unknown {
@@ -106,7 +124,12 @@ describe('全局异常过滤器（M0-34）', () => {
   });
 
   describe('catch —— 失败响应也必须符合 §2.3 统一包', () => {
-    const filter = new AllExceptionsFilter();
+    const { audit, records } = createAudit();
+    const filter = new AllExceptionsFilter(audit);
+
+    beforeEach(() => {
+      records.length = 0; // 用例之间互不串（记录器是共享的）
+    });
 
     it('失败包恰好四个字段，data 恒为 null，且回吐 request_id 响应头', () => {
       const { host, captured } = createHttpHost({ [REQUEST_ID_HEADER]: 'trace-abc' });
@@ -142,6 +165,58 @@ describe('全局异常过滤器（M0-34）', () => {
       const original = new Error('定时任务失败');
 
       expect(() => filter.catch(original, host)).toThrow(original);
+    });
+
+    it('403 写一条 `authz.denied`（越权尝试留痕 · 2026-09-15 定）；无上下文时按匿名落 0', () => {
+      const { host } = createHttpHost({ 'user-agent': 'jest' });
+
+      filter.catch(new AppError(ErrorCode.FORBIDDEN, 403, '当前角色对客户档案只读'), host);
+
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({
+        action: 'authz.denied',
+        operator_id: 0n, // 无请求上下文 → A10「系统动作 = 0」，并靠 detail 标明匿名
+        user_agent: 'jest',
+      });
+      expect(records[0].detail).toMatchObject({
+        operator_kind: 'anonymous',
+        http_status: 403,
+        code: ErrorCode.FORBIDDEN,
+        method: 'POST',
+        path: '/probe/x',
+      });
+    });
+
+    it('401 也记（未带 token 的探测要留痕），且**不因审计而改变响应**', () => {
+      const { host, captured } = createHttpHost({ 'x-request-id': 't-1' });
+
+      filter.catch(new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期'), host);
+
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({ action: 'authz.denied', req_id: 't-1' });
+      expect(captured.status).toBe(401); // 审计是旁路，不改出口
+    });
+
+    it('已登录但越权（403）→ 记**真人** operator_id（不是 0），并标 authenticated', () => {
+      const { host } = createHttpHost();
+
+      runWithContext(
+        { employeeId: 9n, deptIds: [1n], roleCodes: ['admin'], dataScope: { type: 'all', deptIds: [] } },
+        () => filter.catch(new AppError(ErrorCode.FORBIDDEN, 403, '只读'), host),
+      );
+
+      expect(records[0].operator_id).toBe(9n);
+      expect(records[0].detail).toMatchObject({ operator_kind: 'authenticated' });
+    });
+
+    it('409 / 400 / 500 **不写**（只记 401/403 —— 参数错与内部错不淹审计表）', () => {
+      const { host } = createHttpHost();
+
+      filter.catch(new AppError(ErrorCode.UNIQUE_CONFLICT, 409, '该手机号已存在'), host);
+      filter.catch(new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误'), host);
+      filter.catch(new Error('boom'), host);
+
+      expect(records).toHaveLength(0);
     });
   });
 });

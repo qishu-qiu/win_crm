@@ -30,6 +30,7 @@
 // =============================================================================
 import type { DataScope } from '../../../kernel/context/request-context';
 import { resolveDataScopeTarget } from '../../../kernel/data-scope/data-scope-target';
+import { isBusinessWriteRole } from '../../../kernel/data-scope/write-role';
 import { OWNER_MEMBER_TYPE, isEffectiveCollaborator, type RelationMemberLike } from './relation-owner';
 
 /** 关系列表的两个页签（→ 接口 §4.4 / 前端 §四：私海 / 公海） */
@@ -102,7 +103,10 @@ export function resolveRelationListScope(
  *   → 已登记待确认（交接说明 §五）。
  */
 export function isRelationWriteRole(roleCodes: readonly string[]): boolean {
-  return ['sale', 'dept_manager', 'gm'].some((code) => roleCodes.includes(code));
+  // ★ 判定**已上移 kernel**（`kernel/data-scope/write-role.ts`，2026-09-15）：B 域建档也要同一口径，
+  //   而域之间不许互相 import ⇒ 只能放 kernel 各域共用。本函数保留＝**C 域的语义别名**
+  //   （读代码时看得出"这是改关系的写权限"），行为与 kernel 完全一致，**别再各写一份**。
+  return isBusinessWriteRole(roleCodes);
 }
 
 /** 写权限判定结果（service 据此给 403 人话） */

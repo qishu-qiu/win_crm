@@ -21,7 +21,10 @@ describe('M0-28 领域事件定义（架构 §5.3 首批事件清单）', () => 
     expect(names).toEqual(expect.arrayContaining(SPEC_NAMES));
   });
 
-  it('与规格清单一个不多一个不少（Set 防重复／防漏抄）', () => {
+  it('与规格清单一个不多一个不少（Set 防重复／防漏抄）—— ★ 「首批」非穷尽：增补事件须先改架构 §5.3，再同步此处', () => {
+    // ★ 2026-09-15 审计注记：§5.3 标题是「**首批**要落地的跨域事件清单」（**首批**＝将来还会加），
+    //   本断言锁的是「**当前这一批不许自行增减**」（防 AI 自造事件，这是**正当**的封闭断言）；
+    //   但**增补的正确路径**是先改架构 §5.3 的清单、再同步本常量与 SPEC_NAMES —— 不是"事件永远只有 10 个"。
     const names = Object.values(DomainEventName);
     expect(new Set(names).size).toBe(10);
     expect([...names].sort()).toEqual([...SPEC_NAMES].sort());

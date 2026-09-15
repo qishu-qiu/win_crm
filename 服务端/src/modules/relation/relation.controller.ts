@@ -101,7 +101,8 @@ export class RelationController {
     summary: '改关系属性',
     description:
       '`{urgency?, value_tier?, next_action_hint?, competition?, competitor_id?}`。' +
-      '⚠ **非灰度关系必标开发价值**（未标 / 仅 `pending` → **422 / 20403**，→ 数据架构 C1）。' +
+      '⚠ **非灰度关系必标开发价值**：「已标」＝**有值且合法即可，`pending` 也算标过**（2026-09-15 拍板）；' +
+      '**完全没标**的非灰度关系 → **422 / 20403**（→ 数据架构 C1）。' +
       '⚠ 规格 §5.6 是 **`PUT`**（计划行写 PATCH，按铁律以规格为准）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })

@@ -34,6 +34,9 @@ export * from './context/context.module';
 // ⚠ `domain/**` 例外：只能用深路径 `kernel/data-scope/data-scope-target` —— 本桶文件会连带
 //   import `@nestjs/*`（audit 等），而 `domain/**` 的硬约束是**零框架依赖**（架构 §5.4）。
 export * from './data-scope/data-scope-target';
+// 2026-09-15：可写角色的**唯一判定点**（`admin` / 交付 · 客服只读；多角色取「能写」）——
+// 各域写入口一律调它，**别在域内各写一份角色数组**。
+export * from './data-scope/write-role';
 export * from './events/domain-event';
 export * from './events/event-bus';
 // M4-11：总线的 DI 装配点（`@Global()`），调用方只 import 令牌 `EventBus`

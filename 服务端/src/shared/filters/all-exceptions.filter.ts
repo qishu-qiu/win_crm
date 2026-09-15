@@ -8,6 +8,12 @@
 //   · 《销售CRM架构设计说明》V1.3 §7.5 异常映射：P2002 → 409（**不是** MySQL 1062），
 //     映射与文案的唯一实现在 `kernel/errors/prisma-error.mapper.ts`，本文件只**调用**、不重写。
 //   · 同 §5.4：`shared/**` 只依赖更低层 —— 本文件只 import `kernel` / `@nestjs/*`。
+//   · ★ **越权尝试留痕**（2026-09-15 七叔定，等保口径「有迹可查」的延伸）：**401 / 403 也写一条
+//     `authz.denied`**（谁 / 何时 / 打了哪个端点 / 什么码）。★ 为什么放在**这里**而不是切面：
+//     401 由**守卫**抛出、403 由业务 service 抛出 —— 两者都发生在**拦截器之后/之外**，
+//     `AuditLogInterceptor` **根本看不到**（它只在 handler 成功返回时才动手）。
+//     全局过滤器是**唯一**能覆盖「所有失败出口」的位置。⚠ 只记 401/403（安全关注点），
+//     400 / 422 这类调用方参数问题不记 —— 否则审计表被噪音淹掉，真敏感项反而找不着。
 //
 // ★ 为什么把「判定」抽成纯函数 `resolveException`：过滤器本体需要 `ArgumentsHost` + 真实响应对象，
 //   难单测；抽出来后 M0-34 的判据（「AppError → 对应 status 与 code」）可以用一行假数据直接断言，
@@ -18,8 +24,20 @@
 // =============================================================================
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 
-import { AppError, ErrorCode, mapPrismaError } from '../../kernel/index';
+import {
+  AppError,
+  AuditService,
+  ErrorCode,
+  getRequestContext,
+  mapPrismaError,
+} from '../../kernel/index';
 import { type ApiEnvelope, REQUEST_ID_HEADER, resolveRequestId } from '../interceptors/response.interceptor';
+
+/** 越权尝试的动作名（→ 数据架构 A10 的 `模块.动词` 口径；清单同步在 A10） */
+export const AUTHZ_DENIED_ACTION = 'authz.denied';
+
+/** 客户端标识头名（→ A10 `user_agent`；与 `AuditLogInterceptor` / A 域登录同一个头） */
+const USER_AGENT_HEADER = 'user-agent';
 
 /**
  * HTTP 状态 → 业务码（→ §2.4，**逐行转写**）。
@@ -117,6 +135,8 @@ function describeRequest(exception: unknown): string {
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  constructor(private readonly audit: AuditService) {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const resolved = resolveException(exception);
 
@@ -128,8 +148,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     const http = host.switchToHttp();
-    const request = http.getRequest<{ headers?: Record<string, unknown>; method?: string; url?: string }>();
+    const request = http.getRequest<{
+      headers?: Record<string, unknown>;
+      method?: string;
+      url?: string;
+      ip?: string;
+    }>();
     const requestId = resolveRequestId(request.headers?.[REQUEST_ID_HEADER]);
+
+    // ★ 越权尝试留痕（401 / 403）：best-effort、**不 await、不阻断响应**（→ 文件头 ★ 段）
+    if (resolved.httpStatus === 401 || resolved.httpStatus === 403) {
+      this.auditDenied(resolved, request, requestId, exception);
+    }
 
     // 回吐链路 id：用户报错时报这个 id，就能在日志里精确定位这一次请求（§2.3「排错必带」）
     const response = http.getResponse<{
@@ -154,5 +184,42 @@ export class AllExceptionsFilter implements ExceptionFilter {
       data: null, // → §2.3 失败响应固定为 null
     };
     response.status(resolved.httpStatus).json(body);
+  }
+
+  /**
+   * 记一条「未认证 / 越权尝试」（→ 文件头 ★ 段）。
+   *
+   * ★ 走 `recordStandalone`（best-effort）：**审计写失败绝不能把 401/403 变成 500**
+   *   —— 那是拿可用性换合规，且会把"调用方的问题"记成"服务端故障"。
+   * ★ `operator_id`：能读到上下文就用真人；**401 多半没有上下文**（守卫在填上下文之前就抛了）
+   *   → 按 A10「系统动作 = 0」落 `0n`，并在 `detail.operator_kind` 标 `anonymous`，
+   *   免得事后把"匿名探测"读成"某个 id=0 的账号"。
+   */
+  private auditDenied(
+    resolved: ResolvedException,
+    request: { headers?: Record<string, unknown>; method?: string; url?: string; ip?: string },
+    requestId: string,
+    exception: unknown,
+  ): void {
+    const context = getRequestContext();
+    const userAgent = request.headers?.[USER_AGENT_HEADER];
+    const ip = typeof request.ip === 'string' && request.ip !== '' ? request.ip : undefined;
+    const constraint = exception instanceof AppError ? exception.constraint : undefined;
+
+    void this.audit.recordStandalone({
+      action: AUTHZ_DENIED_ACTION,
+      operator_id: context?.employeeId ?? 0n,
+      req_id: requestId,
+      ...(ip === undefined ? {} : { ip }),
+      ...(typeof userAgent === 'string' && userAgent !== '' ? { user_agent: userAgent } : {}),
+      detail: {
+        operator_kind: context === undefined ? 'anonymous' : 'authenticated',
+        http_status: resolved.httpStatus,
+        code: resolved.code,
+        method: request.method ?? '',
+        path: request.url ?? '',
+        ...(constraint === undefined ? {} : { constraint }),
+      },
+    });
   }
 }

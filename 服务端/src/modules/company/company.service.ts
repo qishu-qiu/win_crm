@@ -29,6 +29,7 @@ import {
   ErrorCode,
   bigintToJson,
   getRequestContext,
+  isBusinessWriteRole,
   jsonToBigint,
   mapPrismaError,
   maskCreditCode,
@@ -119,7 +120,7 @@ export class CompanyService {
    * ★ 注意：**不做「疑似重复就拦住」** —— 需求 §12.1 分支 4 明确「强行新建」是合法出口。
    */
   async createCompany(dto: CreateCompanyDto): Promise<CompanyVo> {
-    const operatorId = this.requireOperatorId();
+    const operatorId = this.requireWriter();
     const creditCode = dto.credit_code?.trim();
 
     if (creditCode !== undefined && creditCode !== '') {
@@ -257,7 +258,7 @@ export class CompanyService {
    * ★ 撞号给 **409 人话**（不把 `Duplicate entry` 透出去）；命中**历史号**只提示、不拦截（→ B6）。
    */
   async createContact(dto: CreateContactDto): Promise<CreatedContactVo> {
-    const operatorId = this.requireOperatorId();
+    const operatorId = this.requireWriter();
     const phone = normalizeContactPhone(dto.phone);
 
     if (isEmptyPhone(phone)) {
@@ -375,6 +376,31 @@ export class CompanyService {
     if (context === undefined) {
       throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
         constraint: 'company.no_context',
+      });
+    }
+    return context.employeeId;
+  }
+
+  /**
+   * 当前登录人能**写**客户档案吗（2026-09-15 定）？不能 → **403 / 20003**。
+   *
+   * ★ 依据＝需求 §4.2 ★「**管理员**可查看业务数据，但**一律只读**、不参与客户经营」
+   *   ＋ 同节 ★ **交付 / 客服**「只读；不进公海、**不做客户经营动作**」——
+   *   **建档属客户经营动作**，故这两类角色一律拒。⚠ 规格原文的「只读（不能写跟单 / 改关系 / 建合同）」
+   *   是**举例**，不是「除这三样外都能做」（→ 2026-09-15 审计：把举例当穷尽会反过来**放行**建档）。
+   * ★ 判定收口在 `kernel/data-scope/write-role.ts`（**多角色取"能写"**：`admin` ＋ `sale` 的人仍可写）。
+   * ★ 与 `requireOperatorId()` 的分工：那个只答"**有没有身份**"（401），本函数答"**有没有写权**"（403）。
+   */
+  private requireWriter(): bigint {
+    const context = getRequestContext();
+    if (context === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+        constraint: 'company.no_context',
+      });
+    }
+    if (!isBusinessWriteRole(context.roleCodes)) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '当前角色对客户档案只读（管理员 / 交付 · 客服）', {
+        constraint: 'company.read_only',
       });
     }
     return context.employeeId;

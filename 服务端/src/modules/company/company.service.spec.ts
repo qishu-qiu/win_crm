@@ -499,3 +499,51 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
     });
   });
 });
+
+// =============================================================================
+// 2026-09-15 审计修补：**只读角色不得建档**
+//   病灶＝把需求 §4.2 ★「管理员只读（不能写跟单 / 改关系 / 建合同）」的**举例**当穷尽 ⇒
+//         "建档不在举例里 ⇒ 可以做"，于是任何登录人（含管理员 / 交付 / 客服）都能建档。
+//   依据＝同 ★「管理员**一律只读**、不参与客户经营」＋ 交付 / 客服「不做客户经营动作」；
+//   判定＝`kernel/data-scope/write-role.ts`（**多角色取"能写"**）。
+// =============================================================================
+describe('CompanyService（只读角色 · 2026-09-15）', () => {
+  const READ_ONLY: [string, string[]][] = [
+    ['管理员', ['admin']],
+    ['交付', ['delivery']],
+    ['客服', ['service']],
+  ];
+
+  it.each(READ_ONLY)('%s 建档公司 → 403 / 20003', async (_who, roleCodes) => {
+    const { service } = createService();
+
+    const error = await runWithContext({ ...CONTEXT, roleCodes }, () =>
+      captureAppError(() => service.createCompany({ full_name: '安徽测试建材有限公司' })),
+    );
+
+    expect(error.httpStatus).toBe(403);
+    expect(error.code).toBe(ErrorCode.FORBIDDEN);
+    expect(error.constraint).toBe('company.read_only');
+  });
+
+  it('管理员建档联系人 → 403 / 20003（同一个写入口，同一道门）', async () => {
+    const { service } = createService();
+
+    const error = await runWithContext({ ...CONTEXT, roleCodes: ['admin'] }, () =>
+      captureAppError(() => service.createContact({ name: '张总', phone: '13900000001' })),
+    );
+
+    expect(error.httpStatus).toBe(403);
+    expect(error.constraint).toBe('company.read_only');
+  });
+
+  it('`admin` ＋ `sale` 叠加 → **仍可写**（多角色取"能写"，不是"有一个只读角色就全禁"）', async () => {
+    const { service } = createService();
+
+    await expect(
+      runWithContext({ ...CONTEXT, roleCodes: ['admin', 'sale'] }, () =>
+        service.createCompany({ full_name: '安徽测试建材有限公司' }),
+      ),
+    ).resolves.toBeDefined();
+  });
+});

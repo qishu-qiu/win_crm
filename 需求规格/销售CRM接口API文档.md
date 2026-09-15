@@ -1,11 +1,11 @@
-# 销售 CRM 接口 API 文档 V1.17
+# 销售 CRM 接口 API 文档 V1.18
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据。
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
-> 配套真相源：《销售CRM业务需求文档》**V1.26**、《销售CRM数据架构文档》**V1.31**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.16**（均 需求规格/）。
+> 配套真相源：《销售CRM业务需求文档》**V1.27**、《销售CRM数据架构文档》**V1.32**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.16**（均 需求规格/）。
 > **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22），沿革查 `git log --follow -- 需求规格/销售CRM接口API文档.md`。
-> 生效日期：2026-09-15 ｜ 状态：**V1.17**（**阶段 `stage` 定案为数字 `1`~`7`，英文码作废 →《废止口径登记表》#37**；成功响应一律 200；`urgency` 码与数据架构对齐；**新增常用业务码 `20407`＝跨部门 @求助**；refresh 出参定案；联系方式默认全可见 ＋ 联系人可上锁；登录＝手机号 / 账号名双通道 · 紧随需求 V1.26 / 数据架构 V1.31 / 前端 V1.16）。
-> ⚠ **V1.17 只改了 §2.6 / §4.14.3 的阶段码**：代码注释里残留的 `V1.16` 指针（约 50 处，且需甄别「**前端 V1.16**」不受影响）待下一次专项窗口统一扫，已登记交接说明。
+> 生效日期：2026-09-15 ｜ 状态：**V1.18**（**承诺收尾三态补齐**：`done` 兑现 / `cancelled` 取消（**录错了 / 不成立**，不填原因）/ `waived` 豁免（**确有其事但做不成，必填原因** `waive_reason`）—— 承诺出参加 `waive_reason`、`PUT` 入参形状补全（→ 需求 §10.1 / 数据架构 D1 V1.32）。沿用：阶段 `stage` 为数字 `1`~`7`（英文码作废 →《废止口径登记表》#37）；成功响应一律 200；`20407`＝跨部门 @求助；联系方式默认全可见 ＋ 联系人可上锁；登录＝手机号 / 账号名双通道 · 紧随需求 V1.27 / 数据架构 V1.32 / 前端 V1.16）。
+> ⚠ **注释指针同批对齐**：上一版遗留的 `V1.16` 指针已清；本版升版同时，代码注释里的接口版本指针**一并改成 V1.18**（逐文件**字面**替换，禁批量正则 → 铁律坑 19）。
 
 ---
 
@@ -67,7 +67,7 @@
 | 429 | 20005 | 限流 | **高频请求**（**幂等键重复不算限流** —— 见 §2.5：重复同 key 返回首次结果 200，不重复执行） |
 | 500 | 20099 | 服务异常 | 未预期错误 |
 
-常用业务码（204xx）：`20401` 撞单已存在｜`20402` 超过上限（标签/特质）｜`20403` 必填未填（死因/开发价值/签约校验清单）｜`20404` 预约未完成禁止｜`20405` 解锁申请已存在｜`20406` 关系已激活｜**`20407` 跨部门 @求助**（@求助仅限同部门，跨部门须走正式协同审批 —— **2026-09-15 补**：原规则只写了要求、没给码；按本表「422 ＋ 204xx ＝ 业务校验不通过」归类）。
+常用业务码（204xx）：`20401` 撞单已存在｜`20402` 超过上限（标签/特质）｜`20403` 必填未填（死因 / 开发价值 / 签约校验清单 / **动线 `ignored` 原因 / 承诺豁免原因**）｜`20404` 预约未完成禁止｜`20405` 解锁申请已存在｜`20406` 关系已激活｜**`20407` 跨部门 @求助**（@求助仅限同部门，跨部门须走正式协同审批 —— **2026-09-15 补**：原规则只写了要求、没给码；按本表「422 ＋ 204xx ＝ 业务校验不通过」归类）。
 > 唯一冲突一律映射 **409（撞单/竞态/抢公海）或 422（业务校验）**，**绝不把数据库原话透给销售**——DB 层 MySQL `1062` / **Prisma 层 `P2002`** 都只在服务端内部消化（实现落点 `→架构§7.5`、`服务端/prisma/README.md §七`；负面约束 `→需求§十六`）。
 
 ### 2.5 幂等（Idempotency-Key，[约定] G6）
@@ -174,7 +174,8 @@
 ### 4.6 行动引擎 commitment / event
 - `POST /relations/:id/events`：完成预约触发的事件由服务端生成（前端完成预约即调 `appointment/:id/complete`）；`event_type` 含 `meal/gift/greeting`（客情，`→架构D2`）。
 - `POST /events/quick-mark`：三型（未联系/未接/说两句），**落库、可批量、但不算有效跟进、不更新 `last_event_at`**（防点一下保号刷倒计时，`→需求§十六`第二批）。
-- `POST /relations/:id/commitments`：`type` ∈ `me/them/verdict`；`them` 催客户、`verdict` 给结论；豁免必填原因（`→需求§10.1`）。
+- `POST /relations/:id/commitments`：`type` ∈ `me/them/verdict`；`them` 催客户、`verdict` 给结论。**承诺收尾三态**：`done` 兑现 / `cancelled` 取消（**录错了 / 不成立，不需原因**）/ `waived` 豁免（**确有其事但做不成，必填原因**）（`→需求§10.1`）。
+- `PUT /relations/:id/commitments`：入 `{id,status?,waive_reason?,due_at?,remind_at?}`（`status` ∈ 收尾三态；**`waived` 必填 `waive_reason`**，否则 **422 / 20403**；已结束的承诺（兑现 / 取消 / 豁免）再改同样 **422 / 20403**）（`→需求§10.1`）。
 
 ### 4.7 预约 / 外出 appointment / visit
 - `POST /appointments/:id/complete`：服务端**强制**生成一条跟单事件，否则 **422**（`→需求§15.#3`）。
@@ -382,7 +383,7 @@
 - `POST /relations/:id/events` req `{contact_id?,action_type,summary?,outcome?,stage_forward?,pain_point_id?,competition?,competitor_id?,competition_note?,duration_min?,mentioned_user_ids?:[],promise?:{party,ctype,content,due_at?},appointment_id?,visit_log_id?}`
 - **待关联阶段事件（无关系，配合 需求§6.1 模型 B）**：`POST /contacts/:id/events` req 同 `POST /relations/:id/events`（省 `relation_id`，由服务端置空）；**关联公司激活关系后，服务端批量把该联系人名下 `relation_id` 为空的事件挂到新关系**（`→架构 D2` `→需求§10.2`）。
 - `POST /events/quick-mark` req `{relation_ids?:[],contact_ids?:[],outcome:"not_contacted"|"no_answer"|"brief_hangup"}`（`relation_ids` 与 `contact_ids` **至少一组非空**；**不更新 `last_event_at`**）
-- 承诺 `{id,relation_id,party:"me"|"them"|"verdict",ctype,content,due_at,remind_at,status,done_at?}`
+- 承诺 `{id,relation_id,party:"me"|"them"|"verdict",ctype,content,due_at,remind_at,status,waive_reason?,done_at?}`（`status` ＝**收尾三态**：`done` 兑现 / `cancelled` 取消（录错了，**不填原因**）/ `waived` 豁免（**必填 `waive_reason`**）；`waive_reason` 仅 `waived` 有值，其余为 `null`，→ 需求 §10.1）
 - 节奏规则 `{id,scope_dept_id?,scope_line_id?,trigger,suggest_action,soft,enabled,sort}`
 - 动线条目 `{id,ref_type,ref_id,relation:{id,name},contact?,reason,priority,action_hint,status,snooze_count}`
 - `POST /today-agenda/:id/action` req `{action:"done"|"snoozed"|"ignored",reason?}`（snoozed 上限 3；**ignored 必填 reason** → 422/20403）

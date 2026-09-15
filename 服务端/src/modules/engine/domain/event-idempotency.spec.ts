@@ -3,7 +3,7 @@
 //
 // 判据逐字（《过程产出/开发计划-V1.md》M4-06）：
 //   「`domain/event-idempotency.ts`：幂等键生成纯函数」→ 单测：**同输入同键、异输入异键**。
-// 口径：《销售CRM数据架构文档》V1.31 D2（`idempotency_key UNIQUE`，`VarChar(64)`）。
+// 口径：《销售CRM数据架构文档》V1.32 D2（`idempotency_key UNIQUE`，`VarChar(64)`）。
 // =============================================================================
 import { buildEventIdempotencyKey, type EventIdempotencyInput } from './event-idempotency';
 

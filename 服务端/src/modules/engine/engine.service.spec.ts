@@ -75,6 +75,7 @@ function commitmentRow(overrides: Record<string, unknown> = {}) {
     due_at: new Date('2026-09-16T00:00:00Z'),
     remind_at: null,
     status: 'open',
+    waive_reason: null,
     done_at: null,
     source_event_id: null,
     created_at: new Date('2026-09-15T10:00:00Z'),
@@ -598,6 +599,62 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
       const written = repository.updateCommitment.mock.calls[0]?.[1] as Record<string, unknown>;
       expect(written.status).toBe('cancelled');
       expect(written).not.toHaveProperty('done_at');
+      // ★ 取消＝「录错了 / 不成立」（纠错）—— **不该带原因**（与豁免的分界，→ 需求 §10.1）
+      expect(written).not.toHaveProperty('waive_reason');
+    });
+
+    it('豁免填了原因 → `status=waived` ＋ 落 `waive_reason`（首尾空白去掉）', async () => {
+      const { service, repository } = createService();
+
+      const vo = await runWithContext(contextOf(), () =>
+        service.updateCommitment(RELATION_ID.toString(), {
+          id: COMMITMENT_ID.toString(),
+          status: 'waived',
+          waive_reason: '  客户内部预算冻结，本季度不启动  ',
+        }),
+      );
+
+      const written = repository.updateCommitment.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(written.status).toBe('waived');
+      expect(written.waive_reason).toBe('客户内部预算冻结，本季度不启动');
+      // 豁免不是兑现 —— 不留兑现痕迹
+      expect(written).not.toHaveProperty('done_at');
+      expect(vo.status).toBe('waived');
+    });
+
+    it('豁免**没填原因** → **422 / 20403**，不落库（→ 需求 §10.1「豁免必须填原因」）', async () => {
+      const { service, repository } = createService();
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.updateCommitment(RELATION_ID.toString(), {
+            id: COMMITMENT_ID.toString(),
+            status: 'waived',
+          }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(422);
+      expect(error.code).toBe(ErrorCode.REQUIRED_MISSING);
+      expect(error.constraint).toBe('commitment.waive_reason_required');
+      expect(repository.updateCommitment).not.toHaveBeenCalled();
+    });
+
+    it('豁免只给**空白**原因 → 同样 422（空白不算「填了」）', async () => {
+      const { service, repository } = createService();
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.updateCommitment(RELATION_ID.toString(), {
+            id: COMMITMENT_ID.toString(),
+            status: 'waived',
+            waive_reason: '   ',
+          }),
+        ),
+      );
+
+      expect(error.code).toBe(ErrorCode.REQUIRED_MISSING);
+      expect(repository.updateCommitment).not.toHaveBeenCalled();
     });
 
     it('承诺**不属于**这条关系 → 400，不落库（不能拿 A 关系的入口改 B 的承诺）', async () => {

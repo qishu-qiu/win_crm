@@ -2,11 +2,11 @@
 // D 域入参 DTO（M4-07 写跟单）
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.17 §5.7：
+//   · 《销售CRM接口API文档》V1.18 §5.7：
 //       `POST /relations/:id/events` req `{contact_id?,action_type,summary?,outcome?,
 //        stage_forward?,pain_point_id?,competition?,competitor_id?,competition_note?,
 //        duration_min?,mentioned_user_ids?:[],promise?:{...},appointment_id?,visit_log_id?}`
-//   · 《销售CRM数据架构文档》V1.31 D2：`action_type` / `outcome` / `summary` ≤ 200 字；
+//   · 《销售CRM数据架构文档》V1.32 D2：`action_type` / `outcome` / `summary` ≤ 200 字；
 //       `competition` ∈ none / in_use / comparing；`competition_note` ≤ 100 字。
 //   · 同 §2.4：字段缺失 / 类型错 / **枚举非法** → **400 / 20001**（横切校验管道统一出口）。
 //   · 同 §2.6：入参出参 **snake_case**；id 一律**十进制字符串**（后端 `bigint`）。
@@ -43,6 +43,7 @@ import {
   COMMITMENT_CONTENT_MAX_LENGTH,
   COMMITMENT_CTYPES,
   COMMITMENT_PARTIES,
+  COMMITMENT_WAIVE_REASON_MAX_LENGTH,
 } from '../domain/commitment-rules';
 import { ACTION_TYPES, OUTCOME_VALUES, SUMMARY_MAX_LENGTH } from '../domain/event-effective';
 
@@ -219,13 +220,29 @@ export class UpdateCommitmentDto {
   @ApiPropertyOptional({
     enum: CLOSABLE_STATUSES,
     description:
-      '流转到：`done` 兑现（写 `done_at` / `done_by`）/ `cancelled` 取消。' +
-      '⚠ `waived` 豁免**本批不开放**（承诺表没有存豁免原因的地方，→ `domain/commitment-rules.ts`）',
+      '流转到（→ 需求 §10.1 收尾三态）：`done` 兑现（写 `done_at` / `done_by`）/ ' +
+      '`cancelled` 取消（**录错了 / 不成立**，不需原因）/ `waived` 豁免（**必填原因**，见 `waive_reason`）。' +
+      '已结束的承诺（兑现 / 取消 / 豁免）再改 → **422 / 20403**',
     example: 'done',
   })
   @IsOptional()
   @IsIn([...CLOSABLE_STATUSES], { message: 'status 取值不合法' })
   status?: string;
+
+  @ApiPropertyOptional({
+    description:
+      '豁免原因（**仅 `status=waived` 时传，且必填** ≤255 字；兑现 / 取消 / 改期一律不传）。' +
+      '★ 为什么豁免必填而取消不必填：取消＝记录本身错了（纠错），豁免＝记录没错、但结果没成 ——' +
+      '不写原因，经理事后分不清"这条线还有没有戏"（→ 需求 §10.1）',
+    example: '客户内部预算冻结，本季度不启动',
+    maxLength: COMMITMENT_WAIVE_REASON_MAX_LENGTH,
+  })
+  @IsOptional()
+  @IsString({ message: 'waive_reason 必须是字符串' })
+  @Length(1, COMMITMENT_WAIVE_REASON_MAX_LENGTH, {
+    message: `waive_reason 长度须为 1~${COMMITMENT_WAIVE_REASON_MAX_LENGTH}`,
+  })
+  waive_reason?: string;
 
   @ApiPropertyOptional({ description: '改期（ISO 字符串）', example: '2026-09-20T00:00:00.000Z' })
   @IsOptional()

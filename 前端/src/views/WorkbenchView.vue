@@ -10,9 +10,9 @@ import { homeNameOf } from '../home'
  * 首屏工作台（M4-17）—— **今日该找谁**（`GET /today-agenda`）。
  *
  * 口径来源（★ 真相源，勿自造）：
- *   · 《销售CRM接口API文档》V1.17 §5.7 动线条目：`{id,ref_type,ref_id,relation,contact,
+ *   · 《销售CRM接口API文档》V1.18 §5.7 动线条目：`{id,ref_type,ref_id,relation,contact,
  *     reason,priority,action_hint,status,snooze_count}`。
- *   · 《销售CRM数据架构文档》V1.31 D4：`daily_agenda` 是**每日组装产物**，
+ *   · 《销售CRM数据架构文档》V1.32 D4：`daily_agenda` 是**每日组装产物**，
  *     `done` / `ignored`（已办 / 已忽略）**不再推**。
  *
  * ⚠ **本批的实情（不谎报）**：动线条目由**每日 05:00 的组装任务**产生（属 M7）——

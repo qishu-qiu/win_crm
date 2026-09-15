@@ -2,14 +2,14 @@
 // C 域纯规则（M3-04）—— 「活跃唯一键」：公司 × 部门 × 产品线
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM数据架构文档》V1.31 C1：唯一索引 `uk_active_rel` 由**生成列** `active_key` 实现 ——
+//   · 《销售CRM数据架构文档》V1.32 C1：唯一索引 `uk_active_rel` 由**生成列** `active_key` 实现 ——
 //       `IF(sea_status = 'private' AND merged_into IS NULL,
 //           CONCAT_WS('-', company_id, dept_id, product_line_id), NULL)`
 //       （逐字见 `服务端/prisma/migrations/0001_init/migration.sql` 文末 ③ 生成列段）。
 //   · 同 C1「**★ `dept_id` 恒定不可变**」：掉公海只改「有没有 owner」，**不改部门** ⇒
 //     别的部门想要同一家客户＝**自己激活一条本部门的关系**（唯一键含 `dept_id`，互不冲突，
 //     → 废止口径 #9「跨部门捡公海」不存在；→ 需求 §6.3）。
-//   · 《销售CRM接口API文档》V1.16 §4.4：撞 `uk_active_rel` → **409 / 20401**。
+//   · 《销售CRM接口API文档》V1.18 §4.4：撞 `uk_active_rel` → **409 / 20401**。
 //
 // ★ 为什么应用层要再算一遍：service 的**预检**（先查一次库）才能给出「已有归属」这句人话，
 //   且**不能只靠 DB 唯一键兜底**（→ 本域 service「预检 ＋ catch 再映射」两条都要，同 M2）。

@@ -2,7 +2,7 @@
 // D 域出参 DTO（M4-07 / M4-08）—— **只服务于 Swagger 文档**，不参与运行时转换
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.17 §5.7 事件项：
+//   · 《销售CRM接口API文档》V1.18 §5.7 事件项：
 //       `{id,action_type,summary,outcome,pain_point:{id,label}?,competition?,actor:{id,name},
 //         owner_snapshot?,contact:{id,name}?,duration_min?,event_at,branch:"main"|"sub",
 //         round_no,attachments:[]}`
@@ -134,10 +134,20 @@ export class CommitmentVoDto {
     enum: ['open', 'done', 'expired', 'waived', 'cancelled'],
     description:
       '状态。`open` 进行中 / `done` 已兑现 / `expired` 已逾期（派生态，按 `due_at` 算）/ ' +
-      '`waived` 豁免（**本批不开放写入**：承诺表没有存豁免原因的地方）/ `cancelled` 已取消',
+      '`waived` 已豁免（**必填原因**，理由见 `waive_reason`）/ `cancelled` 已取消',
     example: 'open',
   })
   status!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      '豁免原因（**仅 `status=waived` 有值**，其余状态为 `null`）。' +
+      '`cancelled` 与 `waived` 的分界：取消＝**录错了 / 不成立**（不填原因）；' +
+      '豁免＝**确有其事但做不成**（客户变卦 / 特殊原因…，**必填**）（→ 需求 §10.1）',
+  })
+  waive_reason!: string | null;
 
   @ApiProperty({ type: String, nullable: true, description: '兑现时间（未兑现＝`null`）' })
   done_at!: string | null;

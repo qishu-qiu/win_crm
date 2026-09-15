@@ -5,7 +5,7 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.17 §5.7：`G/P /relations/:id/events`、
+//   · 《销售CRM接口API文档》V1.18 §5.7：`G/P /relations/:id/events`、
 //     `G/P/U /relations/:id/commitments`、`G /today-agenda`；§三 总览同。
 //     ⚠ 「承诺的 U」规格只给了这一行端点，**没给入参形状** —— 本批按
 //       「`id` 指认目标承诺 ＋ 要改的字段」实现，欠账已登记（→ 交接说明 §五）。
@@ -116,12 +116,11 @@ export class EngineController {
   @HttpCode(200)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: '改承诺（兑现 / 取消 / 改期）',
+    summary: '改承诺（兑现 / 取消 / 豁免 / 改期）',
     description:
-      '`{id,status?,due_at?,remind_at?}`，`status` ∈ `done`（兑现）/ `cancelled`（取消）。' +
-      '⚠ **`waived`（豁免）本批不开放**：规格要求「豁免必填原因」，而承诺表没有存原因的列 ——' +
-      '收下原因却无处可存＝假契约，故不做、登记待拍板（→ 交接说明 §二）。' +
-      '已结束的承诺（已兑现 / 已取消）再改 → **422 / 20403**',
+      '`{id,status?,waive_reason?,due_at?,remind_at?}`，`status` ∈ `done` 兑现 / `cancelled` 取消' +
+      '（**录错了 / 不成立**，不需原因）/ `waived` 豁免（**确有其事但做不成，必填 `waive_reason`**）。' +
+      '已结束的承诺（兑现 / 取消 / 豁免）再改 → **422 / 20403**',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
   @ApiOkResponse({ type: CommitmentVoDto })

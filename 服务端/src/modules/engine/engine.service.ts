@@ -5,9 +5,9 @@
 //   **不写业务规则**（有效沟通 / 回写 / 幂等键全在 `domain/`）、**不写 SQL**（在 `engine.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.17 §5.7（事件项出参、`POST /relations/:id/events` 入参）；
+//   · 《销售CRM接口API文档》V1.18 §5.7（事件项出参、`POST /relations/:id/events` 入参）；
 //     §5.6（数据范围）；§2.4（错误码）。
-//   · 《销售CRM数据架构文档》V1.31 D2（`action_event`）：快速标记三型**不**回写 `last_event_at`。
+//   · 《销售CRM数据架构文档》V1.32 D2（`action_event`）：快速标记三型**不**回写 `last_event_at`。
 //   · 《销售CRM业务需求文档》§10.2：有效沟通**必须写一句话结果**；无效沟通**点一下即可**。
 //   · 《销售CRM架构设计说明》V1.3 §5.2 跨域三条路：
 //       ① 同步调对方 **exports 的 service** —— 本文件取「关系在不在 / 归谁 / 我能不能写」、
@@ -43,7 +43,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CompanyService } from '../company/company.service';
 import { OrgService } from '../org/org.service';
 import { RelationService } from '../relation/relation.service';
-import { checkCommitmentMutable } from './domain/commitment-rules';
+import {
+  checkCommitmentMutable,
+  checkWaiveReason,
+  requiresWaiveReason,
+} from './domain/commitment-rules';
 import {
   type CreateCommitmentDto,
   type CreateEventDto,
@@ -81,6 +85,8 @@ export interface CommitmentVo {
   due_at: string | null;
   remind_at: string | null;
   status: string;
+  /** 豁免原因（仅 `status=waived` 有值；→ 需求 §10.1） */
+  waive_reason: string | null;
   done_at: string | null;
 }
 
@@ -333,13 +339,12 @@ export class EngineService {
 
   /**
    * 改承诺（→ §5.7 `PUT /relations/:id/commitments`）：**兑现**（`done`）/ **取消**（`cancelled`）/
-   * **改期**（`due_at` / `remind_at`）。
+   * **豁免**（`waived`）/ **改期**（`due_at` / `remind_at`）。
    *
-   * 三道闸：① 能写这条关系（C 域出口）；② 这条承诺**确实挂在这条关系下**（拿 A 关系的入口
-   * 不能改 B 的承诺）；③ 已结束的承诺不能再改（`domain/commitment-rules.ts`）。
-   *
-   * ⚠ `waived`（豁免）**本批不开放**：规格要求「豁免必填原因」，但 `commitment` 表**没有**
-   *   存原因的列 —— 收下原因却没地方放＝假契约，故不做、登记待拍板（见 domain 文件头 ★）。
+   * 四道闸：① 能写这条关系（C 域出口）；② 这条承诺**确实挂在这条关系下**（拿 A 关系的入口
+   * 不能改 B 的承诺）；③ 已结束的承诺不能再改（`domain/commitment-rules.ts`）；
+   * ④ **豁免必填原因**（`waive_reason`，→ 需求 §10.1）—— 收下原因却没处存＝假契约，
+   *    故本动作**等到列落地（migration `0005`）才开放**（2026-09-15）。
    */
   async updateCommitment(relationId: string, dto: UpdateCommitmentDto): Promise<CommitmentVo> {
     const viewer = requireViewer();
@@ -360,10 +365,23 @@ export class EngineService {
       });
     }
 
+    // ★ 豁免必填原因（→ 需求 §10.1）：取消＝**记录本身错了**（纠错，不必填）；豁免＝**记录没错、但没成**（必填）
+    const waiveReason = (dto.waive_reason ?? '').trim();
+    if (dto.status !== undefined && requiresWaiveReason(dto.status)) {
+      const reasonCheck = checkWaiveReason(waiveReason);
+      if (!reasonCheck.ok) {
+        throw new AppError(ErrorCode.REQUIRED_MISSING, 422, reasonCheck.reason, {
+          constraint: 'commitment.waive_reason_required',
+        });
+      }
+    }
+
     const updated = await this.repository.updateCommitment(commitmentId, {
       ...(dto.status === undefined ? {} : { status: dto.status }),
       // 兑现才写兑现时间 / 兑现人（取消不写，免得「取消」也有一条 done 痕迹）
       ...(dto.status === 'done' ? { done_at: new Date(), done_by: viewer.employeeId } : {}),
+      // 豁免才写原因（其余状态一律留空，免得「取消」也顶一条原因）
+      ...(dto.status === 'waived' ? { waive_reason: waiveReason } : {}),
       ...(dto.due_at === undefined ? {} : { due_at: parseOptionalDate(dto.due_at, 'due_at') }),
       ...(dto.remind_at === undefined ? {} : { remind_at: parseOptionalDate(dto.remind_at, 'remind_at') }),
       updated_by: viewer.employeeId,
@@ -586,6 +604,7 @@ function toCommitmentVo(row: CommitmentRow): CommitmentVo {
     due_at: row.due_at === null ? null : row.due_at.toISOString(),
     remind_at: row.remind_at === null ? null : row.remind_at.toISOString(),
     status: row.status,
+    waive_reason: row.waive_reason,
     done_at: row.done_at === null ? null : row.done_at.toISOString(),
   };
 }

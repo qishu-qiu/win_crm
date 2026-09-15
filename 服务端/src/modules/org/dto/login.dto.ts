@@ -2,7 +2,7 @@
 // 登录入参 DTO（M1-14 / M1-03 双通道）—— `POST /account/login`
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.17 §5.2：`POST /account/login` req **`{account,password}`**。
+//   · 《销售CRM接口API文档》V1.18 §5.2：`POST /account/login` req **`{account,password}`**。
 //     **`account` ＝ 手机号 或 登录账号名**（`employee.username`），**二选一**；
 //     **服务端判别**（11 位手机号格式按手机号查，否则按账号名查）；两通道**共用同一 `password_hash`**。
 //     ⚠ 2026-09-14 变更：由 `{phone,password}` 扩为 `{account,password}`；**前端只给一个输入框**。

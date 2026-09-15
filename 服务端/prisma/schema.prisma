@@ -1,6 +1,6 @@
 // =============================================================================
 // 销售 CRM — Prisma Schema（46 张表）
-// 真相源：《需求规格/销售CRM数据架构文档》V1.31 §三~§九（表）、§十（索引）、§十五（落库口径）
+// 真相源：《需求规格/销售CRM数据架构文档》V1.32 §三~§九（表）、§十（索引）、§十五（落库口径）
 // ORM 定案：Prisma（2026-09-10）；版本钉 7.10.0（2026-09-13 由 6.19.3 升级）；MySQL 8.0+ / InnoDB / utf8mb4
 //
 // ★ Prisma 落库口径（数据架构 §十五.5，务必遵守）：
@@ -692,6 +692,7 @@ model Commitment {
   due_at          DateTime? @db.DateTime(0)
   remind_at       DateTime? @db.DateTime(0)
   status          String    @default("open") @db.VarChar(16) // open/done/expired/waived/cancelled
+  waive_reason    String?   @db.VarChar(255) // ★ 豁免原因：status=waived 时必填（cancelled 取消不需原因）——2026-09-15 补，→需求§10.1
   done_at         DateTime? @db.DateTime(0)
   done_by         BigInt?   @db.UnsignedBigInt
   source_event_id BigInt?   @db.UnsignedBigInt

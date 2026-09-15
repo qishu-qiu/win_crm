@@ -2,7 +2,7 @@ import type { components } from './types'
 import request from './request'
 
 /**
- * 行动引擎接口封装（→《销售CRM接口API文档》V1.17 §5.7）。
+ * 行动引擎接口封装（→《销售CRM接口API文档》V1.18 §5.7）。
  *
  * ★ 类型**一律取自 OpenAPI 生成物**（`src/api/types.ts`，`npm run gen:types` 生成）：
  *   前后端各维护一份接口类型是本项目点名的「双真相源」重灾区（禁止手写对接，→ M0-57）。
@@ -39,7 +39,10 @@ export interface CreateCommitmentInput {
 /** 改承诺入参（→ §5.7 `PUT /relations/:id/commitments`） */
 export interface UpdateCommitmentInput {
   id: string
+  /** `done` 兑现 / `cancelled` 取消（**录错了 / 不成立**，不填原因）/ `waived` 豁免（**必填 `waive_reason`**） */
   status?: string
+  /** 豁免原因（**仅 `status=waived` 时传且必填**；取消 / 兑现 / 改期都不传，→ 需求 §10.1） */
+  waive_reason?: string
   due_at?: string
 }
 
@@ -81,7 +84,7 @@ export async function createCommitment(
   return data
 }
 
-/** 改承诺（本批只开放 `done` 兑现 / `cancelled` 取消；`waived` 豁免待拍板） */
+/** 改承诺（收尾三态：`done` 兑现 / `cancelled` 取消 / `waived` 豁免；→ 需求 §10.1） */
 export async function updateCommitment(
   relationId: string,
   input: UpdateCommitmentInput,

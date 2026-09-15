@@ -42,7 +42,7 @@ import {
  *   · M4-17「**页面上写跟单后，时间线看得到**」。
  *
  * 口径来源（★ 真相源，勿自造）：
- *   · 两个页签与列 →《销售CRM接口API文档》V1.17 §4.4 / §5.6（列表项字段）。
+ *   · 两个页签与列 →《销售CRM接口API文档》V1.18 §4.4 / §5.6（列表项字段）。
  *   · **数据由服务端按数据范围收敛**（→ §2.2），页面**不再自己过滤**：
  *     前端过滤＝第二套范围口径（改了服务端忘了前端就露客户），这是本项目反复点名的
  *     「双真相源」；页面只负责**把服务端的答案显示出来**。
@@ -251,6 +251,54 @@ async function markDone(commitment: Commitment): Promise<void> {
     // 同上
   }
 }
+
+/** 正在填豁免原因的那条承诺（`null` ＝ 没在填） */
+const waivingId = ref<string | null>(null)
+const waiveReasonDraft = ref('')
+const submittingWaive = ref(false)
+
+/**
+ * 点「豁免」→ 展开原因输入。
+ * ★ 为什么要展开：豁免＝**确有其事但做不成**，服务端**必填原因**（→ 需求 §10.1）；
+ *   与「取消」（录错了 / 不成立，不填原因）是两件事，不能合并成一个按钮。
+ */
+function startWaive(commitment: Commitment): void {
+  waivingId.value = commitment.id
+  waiveReasonDraft.value = ''
+}
+
+function cancelWaive(): void {
+  waivingId.value = null
+  waiveReasonDraft.value = ''
+}
+
+/** 提交豁免（空原因不发请求：服务端也会 422，但本地先拦一步，省一个来回） */
+async function submitWaive(commitment: Commitment): Promise<void> {
+  const relation = activeRelation.value
+  if (relation === null) return
+
+  const reason = waiveReasonDraft.value.trim()
+  if (reason === '') {
+    message.warning('豁免必须填原因（写清为什么做不成）')
+    return
+  }
+
+  submittingWaive.value = true
+  try {
+    await updateCommitment(relation.id, {
+      id: commitment.id,
+      status: 'waived',
+      waive_reason: reason,
+    })
+    message.success('已豁免')
+    cancelWaive()
+    await refreshTimeline()
+  } catch {
+    // 同上：错误由请求层统一表达
+  } finally {
+    submittingWaive.value = false
+  }
+}
 </script>
 
 <template>
@@ -409,16 +457,32 @@ async function markDone(commitment: Commitment): Promise<void> {
           <template v-else-if="column.key === 'due'">{{ formatDateTime(record.due_at) }}</template>
           <template v-else-if="column.key === 'status'">
             {{ commitmentStatusNameOf(record.status) }}
+            <span v-if="record.waive_reason">（{{ record.waive_reason }}）</span>
           </template>
           <template v-else-if="column.key === 'actions'">
-            <a-button
-              v-if="record.status === 'open'"
-              type="link"
-              size="small"
-              @click="markDone(record)"
-            >
-              兑现
-            </a-button>
+            <template v-if="record.status === 'open'">
+              <template v-if="waivingId === record.id">
+                <a-input
+                  v-model:value="waiveReasonDraft"
+                  size="small"
+                  placeholder="为什么做不成（客户变卦 / 预算冻结…）"
+                  style="width: 200px"
+                />
+                <a-button
+                  type="link"
+                  size="small"
+                  :loading="submittingWaive"
+                  @click="submitWaive(record)"
+                >
+                  确定豁免
+                </a-button>
+                <a-button type="link" size="small" @click="cancelWaive">不豁免</a-button>
+              </template>
+              <template v-else>
+                <a-button type="link" size="small" @click="markDone(record)">兑现</a-button>
+                <a-button type="link" size="small" @click="startWaive(record)">豁免</a-button>
+              </template>
+            </template>
             <span v-else>—</span>
           </template>
         </template>

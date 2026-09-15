@@ -2,7 +2,7 @@
 // B 域出参 DTO（M2-11 ~ M2-14）—— **只服务于 Swagger 文档**，不参与运行时转换
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.17 §5.4 公司列表项：
+//   · 《销售CRM接口API文档》V1.18 §5.4 公司列表项：
 //       `{id,full_name,city,industry_l1,scale,credit_code?,registered_capital?,legal_person?,
 //         relation_count,old_customer,address_maintained,updated_at}`
 //   · 同 §5.4 `POST /companies/search-dup` resp：

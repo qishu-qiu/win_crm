@@ -5,7 +5,7 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.17 §三 接口总览：`/relations`（G/P）·`/relations/:id`（G/U）
+//   · 《销售CRM接口API文档》V1.18 §三 接口总览：`/relations`（G/P）·`/relations/:id`（G/U）
 //     ·`/relations/:id/members`（G/P/U/D）。
 //     ⚠ 本批只做 **G/P（列表 / 激活 / 详情 / 改属性 / 成员 G/P）**：
 //       `/relations/:id/stage`（推进阶段）·`/labels`·`/transfer`·`/competition`·`/rounds`

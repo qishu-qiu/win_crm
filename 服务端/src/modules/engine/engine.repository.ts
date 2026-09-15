@@ -6,7 +6,7 @@
 //   回写决策在 `domain/last-event.ts`、幂等键在 `domain/event-idempotency.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.31 D1（`commitment`）／D2（`action_event`）。
+//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.32 D1（`commitment`）／D2（`action_event`）。
 //   · D2：`action_event` **不分区**（故主键即 `id`，`uk_idem` 无需含分区键）；
 //     索引 `idx_rel_time(relation_id, event_at)` —— 时间线**倒序**扫描正好命中它；
 //     `idx_contact(contact_id, event_at)` 供「待关联公司」按联系人查孤儿跟单（M6 用）。
@@ -57,6 +57,7 @@ const COMMITMENT_SELECT = {
   due_at: true,
   remind_at: true,
   status: true,
+  waive_reason: true,
   done_at: true,
   source_event_id: true,
   created_at: true,
@@ -125,11 +126,13 @@ export interface CreateCommitmentData {
 
 /**
  * 改承诺（**只列真会变的字段**）。
- * ★ `status` 只允许流转到 `done` / `cancelled`（`waived` 缺原因落点，见 `domain/commitment-rules.ts`）；
+ * ★ `status` 只允许流转到 `done` / `cancelled` / `waived`（→ 需求 §10.1 收尾三态）；
  *   流转合法性由 domain 判，本接口不做限制也不给默认值。
+ * ★ `waive_reason` 与 `waived` 同写：**「必填」的判定在 domain / service**，仓库层只负责落库。
  */
 export interface UpdateCommitmentData {
   status?: string;
+  waive_reason?: string | null;
   done_at?: Date | null;
   done_by?: bigint | null;
   due_at?: Date | null;
@@ -251,7 +254,7 @@ export class EngineRepository {
     return this.prisma.commitment.findFirst({ where: { id }, select: COMMITMENT_SELECT });
   }
 
-  /** 改承诺（兑现 / 取消 / 改期）—— 回整行供出参装配 */
+  /** 改承诺（兑现 / 取消 / 豁免 / 改期）—— 回整行供出参装配 */
   updateCommitment(id: bigint, data: UpdateCommitmentData) {
     return this.prisma.commitment.update({ where: { id }, data, select: COMMITMENT_SELECT });
   }

@@ -2,11 +2,11 @@
 // C 域入参 DTO（M3-09 / M3-10 / M3-11）
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.16 §5.6：
+//   · 《销售CRM接口API文档》V1.18 §5.6：
 //       `POST /relations` req `{company_id, dept_id, product_line_id}`
 //       `PUT /relations/:id` req `{urgency?, value_tier?, next_action_hint?, competition?, competitor_id?}`
 //       `POST /relations/:id/members` req `{employee_id, member_type, source:"collaborate"|"ask_help", valid_until?}`
-//   · 《销售CRM数据架构文档》V1.31 C1 / C2：`urgency` / `value_tier` / `competition` /
+//   · 《销售CRM数据架构文档》V1.32 C1 / C2：`urgency` / `value_tier` / `competition` /
 //     `member_type` / `source` 的**枚举值**（白名单在 domain 里，DTO 只做「照抄一遍」的入参校验）。
 //   · 同 §2.4：字段缺失 / 类型错 / **枚举非法** → **400 / 20001**（横切层的校验管道统一出口）。
 //   · 同 §2.6：入参出参 **snake_case**；所有 id 都是**十进制字符串**（后端 `bigint`，前端 string）。

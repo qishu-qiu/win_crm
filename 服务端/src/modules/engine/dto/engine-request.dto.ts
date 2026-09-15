@@ -27,6 +27,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -37,6 +38,12 @@ import {
 } from 'class-validator';
 
 import { COMPETITION_VALUES } from '../../relation/domain/relation-attributes';
+import {
+  CLOSABLE_STATUSES,
+  COMMITMENT_CONTENT_MAX_LENGTH,
+  COMMITMENT_CTYPES,
+  COMMITMENT_PARTIES,
+} from '../domain/commitment-rules';
 import { ACTION_TYPES, OUTCOME_VALUES, SUMMARY_MAX_LENGTH } from '../domain/event-effective';
 
 /** `competition_note` 上限（→ D2：≤100 字） */
@@ -121,4 +128,112 @@ export class CreateEventDto {
   @ArrayMaxSize(20, { message: 'mentioned_user_ids 最多 20 个' })
   @IsString({ each: true, message: 'mentioned_user_ids 里每项都必须是字符串' })
   mentioned_user_ids?: string[];
+}
+
+/** `GET /relations/:id/events`（时间线，→ §5.7：默认近 1 个月） */
+export class ListEventQueryDto {
+  @ApiPropertyOptional({
+    enum: ['1m', 'all'],
+    description: '时间窗：`1m` ＝近 1 个月（默认，→ §5.7）；`all` ＝全部',
+  })
+  @IsOptional()
+  @IsIn(['1m', 'all'], { message: 'range 取值不合法' })
+  range?: string;
+}
+
+/** `POST /relations/:id/commitments`（建承诺，→ §5.7 / 需求 §10.1） */
+export class CreateCommitmentDto {
+  @ApiPropertyOptional({
+    description: '对着哪个联系人（**选填**，同事件口径：不选也可提交）',
+    example: '5',
+  })
+  @IsOptional()
+  @IsString({ message: 'contact_id 必须是字符串' })
+  @Length(1, 32, { message: 'contact_id 长度不合法' })
+  contact_id?: string;
+
+  @ApiProperty({
+    enum: COMMITMENT_PARTIES,
+    description:
+      '承诺三型：`me` 我答应客户（**催自己**）/ `them` 客户答应我（**催客户**）/ ' +
+      '`verdict` 我定的判定点（**给个结论**）—— → 需求 §10.1',
+    example: 'me',
+  })
+  @IsIn([...COMMITMENT_PARTIES], { message: 'party 取值不合法' })
+  party!: string;
+
+  @ApiProperty({
+    enum: COMMITMENT_CTYPES,
+    description: '承诺类型（→ 数据架构 D1：9 种，`social_*` 为客情类）',
+    example: 'deliver',
+  })
+  @IsIn([...COMMITMENT_CTYPES], { message: 'ctype 取值不合法' })
+  ctype!: string;
+
+  @ApiProperty({ description: '一句话承诺内容（≤255 字）', example: '周三前把报价单发过去' })
+  @IsString({ message: 'content 必须是字符串' })
+  @Length(1, COMMITMENT_CONTENT_MAX_LENGTH, {
+    message: `content 最长 ${COMMITMENT_CONTENT_MAX_LENGTH} 字`,
+  })
+  content!: string;
+
+  @ApiPropertyOptional({
+    description:
+      '到期时间（ISO 字符串）。**前端「三快选」默认明天**，服务端**不替销售定时间**（不给＝未定，→ 需求 §10.1）',
+    example: '2026-09-16T00:00:00.000Z',
+  })
+  @IsOptional()
+  @IsDateString({}, { message: 'due_at 需为 ISO 日期字符串' })
+  due_at?: string;
+
+  @ApiPropertyOptional({
+    description: '提醒时间（ISO 字符串）；不给＝到期当天清晨（组装时算，属 M7）',
+    example: '2026-09-16T01:00:00.000Z',
+  })
+  @IsOptional()
+  @IsDateString({}, { message: 'remind_at 需为 ISO 日期字符串' })
+  remind_at?: string;
+
+  @ApiPropertyOptional({
+    description: '由哪条跟单产生（选填；写事件的「有承诺吗」三快选带过来，→ 需求 §10.1）',
+    example: '101',
+  })
+  @IsOptional()
+  @IsString({ message: 'source_event_id 必须是字符串' })
+  @Length(1, 32, { message: 'source_event_id 长度不合法' })
+  source_event_id?: string;
+}
+
+/**
+ * `PUT /relations/:id/commitments`（改承诺）。
+ * ⚠ 规格只给了「`G/P/U /relations/:id/commitments`」这一行（→ 接口 §三 总览 / §5.7），
+ *   **没给 U 的入参形状** —— 本批按「`id` 指认目标承诺 ＋ 要改的字段」实现，
+ *   冲突 / 欠账已登记（→ 交接说明 §五）。
+ */
+export class UpdateCommitmentDto {
+  @ApiProperty({ description: '要改哪条承诺（十进制字符串）', example: '9' })
+  @IsString({ message: 'id 必须是字符串' })
+  @Length(1, 32, { message: 'id 长度不合法' })
+  id!: string;
+
+  @ApiPropertyOptional({
+    enum: CLOSABLE_STATUSES,
+    description:
+      '流转到：`done` 兑现（写 `done_at` / `done_by`）/ `cancelled` 取消。' +
+      '⚠ `waived` 豁免**本批不开放**（承诺表没有存豁免原因的地方，→ `domain/commitment-rules.ts`）',
+    example: 'done',
+  })
+  @IsOptional()
+  @IsIn([...CLOSABLE_STATUSES], { message: 'status 取值不合法' })
+  status?: string;
+
+  @ApiPropertyOptional({ description: '改期（ISO 字符串）', example: '2026-09-20T00:00:00.000Z' })
+  @IsOptional()
+  @IsDateString({}, { message: 'due_at 需为 ISO 日期字符串' })
+  due_at?: string;
+
+  @ApiPropertyOptional({ description: '改提醒时间（ISO 字符串）', example: '2026-09-20T01:00:00.000Z' })
+  @IsOptional()
+  @IsDateString({}, { message: 'remind_at 需为 ISO 日期字符串' })
+  remind_at?: string;
 }

@@ -10,6 +10,8 @@
 //
 // ★ 各 import 的角色（顺序＝依赖方向，别写反）：
 //   ① `ContextModule` —— kernel 的请求上下文（`@Global`）：当前人 / 角色 / 管辖部门 / 数据范围，横切层与业务域都读它；
+//      同组还有 `EventBusModule`（M4-11）：进程内领域事件总线（`@Global`，**全进程唯一实例**）——
+//      C 域发 `RelationCreated`、D 域收并落首条建档事件（架构 §5.3）。
 //   ② `PrismaModule`  —— 数据库访问（`@Global`）：**只有数据访问层该注入它**（`domain/**` 与业务域禁碰，ESLint 硬卡）；
 //   ③ `AuditModule`   —— 审计留痕（`@Global`，M1 补齐）：敏感动作要在**业务事务内**写 `operation_log`（§7.4）；
 //   ④ `SharedModule`  —— 横切四件套：靠 `APP_GUARD / APP_INTERCEPTOR / APP_FILTER / APP_PIPE` **全局生效**。
@@ -31,7 +33,7 @@
 import { Module } from '@nestjs/common';
 
 import { HealthController } from './health/health.controller';
-import { AuditModule, ContextModule } from './kernel/index';
+import { AuditModule, ContextModule, EventBusModule } from './kernel/index';
 import { CompanyModule } from './modules/company/company.module';
 import { EngineModule } from './modules/engine/engine.module';
 import { OrgModule } from './modules/org/org.module';
@@ -42,6 +44,7 @@ import { SharedModule } from './shared/shared.module';
 @Module({
   imports: [
     ContextModule,
+    EventBusModule,
     PrismaModule,
     AuditModule,
     SharedModule,

@@ -16,6 +16,7 @@ import {
   ErrorCode,
   mapPrismaError,
   runWithContext,
+  type EventBus,
   type RequestContext,
 } from '../../kernel/index';
 import type { CompanyService } from '../company/company.service';
@@ -173,15 +174,19 @@ function createService(options: FakeOptions = {}) {
   };
   // 事务：直接把回调跑起来，并给它一个 tx 标记（本域只用它区分「在事务里」）
   const prisma = { $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn({ tx: true })) };
+  // 领域事件总线（M4-11）：激活成功后在**事务之外** publish `RelationCreated`
+  //  —— 单测只关心「发了什么」，落库是 D 域订阅方的事（→ `engine-event.subscriber.ts`）
+  const events = { publish: jest.fn(async () => undefined) };
 
   const service = new RelationService(
     repository as unknown as RelationRepository,
     org as unknown as OrgService,
     company as unknown as CompanyService,
     prisma as unknown as PrismaService,
+    events as unknown as EventBus,
   );
 
-  return { service, repository, org, company, prisma };
+  return { service, repository, org, company, prisma, events };
 }
 
 function contextOf(

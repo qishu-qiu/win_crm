@@ -28,6 +28,8 @@ export * from './context/public.decorator';
 export * from './context/context.module';
 export * from './events/domain-event';
 export * from './events/event-bus';
+// M4-11：总线的 DI 装配点（`@Global()`），调用方只 import 令牌 `EventBus`
+export * from './events/event-bus.module';
 export * from './audit/transaction-context';
 export * from './audit/audit.service';
 export * from './audit/audit.module';

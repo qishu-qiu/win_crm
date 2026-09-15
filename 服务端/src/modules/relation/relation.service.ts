@@ -29,7 +29,12 @@ import { Injectable } from '@nestjs/common';
 
 import {
   AppError,
+  DomainEventName,
+  // ⚠ 必须是**值导入**（不能写 `type EventBus`）：Nest 靠 `design:paramtypes` 元数据注入，
+  //   类型导入会被编译期擦除 → 元数据退化成 `Function` → 启动即报「依赖解析失败」。
+  EventBus,
   ErrorCode,
+  createDomainEvent,
   getRequestContext,
   jsonToBigint,
   mapPrismaError,
@@ -115,6 +120,8 @@ export class RelationService {
     private readonly org: OrgService,
     private readonly company: CompanyService,
     private readonly prisma: PrismaService,
+    /** 领域事件总线（M4-11；`@Global()` 模块提供，故本域 `imports` 不必列出） */
+    private readonly events: EventBus,
   ) {}
 
   // ===== M3-06 激活（关系 ＋ owner 成员，本域事务）=====
@@ -181,6 +188,26 @@ export class RelationService {
     //   它的 `members` 是空的 —— 拿它去装配引用会得到一个「owner 为 null」的出参
     //   （真库实测踩到过；单测的假对象也要按这个阶段造，否则抓不出来）。
     const row = await this.requireRelationRow(created.id);
+
+    // ★ 建档事件（→ 架构 §5.3：`RelationCreated` ＝ **C 发 → D 域落首条 `action_event`**）
+    //   ① **发在事务提交之后**：事务回滚了就不该有「已建档」这条事件；
+    //   ② 只带**最小信息**（谁 / 对哪条关系 / 归属人），D 域要更多数据回查本域 service（§5.3 尾注）；
+    //   ③ 投递方式由**订阅方**决定（D 域按默认 `async` 订阅）—— 故此处不等它落库、
+    //      也不因它失败而把已经建好的关系判成失败（跨域路②＝「我不等结果」）。
+    await this.events.publish(
+      createDomainEvent({
+        name: DomainEventName.RelationCreated,
+        actorId: viewer.employeeId,
+        aggregateId: created.id,
+        payload: {
+          companyId: triple.companyId,
+          deptId: triple.deptId,
+          productLineId: triple.productLineId,
+          ownerId: viewer.employeeId,
+        },
+      }),
+    );
+
     return this.buildVo(row, await this.loadRefs([row]));
   }
 
@@ -276,6 +303,30 @@ export class RelationService {
    */
   async touchLastEventAt(relationId: bigint, eventAt: Date): Promise<void> {
     await this.repository.updateLastEventAt(relationId, eventAt);
+  }
+
+  /**
+   * 关系**引用**（`{id, name}`）批量出口 —— D 域的「今日动线」条目要 `relation:{id,name}`（→ §5.7）。
+   *
+   * ★ `name` 取**公司全称**：业务关系本身**没有名字字段**（→ 数据架构 C1），
+   *   「今天该找谁」问的就是**哪家公司** —— 依据是接口 §5.7 该字段的形状与业务语义，
+   *   不是本域自造的展示口径。
+   * ★ 公司引用取不到（档案被逻辑删 / 已并走）时**不编名字**，该条 `name` 给空串。
+   * ⚠ 本方法**不做可见性过滤**：调用方（D 域）拿到的 id 来自**它自己**的动线条目
+   *   （`daily_agenda.user_id` 已保证「这条是给我的」），再加一层关系范围判断会把
+   *   经理 / 交付看到的那部分也剪掉。要判关系可见性请用 `getRelation` / `requireWritableRelation`。
+   */
+  async getRelationRefs(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+    const unique = uniqueBigints(ids);
+    if (unique.length === 0) return [];
+
+    const rows = await this.repository.findRelationRefsByIds(unique);
+    const companies = await this.company.getCompanyRefs(
+      uniqueBigints(rows.map((row) => row.company_id)),
+    );
+    const names = toNameMap(companies);
+
+    return rows.map((row) => ({ id: row.id, name: names.get(row.company_id.toString()) ?? '' }));
   }
 
   /**

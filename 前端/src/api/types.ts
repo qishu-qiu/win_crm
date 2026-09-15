@@ -324,6 +324,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/relations/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 关系时间线（跟单事件）
+         * @description **按事件时间倒序**；默认近 1 个月（`range=1m`），`range=all` 取全部。可见性**继承业务关系权限**（→ 需求 §10.2）：他人私海 **403**；`branch` 的分界基准是**该关系的 owner**（不是当前登录人，→ 决策 #30）。⚠ 规格 §5.7 的 `pain_point` / `round_no` 本批**不返回**（卡点字典未接 / 轮次来源未落库）
+         */
+        get: operations["EngineController_listEvents"];
+        put?: never;
+        /**
+         * 记一条跟单
+         * @description `{contact_id?,action_type,summary?,outcome?,competition?,competition_note?,duration_min?,mentioned_user_ids?}`。**有效沟通必须写一句话结果**；快速标记三型（未联系 / 未接 / 说两句挂了）**点一下即可**（→ 需求 §10.2）。重复提交（同内容）→ **409**；快速标记**不重置**掉海倒计时（→ 数据架构 D2）
+         */
+        post: operations["EngineController_recordEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/relations/{id}/commitments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 某关系的承诺列表
+         * @description 可见性同时间线（**继承业务关系权限**）；本批**不分页**（→ 接口 §2.7，M6）
+         */
+        get: operations["EngineController_listCommitments"];
+        /**
+         * 改承诺（兑现 / 取消 / 改期）
+         * @description `{id,status?,due_at?,remind_at?}`，`status` ∈ `done`（兑现）/ `cancelled`（取消）。⚠ **`waived`（豁免）本批不开放**：规格要求「豁免必填原因」，而承诺表没有存原因的列 ——收下原因却无处可存＝假契约，故不做、登记待拍板（→ 交接说明 §二）。已结束的承诺（已兑现 / 已取消）再改 → **422 / 20403**
+         */
+        put: operations["EngineController_updateCommitment"];
+        /**
+         * 建一条承诺
+         * @description `{contact_id?,party,ctype,content,due_at?,remind_at?,source_event_id?}`。`party`：`me` 我答应客户（催自己）/ `them` 客户答应我（催客户）/ `verdict` 给结论（→ 需求 §10.1）；`due_at` 不给＝**未定**（「三快选默认明天」由前端给，服务端不替销售定时间）
+         */
+        post: operations["EngineController_createCommitment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/today-agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 今日该找谁（工作台）
+         * @description **只返回登录人自己的**动线条目（`daily_agenda.user_id`），且只含 `open` / `snoozed`（已办的 `done` / `ignored` 不再推）。⚠ 本批**不实时组装**：条目由每日 05:00 的组装任务产生（属 M7），库里没有当日行就是**空数组**。`relation` 可为 `null`（「只有联系人、还没挂关系」的提醒，→ 数据架构 D4）
+         */
+        get: operations["EngineController_todayAgenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -922,6 +994,244 @@ export interface components {
             /** @description 协同有效期（ISO 日期；`null` / 缺省＝长期，仅正式协同） */
             valid_until?: string;
         };
+        EngineRefDto: {
+            /**
+             * @description id（十进制字符串）
+             * @example 7
+             */
+            id: string;
+            /**
+             * @description 名称快照（取引用那一刻的库值）
+             * @example 王海涛
+             */
+            name: string;
+        };
+        ActionEventVoDto: {
+            /**
+             * @description 事件 id
+             * @example 1
+             */
+            id: string;
+            /**
+             * @description 动作类型（→ D2）
+             * @example phone
+             */
+            action_type: string;
+            /** @description 一句话结果（**快速标记时为 `null`**） */
+            summary: string | null;
+            /**
+             * @description 结果码（空＝中性，→ D2）
+             * @example advanced
+             */
+            outcome: string | null;
+            /**
+             * @description 本次了解的竞品态势（→ C1 快照）
+             * @example none
+             */
+            competition: string | null;
+            /** @description 谁填的（操作人） */
+            actor: components["schemas"]["EngineRefDto"];
+            /** @description **本条创建时该关系的归属人**（→ D2 `owner_snapshot`：按轮次归组 ＋ 前主人标姓名用）。关系暂无 owner（如已掉公海）时为 `null` */
+            owner_snapshot: components["schemas"]["EngineRefDto"] | null;
+            /** @description 本次跟进的联系人（**选填**，→ 需求 §6.3 多联系人口径） */
+            contact: components["schemas"]["EngineRefDto"] | null;
+            /** @description 本次投入分钟 */
+            duration_min: number | null;
+            /** @description 事件发生时间（时间线排序基准，→ D2 `event_at`） */
+            event_at: string;
+            /**
+             * @description `main`＝本条是**该关系 owner** 写的（主线）；`sub`＝协同 / 他人写的（树杈）—— **分界基准是 owner，不是当前登录人**（→ 决策 #30：经理打开时看到的也是主跟单人视角）
+             * @enum {string}
+             */
+            branch: "main" | "sub";
+            /** @description 附件（本批不接收，恒为 `[]`） */
+            attachments: {
+                [key: string]: unknown;
+            }[];
+        };
+        CreateEventDto: {
+            /**
+             * @description 本次对着哪个联系人（**选填**，→ 需求 §6.3 多联系人：见谁都算有效跟进，不按角色加权）
+             * @example 5
+             */
+            contact_id?: string;
+            /**
+             * @description 动作类型（→ D2）。`meal` / `gift` / `greeting`＝客情；`ask_help`＝@求助；`note`＝纯备注；`system`＝系统事件
+             * @example phone
+             * @enum {string}
+             */
+            action_type: "phone" | "wechat" | "visit" | "onsite" | "email" | "meal" | "gift" | "greeting" | "ask_help" | "note" | "system";
+            /**
+             * @description 一句话结果（≤200 字）。**有效沟通必填，快速标记可空** —— `outcome` ∈ 未联系 / 未接电话 / 说两句挂了 时不强制写一个字（→ 需求 §10.2）
+             * @example 客户说下周一再谈，等他们内部过会
+             */
+            summary?: string;
+            /**
+             * @description 结果。**有效沟通**：advanced（有进展）/ stalled（卡住）/ await_reply（等回复）；**快速标记（无效沟通，不重置掉海倒计时）**：not_contacted / no_answer / brief_hangup。空＝中性（非必填，且**算有效沟通**）
+             * @enum {string}
+             */
+            outcome?: "advanced" | "stalled" | "await_reply" | "not_contacted" | "no_answer" | "brief_hangup";
+            /**
+             * @description 本次跟单了解的竞品态势（→ D2：事务回写 C1 快照）
+             * @enum {string}
+             */
+            competition?: "none" | "in_use" | "comparing";
+            /** @description 竞品情况一句话（≤100 字） */
+            competition_note?: string;
+            /**
+             * @description 本次投入分钟（算单位时间价值）
+             * @example 30
+             */
+            duration_min?: number;
+            /**
+             * @description @求助的同事 id 列表（十进制字符串）。**仅正向展示**（卡片上"本条 @了谁"）；授权另走 `relation_member.ask_help`（→ D2 / C2），本列**不做反向查询**
+             * @example [
+             *       "8"
+             *     ]
+             */
+            mentioned_user_ids?: string[];
+        };
+        CommitmentVoDto: {
+            /**
+             * @description 承诺 id
+             * @example 9
+             */
+            id: string;
+            /**
+             * @description 所属业务关系 id
+             * @example 11
+             */
+            relation_id: string;
+            /**
+             * @description 承诺三型：`me` 我答应客户 / `them` 客户答应我 / `verdict` 我定的判定点
+             * @example me
+             * @enum {string}
+             */
+            party: "me" | "them" | "verdict";
+            /**
+             * @description 承诺类型（→ 数据架构 D1）
+             * @example deliver
+             */
+            ctype: string;
+            /**
+             * @description 一句话承诺内容
+             * @example 周三前把报价单发过去
+             */
+            content: string;
+            /** @description 到期时间（未定＝`null`） */
+            due_at: string | null;
+            /** @description 提醒时间（未定＝`null`） */
+            remind_at: string | null;
+            /**
+             * @description 状态。`open` 进行中 / `done` 已兑现 / `expired` 已逾期（派生态，按 `due_at` 算）/ `waived` 豁免（**本批不开放写入**：承诺表没有存豁免原因的地方）/ `cancelled` 已取消
+             * @example open
+             * @enum {string}
+             */
+            status: "open" | "done" | "expired" | "waived" | "cancelled";
+            /** @description 兑现时间（未兑现＝`null`） */
+            done_at: string | null;
+        };
+        CreateCommitmentDto: {
+            /**
+             * @description 对着哪个联系人（**选填**，同事件口径：不选也可提交）
+             * @example 5
+             */
+            contact_id?: string;
+            /**
+             * @description 承诺三型：`me` 我答应客户（**催自己**）/ `them` 客户答应我（**催客户**）/ `verdict` 我定的判定点（**给个结论**）—— → 需求 §10.1
+             * @example me
+             * @enum {string}
+             */
+            party: "me" | "them" | "verdict";
+            /**
+             * @description 承诺类型（→ 数据架构 D1：9 种，`social_*` 为客情类）
+             * @example deliver
+             * @enum {string}
+             */
+            ctype: "reply" | "quote" | "meet" | "deliver" | "decision" | "followup" | "social_meal" | "social_gift" | "social_greeting";
+            /**
+             * @description 一句话承诺内容（≤255 字）
+             * @example 周三前把报价单发过去
+             */
+            content: string;
+            /**
+             * @description 到期时间（ISO 字符串）。**前端「三快选」默认明天**，服务端**不替销售定时间**（不给＝未定，→ 需求 §10.1）
+             * @example 2026-09-16T00:00:00.000Z
+             */
+            due_at?: string;
+            /**
+             * @description 提醒时间（ISO 字符串）；不给＝到期当天清晨（组装时算，属 M7）
+             * @example 2026-09-16T01:00:00.000Z
+             */
+            remind_at?: string;
+            /**
+             * @description 由哪条跟单产生（选填；写事件的「有承诺吗」三快选带过来，→ 需求 §10.1）
+             * @example 101
+             */
+            source_event_id?: string;
+        };
+        UpdateCommitmentDto: {
+            /**
+             * @description 要改哪条承诺（十进制字符串）
+             * @example 9
+             */
+            id: string;
+            /**
+             * @description 流转到：`done` 兑现（写 `done_at` / `done_by`）/ `cancelled` 取消。⚠ `waived` 豁免**本批不开放**（承诺表没有存豁免原因的地方，→ `domain/commitment-rules.ts`）
+             * @example done
+             * @enum {string}
+             */
+            status?: "done" | "cancelled";
+            /**
+             * @description 改期（ISO 字符串）
+             * @example 2026-09-20T00:00:00.000Z
+             */
+            due_at?: string;
+            /**
+             * @description 改提醒时间（ISO 字符串）
+             * @example 2026-09-20T01:00:00.000Z
+             */
+            remind_at?: string;
+        };
+        AgendaItemVoDto: {
+            /**
+             * @description 动线条目 id
+             * @example 31
+             */
+            id: string;
+            /**
+             * @description 这条因何而来：承诺 / 预约 / 节奏规则命中 / 关系（掉海硬提醒）
+             * @example commitment
+             * @enum {string}
+             */
+            ref_type: "commitment" | "appointment" | "cadence" | "relation";
+            /** @description 来源对象 id（如承诺 id） */
+            ref_id: string | null;
+            /** @description 哪条业务关系（`name` 取公司全称，→ C 域出口）。**可为 `null`**：动线条目存在「只有联系人、还没挂关系」的形态（→ 数据架构 D4 `relation_id` 可空） */
+            relation: components["schemas"]["EngineRefDto"] | null;
+            /** @description 对着哪个联系人（可为 `null`） */
+            contact: components["schemas"]["EngineRefDto"] | null;
+            /** @description 为什么今天该找 TA */
+            reason: string | null;
+            /**
+             * @description 优先级（越大越靠前）
+             * @example 10
+             */
+            priority: number;
+            /** @description 建议动作（人话） */
+            action_hint: string | null;
+            /**
+             * @description 处理状态（列表只返回 `open` / `snoozed`，见仓储注释）
+             * @example open
+             * @enum {string}
+             */
+            status: "open" | "done" | "snoozed" | "ignored";
+            /**
+             * @description 已被「明天再说」几次（上限 3，→ 需求 §10.4）
+             * @example 0
+             */
+            snooze_count: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -1360,6 +1670,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RelationMemberVoDto"][];
+                };
+            };
+        };
+    };
+    EngineController_listEvents: {
+        parameters: {
+            query?: {
+                /** @description 时间窗：`1m` ＝近 1 个月（默认，→ §5.7）；`all` ＝全部 */
+                range?: "1m" | "all";
+            };
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionEventVoDto"][];
+                };
+            };
+        };
+    };
+    EngineController_recordEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEventDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionEventVoDto"];
+                };
+            };
+        };
+    };
+    EngineController_listCommitments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitmentVoDto"][];
+                };
+            };
+        };
+    };
+    EngineController_updateCommitment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCommitmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitmentVoDto"];
+                };
+            };
+        };
+    };
+    EngineController_createCommitment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 关系 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommitmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitmentVoDto"];
+                };
+            };
+        };
+    };
+    EngineController_todayAgenda: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgendaItemVoDto"][];
                 };
             };
         };

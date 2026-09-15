@@ -151,6 +151,19 @@ export class RelationRepository {
   }
 
   /**
+   * 按主键批量取「关系 → 公司」指针（D 域「今日动线」要 `relation:{id,name}`，→ 接口 §5.7）。
+   *
+   * ★ 只 select 两列：跨域出口只该给出**调用方要的那点信息**，
+   *   不让外部顺着出口把整行读走（要更多数据请走 `RelationService` 的语义化出口）。
+   */
+  findRelationRefsByIds(ids: readonly bigint[]) {
+    return this.prisma.businessRelation.findMany({
+      where: { id: { in: [...ids] }, deleted_at: null },
+      select: { id: true, company_id: true },
+    });
+  }
+
+  /**
    * 活跃唯一键**预检**：同 公司 × 部门 × 产品线 是否已有**活跃**（私海且未并）的关系。
    *
    * ★ 为什么不用 `active_key` 直接查：该列在 Prisma schema 里是 `@ignore`（生成列**不可写**），

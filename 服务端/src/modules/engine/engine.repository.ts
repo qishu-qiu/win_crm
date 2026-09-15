@@ -62,6 +62,26 @@ const COMMITMENT_SELECT = {
   created_at: true,
 } as const;
 
+/**
+ * 今日动线里**还该出现**的状态（→ 数据架构 D4：`open` 待办 / `snoozed` 推到今天）。
+ * `done` / `ignored` 已处理完，不再推（见 `listAgendaOfUser` 注释 ★）。
+ */
+const AGENDA_VISIBLE_STATUSES: readonly string[] = ['open', 'snoozed'];
+
+/** 今日动线读出的列（→ §5.7 动线条目；`action_reason` 属 M4-14 之后的处理动作，本批不取） */
+const AGENDA_SELECT = {
+  id: true,
+  ref_type: true,
+  ref_id: true,
+  relation_id: true,
+  contact_id: true,
+  reason: true,
+  priority: true,
+  action_hint: true,
+  status: true,
+  snooze_count: true,
+} as const;
+
 /** 写事件（service 组装好，仓储只管落库） */
 export interface CreateEventData {
   relation_id: bigint | null;
@@ -101,6 +121,20 @@ export interface CreateCommitmentData {
   remind_at: Date | null;
   source_event_id: bigint | null;
   created_by: bigint;
+}
+
+/**
+ * 改承诺（**只列真会变的字段**）。
+ * ★ `status` 只允许流转到 `done` / `cancelled`（`waived` 缺原因落点，见 `domain/commitment-rules.ts`）；
+ *   流转合法性由 domain 判，本接口不做限制也不给默认值。
+ */
+export interface UpdateCommitmentData {
+  status?: string;
+  done_at?: Date | null;
+  done_by?: bigint | null;
+  due_at?: Date | null;
+  remind_at?: Date | null;
+  updated_by: bigint;
 }
 
 @Injectable()
@@ -202,6 +236,44 @@ export class EngineRepository {
       where: { relation_id: relationId },
       select: COMMITMENT_SELECT,
       orderBy: { id: 'desc' },
+      take: limit,
+    });
+  }
+
+  // ===== M4-09 承诺：改 =====
+
+  /**
+   * 按主键取承诺（**不带任何范围条件**）。
+   * ★ 调用方必须自己比对 `relation_id`：入口是 `/relations/:id/commitments`，
+   *   不能拿 A 关系的入口去改 B 关系的承诺（那条判断在 service，不在 SQL 里做隐式过滤）。
+   */
+  findCommitmentById(id: bigint) {
+    return this.prisma.commitment.findFirst({ where: { id }, select: COMMITMENT_SELECT });
+  }
+
+  /** 改承诺（兑现 / 取消 / 改期）—— 回整行供出参装配 */
+  updateCommitment(id: bigint, data: UpdateCommitmentData) {
+    return this.prisma.commitment.update({ where: { id }, data, select: COMMITMENT_SELECT });
+  }
+
+  // ===== M4-10 今日动线（简版）=====
+
+  /**
+   * 某员工某日的动线条目（→ §5.7 `GET /today-agenda`）。
+   *
+   * ★ **只取 `open` / `snoozed`**：`done` / `ignored` 是**已处理过**的条目
+   *   （→ 数据架构 D4「组装方式＝结转 + 新增」：处理状态跨天保留、**不重复推**），
+   *   再把它们列进「今天该找谁」就是把已办的事又端上来一遍。
+   * ★ 排序＝ `priority` 降序（→ D4 字段说明「为什么今天该找 TA / 优先级 / 建议动作」），
+   *   同优先级按 `id` 升序，保证同一份数据每次读出的顺序一致。
+   * ⚠ 本批**不实时组装**（组装＝05:00 定时任务，属 M7）：库里没有当日行就返回空数组 ——
+   *   前端看到空，不等于「今天没事」，只是「本批还没接组装」（→ 交接说明 §三）。
+   */
+  listAgendaOfUser(userId: bigint, bizDate: Date, limit: number) {
+    return this.prisma.dailyAgenda.findMany({
+      where: { user_id: userId, biz_date: bizDate, status: { in: [...AGENDA_VISIBLE_STATUSES] } },
+      select: AGENDA_SELECT,
+      orderBy: [{ priority: 'desc' }, { id: 'asc' }],
       take: limit,
     });
   }

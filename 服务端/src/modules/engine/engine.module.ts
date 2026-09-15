@@ -13,9 +13,10 @@
 //     —— 故 `imports` 里只出现 `OrgModule` / `CompanyModule` / `RelationModule`
 //     （**绝不**碰对方的 repository，跨域直连仓储被 ESLint 拦死）。
 //
-// ⚠ **本批（M4-01～M4-08）没有 controller**：`POST /relations/:id/events` /
-//   `GET /relations/:id/events` 属 M4-12，与「承诺 / 工作台」一起交付（届时才好真库 curl 验证）。
-//   故 `controllers: []` 是**有意为之**，不是漏写 —— 起服正常即本条判据达成。
+// ★ M4-12～M4-14 起本模块**有 controller**（`engine.controller.ts`）：跟单 / 承诺 / 今日概览
+//   三个端点（→ 接口 §5.7）。M4-01 时 `controllers: []` 是「先立骨架」的有意为之，现已补齐。
+// ★ 同时挂上**事件订阅者**（`engine-event.subscriber.ts`，M4-11）：订阅属**装配行为**
+//   （`onModuleInit` 注册 / `onModuleDestroy` 退订），故放在模块里注册，不塞进 service。
 //
 // ★ 为什么 `exports: [EngineService]`：F 域（公海）将来要问「多少天没有效沟通」
 //   （→ 需求 §6.3 掉海倒计时），那是本域的跨域出口；**不导出 repository**（理由同 C 域）。
@@ -25,13 +26,15 @@ import { Module } from '@nestjs/common';
 import { CompanyModule } from '../company/company.module';
 import { OrgModule } from '../org/org.module';
 import { RelationModule } from '../relation/relation.module';
+import { EngineController } from './engine.controller';
+import { EngineEventSubscriber } from './engine-event.subscriber';
 import { EngineRepository } from './engine.repository';
 import { EngineService } from './engine.service';
 
 @Module({
   imports: [OrgModule, CompanyModule, RelationModule],
-  controllers: [],
-  providers: [EngineRepository, EngineService],
+  controllers: [EngineController],
+  providers: [EngineRepository, EngineService, EngineEventSubscriber],
   exports: [EngineService],
 })
 export class EngineModule {}

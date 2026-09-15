@@ -1,4 +1,4 @@
-# AI 协作铁律与踩坑复盘 V1.8
+# AI 协作铁律与踩坑复盘 V1.9
 
 > **定位（★ 规范级 · 唯一落点）**：本文是「**AI 协作元规则**」的唯一权威落点 —— 只管「**AI 该怎么干活、别重复踩什么坑**」，**不定义任何业务规则**。
 >
@@ -72,6 +72,8 @@
 | 27 | **入参 DTO 漏写 `@ApiProperty`**（与坑 20 同源、方向相反：20 是「出参可空字段缺 `type`」，本条是「入参字段整个没装饰」） | OpenAPI 里该 DTO 退化成**空对象**（实测 `LoginDto: Record<string, never>`）→ 前端类型不可用 → 被迫手写对接（违反「禁止手写对接」） | **入参 DTO 每个字段都要 `@ApiProperty`**；接口一改就重跑 `gen:types` 并核对 diff（2026-09-15 定） |
 | 28 | **用 PowerShell 给外部命令送「含中文的 JSON」**：管道 `\|` 与 `Invoke-RestMethod -Body '<json 串>'` **都会吞中文** | 实测建档 `full_name` 里 13 个汉字被写成 13 个 `?`，连带 `name_core` 生成空串 —— **看着像 B 域有 bug，其实是我探针的锅**（差点去改没问题的源码） | 唯一可靠姿势：`[System.IO.File]::WriteAllText($p, $json, (New-Object System.Text.UTF8Encoding($false)))` 写 **UTF-8 无 BOM** 文件 → `Invoke-RestMethod -InFile $p -ContentType 'application/json; charset=utf-8'`（或 `curl.exe --data-binary "@$p"`）。★ **先证实探针没错，再怀疑被测代码**（2026-09-15 定） |
 | 29 | **`mysql -e "…"` 里的内层双引号被 PowerShell 吞掉**（实测 `LIKE "x%"` 变成 `LIKE x%` → 语法错） | SQL 报语法错，误判成"库里的数据 / 表有问题" | 把 SQL 写进**ASCII 路径的临时文件**再 `-e "source <path>"`；⚠ **`source` 打不开中文路径**（2026-09-15 定） |
+| 30 | **`nest start` 起的真进程是 `node dist/main`**（父进程才叫 `nest start`）：按命令行含 `nest` 去 `Stop-Process`，只杀得掉父进程 | 改完代码"重启"后**旧进程仍占着 3000**，"探针 `/docs` = 200"照样过 —— 本轮实测因此**白验两轮**（改了 `attachments` 的 Swagger 定义，`gen:types` 一直产出旧形状，却被读成"swagger 不认这个写法"） | 重启＝**按 `dist/main` / `dist/worker` 特征杀进程**（先 `Get-CimInstance Win32_Process -Filter "Name='node.exe'"` 看命令行）；★ 判据＝**必须观察到「只有新代码才有」的行为**（如改 OpenAPI，就直接取 `/docs-json` 里那一段字面比对），**不能只看端口 200**（2026-09-15 定） |
+| 31 | **DI 注入的类用 `import type` 导入**（本轮 `EventBus`） | `tsc --noEmit` / `lint` / `test` **全绿**，起服才报 Nest「依赖解析失败」：构造函数参数元数据 `design:paramtypes` 里那一项退化成 `Function`（类型导入被编译期擦除，装饰器元数据拿不到类引用） | **凡是「构造函数参数类型＝注入令牌」的类，一律值导入**（`import { EventBus }`，不写 `type EventBus`）；判据＝元数据里必须是那个**类**。凡"三绿全过、起服挂掉"，先查这类被擦除的导入（属坑 11 家族：编译期与运行期的分歧）（2026-09-15 定） |
 
 > **三条最核心**：① 先读《废止口径登记表》＋需求 §十六，再动手；② 改文档＝必须 git 提交，四份同批同次；③ 不要自行补全"缺的一块"，先查是否被封路。
 

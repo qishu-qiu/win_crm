@@ -94,8 +94,98 @@ export class ActionEventVoDto {
 
   @ApiProperty({
     type: 'array',
-    items: { type: 'object' },
+    // ⚠ `items` 必须写全 → `additionalProperties: true`：写成 `{ type: 'object' }`（或空 `{}`）
+    //   都会让 `openapi-typescript` 产出 **`Record<string, never>[]`** —— 那种类型一写 `.xxx`
+    //   就报错（等于不可用，→ 铁律坑 20）。本字段本批恒为 `[]`，但**类型也得是能用的**。
+    items: { type: 'object', additionalProperties: true },
     description: '附件（本批不接收，恒为 `[]`）',
   })
   attachments!: unknown[];
+}
+
+/** 承诺项（→ §5.7 承诺形状，M4-09） */
+export class CommitmentVoDto {
+  @ApiProperty({ description: '承诺 id', example: '9' })
+  id!: string;
+
+  @ApiProperty({ description: '所属业务关系 id', example: '11' })
+  relation_id!: string;
+
+  @ApiProperty({
+    enum: ['me', 'them', 'verdict'],
+    description: '承诺三型：`me` 我答应客户 / `them` 客户答应我 / `verdict` 我定的判定点',
+    example: 'me',
+  })
+  party!: string;
+
+  @ApiProperty({ description: '承诺类型（→ 数据架构 D1）', example: 'deliver' })
+  ctype!: string;
+
+  @ApiProperty({ description: '一句话承诺内容', example: '周三前把报价单发过去' })
+  content!: string;
+
+  @ApiProperty({ type: String, nullable: true, description: '到期时间（未定＝`null`）' })
+  due_at!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '提醒时间（未定＝`null`）' })
+  remind_at!: string | null;
+
+  @ApiProperty({
+    enum: ['open', 'done', 'expired', 'waived', 'cancelled'],
+    description:
+      '状态。`open` 进行中 / `done` 已兑现 / `expired` 已逾期（派生态，按 `due_at` 算）/ ' +
+      '`waived` 豁免（**本批不开放写入**：承诺表没有存豁免原因的地方）/ `cancelled` 已取消',
+    example: 'open',
+  })
+  status!: string;
+
+  @ApiProperty({ type: String, nullable: true, description: '兑现时间（未兑现＝`null`）' })
+  done_at!: string | null;
+}
+
+/** 今日动线条目（→ §5.7，M4-10） */
+export class AgendaItemVoDto {
+  @ApiProperty({ description: '动线条目 id', example: '31' })
+  id!: string;
+
+  @ApiProperty({
+    enum: ['commitment', 'appointment', 'cadence', 'relation'],
+    description: '这条因何而来：承诺 / 预约 / 节奏规则命中 / 关系（掉海硬提醒）',
+    example: 'commitment',
+  })
+  ref_type!: string;
+
+  @ApiProperty({ type: String, nullable: true, description: '来源对象 id（如承诺 id）' })
+  ref_id!: string | null;
+
+  @ApiProperty({
+    type: EngineRefDto,
+    nullable: true,
+    description:
+      '哪条业务关系（`name` 取公司全称，→ C 域出口）。' +
+      '**可为 `null`**：动线条目存在「只有联系人、还没挂关系」的形态（→ 数据架构 D4 `relation_id` 可空）',
+  })
+  relation!: EngineRefDto | null;
+
+  @ApiProperty({ type: EngineRefDto, nullable: true, description: '对着哪个联系人（可为 `null`）' })
+  contact!: EngineRefDto | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '为什么今天该找 TA' })
+  reason!: string | null;
+
+  @ApiProperty({ description: '优先级（越大越靠前）', example: 10 })
+  priority!: number;
+
+  @ApiProperty({ type: String, nullable: true, description: '建议动作（人话）' })
+  action_hint!: string | null;
+
+  @ApiProperty({
+    enum: ['open', 'done', 'snoozed', 'ignored'],
+    description: '处理状态（列表只返回 `open` / `snoozed`，见仓储注释）',
+    example: 'open',
+  })
+  status!: string;
+
+  @ApiProperty({ description: '已被「明天再说」几次（上限 3，→ 需求 §10.4）', example: 0 })
+  snooze_count!: number;
 }

@@ -26,6 +26,10 @@ export * from './context/jwt-claims';
 export * from './context/jwt-settings';
 export * from './context/public.decorator';
 export * from './context/context.module';
+// M5-02：数据范围判定（「我能看到谁」的**唯一入口**）—— 各域一律调它，**别自己判 `scope.type`**。
+// ⚠ `domain/**` 例外：只能用深路径 `kernel/data-scope/data-scope-target` —— 本桶文件会连带
+//   import `@nestjs/*`（audit 等），而 `domain/**` 的硬约束是**零框架依赖**（架构 §5.4）。
+export * from './data-scope/data-scope-target';
 export * from './events/domain-event';
 export * from './events/event-bus';
 // M4-11：总线的 DI 装配点（`@Global()`），调用方只 import 令牌 `EventBus`

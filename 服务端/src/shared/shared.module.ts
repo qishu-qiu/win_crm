@@ -57,7 +57,8 @@ import { AppValidationPipe } from './pipes/validation.pipe';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     // ② 统一响应包：**必须第一个注册**（响应阶段倒序执行，它才能在最外层包裹）
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
-    // ③ 数据范围：M0 只打标（M0-36），真实注入在 M5
+    // ③ 数据范围：只把范围**打标到请求上**（M0-36）。★ 判定与注入**不在本拦截器**：
+    //     唯一判定＝`kernel/data-scope/data-scope-target.ts`（M5-02），各域 repository 拼 where（M5-03）
     { provide: APP_INTERCEPTOR, useClass: DataScopeInterceptor },
     // ④ 脱敏：M0 占位放行（M0-37），真实规则在 M5
     { provide: APP_INTERCEPTOR, useClass: DesensitizeInterceptor },

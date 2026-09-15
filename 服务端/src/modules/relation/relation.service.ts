@@ -110,7 +110,7 @@ const OWNER_OCCUPIED_MESSAGE = '该业务关系已有归属销售';
 /** 列表上限（M3 最小列表；分页 / 筛选属 M6，→ 接口 §2.7） */
 const LIST_LIMIT = 100;
 
-/** @求助默认 7 天（→ C2：`dept_rule.ask_help_days` 可配，M5 接配置，本批取规格默认值） */
+/** @求助默认 7 天（→ C2：`dept_rule.ask_help_days` 可配；**配置化尚未排期**，本批取规格默认值） */
 const ASK_HELP_DEFAULT_DAYS = 7;
 
 @Injectable()
@@ -216,8 +216,8 @@ export class RelationService {
   /**
    * 关系列表（→ §5.6 `GET /relations`）。
    *
-   * ★ 范围由 `domain/relation-scope.ts` 判定，本层只做「按范围选一个仓储方法」——
-   *   判断与取数分开，将来 M5 把判定搬进拦截器时，这里只剩一行。
+   * ★ 档位判定走 kernel 唯一入口（→ `kernel/data-scope/data-scope-target.ts`，M5-02），
+   *   C 域语义在 `domain/relation-scope.ts`；本层只做「按范围选一个仓储方法」—— **不拼 `where`**。
    * ★ 交付 / 客服看**公海** → **403**（§2.2「不进公海」）：返回空列表是**静默错误**。
    */
   async listRelations(tab: RelationListTab): Promise<RelationVo[]> {

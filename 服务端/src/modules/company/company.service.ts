@@ -124,7 +124,14 @@ export class CompanyService {
     }
   }
 
-  /** 公司列表（→ §5.4；分页 / 筛选属 M6，本批给最近 100 条） */
+  /**
+   * 公司列表（→ §5.4；分页 / 筛选属 M6，本批给最近 100 条）。
+   *
+   * ★ **刻意不做数据范围过滤**（M5-01 已核，不是漏做）：
+   *   `company` ＝ **公司公海本身、全公司唯一共享**（→ 需求 §6.3 / 数据架构 B1）——
+   *   销售能看到全部**公司档案**是业务设计；被范围约束的是**业务关系 / 跟单**（C / D 域）。
+   *   ⚠ 下个窗口**不要**在这里「补上」`owner` / `dept` 过滤：那会把公司公海打成私海，越改越错。
+   */
   async listCompanies(): Promise<CompanyVo[]> {
     const rows = await this.repository.listCompanies();
     return rows.map(toCompanyVo);

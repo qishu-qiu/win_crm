@@ -17,13 +17,19 @@
 // ★ 为什么 M3 就要做范围收敛（而架构把「数据范围注入」排到 M5）：
 //   M3 交付的是**第一个客户数据列表**。不收敛 ＝ 上线即越权口子（能列出全公司的私海）。
 //   M1 的 `/org/employees` 同样提前做了 G7 收敛 —— 同一判断，不重复论证。
-//   M5 会把本文件的判定**收进数据范围拦截器**：届时本文件是「口径的唯一落点」，
-//   拦截器只是它的执行者（→ §7.2「一处收口」），故此处刻意写成**纯函数**、不掺 SQL。
+//
+// ★ 2026-09-15（M5-01/02）落点已定 —— **旧说法「M5 把判定搬进数据范围拦截器」作废**：
+//   拦截器在响应式管道里**改不了 service 内部的 Prisma 查询**，故它只负责「把范围打标到请求上」；
+//   唯一的档位判定收进 `kernel/data-scope/data-scope-target.ts`（M5-02）。
+//   本文件＝**C 域的翻译层**：把「范围描述 ＋ 私海 / 公海页签语义」翻成 `RelationScope`
+//   （service 据它选一个仓储方法），它**不再是**档位判定的落点。
 //
 // 分层约束（架构 §5.4）：`domain/**` 与框架 / ORM 解耦 ——
 //   `DataScope` / `DataScopeType` 只做**类型**引用（`import type`，编译期擦除，不产生运行期依赖）。
+//   ⚠ `resolveDataScopeTarget` 必须走**深路径**：`../../../kernel` 桶文件会连带 import `@nestjs/*`。
 // =============================================================================
 import type { DataScope } from '../../../kernel/context/request-context';
+import { resolveDataScopeTarget } from '../../../kernel/data-scope/data-scope-target';
 import { OWNER_MEMBER_TYPE, isEffectiveCollaborator, type RelationMemberLike } from './relation-owner';
 
 /** 关系列表的两个页签（→ 接口 §4.4 / 前端 §四：私海 / 公海） */
@@ -55,7 +61,7 @@ export interface RelationScope {
 /**
  * 解析列表范围（→ M3-07 私海 / M3-08 公海）。
  *
- * ★ 判定顺序＝**范围从宽到窄**，与 `resolveDataScope` 同一思路（窄的不许把宽的拉低）。
+ * ★ 档位判定**不在这里**：一律走 kernel 唯一入口（M5-02），本函数只加**C 域的页签语义**。
  * ★ 交付 / 客服看**公海** → `denied`：§2.2 原文「**不进公海**」
  *   —— 返回空列表是**静默错误**（看着像「今天公海没人」），故给 403。
  */
@@ -63,22 +69,23 @@ export function resolveRelationListScope(
   tab: RelationListTab,
   viewer: RelationViewer,
 ): RelationScope {
-  const { type } = viewer.dataScope;
+  const target = resolveDataScopeTarget(viewer.dataScope);
 
-  if (type === 'all') return { kind: 'all', deptIds: [] };
+  if (target.mode === 'all') return { kind: 'all', deptIds: [] };
 
   if (tab === 'sea') {
     // 公海：交付 / 客服**不进公海**（§2.2）；其余按部门看（部门公海＝本部门的关系集合，→ C1）
-    if (type === 'serving') return { kind: 'denied', deptIds: [] };
-    const deptIds = type === 'dept' ? viewer.dataScope.deptIds : viewer.myDeptIds;
+    if (target.mode === 'serving') return { kind: 'denied', deptIds: [] };
+    // 经理＝管辖部门；销售＝**我所属部门**（看公海看的是本部门那一份，不是「和我有关的」）
+    const deptIds = target.mode === 'depts' ? target.deptIds : viewer.myDeptIds;
     return { kind: 'dept', deptIds: [...deptIds] };
   }
 
   // 私海：经理按管辖部门；销售 / 交付·客服按「和我有关的关系」
-  // ⚠ 交付 / 客服的正解是「仅**服务中**（＝在合同服务期内）」—— 合同表属 E 域、M3 未接入，
-  //   故本批先收敛到「我参与的关系（owner ∪ 有效协同）」，**比规格更窄**（不会越权）；
-  //   待 M5/M4 接上合同后补「服务期」条件。已记入 M3 遗留（→ 交接说明 §五）。
-  if (type === 'dept') return { kind: 'dept', deptIds: [...viewer.dataScope.deptIds] };
+  // ⚠ 交付 / 客服的正解是「仅**服务中**（＝在合同服务期内）」—— 合同表属 **E 域、尚未建**，
+  //   M5 已裁「只做形状、不接真数据」（→ 交接说明欠账），故此处仍收敛到
+  //   「我参与的关系（owner ∪ 有效协同）」：**比规格窄**、不越权。E 域落地后改按服务期过滤。
+  if (target.mode === 'depts') return { kind: 'dept', deptIds: [...target.deptIds] };
   return { kind: 'mine', deptIds: [] };
 }
 
@@ -159,7 +166,7 @@ export function checkActivateScope(
  * ★ 与「激活」的差别：这里判的是**已有关系**——除了范围，还要看**我是不是它的 owner**：
  *   `all` 档（总经理）不过滤；`dept` 档＝管辖部门内的关系；`mine` 档＝**我 owner** 的关系。
  *   ⚠ **有效协同人**也算「和我有关」，但本批只交付 owner 判定：协同的写权（读写权 ＋ 全号）
- *     在规格里与 owner 同级（→ C2），等 **M5** 的脱敏 / 权限出口一起做，避免这里先松一道口子。
+ *     在规格里与 owner 同级（→ C2），**尚未排期**（M5 横切层不含此项改动）—— 待裁，别照「M5 会做」读。
  */
 export function checkRelationWrite(
   input: { deptId: bigint; ownerId: bigint | null },

@@ -113,95 +113,30 @@
 
 ## 三、接口总览（★ 索引·非规范：契约以 §四 / §五 为准）
 
-> **⚠ 本表是"目录"，不是"契约"。** §三 只给"有哪些端点"，**请求/响应字段、错误码、校验一律以 §四 分模块契约 与 §五 数据结构为准**；本表与 §四/§五 不一致时以 §四/§五 为准。
+> **⚠ 本节是"目录"，不是"契约"，已压缩为「域 / 分组 → 端点清单」。** 只回答"有哪些端点"；**请求响应字段、错误码、校验、角色一律以 §四 分模块契约 与 §五 数据结构为准**；冲突时以 §四 / §五 为准。
 
-> 方法：G 查 / P 建 / U 改 / D 删（逻辑删为主，停用不删）。角色：S 销售 / M 经理 / B 老板 / A 全员。
+> 记法：**方法 路径**（G 查 / P 建 / U 改 / D 删，逻辑删为主、停用不删）；**★** ＝ V1.1 对齐校正补全（原目录遗漏、需求已定义）。
 
-| 域 | 分组 | 路径 | 方法 | 说明 |
-|---|---|---|---|---|
-| 认证 | account | /account/login | P | 登录 |
-| 认证 | account | /account/refresh | P | 刷新 token |
-| 认证 | account | /account/me | G | 当前人+角色+管辖部门 |
-| 认证 | account | /account/preferences | U ★ | 个人主题（**白天/夜间**）与通知偏好（存账号，`→需求§13`）|
-| 组织 | org | /org/departments | G/**P/U/D** ★ | 部门树（增/改/停用，`→需求§7.1`）|
-| 组织 | org | /org/departments/:id/managers | G/P/D ★ | 部门经理（多对多，`→架构A3`）|
-| 组织 | org | /org/employees | G/**P/U** ★ | 员工（入职/改主兼部门/改直属经理/离职停用）|
-| 组织 | org | /org/employees/:id/roles | G/U ★ | 角色分配（多选，`→架构A5`）|
-| 组织 | org | /org/employees/:id/offboard | P ★ | 离职：批量转交关系（**直属经理发起**，走 `relation_reassign` 审批）|
-| 组织 | org | /org/roles , /org/permissions | G | 角色/权限矩阵 |
-| 组织 | org | /org/product-lines | G/**P**/U ★ | 产品线（固定配色、承接部门、服务周期）|
-| 组织 | org | /org/dept-rule | G/U | 部门规则（掉海天数/灰度提醒/等级档/特质上限）|
-| 组织 | dict | /dict/types , /dict/items | G/**P**/U ★ | 数据字典（builtin 不可删可停用）|
-| 公司 | company | /companies | G/P | 公司档案列表/建档 |
-| 公司 | company | /companies/:id | G/U | 详情/改 |
-| 公司 | company | /companies/:id/profile-tags | G/P/D | 公司档案标签（身份/制度/决策链）|
-| 公司 | company | /companies/search-dup | P | 撞库查重（手机/信用代码/名相似）|
-| 公司 | company | /companies/:id/merge | P ★ | 撞码**墓碑合并**（单事务 6 步，`→需求§7.3`）|
-| 公司 | company | /companies/:id/contacts | G ★ | 公司联系人（含历史/已离职标记，`→架构B5`）|
-| 联系人 | contact | /contacts | G/P/U | 联系人 |
-| 联系人 | contact | /contacts/:id/phone-lock | P/D ★ | **联系方式上锁/解锁**（仅 owner 可锁，`→需求§4.3 二`）|
-| 联系人 | contact | /contacts/:id | **D** ★ | 删除（**经理权限**，销售不可，`→需求§7.2`）|
-| 联系人 | contact | /contacts/:id/traits | U | 谈判特质（≤3，部门可配）|
-| 联系人 | contact | /contacts/:id/merge | P ★ | **墓碑合并**（经理权限，traits 并集、子记录零改动）|
-| 联系人 | contact | /contacts/:id/employments | G ★ | 就职/跳槽历史（N:M 含历史，`→架构B5`）|
-| 联系人 | contact | /contacts/phone-change/apply | P ★ | **手机号变更申请**（审批通过后冻结 24h，`→需求§7.2`）|
-| 关系 | relation | /relations | G/P | 业务关系列表/激活 |
-| 关系 | relation | /relations/:id | G/U | 详情/改（含 urgency / value_tier）|
-| 关系 | relation | /relations/:id/stage | P ★ | **推进阶段**（建议态+限频≥3天/跨里程碑+留痕）|
-| 关系 | relation | /relations/:id/members | G/P/U/D | owner/collaborator/ask_help |
-| 关系 | relation | /relations/:id/stage-log | G | 阶段推进留痕 |
-| 关系 | relation | /relations/:id/labels | G/P/D | 关系级标注（风险/价值/协同）|
-| 关系 | relation | /relations/:id/transfer | P | 转交（审批）|
-| 关系 | relation | /relations/batch-transfer | P ★ | 离职**批量**转交（**直属经理发起**，走 `relation_reassign` 审批）|
-| 关系 | relation | /relations/:id/competition | U | 竞品态（事件回写快照）|
-| 公海 | sea | /sea/company , /sea/department | G | 系统/部门公海 |
-| 公海 | sea | /sea/company/:id/claim | P | 领取到私海（幂等）|
-| 公海 | sea | /sea/records | G | 入公海历史 |
-| 公海 | sea | /sea/manager-todo | G | 超期经理决策待办 |
-| 公海 | sea | /sea/manager-decision | P | 保留/删除关系 |
-| 公海 | sea | /sea/rules | G/U ★ | **公海规则 L1-L4 配置**（`→架构F1`；改掉海天数走 7 天缓冲）|
-| 行动 | commitment | /relations/:id/commitments | G/P/U | 承诺（me/them/verdict）|
-| 行动 | event | /relations/:id/events | G/P | 跟单事件流（近1月默认）|
-| 行动 | event | /events/quick-mark | P | 快速标记（未联系/未接/说两句，落库不更新 last_event_at）|
-| 行动 | cadence | /cadence-rules | G/U | 节奏规则 |
-| 行动 | agenda | /today-agenda | G | 今日动线（每日组装）|
-| 行动 | agenda | /today-agenda/:id/action | P ★ | **处理反馈** done/snoozed/ignored（防逃逸：snooze≤3、ignored 必填原因）|
-| 预约 | appointment | /appointments | G/P/U | 预约 |
-| 预约 | appointment | /appointments/:id/complete | P | 完成预约（强制生成跟单事件，否则 422）|
-| 外出 | visit | /visits | G/P | 外出登记（出去：时间+去干什么+可选关联关系）|
-| 外出 | visit | /visits/:id/return | P ★ | **回来点一下**（记 `actual_return_at`，纯行政不产生事件）|
-| 合同 | contract | /contracts | G/P/U | 合同 |
-| 合同 | contract | /contracts/:id/payments | G/P | 回款流水 |
-| 合同 | contract | /contracts/:id/splits | G/P/U | 合同业绩分配（默认 signer100%）|
-| 合同 | contract | /contracts/suspected-duplicates | G ★ | **疑似重复合同清单**（只检测、不合并，经理判定；`→需求§7.6`）|
-| 工单 | workorder | /workorders | G/P/U | 工单（售后/商机双分类）|
-| 工单 | workorder | /workorders/:id/convert | P ★ | 商机↔工单**双向流转**（`→需求§6.4`）|
-| 台账 | ledger | /ledgers | G | 客户台账（JSON 扩展列）|
-| 台账 | ledger | /ledgers/:id | G/U | 台账详情（动态表单）|
-| 台账 | field | /product-lines/:id/field-templates | G/P/U | 字段模板（先登记后写）|
-| 审批 | approval | /approvals/todo , /approvals/mine | G | 待我审批/我发起 |
-| 审批 | approval | /approvals/:id/approve , /reject | P | 通过/驳回（驳回必填原因）|
-| 审批 | approval | /phone-unlock/apply | P | 联系方式解锁申请（L05，**落锁人审批**）|
-| 报表 | report | /reports/dashboard , /reports/sales , /reports/dept | G | 看板/个人日报/部门月报 |
-| 报表 | report | /reports/company | G ★ | 全公司月报（总经理）|
-| 报表 | report | /reports/sea | G ★ | 公海报表（停留/领取率/流失原因）|
-| 报表 | report | /reports/renewal | G ★ | 续约预警（30/60/90 天）|
-| 报表 | report | /reports/workorder-sla | G ★ | 工单 SLA（处理时长/超时率）|
-| 报表 | report | /reports/death-reason | G ★ | **死因看板**（客户为什么不要我们）|
-| 报表 | report | /reports/churn-reason | G ★ | 流失原因分布（被撬/到期未续/服务不满/疏忽）|
-| 目标 | target | /targets | G/P/U | 月目标（个人/部门/公司）|
-| 目标 | target | /targets/progress | G ★ | 目标进度（回款额主 + 并列签约额 + 时间已过 X%）|
-| 通知 | notice | /notifications | G/U | 消息中心（已读，同类合并）|
-| 复盘 | review | /relations/:id/review | P | 出口复盘 win/loss/churn |
-| 复盘 | review | /reviews/win-library | G ★ | **赢单弹药库**（本部门可见，gm 可全公司）|
-| 复盘 | review | /reviews/defense | G ★ | **防守清单**（哪个竞品在反挖）|
-| 竞品 | competitor | /competitors | G/P/U ★ | **竞品名册**（经理维护，销售只读引用，`→需求§11.1`）|
-| 文件 | file | /files/asset | P ★ | 上传拿 `file_key`（合同附件/回款凭证，`→架构B8`）|
-| 文件 | file | /files/:id | G ★ | 预览/下载（带鉴权，不落 URL）|
-| 系统 | system | /system/config | G/U ★ | 系统级配置（gm 可改，留痕，`→架构A12`）|
-| 系统 | system | /operation-logs | G ★ | 操作留痕审计（经理+/管理员，`→架构A10`）|
+| 域 | 分组 | 端点（方法 + 路径） |
+|---|---|---|
+| 认证 | account | `P /account/login`、`P /account/refresh`、`G /account/me`、`U /account/preferences` ★ |
+| 组织 | org | `G/P/U/D /org/departments` ★、`G/P/D /org/departments/:id/managers` ★、`G/P/U /org/employees` ★、`G/U /org/employees/:id/roles` ★、`P /org/employees/:id/offboard` ★、`G /org/roles`、`G /org/permissions`、`G/P/U /org/product-lines` ★、`G/U /org/dept-rule` |
+| 组织 | dict | `G/P/U /dict/types`、`G/P/U /dict/items` ★ |
+| 公司 | company | `G/P /companies`、`G/U /companies/:id`、`G/P/D /companies/:id/profile-tags`、`P /companies/search-dup`、`P /companies/:id/merge` ★、`G /companies/:id/contacts` ★ |
+| 联系人 | contact | `G/P/U /contacts`、`P/D /contacts/:id/phone-lock` ★、`D /contacts/:id` ★、`U /contacts/:id/traits`、`P /contacts/:id/merge` ★、`G /contacts/:id/employments` ★、`P /contacts/phone-change/apply` ★ |
+| 关系 | relation | `G/P /relations`、`G/U /relations/:id`、`P /relations/:id/stage` ★、`G/P/U/D /relations/:id/members`、`G /relations/:id/stage-log`、`G/P/D /relations/:id/labels`、`P /relations/:id/transfer`、`P /relations/batch-transfer` ★、`U /relations/:id/competition` |
+| 公海 | sea | `G /sea/company`、`G /sea/department`、`P /sea/company/:id/claim`、`G /sea/records`、`G /sea/manager-todo`、`P /sea/manager-decision`、`G/U /sea/rules` ★ |
+| 行动 | commitment / event / cadence / agenda | `G/P/U /relations/:id/commitments`、`G/P /relations/:id/events`、`P /events/quick-mark`、`G/U /cadence-rules`、`G /today-agenda`、`P /today-agenda/:id/action` ★ |
+| 预约 / 外出 | appointment / visit | `G/P/U /appointments`、`P /appointments/:id/complete`、`G/P /visits`、`P /visits/:id/return` ★ |
+| 合同 | contract | `G/P/U /contracts`、`G/P /contracts/:id/payments`、`G/P/U /contracts/:id/splits`、`G /contracts/suspected-duplicates` ★ |
+| 工单 / 台账 | workorder / ledger / field | `G/P/U /workorders`、`P /workorders/:id/convert` ★、`G /ledgers`、`G/U /ledgers/:id`、`G/P/U /product-lines/:id/field-templates` |
+| 审批 | approval | `G /approvals/todo`、`G /approvals/mine`、`P /approvals/:id/approve`、`P /approvals/:id/reject`、`P /phone-unlock/apply` |
+| 报表 | report | `G /reports/dashboard`、`G /reports/sales`、`G /reports/dept`、`G /reports/company` ★、`G /reports/sea` ★、`G /reports/renewal` ★、`G /reports/workorder-sla` ★、`G /reports/death-reason` ★、`G /reports/churn-reason` ★ |
+| 目标 / 通知 | target / notice | `G/P/U /targets`、`G /targets/progress` ★、`G/U /notifications` |
+| 复盘 / 竞品 | review / competitor | `P /relations/:id/review`、`G /reviews/win-library` ★、`G /reviews/defense` ★、`G/P/U /competitors` ★ |
+| 文件 / 系统 | file / system | `P /files/asset` ★、`G /files/:id` ★、`G/U /system/config` ★、`G /operation-logs` ★ |
 
-> ★ = V1.1 对齐校正新增/补全方法（原目录遗漏，需求已定义）。接口总数 **~50 → ~78**。
+> 端点总数 **~78**。**每条端点的入参 / 出参 / 错误码 / 校验 / 角色，一律以 §四、§五 为准**（本节不含这些信息）。
 
 ---
 

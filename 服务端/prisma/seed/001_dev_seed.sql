@@ -97,12 +97,20 @@ INSERT INTO department (id, name, parent_id, service_enabled, status, created_at
   (5, '交付部',   1, 1, 'active', NOW(), NOW());
 
 -- ---------------------------------------------------------------------------
--- 3) product_line：⚠ DEV 占位（规格未给名称清单，只说「7 条线各一色」）
+-- 3) product_line：★ 2026-09-15 七叔拍板的 **7 条正式产品线**（原 3 条占位线已废）
+--    · 规格（需求 §13.3 / 数据架构 A7）只说「7 条线各一色」，**既没给名称清单、也没给色值**
+--      → 名称＝拍板结果；`code` 与 `color_key` 由 **AI 起草（可改）**
+--        （改码前先 grep 引用；改色影响前端产品线标签）
+--    · `dept_ids`（承接部门）与 `service_cycle_days`（服务周期）**仍是 DEV 占位** → 业务确认后改
 -- ---------------------------------------------------------------------------
 INSERT INTO product_line (id, name, code, color_key, dept_ids, service_cycle_days, status, created_at, updated_at) VALUES
-  (1, '网站建设',   'website',  'blue',   '[2,3]', 30, 'active', NOW(), NOW()),
-  (2, '小程序开发', 'miniapp',  'green',  '[2,3]', 45, 'active', NOW(), NOW()),
-  (3, '代运营',     'operation','orange', '[3]',   90, 'active', NOW(), NOW());
+  (1, '财税',   'finance',    'blue',     '[2,3]', 30, 'active', NOW(), NOW()),
+  (2, '法务',   'legal',      'geekblue', '[2,3]', 30, 'active', NOW(), NOW()),
+  (3, '网站',   'website',    'cyan',     '[2,3]', 30, 'active', NOW(), NOW()),
+  (4, 'GEO',    'geo',        'purple',   '[2,3]', 30, 'active', NOW(), NOW()),
+  (5, '短视频', 'video',      'magenta',  '[2,3]', 30, 'active', NOW(), NOW()),
+  (6, '招聘',   'recruit',    'green',    '[2,3]', 30, 'active', NOW(), NOW()),
+  (7, '房产',   'realestate', 'orange',   '[2,3]', 30, 'active', NOW(), NOW());
 
 -- ---------------------------------------------------------------------------
 -- 4) employee：6 个验证账号

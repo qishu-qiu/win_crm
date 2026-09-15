@@ -10,7 +10,7 @@
 //
 // ★ 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM架构设计说明》V1.3 §8.1：`JWT_SECRET` 用**真随机**，**宁可起不来也不带默认值**。
-//   · 《销售CRM接口API文档》V1.15 §2.2：`access_token` 为 Bearer JWT。
+//   · 《销售CRM接口API文档》V1.16 §2.2：`access_token` 为 Bearer JWT。
 //
 // 分层约束（架构 §5.4）：`kernel/**` 零业务 —— 本文件**不许 import `modules/*` / `shared/**`**，
 //   也**不依赖 `@nestjs/*`**（纯配置读取，方便 domain / spec 直接引用而不拉进框架）。

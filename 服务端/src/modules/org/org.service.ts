@@ -5,7 +5,7 @@
 //   **不写业务规则**（口径在 `domain/`）、**不写 SQL**（在 `*.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.15 §5.2：`POST /account/login` req **`{account,password}`**
+//   · 《销售CRM接口API文档》V1.16 §5.2：`POST /account/login` req **`{account,password}`**
 //     （`account` ＝ 手机号 或 登录账号名，**服务端判别**，→ 登记表 #32）、
 //     resp `{access_token, refresh_token, user: UserVO}`；`GET /account/me` → `UserVO`
 //     ＝ `{id,name,username?,role,dept:{id,name},managed_dept_ids:[],permissions:{}}`。
@@ -412,8 +412,10 @@ export class OrgService {
     return this.repository.findDepartmentsByIds(ids);
   }
 
-  /** 产品线 `{id,name}` 引用（⚠ `color_key` 无数据源，见仓储注释） */
-  getProductLineRefs(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+  /** 产品线 `{id,name,color_key}` 引用（固定配色键 → 需求 §13.3；migration 0004 补的列） */
+  getProductLineRefs(
+    ids: readonly bigint[],
+  ): Promise<{ id: bigint; name: string; color_key: string | null }[]> {
     return this.repository.findProductLinesByIds(ids);
   }
 

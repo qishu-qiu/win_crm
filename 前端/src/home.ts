@@ -27,7 +27,7 @@ export function homeNameOf(role: string): string {
   }
 }
 
-/** 角色码 → 中文名（内置 6 条，→《数据架构文档》V1.30 A4）；用于空壳上的角色小标 */
+/** 角色码 → 中文名（内置 6 条，→《数据架构文档》V1.31 A4）；用于空壳上的角色小标 */
 export function roleNameOf(role: string): string {
   const names: Record<string, string> = {
     sale: '销售',

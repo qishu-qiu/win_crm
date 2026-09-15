@@ -2,7 +2,7 @@
 // C 域出参 DTO（M3-09 ~ M3-11）—— **只服务于 Swagger 文档**，不参与运行时转换
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.15 §5.6：
+//   · 《销售CRM接口API文档》V1.16 §5.6：
 //     **列表项** `{id,company:{id,name},dept:{id,name},product_line:{id,name,color_key},stage:1-7,
 //       urgency,value_tier,customer_level,owner:{id,name},last_event_at,drop_in_x_days,
 //       overdue,competition,amount|amount_masked,old_customer,is_weekly}`
@@ -13,7 +13,6 @@
 //
 // ⚠ **M3 只给出本规模块真能算出来的字段**（设计规范 §3.2 第 11 条「禁假数据撑页面」的同类原则：
 //   不填假值、也不假装有字段）。未落地的字段与原因**逐条列出**，全部登记在交接说明 §五：
-//   · `product_line.color_key` —— **无数据源**：`product_line` 表没有该列（规格说「7 线固定配色」）
 //   · `drop_in_x_days` —— 掉海规则（L1-L4）属公海域，M7 才有；本批不猜
 //   · `overdue` —— 逾期＝承诺（D 域）判定，M4 才有
 //   · `amount` / `amount_masked` —— 合同（E 域）回款，未接
@@ -41,6 +40,27 @@ export class RelationRefDto {
   name!: string;
 }
 
+/**
+ * 产品线引用 `{id,name,color_key}`（→ 接口 §5.3 / §5.6「实体引用（内嵌）」）。
+ * ★ 与 `RelationRefDto` 不同：产品线**多一个固定配色键**（需求 §13.3「7 条线各一色」），
+ *   故此形状单列一个 DTO，别拿 `RelationRefDto` 凑（凑了就把 `color_key` 丢了）。
+ */
+export class ProductLineRefDto {
+  @ApiProperty({ description: '产品线 id（十进制字符串）', example: '1' })
+  id!: string;
+
+  @ApiProperty({ description: '产品线名称', example: '网站建设' })
+  name!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '固定配色键（7 条线各一色，前端照渲染，→ 需求 §13.3）；**未配置给 `null`**',
+    example: 'blue',
+  })
+  color_key!: string | null;
+}
+
 /** 关系列表项 / 详情共有部分（→ §5.6） */
 export class RelationVoDto {
   @ApiProperty({ description: '业务关系 id', example: '1' })
@@ -52,8 +72,8 @@ export class RelationVoDto {
   @ApiProperty({ type: RelationRefDto, nullable: true, description: '承接部门（`dept_id` 恒定不可变，→ C1）' })
   dept!: RelationRefDto | null;
 
-  @ApiProperty({ type: RelationRefDto, nullable: true, description: '产品线（⚠ 规格的 `color_key` 无数据源，见文件头）' })
-  product_line!: RelationRefDto | null;
+  @ApiProperty({ type: ProductLineRefDto, nullable: true, description: '产品线（含固定配色键 `color_key`）' })
+  product_line!: ProductLineRefDto | null;
 
   @ApiProperty({ description: '工作流阶段：1~6 ＋ 7＝已流失', example: 1 })
   stage!: number;

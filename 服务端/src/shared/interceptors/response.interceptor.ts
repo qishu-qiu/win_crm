@@ -2,7 +2,7 @@
 // 统一响应拦截器（M0-33）—— 所有成功出参包成 `{ code, message, request_id, data }`
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.15 §2.3 统一响应包（**逐字**）：
+//   · 《销售CRM接口API文档》V1.16 §2.3 统一响应包（**逐字**）：
 //       成功分页 `{ "code": 0, "message": "ok", "request_id": "r-xxxx",
 //                   "data": { "list": [...], "total": 120, "page": 1, "page_size": 20 } }`
 //       成功单对象 `{ "code": 0, "message": "ok", "request_id": "r-xxxx", "data": {...} }`

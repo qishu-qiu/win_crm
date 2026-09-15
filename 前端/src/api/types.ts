@@ -727,6 +727,23 @@ export interface components {
              */
             name: string;
         };
+        ProductLineRefDto: {
+            /**
+             * @description 产品线 id（十进制字符串）
+             * @example 1
+             */
+            id: string;
+            /**
+             * @description 产品线名称
+             * @example 网站建设
+             */
+            name: string;
+            /**
+             * @description 固定配色键（7 条线各一色，前端照渲染，→ 需求 §13.3）；**未配置给 `null`**
+             * @example blue
+             */
+            color_key: string | null;
+        };
         RelationVoDto: {
             /**
              * @description 业务关系 id
@@ -737,8 +754,8 @@ export interface components {
             company: components["schemas"]["RelationRefDto"] | null;
             /** @description 承接部门（`dept_id` 恒定不可变，→ C1） */
             dept: components["schemas"]["RelationRefDto"] | null;
-            /** @description 产品线（⚠ 规格的 `color_key` 无数据源，见文件头） */
-            product_line: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线（含固定配色键 `color_key`） */
+            product_line: components["schemas"]["ProductLineRefDto"] | null;
             /**
              * @description 工作流阶段：1~6 ＋ 7＝已流失
              * @example 1
@@ -817,8 +834,8 @@ export interface components {
             company: components["schemas"]["RelationRefDto"] | null;
             /** @description 承接部门（`dept_id` 恒定不可变，→ C1） */
             dept: components["schemas"]["RelationRefDto"] | null;
-            /** @description 产品线（⚠ 规格的 `color_key` 无数据源，见文件头） */
-            product_line: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线（含固定配色键 `color_key`） */
+            product_line: components["schemas"]["ProductLineRefDto"] | null;
             /**
              * @description 工作流阶段：1~6 ＋ 7＝已流失
              * @example 1

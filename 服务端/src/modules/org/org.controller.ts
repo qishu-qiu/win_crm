@@ -5,7 +5,7 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**（故本文件零 `if` 业务分支）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.15 §三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
+//   · 《销售CRM接口API文档》V1.16 §三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
 //     ·`GET /account/me`（G）·`GET /org/departments|employees|roles|permissions`（G）。
 //   · 同 §2.2：除登录 / 刷新外**一律带** `Authorization: Bearer <access_token>` ——
 //     故本文件只给 login / refresh 打 `@Public()`（守卫自 M0-38 起全局生效，不打就被 401 挡死）。

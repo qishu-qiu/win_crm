@@ -6,8 +6,8 @@
 //   故此处不做「是不是经理」「角色该给什么范围」这类判断，只把行取回来、把 JSON 列**拉直**。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.30 域 A（A1~A7）。
-//   · 出参字段形状 →《销售CRM接口API文档》V1.15 §5.3：
+//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.31 域 A（A1~A7）。
+//   · 出参字段形状 →《销售CRM接口API文档》V1.16 §5.3：
 //       部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`
 //       员工 `{id,work_no,name,phone,username?,primary_dept:{id,name},extra_depts:[],product_lines:[],
 //              direct_manager:{id,name},roles:["sale"],status}`
@@ -186,17 +186,20 @@ export class OrgRepository {
   }
 
   /**
-   * 按 id 批量取**产品线**引用（供 C 域 `product_line:{id,name}` 装配，→ 接口 §5.6）。
+   * 按 id 批量取**产品线**引用（供 C 域 `product_line:{id,name,color_key}` 装配，→ 接口 §5.6）。
    *
-   * ⚠ 规格 §5.3 / §5.6 的出参是 `product_line:{id,name,color_key}`，但 **`product_line` 表没有
-   *   `color_key` 列**、种子里也没有 —— 即「7 线固定配色」**至今没有数据源**（`/org/product-lines`
-   *   同样没给出该字段）。故本方法**只取 id/name**，不编 `color_key`；缺口已记入交接说明 §五。
+   * ★ `color_key`（固定配色键）原**无数据源**：需求 §13.3「产品线 = 全系统固定配色（7 条线各一色）」
+   *   与接口 §4.1 / §5.3 / §5.6 都要求它，《数据架构文档》A7 却漏落该列 ⇒ 2026-09-15 补
+   *   `product_line.color_key`（migration `0004`），三处口径就此对齐。列**可空**：未配置给 `null`，
+   *   由前端回落（**不编默认色** —— 假默认色会让页面理直气壮地渲染错颜色）。
    */
-  async findProductLinesByIds(ids: readonly bigint[]): Promise<{ id: bigint; name: string }[]> {
+  async findProductLinesByIds(
+    ids: readonly bigint[],
+  ): Promise<{ id: bigint; name: string; color_key: string | null }[]> {
     if (ids.length === 0) return [];
     return this.prisma.productLine.findMany({
       where: { id: { in: uniqueBigints(ids) }, deleted_at: null },
-      select: { id: true, name: true },
+      select: { id: true, name: true, color_key: true },
     });
   }
 

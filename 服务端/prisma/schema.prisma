@@ -1,6 +1,6 @@
 // =============================================================================
 // 销售 CRM — Prisma Schema（46 张表）
-// 真相源：《需求规格/销售CRM数据架构文档》V1.30 §三~§九（表）、§十（索引）、§十五（落库口径）
+// 真相源：《需求规格/销售CRM数据架构文档》V1.31 §三~§九（表）、§十（索引）、§十五（落库口径）
 // ORM 定案：Prisma（2026-09-10）；版本钉 7.10.0（2026-09-13 由 6.19.3 升级）；MySQL 8.0+ / InnoDB / utf8mb4
 //
 // ★ Prisma 落库口径（数据架构 §十五.5，务必遵守）：
@@ -171,6 +171,7 @@ model ProductLine {
   id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   name               String    @unique(map: "uk_product_line_name") @db.VarChar(50)
   code               String    @unique(map: "uk_code") @db.VarChar(32)
+  color_key          String?   @db.VarChar(32) // ★ 固定配色键（7 条线各一色，→ 需求 §13.3 / 接口 §5.3；migration 0004 补）
   dept_ids           Json? // 承接部门 JSON
   service_cycle_days Int?
   status             String    @default("active") @db.VarChar(32)

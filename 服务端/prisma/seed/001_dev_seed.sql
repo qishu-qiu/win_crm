@@ -39,10 +39,12 @@
 --        · `contract_amount`   → 仅 `gm` 为 visible，其余 masked（跨部门金额脱敏）
 --      旧 key `cross_dept_private`（看他人私海）/ `phone_unlock`（手机号解锁）**已废止**，不再写入。
 --      ⚠ 矩阵是**角色级兜底档**：「经理**管辖内**可见」由**数据范围**承担，不走本表。
---   ③ ⚠ **本批未做**（不在执行范围，待指令）：`product_line` 仍是 3 条 DEV 占位 ——
---      七叔已给 7 条名称清单（法务 / 财税 / 招聘 / 房产 / 网站建设 / 短视频 / GEO推广），
---      但发现 `product_line` 表**没有 `color_key` 列**（接口 API §5.3、§5「实体引用」
---      的 `product_line:{id,name,color_key}` 却要求返回它）→ 属**新缺口**，等拍板后与名称一并替换。
+--   ③ `product_line` ✅ **2026-09-15 补 `color_key`**（migration `0004`）：需求 §13.3「产品线＝
+--      全系统固定配色（7 条线各一色）」＋ 接口 §4.1 / §5.3 / §5.6 一直要求该字段，而本表原**漏落**
+--      该列 ⇒ 数据架构 A7 同步补（升 V1.31）。**3 条占位线给了过渡色键**
+--      （website=blue / miniapp=green / operation=orange）；⚠ 七叔的 **7 条正式线名称清单**
+--      （法务 / 财税 / 招聘 / 房产 / 网站建设 / 短视频 / GEO推广）仍待拍板，
+--      届时连同 7 个色键一并替换（**键名是色板槽位语义，换线不必然换键**）。
 --   ④ `permission_matrix` 的**行数基线仍是 18**（3 key × 6 角色）—— 旧 key 换新 key，行数不变。
 --
 -- ⚠ 字段陷阱（真库实测，改本文件时必看）：
@@ -97,10 +99,10 @@ INSERT INTO department (id, name, parent_id, service_enabled, status, created_at
 -- ---------------------------------------------------------------------------
 -- 3) product_line：⚠ DEV 占位（规格未给名称清单，只说「7 条线各一色」）
 -- ---------------------------------------------------------------------------
-INSERT INTO product_line (id, name, code, dept_ids, service_cycle_days, status, created_at, updated_at) VALUES
-  (1, '网站建设',   'website',  '[2,3]', 30, 'active', NOW(), NOW()),
-  (2, '小程序开发', 'miniapp',  '[2,3]', 45, 'active', NOW(), NOW()),
-  (3, '代运营',     'operation','[3]',   90, 'active', NOW(), NOW());
+INSERT INTO product_line (id, name, code, color_key, dept_ids, service_cycle_days, status, created_at, updated_at) VALUES
+  (1, '网站建设',   'website',  'blue',   '[2,3]', 30, 'active', NOW(), NOW()),
+  (2, '小程序开发', 'miniapp',  'green',  '[2,3]', 45, 'active', NOW(), NOW()),
+  (3, '代运营',     'operation','orange', '[3]',   90, 'active', NOW(), NOW());
 
 -- ---------------------------------------------------------------------------
 -- 4) employee：6 个验证账号

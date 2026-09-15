@@ -2,7 +2,7 @@ import type { components } from './types'
 import request from './request'
 
 /**
- * 认证接口封装（→《销售CRM接口API文档》V1.15 §5.2）。
+ * 认证接口封装（→《销售CRM接口API文档》V1.16 §5.2）。
  *
  * ★ 类型**一律取自 OpenAPI 生成物**（`src/api/types.ts`，由 `npm run gen:types` 生成）：
  *   前后端各维护一份接口类型是本项目点名的「双真相源」重灾区（M0-57 判据：禁止手写）。

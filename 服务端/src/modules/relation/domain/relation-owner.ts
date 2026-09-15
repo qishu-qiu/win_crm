@@ -2,7 +2,7 @@
 // C 域纯规则（M3-05）—— 「一关系一 owner」
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM数据架构文档》V1.30 C2：`member_type` ∈ `owner`（主责销售，**1**）/
+//   · 《销售CRM数据架构文档》V1.31 C2：`member_type` ∈ `owner`（主责销售，**1**）/
 //     `collaborator`（协同人：正式协同或被 @求助者，**多**）；DB 侧由生成列
 //     `owner_flag = IF(member_type='owner', relation_id, NULL)` ＋ `uk_owner` 兜底
 //     （→ `migrations/0001_init/migration.sql` 文末 ③）。

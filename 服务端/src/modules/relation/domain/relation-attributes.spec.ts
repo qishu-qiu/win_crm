@@ -1,6 +1,6 @@
 // =============================================================================
 // C 域纯规则用例（M3-10 改属性）
-// 判据来源：《数据架构文档》V1.30 C1「★ 校验（2026-09-10 定）：`urgency != gray` 的关系
+// 判据来源：《数据架构文档》V1.31 C1「★ 校验（2026-09-10 定）：`urgency != gray` 的关系
 //   **必须已标 `value_tier`** —— 紧迫档离开灰度时服务端 **422** 拦截」；
 //   废止口径 #25：「愿标才标」**只适用于灰度**，非灰度**必标**。
 // =============================================================================
@@ -60,11 +60,8 @@ describe('relation-attributes（M3-10）', () => {
       expect(checkValueTierForUrgency(urgency, null)).toEqual({ ok: false, kind: 'value_tier_required' });
     });
 
-    it('非灰度 ＋ `pending`（＝尚未定档）→ 拒：只判「列非空」的话点一下就能绕过闸门', () => {
-      expect(checkValueTierForUrgency('weekly', 'pending')).toEqual({
-        ok: false,
-        kind: 'value_tier_required',
-      });
+    it('非灰度 ＋ `pending`（＝待定）→ **放行**（2026-09-15 七叔拍板：「只要标了就行，高/中/低还是其他都可」）', () => {
+      expect(checkValueTierForUrgency('weekly', 'pending')).toEqual({ ok: true });
     });
 
     it('非灰度 ＋ 非法值 → 拒（枚举合法性另有 DTO 白名单，这里是第二道）', () => {

@@ -10,7 +10,7 @@ import { message } from 'ant-design-vue'
 import type { components } from './types'
 
 /**
- * 后端统一包格式（→《销售CRM接口API文档》V1.15 §2.3 / §2.4）。
+ * 后端统一包格式（→《销售CRM接口API文档》V1.16 §2.3 / §2.4）。
  * HTTP 200 不代表业务成功；必须检查 `body.code === 0`。
  */
 export interface ApiResponse<T = unknown> {

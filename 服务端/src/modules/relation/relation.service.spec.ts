@@ -162,7 +162,7 @@ function createService(options: FakeOptions = {}) {
       ].filter((ref) => ids.includes(ref.id)),
     ),
     getProductLineRefs: jest.fn(async (ids: readonly bigint[]) =>
-      [{ id: LINE_ID, name: '标准线' }].filter((ref) => ids.includes(ref.id)),
+      [{ id: LINE_ID, name: '标准线', color_key: 'blue' }].filter((ref) => ids.includes(ref.id)),
     ),
     getEmployeeDeptIds: jest.fn(async () => options.mentionedDeptIds ?? [DEPT_ID]),
   };
@@ -247,6 +247,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(result.owner).toEqual(ME_REF);
       expect(result.company).toEqual(COMPANY_REF);
       expect(result.dept).toEqual({ id: DEPT_ID, name: '销售一部' });
+      // 产品线引用**必须带固定配色键**（→ 需求 §13.3 / 接口 §5.6；漏了就该红）
+      expect(result.product_line).toEqual({ id: LINE_ID, name: '标准线', color_key: 'blue' });
       expect(result.sea_status).toBe('private');
     });
 
@@ -476,7 +478,7 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(repository.createMember).not.toHaveBeenCalled();
     });
 
-    it('`ask_help`（@求助）**跨部门 → 403**（→ 需求 §4.3 / 废止口径 #10），不落库', async () => {
+    it('`ask_help`（@求助）**跨部门 → 422 / 20407**（→ 需求 §4.3 / 废止口径 #10；码值 2026-09-15 补），不落库', async () => {
       const { service, repository } = createService({ mentionedDeptIds: [OTHER_DEPT_ID] });
 
       const error = await captureAppError(() =>
@@ -489,7 +491,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         ),
       );
 
-      expect(error.httpStatus).toBe(403);
+      expect(error.httpStatus).toBe(422);
+      expect(error.code).toBe(ErrorCode.ASK_HELP_CROSS_DEPT);
       expect(error.constraint).toBe('relation.ask_help.cross_dept');
       expect(repository.createMember).not.toHaveBeenCalled();
     });

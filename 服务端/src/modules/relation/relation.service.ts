@@ -6,10 +6,10 @@
 //   **不写 SQL**（在 `relation.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.15 §5.6（关系入参出参）、§2.2（数据范围四档）、§2.4（错误码）。
+//   · 《销售CRM接口API文档》V1.16 §5.6（关系入参出参）、§2.2（数据范围四档）、§2.4（错误码）。
 //     ⚠ 计划行 M3-10 写的是 `PATCH /relations/:id`，而 §5.6 写的是 **`PUT`** ——
 //       按铁律 A（与规格冲突以规格为准）**实现 PUT**，冲突已记入本批报告与交接说明 §五。
-//   · 《销售CRM数据架构文档》V1.30 C1 / C2（表与校验）、C7（竞品名册）。
+//   · 《销售CRM数据架构文档》V1.31 C1 / C2（表与校验）、C7（竞品名册）。
 //   · 《销售CRM架构设计说明》V1.3 §5.2 跨域三条路：
 //       ① 同步调对方 **exports 的 service** —— 本文件取公司 / 部门 / 产品线 / 员工引用走这条
 //          （**禁止**查对方的表）；③ 改多表必须一起成功 → **本域 `$transaction`**
@@ -66,7 +66,8 @@ export interface RelationVo {
   id: bigint;
   company: { id: bigint; name: string } | null;
   dept: { id: bigint; name: string } | null;
-  product_line: { id: bigint; name: string } | null;
+  /** 产品线引用（多一个固定配色键 `color_key`，→ 需求 §13.3 / 接口 §5.6） */
+  product_line: { id: bigint; name: string; color_key: string | null } | null;
   stage: number;
   urgency: string;
   value_tier: string | null;
@@ -297,8 +298,8 @@ export class RelationService {
    *
    * ★ owner：走 `checkOwnerSlot`（一关系一 owner）→ 别人占位 **409 + `uk_owner` 那句人话**。
    * ★ collaborator：`source` 必填；`ask_help`（@求助）**限同部门**（需求 §4.3 / 废止口径 #10），
-   *   跨部门 → **403**（⚠ 规格没给这条规则的错误码，取「数据权限越界 20003」最近的一档，
-   *   已登记待确认）；`ask_help` 未给 `valid_until` 时按 C2 默认 **7 天**。
+   *   跨部门 → **422 / 20407**（码值 2026-09-15 补进接口 §2.4，见 `ErrorCode.ASK_HELP_CROSS_DEPT`）；
+   *   `ask_help` 未给 `valid_until` 时按 C2 默认 **7 天**。
    * ⚠ 正式协同的**审批流**不在本批：本批只落「审批通过之后的那一行」——
    *   审批中心（M5/approval）接上时，本方法就是它的执行出口，届时需补「审批单号」字段落库。
    */
@@ -356,9 +357,15 @@ export class RelationService {
       if (source === 'ask_help') {
         const mentionedDeptIds = await this.org.getEmployeeDeptIds(employeeId);
         if (!isSameDeptForAskHelp(viewer.myDeptIds, mentionedDeptIds)) {
-          throw new AppError(ErrorCode.FORBIDDEN, 403, '@求助仅限同部门，跨部门请走正式协同审批', {
-            constraint: 'relation.ask_help.cross_dept',
-          });
+          // ⚠ 码值 2026-09-15 定：原实现借的是 403 / 20003（「数据权限越界」），七叔拍板补一条
+          //   业务码 —— 这条拦的是**动作不合规**（不是"你没权限看这条数据"），故按 §2.4 归到
+          //   **422 ＋ 204xx**：`20407` 跨部门 @求助（接口 §2.4 已同步写入）
+          throw new AppError(
+            ErrorCode.ASK_HELP_CROSS_DEPT,
+            422,
+            '@求助仅限同部门，跨部门请走正式协同审批',
+            { constraint: 'relation.ask_help.cross_dept' },
+          );
         }
       }
       if (dto.valid_until !== undefined) {
@@ -475,7 +482,9 @@ export class RelationService {
     return {
       companies: toNameMap(companies),
       departments: toNameMap(departments),
-      productLines: toNameMap(productLines),
+      productLines: new Map(
+        productLines.map((line) => [line.id.toString(), { name: line.name, colorKey: line.color_key }]),
+      ),
       employees: toNameMap(employees),
     };
   }
@@ -487,7 +496,7 @@ export class RelationService {
       id: row.id,
       company: refOf(refs.companies, row.company_id),
       dept: refOf(refs.departments, row.dept_id),
-      product_line: refOf(refs.productLines, row.product_line_id),
+      product_line: productLineRefOf(refs.productLines, row.product_line_id),
       stage: row.stage_id,
       urgency: row.urgency,
       value_tier: row.value_tier,
@@ -507,11 +516,12 @@ export class RelationService {
 /** 仓储读出的关系行（结构取自 `RELATION_SELECT`，**不手抄字段**） */
 type RelationRow = NonNullable<Awaited<ReturnType<RelationRepository['findRelationById']>>>;
 
-/** 跨域引用表（id 十进制串 → 名字）；取不到就是「没有」（呼叫方给 null，**不编名字**） */
+/** 跨域引用表（id 十进制串 → 名字）；取不到就是「没有」（呼叫方给 `null`，**不编名字**） */
 interface RefMaps {
   companies: Map<string, string>;
   departments: Map<string, string>;
-  productLines: Map<string, string>;
+  /** 产品线**多带一个配色键**，故不是纯 `name` 表 */
+  productLines: Map<string, { name: string; colorKey: string | null }>;
   employees: Map<string, string>;
 }
 
@@ -585,6 +595,15 @@ function toNameMap(refs: readonly { id: bigint; name: string }[]): Map<string, s
 function refOf(map: Map<string, string>, id: bigint): { id: bigint; name: string } | null {
   const name = map.get(id.toString());
   return name === undefined ? null : { id, name };
+}
+
+/** id → `{id,name,color_key}`（产品线专用；未配置配色 → 该字段 `null`，**不编默认色**） */
+function productLineRefOf(
+  map: Map<string, { name: string; colorKey: string | null }>,
+  id: bigint,
+): { id: bigint; name: string; color_key: string | null } | null {
+  const hit = map.get(id.toString());
+  return hit === undefined ? null : { id, name: hit.name, color_key: hit.colorKey };
 }
 
 /** 日期加天数（@求助默认 7 天；不用第三方库，够了） */

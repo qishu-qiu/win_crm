@@ -93,7 +93,7 @@ npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script >
 ### 4.2 `0002_company_capital_legal_person`（增量）
 
 - **做什么**：① `company` 加 2 列 —— `registered_capital`（`DECIMAL(16,2)`，**单位＝元**）/ `legal_person`（`VARCHAR(64)`）；② `address` / `bank_name` / `invoice_title` / `tax_no` 4 列注释由「成交后强制补」改为「**成交后可选补全，不强制**」。
-- **为什么**：需求 **§7.3** 定 —— 注册资本 / 法定代表人＝**公司档案「可选扩展字段」，不做签约强制、不计入完善度**，只作档案留存与按规模筛选；同批修掉数据架构 **E8** 硬伤 —— 签约校验清单的 `field_key` 用了库里不存在的「逻辑名」（`registered_address` / `industry` / `region`），导致「逐项查字段非空」**写不出 SQL** → 改真实列名 `address` / `industry_l1` / `province`，**公司级默认清单 6 项 → 4 项**。
+- **为什么**：需求 **§7.3** 定 —— 注册资本 / 法定代表人＝**公司档案「可选扩展字段」，不做签约强制、不计入完善度**，只作档案留存与按规模筛选；同批修掉数据架构 **E8** 硬伤 —— 签约校验清单的 `field_key` 用了库里不存在的「逻辑名」（`registered_address` / `industry` / `region`），导致「逐项查字段非空」**写不出 SQL** → 改真实列名 `address` / `industry_l1` / `province`，**公司级默认清单收敛为 4 项**（项数 / 字段以 `→数据架构 E8` 为准）。
 - **单位口径**：库内 / 接口层一律「**元**」；前端按「**万元**」录入与展示并做一次换算（`500` 万 ⇄ `5000000`）。
 - **性质**：纯 `ALTER TABLE` 加列 / 改注释，**不回填数据、无破坏性**。表数不变（仍 46 张业务表），**无新增索引**（注册资金区间筛选选择性低，暂不建，见数据架构 B1）。
 

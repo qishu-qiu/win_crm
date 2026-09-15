@@ -2,7 +2,7 @@
 // C 域出参 DTO（M3-09 ~ M3-11）—— **只服务于 Swagger 文档**，不参与运行时转换
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.16 §5.6：
+//   · 《销售CRM接口API文档》V1.17 §5.6：
 //     **列表项** `{id,company:{id,name},dept:{id,name},product_line:{id,name,color_key},stage:1-7,
 //       urgency,value_tier,customer_level,owner:{id,name},last_event_at,drop_in_x_days,
 //       overdue,competition,amount|amount_masked,old_customer,is_weekly}`

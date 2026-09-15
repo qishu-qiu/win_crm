@@ -5,7 +5,7 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.16 §三 接口总览：`/companies`（G/P）·`/companies/search-dup`（P）
+//   · 《销售CRM接口API文档》V1.17 §三 接口总览：`/companies`（G/P）·`/companies/search-dup`（P）
 //     ·`/companies/:id/contacts`（G）·`/contacts`（G/P/U）。
 //   · 同 §2.2：除登录 / 刷新外**一律带** `Authorization: Bearer <access_token>`
 //     —— 本域**没有** `@Public()`，全部走全局守卫。

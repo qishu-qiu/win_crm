@@ -2,7 +2,7 @@
 // 全局异常过滤器（M0-34）—— **所有**异常出口都收成统一响应包
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.16 §2.3：失败响应 `{ code, message, request_id, data: null }`
+//   · 《销售CRM接口API文档》V1.17 §2.3：失败响应 `{ code, message, request_id, data: null }`
 //     —— 注意 **data 恒为 null**（不是省略、不是空对象）；`message` 是**给销售看的人话**。
 //   · 同 §2.4 错误码表：左列 HTTP 状态、右列业务 code，两套编号并存（`CODE_BY_HTTP_STATUS` 逐行转写）。
 //   · 《销售CRM架构设计说明》V1.3 §7.5 异常映射：P2002 → 409（**不是** MySQL 1062），

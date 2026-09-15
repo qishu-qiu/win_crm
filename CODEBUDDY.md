@@ -49,7 +49,7 @@ L0 kernel → L1 org(A) → L2 company(B) → L3 relation(C) → L4 engine(D)/tr
 - **数据范围四档**：`all`（总经理/管理员；管理员另加只读 ＋ 每次查看写 `operation_log` ＋ 不解除金额脱敏）> `dept`（经理＝管辖部门）> `self`（销售＝本人 ∪ 有效协同人 ∪ 公海）> `serving`（交付/客服＝仅合同服务期内客户，只读、不进公海）。一人多角色**取更宽的一档**；**禁止在 repository 手写 `where owner_id = ...`**。
 - **脱敏**：出口统一渲染，详见需求 §8 与《废止口径登记表》#30。要点：**联系方式不按角色分档**——详情给全号、列表/卡片给 `phone_masked`；owner 上锁时非 owner 只见 `phone_locked`；**报表 / 看板 / 汇总出口不脱敏**。
 - **审计**：敏感动作在**业务事务内**写 `operation_log`，随业务回滚。
-- **异常映射**：唯一冲突认 Prisma **`P2002`**（不是 MySQL 1062）→ 409/422，约束名取 `meta.driverAdapterError.cause.constraint.index`。
+- **异常映射**：唯一冲突认 Prisma **`P2002`**（不是 MySQL 1062）→ 409/422（分档与约束名取值 → `服务端/prisma/README.md §七`）。
 
 ## 5. 数据层硬口径
 

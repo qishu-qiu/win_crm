@@ -716,19 +716,19 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 2. 本文档为 Schema 唯一真相源：任何表/字段/字典/规则以本文档为准；实现中如发现需增补，**先回《业务需求文档》确认规则、再回本文档登记版本**，最后才落代码
 3. 无历史生产数据可迁；如有少量手工试录数据，人工补录即可
 4. **开发顺序**（依依赖）：域 A/B/C（组织与客户底座）→ 域 D 行动引擎（commitment / action_event / daily_agenda）→ 域 E/G（交易与审批）→ 域 F（公海）→ 定时任务与三出口视图 → **A14 target 目标层**（依赖 contract/payment 与部门树，放最后）
-5. **★ Prisma 落库口径（2026-09-10 ORM 定案为 Prisma）**：本项目重度依赖 MySQL 原生特性（生成列 / 分区表 / JSON / 递归 CTE），Prisma 并非全部原生支持。落库按以下五条执行：
+5. **★ Prisma 落库口径（2026-09-10 ORM 定案为 Prisma）**：本项目重度依赖 MySQL 原生特性（生成列 / 分区表 / JSON / 递归 CTE），Prisma 并非全部原生支持。**数据架构侧的五条口径如下；Prisma / MySQL 的实现细节（手写 SQL、CLI 参数、实测踩坑）一律见 `服务端/prisma/README.md §六`：**
 
-| # | 场景 | 做法 |
+| # | 场景（数据架构侧） | 口径 |
 |---|---|---|
-| 1 | **生成列**<br>（`business_relation.active_key`、`relation_member.owner_flag`、`contact.phone_active`） | schema.prisma 中定义为**可选字段并加 `@ignore`**（Prisma Client 不暴露、不进入 create/update input，**杜绝"试图写入生成列"的运行时报错**）；**在 migration SQL 里手写** `ADD COLUMN x GENERATED ALWAYS AS (...) STORED` ＋ 唯一索引。应用层**不读不写**这些列——唯一性由 DB 兜底，冲突靠错误码识别（见第 3 条）。**⚠ 2026-09-12 实测补充：生成列引用的 FK 列必须为 `ON UPDATE RESTRICT`**（否则 ERROR 1215）——`business_relation.company_id / dept_id / product_line_id` 与 `relation_member.relation_id` **这 4 条外键已改**，其余外键不变 |
-| 2 | **分区表**<br>（**stat_daily / operation_log / job_run_log 三张**） | Prisma 不支持 `PARTITION BY`：migration 中手写 `ALTER TABLE ... PARTITION BY RANGE ...`，schema.prisma 保持普通表定义（可能产生 drift 警告，可接受）。**⚠ MySQL 规则：每个唯一键（含主键）都必须包含分区列，否则报 ERROR 1503**，故先扩主键含分区列。**🚫 2026-09-12 调整：原定的 `action_event` / `daily_agenda` 已放弃分区** —— 「分区表不能参与外键」（ERROR 1506）与「保外键」策略冲突；`action_event.uk_idem` 随之回退为**全局唯一 `(idempotency_key)`**（§10.1 原文即如此） |
-| 3 | **唯一约束冲突 → 409 / 422** | Prisma 唯一冲突错误码是 **P2002**（不是 MySQL 的 1062）。统一在异常过滤器映射：P2002 → 409（撞单 / 激活竞态 / 抢公海）/ 422（业务校验），并从 **Prisma 7 ＋ driver adapter 的真实位置** `meta.driverAdapterError.cause.constraint.index` 读出命中的约束名（**2026-09-14 真库实测：v7 下已无 `meta.target`**，→ 废止口径登记表 #29），返回对应提示（如"已有归属：张三"） |
-| 4 | **复杂查询 / 报表 / 递归 CTE** | 经理看板、合并树递归（`WITH RECURSIVE`）、`GROUP BY` 聚合一律走 `$queryRaw` ＋ `Prisma.sql` 参数化防注入。**不为迁就 Client API 而牺牲 SQL 表达力** |
-| 5 | **JSON 字段**<br>（`ledger.extra_fields`、`contact.extra_phones`、`dept_rule.level_tiers` 等） | Prisma `Json` 类型原生支持 ✓。但**禁止在 JSON 列上做 `JSON_CONTAINS` 反向查询**（全表扫描，见 §十七 A.2）；高频检索的 key 走生成列或提升为正式字段 |
+| 1 | **生成列** —— `business_relation.active_key` / `relation_member.owner_flag` / `contact.phone_active` | schema 中声明为**可选字段 ＋ `@ignore`**（Client 不暴露、不进 create/update input）；**应用层不读不写**，唯一性由 DB 兜底。**⚠ 生成列引用的 FK 列必须 `ON UPDATE RESTRICT`**（否则 ERROR 1215）—— 这 **4 条**：`business_relation.company_id / dept_id / product_line_id` ＋ `relation_member.relation_id` |
+| 2 | **分区表** —— 恰 **3 张**：`stat_daily` / `operation_log` / `job_run_log` | 按 `biz_date` / `occurred_at` / `run_at` **月分区**；主键须含分区列（ERROR 1503）。**🚫 `action_event` / `daily_agenda` 已放弃分区**（分区表不能参与外键，ERROR 1506）→ `action_event.uk_idem` 回退为**全局唯一 `(idempotency_key)`** |
+| 3 | **唯一约束冲突 → 409 / 422** | Prisma 唯一冲突码是 **`P2002`**（不是 MySQL 1062）→ 异常过滤器映射 409（撞单 / 激活竞态 / 抢公海）/ 422（业务校验）。**约束名取值位置与实测溯源 → `服务端/prisma/README.md §七`** |
+| 4 | **复杂查询 / 报表 / 递归 CTE** | 一律走 `$queryRaw` ＋ `Prisma.sql` 参数化防注入。**不为迁就 Client API 牺牲 SQL 表达力** |
+| 5 | **JSON 字段**（`ledger.extra_fields` / `contact.extra_phones` / `dept_rule.level_tiers` 等） | Prisma `Json` 原生支持；但**禁止在 JSON 列上做 `JSON_CONTAINS` 反向查询**（全表扫描，见 §十七 A.2）；高频检索的 key 走生成列或提升为正式字段 |
 
-> **一句话分工**：**Prisma 管"类型安全 ＋ 日常 CRUD"，MySQL 原生特性（生成列 / 分区 / CTE）交给手写 migration 与 `$queryRaw`。** 二者不冲突，但必须在**第一次建库时就把 migration 写对**——后期再改成本高。
+> **一句话分工**：**Prisma 管"类型安全 ＋ 日常 CRUD"，MySQL 原生特性（生成列 / 分区 / CTE）交给手写 migration 与 `$queryRaw`** —— 必须在**第一次建库时就把 migration 写对**，后期再改成本高。
 >
-> **对账便利（选 Prisma 的理由之一）**：`schema.prisma` 是纯文本、**46 张表**全集中在一个文件里，七叔可直接对照本文档 §二～§九 逐表检查，与《数据架构文档》保持一一对应。
+> **对账便利（选 Prisma 的理由之一）**：`schema.prisma` 是纯文本、**46 张表**集中在一个文件，可直接对照 §二～§九 逐表检查。
 
 
 

@@ -27,6 +27,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
+  IsArray,
   IsDateString,
   IsIn,
   IsInt,
@@ -45,12 +46,14 @@ import {
   COMMITMENT_PARTIES,
   COMMITMENT_WAIVE_REASON_MAX_LENGTH,
 } from '../domain/commitment-rules';
-import { ACTION_TYPES, OUTCOME_VALUES, SUMMARY_MAX_LENGTH } from '../domain/event-effective';
+import { ACTION_TYPES, OUTCOME_VALUES, QUICK_MARK_OUTCOMES, SUMMARY_MAX_LENGTH } from '../domain/event-effective';
 
 /** `competition_note` 上限（→ D2：≤100 字） */
 const COMPETITION_NOTE_MAX_LENGTH = 100;
 /** 单次投入分钟上限（一天 1440 分钟；超过必是误填） */
 const DURATION_MAX = 1440;
+/** 一次批量快速标记的条数上限（一屏勾选足够；也防一次请求打爆 `action_event`） */
+const QUICK_MARK_MAX_ITEMS = 100;
 
 /** `POST /relations/:id/events`（写跟单） */
 export class CreateEventDto {
@@ -253,4 +256,48 @@ export class UpdateCommitmentDto {
   @IsOptional()
   @IsDateString({}, { message: 'remind_at 需为 ISO 日期字符串' })
   remind_at?: string;
+}
+
+/**
+ * `POST /events/quick-mark`（批量快速标记，→ 接口 §5.7 / §4.6）。
+ *
+ * 规格原文 req：`{relation_ids?:[],contact_ids?:[],outcome:"not_contacted"|"no_answer"|"brief_hangup"}`
+ * （`relation_ids` 与 `contact_ids` **至少一组非空**；**不更新 `last_event_at`**）。
+ *
+ * ⚠ 本批**只接 `relation_ids`**：`contact_ids`（"待关联公司"阶段只绑联系人的标记，→ 需求 §6.1 模型 B）
+ *   要先判「这条联系人归不归我写」，而 B 域目前**没有联系人写权限出口**、规格也没给判定口径 ——
+ *   收了只能不校验（＝假契约）。故给了 `contact_ids` 一律 **400**，缺口登记（→《欠账登记表》D-23）。
+ */
+export class QuickMarkDto {
+  @ApiPropertyOptional({
+    description: '要标记的业务关系 id 列表（十进制字符串）。与 `contact_ids` 至少一组非空',
+    example: ['5', '4'],
+  })
+  @IsOptional()
+  @IsArray({ message: 'relation_ids 必须是数组' })
+  @ArrayMaxSize(QUICK_MARK_MAX_ITEMS, { message: `relation_ids 最多 ${QUICK_MARK_MAX_ITEMS} 条` })
+  @IsString({ each: true, message: 'relation_ids 里每项都必须是字符串' })
+  relation_ids?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      '待关联联系人的 id 列表（十进制字符串）。⚠ **本批未开放**：联系人写权限口径未定，' +
+      '给了会返回 **400**（→《欠账登记表》D-23）',
+    example: ['7'],
+  })
+  @IsOptional()
+  @IsArray({ message: 'contact_ids 必须是数组' })
+  @ArrayMaxSize(QUICK_MARK_MAX_ITEMS, { message: `contact_ids 最多 ${QUICK_MARK_MAX_ITEMS} 条` })
+  @IsString({ each: true, message: 'contact_ids 里每项都必须是字符串' })
+  contact_ids?: string[];
+
+  @ApiProperty({
+    enum: QUICK_MARK_OUTCOMES,
+    description:
+      '快速标记三型：`not_contacted` 未联系 / `no_answer` 未接电话 / `brief_hangup` 说两句挂了' +
+      '（→ 需求 §10.2）。**不算有效跟进、不重置掉海倒计时**（→ 需求 §6.3）',
+    example: 'no_answer',
+  })
+  @IsIn([...QUICK_MARK_OUTCOMES], { message: 'outcome 取值不合法（只接受三型快速标记）' })
+  outcome!: string;
 }

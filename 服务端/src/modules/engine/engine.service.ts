@@ -59,6 +59,7 @@ import {
 import {
   type CreateCommitmentDto,
   type CreateEventDto,
+  type QuickMarkDto,
   type UpdateCommitmentDto,
 } from './dto/engine-request.dto';
 import { isSummaryRequired } from './domain/event-effective';
@@ -77,6 +78,8 @@ export const ENGINE_AUDIT_ACTIONS = {
   commitmentCreate: 'commitment.create',
   /** 改承诺（兑现 / 取消 / 豁免 / 改期）→ `PUT /relations/:id/commitments`（写动作，由统一切面留痕） */
   commitmentUpdate: 'commitment.update',
+  /** ★ 批量快速标记 → `POST /events/quick-mark`（写动作，由统一切面留痕） */
+  quickMark: 'event.quick_mark',
   /** ★ 查看跟单全文 → `GET /relations/:id/events`：**读路径**，只对**管理员**写（本文件手工调 `recordStandalone`） */
   eventView: 'event.view',
 } as const;
@@ -132,6 +135,16 @@ export interface AgendaItemVo {
   snooze_count: number;
 }
 
+/**
+ * 批量快速标记出参（→ §5.7）。
+ * ⚠ 规格**没给出参形状**（§5.7 只给了 req）—— 本批按「标了几条」实现，
+ *   缺口登记（→《欠账登记表》D-24），待回填接口文档。
+ */
+export interface QuickMarkResultVo {
+  /** 实际落库的事件条数（＝去重后能写的关系数） */
+  marked: number;
+}
+
 /** `RelationCreated` 事件的载荷（→ C 域 `createRelation` 发出；**最小信息**，架构 §5.3） */
 export interface RelationCreatedPayload {
   companyId?: bigint;
@@ -157,6 +170,9 @@ const COMMITMENT_LIMIT = 100;
 
 /** 今日动线条目上限（同上：本批无分页） */
 const AGENDA_LIMIT = 100;
+
+/** 快速标记落库时的 `action_type`（→ 见 `quickMark` 方法头 ★：三型都是「电话没打通」这一族） */
+const QUICK_MARK_ACTION_TYPE = 'phone';
 
 /** 建档事件的幂等键前缀（→ 见 `recordRelationCreated`：让「至少一次投递」不会写成两条） */
 const RELATION_CREATED_KEY_PREFIX = 'relation_created';
@@ -280,6 +296,92 @@ export class EngineService {
       relation.ownerId,
       await this.loadRefs([created], [relation.ownerId]),
     );
+  }
+
+  // ===== M6-09 批量快速标记 =====
+
+  /**
+   * 批量快速标记（→ §5.7 `POST /events/quick-mark`；列表页「勾选多个客户 → 一次性标记」）。
+   *
+   * ★ 与 `recordEvent` 的**三条语义差别**（别把两套逻辑合成一个方法）：
+   *   ① **不回写 `last_event_at`**：快速标记＝无效沟通，不重置掉海倒计时
+   *      （→ 需求 §6.3 / §十六 #44：否则销售每天点一下就能保号，倒计时被刷爆）；
+   *   ② **没有 `summary`**：规格 req 里就没有这个字段（点一下即留痕，不强制写一个字，→ 需求 §10.2）；
+   *   ③ **不写幂等键**（`idempotency_key` 留 `null`）：每次点击**都该是一条独立记录** ——
+   *      需求 §10.2 要的正是「这个客户打过 N 次」。若沿用内容幂等键（`domain/event-idempotency.ts`
+   *      的「同内容同键」），第二天再打同一个号会被判成「刚刚已经记过了」409，统计直接失真。
+   *      ⚠ 那个函数是给**写跟单**用的，别搬到这里。
+   *
+   * ★ `action_type` 固定 `phone`：三型快速标记都是「电话没打通」这一族
+   *   （未联系 / 未接电话 / 说两句挂了），而规格 req **没给 `action_type`**
+   *   ⇒ 不替销售编动作类型，按唯一可能的动作落（已在报告里点名）。
+   *
+   * ★ 逐条判**可写**（C 域出口）：越权 / 只读角色当场 403，**不做「跳过坏行、静默成功」**
+   *   —— 批量里混进一条别人的客户却弹「标了 9 条」，比直接报错更糟（销售会以为都标上了）。
+   */
+  async quickMark(dto: QuickMarkDto): Promise<QuickMarkResultVo> {
+    const viewer = requireViewer();
+
+    // ① 参数：至少一组 id 非空（→ §5.7）；`contact_ids` 本批未开放（→ DTO 注释 /《欠账登记表》D-23）
+    if ((dto.contact_ids ?? []).length > 0) {
+      throw new AppError(
+        ErrorCode.PARAM_INVALID,
+        400,
+        '参数错误：本批暂不支持标记「待关联公司」的联系人，请用 relation_ids',
+        { constraint: 'quick_mark.contact_unsupported' },
+      );
+    }
+    const rawIds = dto.relation_ids ?? [];
+    if (rawIds.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：relation_ids 不能为空', {
+        constraint: 'quick_mark.empty',
+      });
+    }
+
+    // ② 去重：同一个关系勾两次＝**一条**记录（否则一次点击落两条，统计翻倍）
+    const relationIds = [...new Set(rawIds.map((id) => jsonToBigint(id, 'relation_ids')))];
+    // ③ **先全判完可写，再落库**：免得「标了一半才报 403」留下半批脏数据
+    const relations: { id: bigint; ownerId: bigint | null }[] = [];
+    for (const id of relationIds) {
+      relations.push(await this.relation.requireWritableRelation(id.toString()));
+    }
+
+    const eventAt = new Date();
+    let marked = 0;
+    await this.prisma
+      .$transaction(async (tx) => {
+        const client: EngineTxClient = tx;
+        for (const relation of relations) {
+          await this.repository.createEvent(
+            {
+              relation_id: relation.id,
+              contact_id: null,
+              actor_id: viewer.employeeId,
+              owner_snapshot: relation.ownerId,
+              action_type: QUICK_MARK_ACTION_TYPE,
+              summary: null,
+              outcome: dto.outcome,
+              competition: null,
+              competitor_id: null,
+              competition_note: null,
+              duration_min: null,
+              source: 'manual',
+              visit_log_id: null,
+              appointment_id: null,
+              // ★ 不写幂等键（见方法头 ★③）
+              idempotency_key: null,
+              event_at: eventAt,
+            },
+            client,
+          );
+          marked += 1;
+        }
+      })
+      .catch((error: unknown) => {
+        throw mapPrismaError(error) ?? error;
+      });
+
+    return { marked };
   }
 
   // ===== M4-08 关系时间线 =====

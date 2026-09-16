@@ -29,9 +29,15 @@ import {
   CreateCommitmentDto,
   CreateEventDto,
   ListEventQueryDto,
+  QuickMarkDto,
   UpdateCommitmentDto,
 } from './dto/engine-request.dto';
-import { ActionEventVoDto, AgendaItemVoDto, CommitmentVoDto } from './dto/engine-response.dto';
+import {
+  ActionEventVoDto,
+  AgendaItemVoDto,
+  CommitmentVoDto,
+  QuickMarkResultDto,
+} from './dto/engine-response.dto';
 import {
   ENGINE_AUDIT_ACTIONS,
   EngineService,
@@ -39,6 +45,7 @@ import {
   type AgendaItemVo,
   type CommitmentVo,
   type EventRange,
+  type QuickMarkResultVo,
 } from './engine.service';
 
 @ApiTags('行动引擎')
@@ -80,6 +87,23 @@ export class EngineController {
   @ApiOkResponse({ type: ActionEventVoDto })
   recordEvent(@Param('id') id: string, @Body() body: CreateEventDto): Promise<ActionEventVo> {
     return this.engine.recordEvent(id, body);
+  }
+
+  @Audit(ENGINE_AUDIT_ACTIONS.quickMark, 'action_event')
+  @Post('events/quick-mark')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '批量快速标记（未联系 / 未接电话 / 说两句挂了）',
+    description:
+      '`{relation_ids:[],outcome}`。**落库、可批量，但不算有效跟进、不更新 `last_event_at`**' +
+      '（→ 需求 §6.3 / §10.2：点一下不能保号）。重复点同一条**会落多条** ——' +
+      '「这个客户打过 N 次」正是这么统计的。' +
+      '⚠ 规格里的 `contact_ids` **本批未开放**（联系人写权限口径未定 →《欠账登记表》D-23），给了 **400**',
+  })
+  @ApiOkResponse({ type: QuickMarkResultDto })
+  quickMark(@Body() body: QuickMarkDto): Promise<QuickMarkResultVo> {
+    return this.engine.quickMark(body);
   }
 
   // ===== M4-13 承诺（建 / 列 / 改）=====

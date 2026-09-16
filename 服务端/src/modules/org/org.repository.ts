@@ -261,13 +261,33 @@ export class OrgRepository {
     });
   }
 
-  /** 产品线（用于把部门行的 `product_line_ids` 反查出来 —— A7 把承接部门写在**产品线侧**） */
+  /**
+   * 产品线行（**一次查询形状供两处用**）：
+   *   ① 把部门行的 `product_line_ids` 反查出来 —— A7 把承接部门写在**产品线侧**；
+   *   ② `GET /org/product-lines` 的出参（→ §5.3：含 `color_key` / 服务周期 / 状态）。
+   */
   async listProductLines(): Promise<
-    { id: bigint; name: string; code: string; dept_ids: unknown }[]
+    {
+      id: bigint;
+      name: string;
+      code: string;
+      color_key: string | null;
+      dept_ids: unknown;
+      service_cycle_days: number | null;
+      status: string;
+    }[]
   > {
     return this.prisma.productLine.findMany({
       where: { deleted_at: null },
-      select: { id: true, name: true, code: true, dept_ids: true },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        color_key: true,
+        dept_ids: true,
+        service_cycle_days: true,
+        status: true,
+      },
       orderBy: { id: 'asc' },
     });
   }

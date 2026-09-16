@@ -104,6 +104,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/org/product-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 产品线列表
+         * @description 含 `color_key`（7 条线固定配色，前端照渲染，→ 需求 §13.3）与承接部门集合。录入页激活业务关系时选产品线用（`POST /relations` req 含 `product_line_id`，→ §5.6）
+         */
+        get: operations["OrgController_listProductLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/org/employees": {
         parameters: {
             query?: never;
@@ -348,6 +368,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events/quick-mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 批量快速标记（未联系 / 未接电话 / 说两句挂了）
+         * @description `{relation_ids:[],outcome}`。**落库、可批量，但不算有效跟进、不更新 `last_event_at`**（→ 需求 §6.3 / §10.2：点一下不能保号）。重复点同一条**会落多条** ——「这个客户打过 N 次」正是这么统计的。⚠ 规格里的 `contact_ids` **本批未开放**（联系人写权限口径未定 →《欠账登记表》D-23），给了 **400**
+         */
+        post: operations["EngineController_quickMark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/relations/{id}/commitments": {
         parameters: {
             query?: never;
@@ -513,6 +553,34 @@ export interface components {
             manager_ids: string[];
             /** @description 关联产品线集合（由 A7 的 `dept_ids` 反向索引而来） */
             product_line_ids: string[];
+        };
+        ProductLineVoDto: {
+            /** @example 5 */
+            id: string;
+            /** @example 标准建站线 */
+            name: string;
+            /**
+             * @description 产品线英文码（→ A7 `code`）
+             * @example STD
+             */
+            code: string;
+            /**
+             * @description 固定配色键（7 条线各一色，→ 需求 §13.3）；未配置为 `null`，前端自行回落
+             * @example blue
+             */
+            color_key: string | null;
+            /** @description 承接部门集合（A7 `dept_ids` 由 JSON 转十进制字符串） */
+            dept_ids: string[];
+            /**
+             * @description 服务周期（天）；未配置为 `null`
+             * @example 365
+             */
+            service_cycle_days: number | null;
+            /**
+             * @description 状态（active / disabled）
+             * @example active
+             */
+            status: string;
         };
         EmployeeVoDto: {
             /** @example 7 */
@@ -1110,6 +1178,36 @@ export interface components {
              */
             mentioned_user_ids?: string[];
         };
+        QuickMarkDto: {
+            /**
+             * @description 要标记的业务关系 id 列表（十进制字符串）。与 `contact_ids` 至少一组非空
+             * @example [
+             *       "5",
+             *       "4"
+             *     ]
+             */
+            relation_ids?: string[];
+            /**
+             * @description 待关联联系人的 id 列表（十进制字符串）。⚠ **本批未开放**：联系人写权限口径未定，给了会返回 **400**（→《欠账登记表》D-23）
+             * @example [
+             *       "7"
+             *     ]
+             */
+            contact_ids?: string[];
+            /**
+             * @description 快速标记三型：`not_contacted` 未联系 / `no_answer` 未接电话 / `brief_hangup` 说两句挂了（→ 需求 §10.2）。**不算有效跟进、不重置掉海倒计时**（→ 需求 §6.3）
+             * @example no_answer
+             * @enum {string}
+             */
+            outcome: "not_contacted" | "no_answer" | "brief_hangup";
+        };
+        QuickMarkResultDto: {
+            /**
+             * @description 实际落库的事件条数（＝去重后能写的关系数）
+             * @example 3
+             */
+            marked: number;
+        };
         CommitmentVoDto: {
             /**
              * @description 承诺 id
@@ -1369,6 +1467,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DepartmentVoDto"][];
+                };
+            };
+        };
+    };
+    OrgController_listProductLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductLineVoDto"][];
                 };
             };
         };
@@ -1755,6 +1872,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionEventVoDto"];
+                };
+            };
+        };
+    };
+    EngineController_quickMark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickMarkDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickMarkResultDto"];
                 };
             };
         };

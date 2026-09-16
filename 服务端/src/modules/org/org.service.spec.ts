@@ -81,7 +81,19 @@ interface FakeRepositories {
   permissions?: { perm_key: string; role_code: string; level: string }[];
   departmentRows?: { id: bigint; name: string; parent_id: bigint; service_enabled: boolean; status: string }[];
   deptManagers?: { dept_id: bigint; employee_id: bigint }[];
-  productLines?: { id: bigint; name: string; code: string; dept_ids: unknown }[];
+  /**
+   * 产品线行：`color_key` / `service_cycle_days` / `status` **可省**（写用例时只关心其中几项），
+   * 缺省值在 `createRepository` 里补齐（→ 真实 `listProductLines` 的返回形状不变）。
+   */
+  productLines?: {
+    id: bigint;
+    name: string;
+    code: string;
+    dept_ids: unknown;
+    color_key?: string | null;
+    service_cycle_days?: number | null;
+    status?: string;
+  }[];
   employeeRows?: EmployeeRowFixture[];
   rolesByEmployee?: Map<string, string[]>;
   employeeRefs?: { id: bigint; name: string }[];
@@ -103,7 +115,14 @@ function createRepository(options: FakeRepositories = {}) {
     findEmployeesByIds: jest.fn(async () => options.employeeRefs ?? []),
     findRolesByEmployeeIds: jest.fn(async () => options.rolesByEmployee ?? new Map<string, string[]>()),
     listDepartments: jest.fn(async () => options.departmentRows ?? []),
-    listProductLines: jest.fn(async () => options.productLines ?? []),
+    listProductLines: jest.fn(async () =>
+      (options.productLines ?? []).map((line) => ({
+        color_key: null,
+        service_cycle_days: null,
+        status: 'active',
+        ...line,
+      })),
+    ),
     listEmployees: jest.fn(async () => options.employeeRows ?? []),
     listRoles: jest.fn(async () => options.roles ?? []),
     listPermissionMatrix: jest.fn(async () => options.permissionMatrix ?? []),
@@ -611,6 +630,48 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
           status: 'active',
           manager_ids: [7n, 8n],
           product_line_ids: [5n],
+        },
+      ]);
+    });
+
+    it('产品线列表：`dept_ids` 转十进制字符串（含脏数据）、`color_key` 未配置保持 `null`（→ 接口 §5.3）', async () => {
+      const { service } = createService({
+        productLines: [
+          // `dept_ids` 里混一个字符串 "3"（手工导入的脏数据）；配色 / 服务周期 / 状态均走缺省
+          { id: 5n, name: '标准线', code: 'STD', dept_ids: [2, '3'] },
+          {
+            id: 6n,
+            name: '小程序线',
+            code: 'MP',
+            dept_ids: null,
+            color_key: 'green',
+            service_cycle_days: 180,
+            status: 'disabled',
+          },
+        ],
+      });
+
+      const lines = await service.listProductLines();
+
+      expect(lines).toEqual([
+        {
+          id: 5n,
+          name: '标准线',
+          code: 'STD',
+          // ★ 未配置 = `null`（**不编默认色**：假默认色会让页面理直气壮渲染错颜色）
+          color_key: null,
+          dept_ids: ['2', '3'],
+          service_cycle_days: null,
+          status: 'active',
+        },
+        {
+          id: 6n,
+          name: '小程序线',
+          code: 'MP',
+          color_key: 'green',
+          dept_ids: [],
+          service_cycle_days: 180,
+          status: 'disabled',
         },
       ]);
     });

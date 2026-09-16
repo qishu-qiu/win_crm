@@ -3,7 +3,7 @@
 //
 // 判据逐字（《开发计划》）：M1-11「`/docs` 可见 + 真调通，返回统一包」· M1-13「curl 返回列表且字段齐」。
 // ★ 真调通 / 真返回由 curl 现场验（M1 完成报告里贴命令与输出）；**单测负责另外两件 curl 看不出来的事**：
-//   ① 路由与公开性**恰好**是规格里那 7 条（多一条 = 多一个未授权入口，少一条 = 前端 404）；
+//   ① 路由与公开性**恰好**是规格里那 8 条（多一条 = 多一个未授权入口，少一条 = 前端 404）；
 //   ② controller **只解析请求 + 调一个 service**（注入的东西多了就是分层被侵蚀，坑 15 的正面用法）。
 // =============================================================================
 import { RequestMethod } from '@nestjs/common';
@@ -13,7 +13,15 @@ import { IS_PUBLIC_KEY } from '../../kernel/index';
 import { OrgController, toRequestMeta } from './org.controller';
 import { OrgService } from './org.service';
 
-type HandlerName = 'login' | 'refresh' | 'me' | 'listDepartments' | 'listEmployees' | 'listRoles' | 'listPermissions';
+type HandlerName =
+  | 'login'
+  | 'refresh'
+  | 'me'
+  | 'listDepartments'
+  | 'listProductLines'
+  | 'listEmployees'
+  | 'listRoles'
+  | 'listPermissions';
 
 interface RouteExpectation {
   handler: HandlerName;
@@ -29,6 +37,7 @@ const ROUTES: RouteExpectation[] = [
   { handler: 'refresh', path: 'account/refresh', method: RequestMethod.POST, isPublic: true },
   { handler: 'me', path: 'account/me', method: RequestMethod.GET, isPublic: false },
   { handler: 'listDepartments', path: 'org/departments', method: RequestMethod.GET, isPublic: false },
+  { handler: 'listProductLines', path: 'org/product-lines', method: RequestMethod.GET, isPublic: false },
   { handler: 'listEmployees', path: 'org/employees', method: RequestMethod.GET, isPublic: false },
   { handler: 'listRoles', path: 'org/roles', method: RequestMethod.GET, isPublic: false },
   { handler: 'listPermissions', path: 'org/permissions', method: RequestMethod.GET, isPublic: false },
@@ -40,6 +49,7 @@ function createServiceStub() {
     refresh: jest.fn(async () => ({ access_token: 'a2', refresh_token: 'r2' })),
     me: jest.fn(async () => ({ id: 7n })),
     listDepartments: jest.fn(async () => [{ id: 1n }]),
+    listProductLines: jest.fn(async () => [{ id: 5n }]),
     listEmployees: jest.fn(async () => [{ id: 7n }]),
     listRoles: jest.fn(async () => [{ code: 'sale' }]),
     listPermissions: jest.fn(async () => [{ perm_key: 'customer.view' }]),
@@ -84,7 +94,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       expect(Reflect.getMetadata(HTTP_CODE_METADATA, OrgController.prototype.me)).toBeUndefined();
     });
 
-    it('类级路径前缀为空（Nest 归一成 `/`），且**只挂了这 7 条路由**（多一条就是多一个没人评审过的入口）', () => {
+    it('类级路径前缀为空（Nest 归一成 `/`），且**只挂了这 8 条路由**（多一条就是多一个没人评审过的入口）', () => {
       // Nest 会把 `@Controller()` 的空前缀归一成 `/`，路径拼接时再被各 handler 的完整路径覆盖
       expect(Reflect.getMetadata(PATH_METADATA, OrgController)).toBe('/');
 
@@ -93,7 +103,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
         // `prototype.constructor` 会**继承到类级**的 PATH_METADATA（自身没有 handler 元数据），必须排掉
         .filter((name) => name !== 'constructor')
         .filter((name) => Reflect.getMetadata(PATH_METADATA, prototype[name] as object) !== undefined);
-      // `toRequestMeta` 是模块级导出（不在 prototype 上），故这里应**恰好**是 ROUTES 的 7 个 handler
+      // `toRequestMeta` 是模块级导出（不在 prototype 上），故这里应**恰好**是 ROUTES 的 8 个 handler
       expect(routed.sort()).toEqual([...ROUTES.map((route) => route.handler)].sort());
     });
   });
@@ -112,6 +122,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       refresh: [{ refresh_token: 'opaque-token' }],
       me: [],
       listDepartments: [],
+      listProductLines: [],
       listEmployees: [],
       listRoles: [],
       listPermissions: [],

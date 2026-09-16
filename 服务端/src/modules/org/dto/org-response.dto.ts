@@ -119,6 +119,51 @@ export class DepartmentVoDto {
   product_line_ids!: string[];
 }
 
+/**
+ * 产品线（→ §5.3 `产品线 {id,name,code,color_key,dept_ids:[],service_cycle_days,status}`）。
+ *
+ * ★ 为什么单列一个端点（`GET /org/product-lines`，→ §4.2 / §三）：录入页「激活业务关系」
+ *   要选产品线（`POST /relations` req 含 `product_line_id`，→ §5.6），此前无处可取
+ *   （→《欠账登记表》D-05）。
+ * ★ `color_key`（固定配色键，→ 需求 §13.3「产品线 = 全系统固定配色」）**可空**：
+ *   未配置给 `null`，由前端回落 —— **不编默认色**（假默认色会让页面理直气壮渲染错颜色）。
+ */
+export class ProductLineVoDto {
+  @ApiProperty({ type: String, example: '5' })
+  id!: string;
+
+  @ApiProperty({ example: '标准建站线' })
+  name!: string;
+
+  @ApiProperty({ description: '产品线英文码（→ A7 `code`）', example: 'STD' })
+  code!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '固定配色键（7 条线各一色，→ 需求 §13.3）；未配置为 `null`，前端自行回落',
+    example: 'blue',
+  })
+  color_key!: string | null;
+
+  @ApiProperty({
+    type: [String],
+    description: '承接部门集合（A7 `dept_ids` 由 JSON 转十进制字符串）',
+  })
+  dept_ids!: string[];
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: '服务周期（天）；未配置为 `null`',
+    example: 365,
+  })
+  service_cycle_days!: number | null;
+
+  @ApiProperty({ description: '状态（active / disabled）', example: 'active' })
+  status!: string;
+}
+
 /** 员工（→ §5.3；**不含密码哈希**） */
 export class EmployeeVoDto {
   @ApiProperty({ type: String, example: '7' })

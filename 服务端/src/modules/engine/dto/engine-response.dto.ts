@@ -199,3 +199,13 @@ export class AgendaItemVoDto {
   @ApiProperty({ description: '已被「明天再说」几次（上限 3，→ 需求 §10.4）', example: 0 })
   snooze_count!: number;
 }
+
+/**
+ * 批量快速标记出参（→ §5.7 `POST /events/quick-mark`，M6-09）。
+ * ⚠ 规格**只给了 req、没给出参形状** —— 本批按「标了几条」实现，
+ *   缺口登记（→《欠账登记表》D-24），待回填接口文档。
+ */
+export class QuickMarkResultDto {
+  @ApiProperty({ description: '实际落库的事件条数（＝去重后能写的关系数）', example: 3 })
+  marked!: number;
+}

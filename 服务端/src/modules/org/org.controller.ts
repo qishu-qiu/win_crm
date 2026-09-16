@@ -28,6 +28,7 @@ import {
   EmployeeVoDto,
   LoginResultDto,
   PermissionVoDto,
+  ProductLineVoDto,
   RefreshResultDto,
   RoleVoDto,
   UserVoDto,
@@ -127,6 +128,19 @@ export class OrgController {
   @ApiOkResponse({ type: [DepartmentVoDto] })
   listDepartments(): ReturnType<OrgService['listDepartments']> {
     return this.org.listDepartments();
+  }
+
+  @Get('org/product-lines')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '产品线列表',
+    description:
+      '含 `color_key`（7 条线固定配色，前端照渲染，→ 需求 §13.3）与承接部门集合。' +
+      '录入页激活业务关系时选产品线用（`POST /relations` req 含 `product_line_id`，→ §5.6）',
+  })
+  @ApiOkResponse({ type: [ProductLineVoDto] })
+  listProductLines(): ReturnType<OrgService['listProductLines']> {
+    return this.org.listProductLines();
   }
 
   @Get('org/employees')

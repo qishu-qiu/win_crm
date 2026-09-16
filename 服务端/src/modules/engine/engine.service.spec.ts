@@ -414,6 +414,81 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
     });
   });
 
+  describe('quickMark：批量快速标记（M6-09）', () => {
+    const QUICK_DTO = { relation_ids: ['11', '11', '12'], outcome: 'no_answer' };
+
+    it('落库：`action_type=phone`、`summary=null`、**幂等键为空**（每次点击都该是一条独立记录）', async () => {
+      const { service, repository, prisma } = createService();
+
+      await runWithContext(contextOf(), () => service.quickMark(QUICK_DTO));
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const data = repository.createEvent.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(data.action_type).toBe('phone');
+      expect(data.summary).toBeNull();
+      expect(data.outcome).toBe('no_answer');
+      expect(data.owner_snapshot).toBe(OWNER);
+      expect(data.source).toBe('manual');
+      // ★ 关键：**不写幂等键** —— 若沿用写跟单那套「同内容同键」，
+      //   第二天再打同一个号标记就会被判成 409「刚刚已经记过了」，统计直接失真
+      expect(data.idempotency_key).toBeNull();
+    });
+
+    it('**不回写 `last_event_at`**（快速标记不算有效跟进，→ 需求 §6.3 / §十六 #44）', async () => {
+      const { service, relation } = createService();
+
+      await runWithContext(contextOf(), () => service.quickMark(QUICK_DTO));
+
+      expect(relation.touchLastEventAt).not.toHaveBeenCalled();
+    });
+
+    it('批量：同一关系勾两次只落**一条**（去重）；条数如实返回', async () => {
+      const { service, repository, relation } = createService();
+
+      const result = await runWithContext(contextOf(), () => service.quickMark(QUICK_DTO));
+
+      // 去重后是两条（11 / 12）→ 判两次可写、落两条
+      expect(relation.requireWritableRelation).toHaveBeenCalledTimes(2);
+      expect(repository.createEvent).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ marked: 2 });
+    });
+
+    it('参数：`relation_ids` 空 → 400；给了 `contact_ids` → 400（本批未开放，→ 欠账 D-23）', async () => {
+      const empty = createService();
+      const emptyError = await runWithContext(contextOf(), () =>
+        captureAppError(() => empty.service.quickMark({ relation_ids: [], outcome: 'no_answer' })),
+      );
+      expect(emptyError.httpStatus).toBe(400);
+      expect(emptyError.constraint).toBe('quick_mark.empty');
+
+      const withContact = createService();
+      const contactError = await runWithContext(contextOf(), () =>
+        captureAppError(() =>
+          withContact.service.quickMark({ contact_ids: ['7'], outcome: 'no_answer' }),
+        ),
+      );
+      expect(contactError.httpStatus).toBe(400);
+      expect(contactError.constraint).toBe('quick_mark.contact_unsupported');
+      expect(withContact.repository.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('越权 / 只读：C 域出口抛 403 → **整批不落库**（不做「跳过坏行、静默成功」）', async () => {
+      const { service, repository } = createService({
+        relationError: new AppError(ErrorCode.FORBIDDEN, 403, '无权操作该数据范围之外的业务关系', {
+          constraint: 'out_of_scope',
+        }),
+      });
+
+      const error = await runWithContext(contextOf(), () =>
+        captureAppError(() => service.quickMark(QUICK_DTO)),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      // ★ 判据：**先全判完再落库** —— 否则批量里混进一条别人的客户，会「标了一半才报错」
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listEvents：关系时间线（M4-08）', () => {
     it('**倒序**：出参顺序＝仓储返回顺序（倒序由仓储 `orderBy` 保证，service 不重排）', async () => {
       const rows = [

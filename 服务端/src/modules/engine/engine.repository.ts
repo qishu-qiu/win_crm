@@ -106,7 +106,12 @@ export interface CreateEventData {
   source: string;
   visit_log_id: bigint | null;
   appointment_id: bigint | null;
-  idempotency_key: string;
+  /**
+   * 幂等键。
+   * ★ **`null` 是合法值**（列可空、`uk_idem` 唯一索引允许多个 NULL）：**批量快速标记**刻意不写它
+   *   —— 每次点击都该是一条独立记录（「这个客户打过 N 次」正是这么统计的，→ `quickMark` 方法头 ★③）。
+   */
+  idempotency_key: string | null;
   event_at: Date;
 }
 

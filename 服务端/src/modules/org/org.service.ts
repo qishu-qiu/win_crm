@@ -303,6 +303,29 @@ export class OrgService {
   }
 
   /**
+   * 产品线列表（→ 接口 §5.3 / §4.2 `GET /org/product-lines`）。
+   *
+   * ★ 用途：录入页「激活业务关系」要选产品线（`POST /relations` req 含 `product_line_id`，
+   *   → §5.6）；此前没有这个只读端点，录入页建不出关系（→《欠账登记表》D-05）。
+   * ★ **不做数据范围收敛**：产品线是**全公司配置**（7 条线固定配色，→ 需求 §13.3），
+   *   不是业务数据 —— 同 `listRoles` / `listPermissions` 的取法。
+   * ★ `dept_ids` 出参转**十进制字符串**（→ §2.6：id 一律十进制字符串）；`color_key` 未配置
+   *   原样给 `null`（**不编默认色**，→ DTO 注释）。
+   */
+  async listProductLines() {
+    const rows = await this.repository.listProductLines();
+    return rows.map((line) => ({
+      id: line.id,
+      name: line.name,
+      code: line.code,
+      color_key: line.color_key,
+      dept_ids: parseIdList(line.dept_ids).map((id) => id.toString()),
+      service_cycle_days: line.service_cycle_days,
+      status: line.status,
+    }));
+  }
+
+  /**
    * 员工列表（→ API §4.2 / §5.3；**不含密码哈希**）。
    *
    * ★ **G7 收敛**（→ 接口 §4.2）：「服务端按 `managed_dept_ids` 收敛；**销售只能看同部门**」——

@@ -1,10 +1,10 @@
-# 销售 CRM 接口 API 文档 V1.22
+# 销售 CRM 接口 API 文档 V1.23
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据。
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
 > 配套真相源：《销售CRM业务需求文档》**V1.30**、《销售CRM数据架构文档》**V1.36**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.16**（均 需求规格/）。
 > **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22），沿革查 `git log --follow -- 需求规格/销售CRM接口API文档.md`。
-> 生效日期：2026-09-16 ｜ 状态：**V1.22**（**联系人列表可见范围 ＋ 待关联归属**（2026-09-16 拍板）：`GET /contacts` 增设 `only_unlinked` 入参（只看"未关联公司"的待跟进）；**「待关联」（未挂公司）联系人只给归属人自己** —— 归属＝**建档录入人**，落新增列 `contact.owner_id`（migration `0007`，→ 需求 §6.1 ⑦~⑪）。⚠ **已挂公司者的"公司维度收敛"待补**：`company`(L2) **不可反向依赖** `relation`(L3)（架构 §3 层级），落地方式待定（→《欠账登记表》D-28）。**沿用 V1.21**：业务关系列表「筛选」落地**：`GET /relations` 增 `view`（`all` 我的全部 / `following` 跟进中＝阶段 1~5 / `cooperated` 已合作＝阶段 6 / `churned` 已流失＝阶段 7）＋ `urgency`（紧迫档**多选**、逗号分隔），→ §4.4 / §5.6。**拍板结论（P-01）＝由后端开参数**、**不放前端本地过滤** —— 分页之后本地过滤只能筛当前页，且「共 N 条」会退化成「本页条数」。⚠ 前端 §5 的第五档 **「逾期未跟进」本版不提供**：逾期唯一来源是承诺 / 预约（D 域），字段尚未落地，**不编一个假的逾期定义**（→《欠账登记表》D-10）。**沿用 V1.20**：业务关系列表分页落地（出参由裸数组改为 §2.3 分页形态 `{list,total,page,page_size}`、入参 `page` / `page_size`）／**§2.6 码表落点收口**（枚举码值不再在本文件列举，一律指向《数据架构文档》§十三 `dict_item` ／ §三~§九 字段口径 —— 消掉「同一串码值有两个落点」这个 **5 次翻车的病根**（→《废止口径登记表》#36 / #37）；阶段 `stage` 数字 `1`~`7` 的**例外提示保留**，仍禁止自造英文码）／承诺三态（`done` / `cancelled` / `waived`）、成功响应一律 200、`20407`＝跨部门 @求助、联系方式默认全可见 ＋ 联系人可上锁、登录＝手机号 / 账号名双通道 · 紧随需求 V1.30 / 数据架构 V1.36 / 前端 V1.16）。
+> 生效日期：2026-09-16 ｜ 状态：**V1.23**（**新增「关联公司并激活业务关系」端点**（2026-09-16 拍板 · D-29）：`POST /contacts/:id/activate-relation` —— 把「待关联」联系人关联到公司 ＋ 激活关系 ＋ 把孤儿跟单批量挂过去，**三件事一个动作**（→ §4.4 / §5.6）。**沿用 V1.22**：**联系人列表可见范围 ＋ 待关联归属**（2026-09-16 拍板）：`GET /contacts` 增设 `only_unlinked` 入参（只看"未关联公司"的待跟进）；**「待关联」（未挂公司）联系人只给归属人自己** —— 归属＝**建档录入人**，落新增列 `contact.owner_id`（migration `0007`，→ 需求 §6.1 ⑦~⑪）。⚠ **已挂公司者的"公司维度收敛"待补**：`company`(L2) **不可反向依赖** `relation`(L3)（架构 §3 层级），落地方式待定（→《欠账登记表》D-28）。**沿用 V1.21**：业务关系列表「筛选」落地**：`GET /relations` 增 `view`（`all` 我的全部 / `following` 跟进中＝阶段 1~5 / `cooperated` 已合作＝阶段 6 / `churned` 已流失＝阶段 7）＋ `urgency`（紧迫档**多选**、逗号分隔），→ §4.4 / §5.6。**拍板结论（P-01）＝由后端开参数**、**不放前端本地过滤** —— 分页之后本地过滤只能筛当前页，且「共 N 条」会退化成「本页条数」。⚠ 前端 §5 的第五档 **「逾期未跟进」本版不提供**：逾期唯一来源是承诺 / 预约（D 域），字段尚未落地，**不编一个假的逾期定义**（→《欠账登记表》D-10）。**沿用 V1.20**：业务关系列表分页落地（出参由裸数组改为 §2.3 分页形态 `{list,total,page,page_size}`、入参 `page` / `page_size`）／**§2.6 码表落点收口**（枚举码值不再在本文件列举，一律指向《数据架构文档》§十三 `dict_item` ／ §三~§九 字段口径 —— 消掉「同一串码值有两个落点」这个 **5 次翻车的病根**（→《废止口径登记表》#36 / #37）；阶段 `stage` 数字 `1`~`7` 的**例外提示保留**，仍禁止自造英文码）／承诺三态（`done` / `cancelled` / `waived`）、成功响应一律 200、`20407`＝跨部门 @求助、联系方式默认全可见 ＋ 联系人可上锁、登录＝手机号 / 账号名双通道 · 紧随需求 V1.30 / 数据架构 V1.36 / 前端 V1.16）。
 > ⚠ **代码注释不绑文档版本号（2026-09-16 定）**：代码里引用规格一律写「《文档名》§X」，**不写 `V1.xx`** —— 绑版本号必漂移（实测 `V1.16` / `V1.27` / `V1.3` / `V1.32` 全成旧值：这正是坑 #1 / #6 的复现路径）。本版同批把 `服务端/src` ＋ `前端/src` 里的历史版本指针**全部去除**（逐文件**字面**替换，禁批量正则 → 铁律坑 19）。
 
 ---
@@ -159,6 +159,7 @@
 
 ### 4.4 业务关系 relation（[核心]）
 - `POST /relations`（激活）：`{company_id, dept_id, product_line_id}` → 唯一约束 **`uk_active_rel(active_key)`**（生成列 ＝ 三元组 ＋ `sea_status='private'` ＋ `merged_into IS NULL`，`→数据架构§10.1` / `§十五.5`）撞则 **409 / 20401**（引导转交/协同）。
+- `POST /contacts/:id/activate-relation`（**V1.23 新增**，2026-09-16 拍板）：「**关联公司并激活业务关系**」—— 把一条「待关联」联系人登记到公司 ＋ 激活一条业务关系 ＋ 把该联系人名下**未挂关系**的跟单批量挂到新关系（三件事一个动作，形状与错误约定见 **§5.6**）。
 - `GET /relations`：**列表类一律分页**（→ §2.3 / §2.7）—— 入参 `tab` ＋ `page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ **`{list,total,page,page_size}`**（**不是裸数组**；排序恒 `id desc`）。**筛选（V1.21）**：`view`（视图：`all` 我的全部 / `following` 跟进中＝阶段 1~5 / `cooperated` 已合作＝阶段 6 / `churned` 已流失＝阶段 7）＋ `urgency`（紧迫档**多选**、逗号分隔）——**由后端过滤**（前端本地过滤在分页后只能筛当前页），`total` 数的是**筛完之后**的总数。`list` 项含 `stage`（彩色点）、`urgency`、`value_tier`、逾期标红、`drop_in_x_days`（24h 掉公海⚠）、竞争徽标、跨线 `amount_masked`。
 - `GET /relations/:id/events`：默认 `range=1m`（近1月）；出参按 `created_by == 当前人` 分 `main` / `branch`（树杈），带 `createdByName` + `contactName`（`→需求§7.5` `→设计规范§八`）。
 - `POST /relations/:id/transfer`：跨部门转交 = **双方上级双签**；上级缺失上溯经理/总经理（`→需求§7.9` `→架构G1`）。
@@ -369,6 +370,12 @@
 - **列表项** `{id,company:{id,name},dept:{id,name},product_line:{id,name,color_key},stage:1-7,urgency,value_tier,customer_level,owner:{id,name},last_event_at,drop_in_x_days,overdue,competition,amount|amount_masked,old_customer,is_weekly}`
 - **详情** ＝ 列表项 ＋ `{next_action_hint,sea_status,round_no（当前轮次号＝已掉海次数+1，派生不落表）,prev_round?:{round_no,owner:{id,name},dead_or_churn?:reason,dropped_at,claimed_at?,event_count},competitors:[{id,name,positioning}],labels:{risk:[{label_id,label_code,label}],other:[]},members:[{employee:{id,name},member_type:"owner"|"collaborator",source,valid_until?}],stage_logs:[{from_stage,to_stage,action,reason?,operator:{id,name},created_at}],try_count_30d}`
 - `POST /relations`（激活）req `{company_id,dept_id,product_line_id}`（撞 `uk_active_rel` → **409/20401**）
+- `POST /contacts/:id/activate-relation`（**V1.23 新增**，2026-09-16 拍板）：把一条「**待关联**」联系人（还没挂公司）**关联到公司 ＋ 激活一条业务关系**，并把该联系人名下**未挂关系**的跟单**批量挂到新关系**（历史不断，→ 需求 §6.1 ④）。
+  - req `{company_id,dept_id,product_line_id,position?}`（`position?` ＝ 此人在该公司的职位，写进就职关系；可空）。
+  - resp ＝ **新关系的列表项**（同本节列表项形状，前端可直接跳详情）＋ `linked_events`（本次搬运的跟单条数）。
+  - **一个动作含三件事**：① 写**就职关系**（`company_contact`，`is_current=true`）② **建关系**（公司 × 部门 × 产品线；**owner ＝ 发起人**，与 `POST /relations` 同规矩）③ **批量改挂孤儿跟单**（`action_event` 里 `relation_id` 为空、且 `contact_id` 是该联系人的行）。
+  - **错误**：三元组已有活跃关系 → **409 / 20401**（与 `POST /relations` **同一句人话**）；**该联系人已挂过公司**（不是「待关联」）→ **409**（防重复触发）；部门越权 / 只读角色 → **403**；各类 id 不存在 → **400**。
+  - ⚠ **可重入**：重复调用不会二次搬运（第三步只动 `relation_id` 为空的行）。⚠ **实现前置**：本动线跨 **B / C / D 三域**且架构禁跨域大事务，动手前先核**层级**（`C` 域**不可反向依赖** `D` 域）与 EventBus 现状（→《欠账登记表》**D-29**）。
 - `PUT /relations/:id` req `{urgency?,value_tier?,next_action_hint?,competition?,competitor_id?}`
 - `PUT /relations/:id/stage` req `{to_stage,confirm?:true}` → resp `{suggested_stage?,stage_log}`
 - `POST/DELETE /relations/:id/members` req `{employee_id,member_type,source:"collaborate"|"ask_help",valid_until?}`

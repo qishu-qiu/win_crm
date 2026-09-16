@@ -1,0 +1,55 @@
+import { ref } from 'vue'
+
+import { fetchMe, type UserVo } from './api/auth'
+import { clearTokens, getAccessToken } from './api/request'
+
+/**
+ * 登录态（M6-05）—— **全应用唯一一份「我是谁」**。
+ *
+ * ★ 为什么不引 pinia：本项目只此一个跨页状态（当前登录人），引一整个状态库属**新增依赖**
+ *   （要单独的执行令，→ `前端/README.md`）。等真的出现第二、第三个跨页状态再引不迟 ——
+ *   那时改动也只在本文件与调用方。
+ *
+ * ★ 为什么 `restoreSession()` 要**调 `GET /account/me`** 而不是「有 token 就当已登录」：
+ *   token 可能已过期 / 被撤销 / 账号被停用 —— 直接进空壳会出现「看着已登录、一操作全是 401」
+ *   （→ 原 `App.vue` 同款判断，此处只是把逻辑从组件里搬出来，行为不变）。
+ */
+export const currentUser = ref<UserVo | null>(null)
+
+/** 启动自检是否跑完（跑完前不渲染任何页面，避免「先闪一下登录页又跳走」） */
+export const sessionReady = ref(false)
+
+/**
+ * 启动 / 刷新页面时恢复登录态。
+ * @returns 是否**确实已登录**（`false` ＝ 调用方该把用户送回登录页）
+ */
+export async function restoreSession(): Promise<boolean> {
+  if (getAccessToken() === null) {
+    sessionReady.value = true
+    return false
+  }
+  try {
+    currentUser.value = await fetchMe()
+    return true
+  } catch {
+    // me 失败（含刷新链路失败）→ 清干净：不带着坏 token 往下走
+    clearTokens()
+    currentUser.value = null
+    return false
+  } finally {
+    sessionReady.value = true
+  }
+}
+
+/** 登录成功后写入（token 由调用方 `setTokens` 落 localStorage） */
+export function signIn(user: UserVo): void {
+  currentUser.value = user
+  sessionReady.value = true
+}
+
+/** 退出 / 会话失效：清 token 与当前人（**不跳路由** —— 跳由 App 或页面负责） */
+export function signOut(): void {
+  clearTokens()
+  currentUser.value = null
+  sessionReady.value = true
+}

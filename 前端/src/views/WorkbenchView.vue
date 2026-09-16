@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import type { UserVo } from '../api/auth'
 import { fetchTodayAgenda, type AgendaItem } from '../api/engine'
 import { refTypeNameOf } from '../engine'
 import { homeNameOf } from '../home'
+import { currentUser } from '../session'
 
 /**
  * 首屏工作台（M4-17）—— **今日该找谁**（`GET /today-agenda`）。
@@ -21,9 +21,9 @@ import { homeNameOf } from '../home'
  * ★ 页面**不再自己过滤 / 排序**：范围（只给我自己的）与顺序（优先级）都由服务端定
  *   —— 前端再排一次就是第二套口径（本项目反复点名的双真相源）。
  */
-const props = defineProps<{ user: UserVo }>()
-
-const homeName = computed(() => homeNameOf(props.user.role))
+// ★ M6-05 起**不再接收 `user` prop**：当前登录人从 `session` 取 —— 路由化后页面是
+//   由 `<router-view>` 渲染的，没有「父组件传 prop」这条通道；身份只留一个来源（session）。
+const homeName = computed(() => homeNameOf(currentUser.value?.role ?? ''))
 
 const items = ref<AgendaItem[]>([])
 const loading = ref(false)

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-import { login, type UserVo } from '../api/auth'
+import { login } from '../api/auth'
 import { setTokens } from '../api/request'
+import { signIn } from '../session'
 
 /**
  * 登录页（→《销售CRM前端页面与交互文档》V1.16 §六「1 登录 /login」）：
@@ -15,7 +17,8 @@ import { setTokens } from '../api/request'
  *   登录失败（401 / 20002）是**用户自己的输入问题**，要指到字段上；弹个飘走的气泡没人看得清。
  *   `api/request.ts` 已对 `/account/login` 跳过全局提示，两边口径一致。
  */
-const emit = defineEmits<{ 'logged-in': [user: UserVo] }>()
+const router = useRouter()
+const route = useRoute()
 
 const form = reactive({ account: '', password: '' })
 const submitting = ref(false)
@@ -34,7 +37,10 @@ async function submit(): Promise<void> {
   try {
     const result = await login({ account: form.account, password: form.password })
     setTokens(result.access_token, result.refresh_token)
-    emit('logged-in', result.user)
+    signIn(result.user)
+    // 登录后去处：守卫拦下来的原页面（`?redirect=`）优先，否则回工作台
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    await router.replace(redirect)
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : '登录失败，请稍后重试'
   } finally {

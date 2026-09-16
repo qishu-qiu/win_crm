@@ -1,74 +1,55 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-import { fetchMe, type UserVo } from './api/auth'
-import { UNAUTHORIZED_EVENT, clearTokens, getAccessToken } from './api/request'
+import { UNAUTHORIZED_EVENT } from './api/request'
 import { homeNameOf, roleNameOf } from './home'
-import EntryView from './views/EntryView.vue'
-import LoginView from './views/LoginView.vue'
-import RelationListView from './views/RelationListView.vue'
-import WorkbenchView from './views/WorkbenchView.vue'
+import { currentUser, restoreSession, sessionReady, signOut } from './session'
 
 /**
- * 应用外壳（M1-18 登录页 ＋ M2-17 建档页）：顶栏（身份 / 导航 / 退出）＋ 视图切换。
+ * 应用外壳（M1-18 登录页 ＋ M2-17 建档页 ＋ **M6-05 路由收口**）——
+ * 顶栏（身份 / 导航 / 退出）＋ `<router-view>` 页面出口。
  *
- * ★ 为什么**不引 router**：M0-54 ~ M0-57 落的前端骨架只有 vue ＋ ant-design-vue ＋ axios；
- *   引 vue-router 属**新增依赖**（要单独的执行令）。故这里用「登录人 ＋ 一条 view 状态」切换视图
- *   —— 等真正多页（§五 的 29 个路由）时再按拍板引 router，届时本文件是唯一要改的地方。
+ * ★ **M6-05 起引入 `vue-router`**（新增依赖，2026-09-16 七叔执行令）：
+ *   原先用「一条 `view` 状态 ＋ `v-if`」手切三个视图 —— 那是骨架期的临时做法
+ *   （当时引 router 属新增依赖、要单独拿令，所以刻意没引）。现在页面到 4 个
+ *   （后续还有 25 页）＋ 要按角色**不下发路由**（§四.2），手切撑不住了。
  *
- * ★ 启动时为什么先调 `GET /account/me` 而不是「有 token 就当已登录」：
- *   token 可能已过期 / 被撤销 / 账号被停用 —— 直接进空壳会出现「看着已登录、一操作全是 401」。
- *   用一次 me 把真实状态问清楚，失败就干净地回登录页。
+ * ★ 三处分工（**别混**）：
+ *   · **进不进得来** ＝ 路由守卫（`router/index.ts`，读 token、同步、零网络）；
+ *   · **这个会话还算不算数** ＝ `session.restoreSession()`（`GET /account/me`），失败即送回 `/login`；
+ *   · **401 会话失效** ＝ `api/request.ts` 派发 `UNAUTHORIZED_EVENT`，本文件监听后退回登录页
+ *     （★ `api/` **不 import router** —— 那会让「请求层」依赖「路由层」，刷新失败时还可能
+ *       路由尚未就绪）。
  *
  * ★ 顶栏放在**外壳**而不是各页面里：页面只管自己的正文，身份 / 导航只写一处
  *   （写两处必然出现「一个页面的导航比另一个少一项」）。
  */
-type ViewKey = 'workbench' | 'entry' | 'relations'
-
-const user = ref<UserVo | null>(null)
-const booting = ref(true)
-const view = ref<ViewKey>('workbench')
+const router = useRouter()
 
 /** 导航项：首屏名取自规格（§4.1 角色表「主入口」列），不写「首页 / 主页」这类自造名 */
-const navItems = computed<Array<{ key: ViewKey; label: string }>>(() => [
-  { key: 'workbench', label: homeNameOf(user.value?.role ?? '') },
-  { key: 'entry', label: '建档' },
-  { key: 'relations', label: '业务关系' },
+const navItems = computed<Array<{ to: string; label: string }>>(() => [
+  { to: '/', label: homeNameOf(currentUser.value?.role ?? '') },
+  { to: '/entry', label: '建档' },
+  { to: '/relations', label: '业务关系' },
 ])
 
-const roleName = computed(() => roleNameOf(user.value?.role ?? ''))
-const deptName = computed(() => user.value?.dept?.name ?? '未分配部门')
-
-async function restoreSession(): Promise<void> {
-  if (!getAccessToken()) {
-    booting.value = false
-    return
-  }
-  try {
-    user.value = await fetchMe()
-  } catch {
-    // me 失败（含刷新链路失败）→ 清干净回登录页：不带着坏 token 往下走
-    clearTokens()
-    user.value = null
-  } finally {
-    booting.value = false
-  }
-}
-
-function onLoggedIn(next: UserVo): void {
-  user.value = next
-  view.value = 'workbench'
-}
+const roleName = computed(() => roleNameOf(currentUser.value?.role ?? ''))
+const deptName = computed(() => currentUser.value?.dept?.name ?? '未分配部门')
 
 function onLogout(): void {
-  clearTokens()
-  user.value = null
-  view.value = 'workbench'
+  signOut()
+  void router.replace('/login')
+}
+
+async function bootstrap(): Promise<void> {
+  const authenticated = await restoreSession()
+  if (!authenticated) await router.replace('/login')
 }
 
 onMounted(() => {
   window.addEventListener(UNAUTHORIZED_EVENT, onLogout)
-  void restoreSession()
+  void bootstrap()
 })
 
 onUnmounted(() => {
@@ -77,38 +58,38 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="booting" class="app-booting">正在进入…</div>
-  <LoginView v-else-if="user === null" @logged-in="onLoggedIn" />
+  <div v-if="!sessionReady" class="app-booting">正在进入…</div>
 
+  <!-- 未登录：只可能是登录页（守卫保证），全屏、无顶栏 -->
+  <router-view v-else-if="currentUser === null" />
+
+  <!-- 已登录：顶栏 ＋ 页面出口 -->
   <div v-else class="shell">
     <header class="shell-header">
       <div class="shell-identity">
-        <span class="shell-name">{{ user.name }}</span>
+        <span class="shell-name">{{ currentUser.name }}</span>
         <span class="shell-meta">{{ roleName }}</span>
         <span class="shell-meta">{{ deptName }}</span>
       </div>
 
       <nav class="shell-nav">
-        <button
+        <router-link
           v-for="item in navItems"
-          :key="item.key"
-          type="button"
+          :key="item.to"
+          :to="item.to"
           class="shell-nav-item"
-          :class="{ 'is-active': view === item.key }"
-          :aria-current="view === item.key ? 'page' : undefined"
-          @click="view = item.key"
+          active-class="is-active"
+          exact-active-class="is-active"
         >
           {{ item.label }}
-        </button>
+        </router-link>
       </nav>
 
       <a-button type="text" @click="onLogout">退出登录</a-button>
     </header>
 
     <main class="shell-body">
-      <WorkbenchView v-if="view === 'workbench'" :user="user" />
-      <EntryView v-else-if="view === 'entry'" />
-      <RelationListView v-else />
+      <router-view />
     </main>
   </div>
 </template>
@@ -170,11 +151,15 @@ onUnmounted(() => {
   margin-right: auto;
 }
 
+/** 导航项是 `<router-link>`（渲染成 `<a>`）—— 底色 / 下划线一律重置，样式口径与按钮一致 */
 .shell-nav-item {
+  display: inline-flex;
+  align-items: center;
   padding: 0 var(--crm-space-sm);
   height: 32px;
   font-size: var(--crm-font-size-base);
   color: var(--crm-color-text-secondary);
+  text-decoration: none;
   background: transparent;
   border: none;
   border-radius: var(--crm-radius-sm);

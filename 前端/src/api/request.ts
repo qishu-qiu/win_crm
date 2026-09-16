@@ -36,7 +36,10 @@ const REFRESH_KEY = 'crm_refresh_token'
 const LOGIN_PATH = '/account/login'
 const REFRESH_PATH = '/account/refresh'
 
-/** 登录态失效事件：刷新失败时派发，由 App 回到登录页（本骨架**不引 router**，故用事件而不是跳路由） */
+/**
+ * 登录态失效事件：刷新失败时派发，由 `App.vue` 监听后退回 `/login`。
+ * ★ 本层**不 import router**（请求层不依赖路由层；且刷新失败时路由未必已就绪）—— 故走事件。
+ */
 export const UNAUTHORIZED_EVENT = 'crm:unauthorized'
 
 const request = axios.create({
@@ -129,7 +132,7 @@ request.interceptors.response.use(
           waitQueue.forEach(({ reject }) => reject(refreshError))
           waitQueue = []
           clearTokens()
-          // 回到登录页：本骨架无 router，用事件让 App 切视图
+          // 回到登录页：派事件给 App（请求层不直接跳路由）
           window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
           return Promise.reject(refreshError instanceof Error ? refreshError : new Error(text))
         }

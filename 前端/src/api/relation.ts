@@ -60,3 +60,14 @@ export async function listRelations(query: ListRelationsQuery): Promise<Relation
   })
   return data
 }
+
+/**
+ * 关系详情（`GET /relations/:id`，→ 接口 §5.6）。
+ * ★ 本片（M6-08）只消费「详情 ＋ `members`」—— 详情里其余分组（`stage_logs` / `labels` /
+ *   `competitors` / `rounds`）属后续里程碑，**服务端尚未返回**（→《欠账登记表》D-11），
+ *   故页面也**不摆点了没用的入口**。
+ */
+export async function getRelation(id: string): Promise<RelationDetail> {
+  const { data } = await request.get<RelationDetail>(`/relations/${id}`)
+  return data
+}

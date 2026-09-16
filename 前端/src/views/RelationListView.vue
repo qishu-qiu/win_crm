@@ -446,7 +446,11 @@ async function submitWaive(commitment: Commitment): Promise<void> {
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'company'">
-          {{ record.company?.name ?? '（档案已删除）' }}
+          <!-- 实体可点（→ README §九 不变量⑥「任何位置出现都可点开」；解欠账 D-13） -->
+          <router-link v-if="record.company" :to="`/relations/${record.id}`" class="relations-link">
+            {{ record.company.name }}
+          </router-link>
+          <template v-else>（档案已删除）</template>
         </template>
         <template v-else-if="column.key === 'dept'">{{ record.dept?.name ?? '—' }}</template>
         <template v-else-if="column.key === 'productLine'">
@@ -692,6 +696,11 @@ async function submitWaive(commitment: Commitment): Promise<void> {
   margin: 0 0 var(--crm-space-sm);
   font-size: var(--crm-font-size-xs);
   color: var(--crm-color-error);
+}
+
+/** 可点实体（→ README §九 不变量⑥「任何位置出现都可点开」，与链接同色、不加下划线噪音） */
+.relations-link {
+  color: var(--crm-color-primary);
 }
 
 /** 状态＝圆点 ＋ 文字（→ 设计规范 §4.4） */

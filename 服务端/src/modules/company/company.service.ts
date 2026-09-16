@@ -371,6 +371,16 @@ export class CompanyService {
     return rows.map((row) => toContactBrief(row, viewerId, { position: null, is_current: true }));
   }
 
+  // ===== 跨域只读出口（架构 §5.2 路之①）=====
+
+  /**
+   * 联系人**归属人**（供 D 域判「这条"待关联"线索能不能标我」；→ 需求 §6.1 ⑦ / ⑨）。
+   * ★ 口径：**谁建的归谁**（归属可改，故以**当前** `owner_id` 为准，不是最初建档人）。
+   */
+  getContactOwners(ids: readonly bigint[]): Promise<{ id: bigint; owner_id: bigint | null }[]> {
+    return this.repository.findContactOwnersByIds(ids);
+  }
+
   // ===== M2-14 公司联系人 =====
 
   /** 该公司下的联系人（**含历史就职 / 已离职标记**，→ B5；`phone_locked` 同 `listContacts`） */

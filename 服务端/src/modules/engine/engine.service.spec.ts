@@ -121,6 +121,8 @@ interface FakeOptions {
   relationRefs?: { id: bigint; name: string }[];
   /** 关系的 owner（建承诺时要看「承诺跟关系走」，用 `null` 模拟已掉公海） */
   ownerId?: bigint | null;
+  /** 「待关联」联系人的归属（P-03：快速标记的联系人侧要判「归不归我」）；不给＝默认都归我 */
+  contactOwners?: { id: bigint; owner_id: bigint | null }[];
 }
 
 function createService(options: FakeOptions = {}) {
@@ -174,6 +176,12 @@ function createService(options: FakeOptions = {}) {
   const company = {
     getContactRefs: jest.fn(async (ids: readonly bigint[]) =>
       options.contactMissing === true ? [] : [{ id: CONTACT_ID, name: '张总' }].filter((ref) => ids.includes(ref.id)),
+    ),
+    // P-03：快速标记的**联系人侧**要判「这条"待关联"线索归不归我」（B 域出口）
+    getContactOwners: jest.fn(async (ids: readonly bigint[]) =>
+      options.contactOwners === undefined
+        ? ids.map((id) => ({ id, owner_id: ME }))
+        : options.contactOwners,
     ),
   };
   const prisma = { $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn({ tx: true })) };
@@ -453,23 +461,57 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
       expect(result).toEqual({ marked: 2 });
     });
 
-    it('参数：`relation_ids` 空 → 400；给了 `contact_ids` → 400（本批未开放，→ 欠账 D-23）', async () => {
-      const empty = createService();
-      const emptyError = await runWithContext(contextOf(), () =>
-        captureAppError(() => empty.service.quickMark({ relation_ids: [], outcome: 'no_answer' })),
-      );
-      expect(emptyError.httpStatus).toBe(400);
-      expect(emptyError.constraint).toBe('quick_mark.empty');
+    it('参数：两组都空 → 400（`quick_mark.empty`）', async () => {
+      const { service } = createService();
 
-      const withContact = createService();
-      const contactError = await runWithContext(contextOf(), () =>
-        captureAppError(() =>
-          withContact.service.quickMark({ contact_ids: ['7'], outcome: 'no_answer' }),
-        ),
+      const error = await runWithContext(contextOf(), () =>
+        captureAppError(() => service.quickMark({ outcome: 'no_answer' })),
       );
-      expect(contactError.httpStatus).toBe(400);
-      expect(contactError.constraint).toBe('quick_mark.contact_unsupported');
-      expect(withContact.repository.createEvent).not.toHaveBeenCalled();
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('quick_mark.empty');
+    });
+
+    it('「待关联」联系人侧：**归我**的线索可标（`relation_id` 空、`owner_snapshot` 无可取故为 null）', async () => {
+      const { service, repository } = createService();
+
+      const result = await runWithContext(contextOf(), () =>
+        service.quickMark({ contact_ids: ['7'], outcome: 'no_answer' }),
+      );
+
+      expect(result).toEqual({ marked: 1 });
+      const data = repository.createEvent.mock.calls[0]?.[0] as Record<string, unknown>;
+      // ★ 「待关联」阶段的正当形态：只绑联系人，`relation_id` 为空（→ 数据架构 D2）
+      expect(data.relation_id).toBeNull();
+      expect(data.contact_id).toBe(7n);
+      expect(data.owner_snapshot).toBeNull();
+      expect(data.idempotency_key).toBeNull();
+    });
+
+    it('「待关联」联系人侧：**不是我的**线索 → 403，整批不落库（→ 需求 §6.1 ⑦⑨「谁建的归谁」）', async () => {
+      const { service, repository } = createService({
+        contactOwners: [{ id: 7n, owner_id: OTHER }],
+      });
+
+      const error = await runWithContext(contextOf(), () =>
+        captureAppError(() => service.quickMark({ contact_ids: ['7'], outcome: 'no_answer' })),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('quick_mark.not_mine');
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('「待关联」联系人侧：id 不存在 → 400（**不静默跳过**：否则「标了 9 条」却少一条）', async () => {
+      const { service, repository } = createService({ contactOwners: [] });
+
+      const error = await runWithContext(contextOf(), () =>
+        captureAppError(() => service.quickMark({ contact_ids: ['7'], outcome: 'no_answer' })),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('quick_mark.contact_missing');
+      expect(repository.createEvent).not.toHaveBeenCalled();
     });
 
     it('越权 / 只读：C 域出口抛 403 → **整批不落库**（不做「跳过坏行、静默成功」）', async () => {

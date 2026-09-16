@@ -574,7 +574,7 @@ model RelationMember {
   added_at    DateTime? @db.DateTime(0)
   revoked_by  BigInt?   @db.UnsignedBigInt
   revoked_at  DateTime? @db.DateTime(0)
-  owner_flag  BigInt?   @ignore @db.UnsignedBigInt // ★ 生成列：owner=relation_id，非owner=NULL（UK 手写 migration）
+  owner_flag  BigInt?   @ignore @db.UnsignedBigInt // ★ 生成列：**在位的** owner=relation_id，否则 NULL（UK 手写 migration；条件自 0008 起含 revoked_at IS NULL）
 
   relation BusinessRelation @relation(fields: [relation_id], references: [id], onUpdate: Restrict)
 

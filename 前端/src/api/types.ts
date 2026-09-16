@@ -379,7 +379,7 @@ export interface paths {
         put?: never;
         /**
          * 批量快速标记（未联系 / 未接电话 / 说两句挂了）
-         * @description `{relation_ids:[],outcome}`。**落库、可批量，但不算有效跟进、不更新 `last_event_at`**（→ 需求 §6.3 / §10.2：点一下不能保号）。重复点同一条**会落多条** ——「这个客户打过 N 次」正是这么统计的。⚠ 规格里的 `contact_ids` **本批未开放**（联系人写权限口径未定 →《欠账登记表》D-23），给了 **400**
+         * @description `{relation_ids?:[],contact_ids?:[],outcome}`（**两组至少一组非空**）。**落库、可批量，但不算有效跟进、不更新 `last_event_at`**（→ 需求 §6.3 / §10.2：点一下不能保号）。重复点同一条**会落多条** ——「这个客户打过 N 次」正是这么统计的。⚠ 判定分两组：关系侧判**可写**（越权 / 只读 → 403）；「待关联」联系人侧判**归属人**（只有当前归属人能标，别人 → 403；→ 需求 §6.1 ⑦⑨）
          */
         post: operations["EngineController_quickMark"];
         delete?: never;
@@ -1188,7 +1188,7 @@ export interface components {
              */
             relation_ids?: string[];
             /**
-             * @description 待关联联系人的 id 列表（十进制字符串）。⚠ **本批未开放**：联系人写权限口径未定，给了会返回 **400**（→《欠账登记表》D-23）
+             * @description 「待关联」（未挂公司）联系人的 id 列表（十进制字符串）。**只有该联系人的当前归属人才能标记**（别人 → **403**）—— 归属＝建档人、可改（→ 需求 §6.1 ⑦⑨）
              * @example [
              *       "7"
              *     ]

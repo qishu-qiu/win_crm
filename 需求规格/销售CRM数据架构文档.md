@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.35（现行有效）
+# 销售 CRM 数据架构文档 V1.36（现行有效）
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
@@ -12,7 +12,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.35（现行有效）** / 2026-09-16 |
+| 版本 / 日期 | **V1.36（现行有效）** / 2026-09-16 |
 | 上游 | 《销售CRM业务需求文档》**V1.30**（业务规则唯一来源） |
 | 下游 | 《销售CRM接口API文档》**V1.22**、《销售CRM设计规范》**V1.0**、《销售CRM前端页面与交互文档》**V1.16** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
@@ -293,7 +293,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 - **正式协同**：owner 或经理发起、审批通过（source=collaborate）
 - **@求助（ask_help）= 轻量临时协同**（`→需求§3` 术语）：owner 写事件 @ 同事即时授予**与正式协同相同**的权限；默认 7 天自动收回（dept_rule.ask_help_days 可配）、owner 可随时撤销、全量留痕、**免审批**。想长期共同跟进必须走正式协同审批
 - **主责变更**（`→需求§5.2`）：换人=transfer 审批；短期=带期限 collaborator；**离职=管理员批量转交**（payload 支持清单）
-- **索引**：`uk(relation_id, employee_id, member_type)` 防重复授予；**`uk_owner(owner_flag)` 保证一关系仅一 owner**（生成列，见 §10.2-1）；`idx(employee_id, member_type, valid_until)` 供"我协同 / @我"列表与有效期扫描（§十七 A.3）；`idx(relation_id)` 供关系内成员查询
+- **索引**：`uk(relation_id, employee_id, member_type)` 防重复授予；**`uk_owner(owner_flag)` 保证一关系仅一 owner**（生成列＝**只有在位（未撤销）的 owner** 占位，见 §10.2-1）；`idx(employee_id, member_type, valid_until)` 供"我协同 / @我"列表与有效期扫描（§十七 A.3）；`idx(relation_id)` 供关系内成员查询
 
 ### C3 relation_stage_log 阶段推进留痕
 `relation_id + from_stage/to_stage + action(normal/jump/rollback/lost) + reason + operator_id`
@@ -575,7 +575,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 表 | 索引 |
 |---|---|
 | business_relation | **`uk_active_rel`**（生成列）、`idx_company(company_id)`、`idx_sea_scan(last_event_at, sea_status)`、`idx_dept_sea(dept_id, product_line_id, sea_status)`、`idx_merged_rel(merged_into)`（被并分支查询） |
-| relation_member | **`uk_member(relation_id, employee_id, member_type)`**、**`uk_owner(owner_flag)`（生成列 `owner_flag`：owner=relation_id，非 owner=NULL → 一关系仅一 owner）**、`idx_my(employee_id, member_type, valid_until)`、`idx_relation(relation_id)` |
+| relation_member | **`uk_member(relation_id, employee_id, member_type)`**、**`uk_owner(owner_flag)`（生成列 `owner_flag`：**在位的** owner=relation_id，其余=NULL → 一关系仅一 owner；「在位」＝未撤销，见 §10.2-1）**、`idx_my(employee_id, member_type, valid_until)`、`idx_relation(relation_id)` |
 | relation_stage_log | `idx_rel_time(relation_id, created_at)` |
 | relation_label | **`uk_rel_label(relation_id, group_code, label_id)`**、`idx_label(label_id)` |
 | appointment | `idx_rel_time(relation_id, appointment_at, status)`、`idx_contact(contact_id)`、`idx_due(appointment_at, status)`、`idx_event(action_event_id)` |
@@ -625,7 +625,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 | # | 目标 | 实现 |
 |---|---|---|
-| 1 | **一关系仅一 owner** | `relation_member` 加生成列 `owner_flag = IF(member_type='owner', relation_id, NULL)`（STORED），`UNIQUE uk_owner(owner_flag)`。owner 唯一、collaborator 多行不受限；重复 owner 撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409 |
+| 1 | **一关系仅一 owner** | `relation_member` 加生成列 `owner_flag = IF(member_type='owner' AND revoked_at IS NULL, relation_id, NULL)`（STORED），`UNIQUE uk_owner(owner_flag)`。owner 唯一、collaborator 多行不受限；重复 owner 撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409。**★ 2026-09-16 修正（migration `0008`）：条件加 `revoked_at IS NULL`** —— 撤销（掉公海 / 转交）在本项目里的定义是**置 `revoked_at`、不物理删**（留痕），旧条件只看"是不是 owner"，会让**被撤销的 owner 继续占位** ⇒ 掉海后重新领取、转交换人时**落不下新 owner**（撞 `uk_owner`）。改成"**只有在位的 owner 才占位**"后，撤销即自动释放位子（→《欠账登记表》D-26 已闭环） |
 | 2 | **活跃手机号唯一**（软删/换号后号码释放） | `contact` 加生成列 `phone_active = IF(deleted_at IS NULL, phone, NULL)`（STORED），`UNIQUE uk_phone_active(phone_active)`。未删行占号、软删行变 NULL 放行；换号=改 phone 自动释放旧号。`company.credit_code`、`employee.work_no` **同理** |
 | 3 | **抢公海原子认领** | 认领 = 条件 UPDATE：`UPDATE business_relation SET sea_status='private', owner_id=? WHERE id=? AND sea_status='company_sea'`（同一事务写 relation_member owner + sea_record）。**影响行数=1 才算抢到**；=0 → 409「已被领走」 |
 | 4 | 撞单（已有） | `contact.phone`（→ 改为 `phone_active` 生成列唯一）+ `company.credit_code`；公司名相似度应用层；**撞码合并流程（信用代码撞重→墓碑合并）见 `→需求§7.3`**：B 打 `merged_into`→A、B.`credit_code` 置 NULL（UNIQUE 可空放行）、子表随 `relation_id`/`company_id` 重定向零改动 |

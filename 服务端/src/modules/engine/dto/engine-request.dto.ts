@@ -264,9 +264,9 @@ export class UpdateCommitmentDto {
  * 规格原文 req：`{relation_ids?:[],contact_ids?:[],outcome:"not_contacted"|"no_answer"|"brief_hangup"}`
  * （`relation_ids` 与 `contact_ids` **至少一组非空**；**不更新 `last_event_at`**）。
  *
- * ⚠ 本批**只接 `relation_ids`**：`contact_ids`（"待关联公司"阶段只绑联系人的标记，→ 需求 §6.1 模型 B）
- *   要先判「这条联系人归不归我写」，而 B 域目前**没有联系人写权限出口**、规格也没给判定口径 ——
- *   收了只能不校验（＝假契约）。故给了 `contact_ids` 一律 **400**，缺口登记（→《欠账登记表》D-23）。
+ * ★ 两组对象**判定不同**（2026-09-16 起两组都开放，→ 需求 §6.1 ⑦⑨）：
+ *   · `relation_ids` → 判**关系可写**（C 域出口：越权 / 只读角色 → 403）；
+ *   · `contact_ids`  → 判**归属人是不是我** —— 「待关联」线索属私人待跟进，只有**当前归属人**能标（别人 → 403）。
  */
 export class QuickMarkDto {
   @ApiPropertyOptional({
@@ -281,8 +281,8 @@ export class QuickMarkDto {
 
   @ApiPropertyOptional({
     description:
-      '待关联联系人的 id 列表（十进制字符串）。⚠ **本批未开放**：联系人写权限口径未定，' +
-      '给了会返回 **400**（→《欠账登记表》D-23）',
+      '「待关联」（未挂公司）联系人的 id 列表（十进制字符串）。' +
+      '**只有该联系人的当前归属人才能标记**（别人 → **403**）—— 归属＝建档人、可改（→ 需求 §6.1 ⑦⑨）',
     example: ['7'],
   })
   @IsOptional()

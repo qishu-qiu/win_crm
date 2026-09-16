@@ -179,6 +179,24 @@ export class CompanyRepository {
     });
   }
 
+  /**
+   * 联系人的**归属人**（→ 需求 §6.1 ⑦；列 `owner_id` 由 migration `0007` 加）。
+   *
+   * ★ 用途：**快速标记的联系人侧**要判「这条"待关联"线索归不归我标」——`contact` 是 B 域的表，
+   *   D 域不许自己查（架构 §5.2 路之①），故由本域给一个只够判定的窄出口。
+   * ⚠ 与 `findContactRefsByIds` 同口径：只回**未删除、未合并**的行；
+   *   **查不到的 id 由调用方当「联系人不存在」处理**（400），别静默跳过——静默跳过＝"标了 9 条"却少一条。
+   */
+  async findContactOwnersByIds(
+    ids: readonly bigint[],
+  ): Promise<{ id: bigint; owner_id: bigint | null }[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.contact.findMany({
+      where: { id: { in: [...new Set(ids)] }, deleted_at: null, merged_into: null },
+      select: { id: true, owner_id: true },
+    });
+  }
+
   // ===== M2-03 查重（公司）=====
 
   /**

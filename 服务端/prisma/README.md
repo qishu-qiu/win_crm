@@ -1,7 +1,7 @@
 # 服务端 / Prisma —— 落库口径唯一落点
 
 > **定位**：本目录承载「**数据落库口径**」——Prisma 版本硬口径 / 必须手写 migration 的部分 / 真库结构约束 / 上线前必做。
-> **真相源**：《需求规格/销售CRM数据架构文档》**V1.35**（§三~§九 表、§十 索引、§十五 落库口径）。本文只记「Prisma 与 MySQL 层面的落法」，不重复业务规则。
+> **真相源**：《需求规格/销售CRM数据架构文档》**V1.36**（§三~§九 表、§十 索引、§十五 落库口径）。本文只记「Prisma 与 MySQL 层面的落法」，不重复业务规则。
 > **读者**：改 `schema.prisma` / 写 migration / 首次部署前**必读**。所有 prisma 命令**一律在 `服务端/` 内执行**。
 > 版本沿革查 git。
 
@@ -9,7 +9,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| `prisma/schema.prisma` | **46 张业务表**，与数据架构 V1.35 一致 |
+| `prisma/schema.prisma` | **46 张业务表**，与数据架构 V1.36 一致 |
 | `prisma/migrations/0001_init/` | baseline（46 表 / 索引 / 外键）＋ 结尾**「手工补充段」**（生成列 / 3 张分区表 / 视图 / CHECK / 46 表中文 COMMENT）。**已 `migrate resolve --applied` 登记为基线** |
 | `prisma/migrations/0002_company_capital_legal_person/` | 增量（详见 §四.2） |
 | `prisma/migrations/0003_username_and_phone_lock/` | 增量（详见 §四.3） |
@@ -58,7 +58,7 @@ npx prisma format   --schema prisma/schema.prisma
 
 ## 三、schema.prisma
 
-- **46 张表**，真相源＝数据架构文档 **V1.35**。
+- **46 张表**，真相源＝数据架构文档 **V1.36**。
 - **教训一（P1012 · 关系未双向声明）**：`SignChecklist.product_line` 曾缺 `ProductLine` 侧对向字段 → 已在 `ProductLine` 补 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**。**规律：Prisma 关系字段是双向的 —— 加表 / 加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败。**
 - **教训二（P1012 · v7 移除 `datasource.url`）**：见 §二。**规律：主版本升级先跑只读的 `migrate status` 验证迁移历史兼容，再动 schema。**
 
@@ -158,7 +158,7 @@ npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script >
 
 | # | 场景 | 做法 |
 | --- | --- | --- |
-| 1 | **生成列**：`business_relation.active_key` / `relation_member.owner_flag` / `contact.phone_active` | schema 中已声明为 `@ignore` 字段（Client 不暴露）。**⚠ 实测：Prisma 仍会把它们建成「普通可空列」** → migration 里需 **`DROP COLUMN` 后重建为 `GENERATED ALWAYS AS (...) STORED` ＋ 建唯一索引**（`uk_active_rel` / `uk_owner` / `uk_phone_active`）。**唯一性由 DB 兜底，冲突靠 P2002 识别** |
+| 1 | **生成列**：`business_relation.active_key` / `relation_member.owner_flag` / `contact.phone_active` | schema 中已声明为 `@ignore` 字段（Client 不暴露）。**⚠ 实测：Prisma 仍会把它们建成「普通可空列」** → migration 里需 **`DROP COLUMN` 后重建为 `GENERATED ALWAYS AS (...) STORED` ＋ 建唯一索引**（`uk_active_rel` / `uk_owner` / `uk_phone_active`）。**唯一性由 DB 兜底，冲突靠 P2002 识别**。★ `owner_flag` **自 migration `0008`（2026-09-16）起为「只有在位者占位」**：表达式含 `AND revoked_at IS NULL` —— 撤销即释放位子（否则掉海重新领取 / 转交时落不下新 owner，→ 数据架构 §10.2-1 /《欠账登记表》D-26） |
 | 2 | **分区表**（**恰 3 张**）：`stat_daily` / `operation_log` / `job_run_log` | schema 保持普通表定义（会报 drift 警告，可接受）；migration 手写 `ALTER TABLE ... PARTITION BY RANGE`（按 `biz_date` / `occurred_at` / `run_at` 月分区）。🚫 `action_event` / `daily_agenda` 已因「保外键」**放弃分区**（ERROR 1506） |
 | 3 | **CHECK 约束** | 如 `approval` 申请人 ≠ 审批人（DB CHECK ＋ 应用双拦）。**⚠ 需 MySQL 8.0.16+**，8.0.12 静默忽略 |
 | 4 | **视图** | `v_contract_performance` ＝ `contract × contract_split`（无 split 则 `signer_id` 占 100%）——**业绩统计一律读此视图**，避免口径漂移。**⚠ 视图不能带 `COMMENT`** |

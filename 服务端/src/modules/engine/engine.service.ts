@@ -322,56 +322,83 @@ export class EngineService {
   async quickMark(dto: QuickMarkDto): Promise<QuickMarkResultVo> {
     const viewer = requireViewer();
 
-    // ① 参数：至少一组 id 非空（→ §5.7）；`contact_ids` 本批未开放（→ DTO 注释 /《欠账登记表》D-23）
-    if ((dto.contact_ids ?? []).length > 0) {
+    // ① 参数：**两组至少给一组**（→ §5.7）
+    const rawRelationIds = dto.relation_ids ?? [];
+    const rawContactIds = dto.contact_ids ?? [];
+    if (rawRelationIds.length === 0 && rawContactIds.length === 0) {
       throw new AppError(
         ErrorCode.PARAM_INVALID,
         400,
-        '参数错误：本批暂不支持标记「待关联公司」的联系人，请用 relation_ids',
-        { constraint: 'quick_mark.contact_unsupported' },
+        '参数错误：relation_ids 与 contact_ids 至少给一组',
+        { constraint: 'quick_mark.empty' },
       );
     }
-    const rawIds = dto.relation_ids ?? [];
-    if (rawIds.length === 0) {
-      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：relation_ids 不能为空', {
-        constraint: 'quick_mark.empty',
-      });
-    }
 
-    // ② 去重：同一个关系勾两次＝**一条**记录（否则一次点击落两条，统计翻倍）
-    const relationIds = [...new Set(rawIds.map((id) => jsonToBigint(id, 'relation_ids')))];
+    // ② 去重：同一个对象勾两次＝**一条**记录（否则一次点击落两条，统计翻倍）
+    const relationIds = [...new Set(rawRelationIds.map((id) => jsonToBigint(id, 'relation_ids')))];
+    const contactIds = [...new Set(rawContactIds.map((id) => jsonToBigint(id, 'contact_ids')))];
+
     // ③ **先全判完可写，再落库**：免得「标了一半才报 403」留下半批脏数据
+    //    ③-1 关系侧 → C 域出口（越权 / 只读角色 → 403）
     const relations: { id: bigint; ownerId: bigint | null }[] = [];
     for (const id of relationIds) {
       relations.push(await this.relation.requireWritableRelation(id.toString()));
     }
+    //    ③-2 「待关联」联系人侧 → **只有当前归属人能标**（→ 需求 §6.1 ⑦⑨「谁建的归谁」）。
+    //         ★ 以**当前** `owner_id` 为准，不是最初的建档人：归属**可改**（经理分派 / 离职交接，
+    //           只留痕不走审批，→ 需求 §6.1 ⑨），改完就该由新归属人负责标。
+    if (contactIds.length > 0) {
+      const owners = await this.company.getContactOwners(contactIds);
+      if (owners.length !== contactIds.length) {
+        throw new AppError(
+          ErrorCode.PARAM_INVALID,
+          400,
+          '参数错误：contact_ids 里有不存在（或已合并 / 已删除）的联系人',
+          { constraint: 'quick_mark.contact_missing' },
+        );
+      }
+      if (owners.some((row) => row.owner_id !== viewer.employeeId)) {
+        throw new AppError(ErrorCode.FORBIDDEN, 403, '只能标记自己的待跟进线索', {
+          constraint: 'quick_mark.not_mine',
+        });
+      }
+    }
 
     const eventAt = new Date();
+    /** 两类对象共用的落库字段（**不含** `relation_id` / `contact_id` / `owner_snapshot`） */
+    const base = {
+      actor_id: viewer.employeeId,
+      action_type: QUICK_MARK_ACTION_TYPE,
+      summary: null,
+      outcome: dto.outcome,
+      competition: null,
+      competitor_id: null,
+      competition_note: null,
+      duration_min: null,
+      source: 'manual',
+      visit_log_id: null,
+      appointment_id: null,
+      // ★ 不写幂等键（见方法头 ★③）
+      idempotency_key: null,
+      event_at: eventAt,
+    };
     let marked = 0;
     await this.prisma
       .$transaction(async (tx) => {
         const client: EngineTxClient = tx;
+        // 关系侧：挂关系（`owner_snapshot` ＝ 该关系当前 owner）
         for (const relation of relations) {
           await this.repository.createEvent(
-            {
-              relation_id: relation.id,
-              contact_id: null,
-              actor_id: viewer.employeeId,
-              owner_snapshot: relation.ownerId,
-              action_type: QUICK_MARK_ACTION_TYPE,
-              summary: null,
-              outcome: dto.outcome,
-              competition: null,
-              competitor_id: null,
-              competition_note: null,
-              duration_min: null,
-              source: 'manual',
-              visit_log_id: null,
-              appointment_id: null,
-              // ★ 不写幂等键（见方法头 ★③）
-              idempotency_key: null,
-              event_at: eventAt,
-            },
+            { ...base, relation_id: relation.id, contact_id: null, owner_snapshot: relation.ownerId },
+            client,
+          );
+          marked += 1;
+        }
+        // 联系人侧：**只绑联系人**（`relation_id` 空 —— 「待关联」阶段的正当形态，→ 数据架构 D2）；
+        //   此时没有关系，`owner_snapshot` 无从取，留 `null`
+        for (const contactId of contactIds) {
+          await this.repository.createEvent(
+            { ...base, relation_id: null, contact_id: contactId, owner_snapshot: null },
             client,
           );
           marked += 1;

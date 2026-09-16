@@ -108,6 +108,11 @@ function relationFixture(overrides: Partial<RelationFixture> = {}): RelationFixt
   };
 }
 
+/** 分页仓储的返回形状（M6-07 起列表方法返回 `{ rows, total }`，→ `relation.repository.ts`） */
+function pageOf(rows: RelationFixture[]): { rows: RelationFixture[]; total: number } {
+  return { rows, total: rows.length };
+}
+
 interface FakeOptions {
   /** 预检命中的活跃关系（`null` ＝ 没撞） */
   active?: RelationFixture | null;
@@ -145,11 +150,13 @@ function createService(options: FakeOptions = {}) {
     ),
     findMember: jest.fn(async () => options.member ?? null),
     findCompetitorById: jest.fn(async () => options.competitor ?? null),
-    listPrivateRelationsOfEmployee: jest.fn(async () => options.rows ?? []),
-    listPrivateRelationsOfDepts: jest.fn(async () => options.rows ?? []),
-    listPrivateRelations: jest.fn(async () => options.rows ?? []),
-    listSeaRelationsOfDepts: jest.fn(async () => options.rows ?? []),
-    listSeaRelations: jest.fn(async () => options.rows ?? []),
+    // ⚠ 假件必须**照真实形状**给 `{ rows, total }`：给裸数组时 service 解构出 `undefined`，
+    //   用例会假红（→ 铁律坑 16「假红先修假件，再怀疑被测代码」）
+    listPrivateRelationsOfEmployee: jest.fn(async () => pageOf(options.rows ?? [])),
+    listPrivateRelationsOfDepts: jest.fn(async () => pageOf(options.rows ?? [])),
+    listPrivateRelations: jest.fn(async () => pageOf(options.rows ?? [])),
+    listSeaRelationsOfDepts: jest.fn(async () => pageOf(options.rows ?? [])),
+    listSeaRelations: jest.fn(async () => pageOf(options.rows ?? [])),
     updateRelation: jest.fn(async () => options.row ?? relationFixture()),
   };
   const org = {
@@ -336,17 +343,17 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
     });
   });
 
-  describe('listRelations：私海 / 公海（范围收敛）', () => {
+  describe('listRelations：私海 / 公海（范围收敛 ＋ 分页）', () => {
     it('私海 · 销售 → 走「我参与」那条查询，**不调**其它范围方法', async () => {
       const { service, repository } = createService({ rows: [relationFixture()] });
 
-      const rows = await runWithContext(contextOf(), () => service.listRelations('private'));
+      const page = await runWithContext(contextOf(), () => service.listRelations('private'));
 
       expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledTimes(1);
       expect(repository.listPrivateRelationsOfDepts).not.toHaveBeenCalled();
       expect(repository.listPrivateRelations).not.toHaveBeenCalled();
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.owner).toEqual(ME_REF);
+      expect(page.list).toHaveLength(1);
+      expect(page.list[0]?.owner).toEqual(ME_REF);
     });
 
     it('私海 · 经理 → 只查**管辖部门**', async () => {
@@ -357,7 +364,10 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         () => service.listRelations('private'),
       );
 
-      expect(repository.listPrivateRelationsOfDepts).toHaveBeenCalledWith([MANAGED_DEPT_ID], 100);
+      expect(repository.listPrivateRelationsOfDepts).toHaveBeenCalledWith(
+        [MANAGED_DEPT_ID],
+        expect.objectContaining({ page: 1, pageSize: 20, skip: 0, take: 20 }),
+      );
       expect(repository.listPrivateRelations).not.toHaveBeenCalled();
     });
 
@@ -380,7 +390,7 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
 
       expect(repository.listSeaRelationsOfDepts).toHaveBeenCalledWith(
         [DEPT_ID, MANAGED_DEPT_ID],
-        100,
+        expect.objectContaining({ page: 1, pageSize: 20 }),
       );
       expect(repository.listSeaRelations).not.toHaveBeenCalled();
     });
@@ -405,9 +415,54 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         rows: [relationFixture({ company_id: 999n })],
       });
 
-      const rows = await runWithContext(contextOf(), () => service.listRelations('private'));
+      const page = await runWithContext(contextOf(), () => service.listRelations('private'));
 
-      expect(rows[0]?.company).toBeNull();
+      expect(page.list[0]?.company).toBeNull();
+    });
+
+    // ===== M6-07 判据：分页形态 ＋ 入参透传（→ 接口 §2.3 / §2.7）=====
+
+    it('分页：`page/pageSize` 原样落到仓储的 `skip/take`（第 2 页、每页 1 条 → skip 1）', async () => {
+      const { service, repository } = createService({
+        rows: [relationFixture(), relationFixture({ id: 12n })],
+      });
+
+      const page = await runWithContext(contextOf(), () =>
+        service.listRelations('private', { page: 2, pageSize: 1 }),
+      );
+
+      expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
+        ME,
+        expect.any(Date),
+        expect.objectContaining({ page: 2, pageSize: 1, skip: 1, take: 1 }),
+      );
+      // ⚠ `total` **不来自本页行数**：它是仓储给的**全量**计数（桩件＝2 行 → total 2，
+      //   而本页只回 1 行才是真实分页的样子；此处桩件不受 take 约束，故只钉字段与取值口径）
+      expect(page).toEqual({ list: expect.any(Array), total: 2, page: 2, page_size: 1 });
+    });
+
+    it('分页：不传即默认第 1 页、每页 20（→ §2.7「默认 1 / 默认 20」）', async () => {
+      const { service } = createService({ rows: [relationFixture()] });
+
+      const page = await runWithContext(contextOf(), () => service.listRelations('private'));
+
+      expect(page.page).toBe(1);
+      expect(page.page_size).toBe(20);
+      expect(page.total).toBe(1);
+    });
+
+    it('分页：`pageSize` 超上限 → **夹紧到 100 而不报错**（归一化只在 kernel 一处，→ §2.7）', async () => {
+      const { service, repository } = createService({ rows: [] });
+
+      await runWithContext(contextOf(), () =>
+        service.listRelations('private', { page: 1, pageSize: 999 }),
+      );
+
+      expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
+        ME,
+        expect.any(Date),
+        expect.objectContaining({ pageSize: 100, take: 100 }),
+      );
     });
   });
 

@@ -1,10 +1,10 @@
-# 销售 CRM 接口 API 文档 V1.19
+# 销售 CRM 接口 API 文档 V1.20
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据。
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
 > 配套真相源：《销售CRM业务需求文档》**V1.29**、《销售CRM数据架构文档》**V1.34**、《销售CRM设计规范》V1.0、《销售CRM前端页面与交互文档》**V1.16**（均 需求规格/）。
 > **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22），沿革查 `git log --follow -- 需求规格/销售CRM接口API文档.md`。
-> 生效日期：2026-09-16 ｜ 状态：**V1.19**（**§2.6 码表落点收口**：枚举码值**不再在本文件列举**，一律指向《数据架构文档》§十三 `dict_item` ／ §三~§九 字段口径 —— 消掉「同一串码值有两个落点」这个**5 次翻车的病根**（→《废止口径登记表》#36 / #37）；阶段 `stage` 数字 `1`~`7` 的**例外提示保留**，仍禁止自造英文码。沿用：承诺三态（`done` / `cancelled` / `waived`）、成功响应一律 200、`20407`＝跨部门 @求助、联系方式默认全可见 ＋ 联系人可上锁、登录＝手机号 / 账号名双通道 · 紧随需求 V1.29 / 数据架构 V1.34 / 前端 V1.16）。
+> 生效日期：2026-09-16 ｜ 状态：**V1.20**（**业务关系列表分页落地**：`GET /relations` 出参由**裸数组**改为 §2.3 分页形态 **`{list,total,page,page_size}`**，入参增 `page`（默认 1）/ `page_size`（默认 20、最大 100）—— 这是**落实既有通用约定**（§2.3 / §2.7），**未新增任何分页规则**；同批 `服务端` C 域接入 kernel 分页公共件（`resolvePagination` / `buildPageResult`）、前端列表页接分页器。**沿用 V1.19**：**§2.6 码表落点收口**（枚举码值**不再在本文件列举**，一律指向《数据架构文档》§十三 `dict_item` ／ §三~§九 字段口径 —— 消掉「同一串码值有两个落点」这个**5 次翻车的病根**（→《废止口径登记表》#36 / #37）；阶段 `stage` 数字 `1`~`7` 的**例外提示保留**，仍禁止自造英文码）／承诺三态（`done` / `cancelled` / `waived`）、成功响应一律 200、`20407`＝跨部门 @求助、联系方式默认全可见 ＋ 联系人可上锁、登录＝手机号 / 账号名双通道 · 紧随需求 V1.29 / 数据架构 V1.34 / 前端 V1.16）。
 > ⚠ **代码注释不绑文档版本号（2026-09-16 定）**：代码里引用规格一律写「《文档名》§X」，**不写 `V1.xx`** —— 绑版本号必漂移（实测 `V1.16` / `V1.27` / `V1.3` / `V1.32` 全成旧值：这正是坑 #1 / #6 的复现路径）。本版同批把 `服务端/src` ＋ `前端/src` 里的历史版本指针**全部去除**（逐文件**字面**替换，禁批量正则 → 铁律坑 19）。
 
 ---
@@ -159,7 +159,7 @@
 
 ### 4.4 业务关系 relation（[核心]）
 - `POST /relations`（激活）：`{company_id, dept_id, product_line_id}` → 唯一约束 **`uk_active_rel(active_key)`**（生成列 ＝ 三元组 ＋ `sea_status='private'` ＋ `merged_into IS NULL`，`→数据架构§10.1` / `§十五.5`）撞则 **409 / 20401**（引导转交/协同）。
-- `GET /relations`：列表出参含 `stage`（彩色点）、`urgency`、`value_tier`、逾期标红、`drop_in_x_days`（24h 掉公海⚠）、竞争徽标、跨线 `amount_masked`。
+- `GET /relations`：**列表类一律分页**（→ §2.3 / §2.7）—— 入参 `tab` ＋ `page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ **`{list,total,page,page_size}`**（**不是裸数组**；排序恒 `id desc`）。`list` 项含 `stage`（彩色点）、`urgency`、`value_tier`、逾期标红、`drop_in_x_days`（24h 掉公海⚠）、竞争徽标、跨线 `amount_masked`。
 - `GET /relations/:id/events`：默认 `range=1m`（近1月）；出参按 `created_by == 当前人` 分 `main` / `branch`（树杈），带 `createdByName` + `contactName`（`→需求§7.5` `→设计规范§八`）。
 - `POST /relations/:id/transfer`：跨部门转交 = **双方上级双签**；上级缺失上溯经理/总经理（`→需求§7.9` `→架构G1`）。
 
@@ -362,6 +362,7 @@
 - 建号/改号命中历史号 → 出参 `phone_history_hint:"曾属于 XX"`（**提示不拦截**）
 
 ### 5.6 业务关系 relation（核心）
+- **列表出参** ＝ §2.3 分页形态 **`{list,total,page,page_size}`**（**列表类一律分页**，→ §2.7；`total` 数的是**结果集**、不是本页行数）；`list` 每项结构见下。
 - **列表项** `{id,company:{id,name},dept:{id,name},product_line:{id,name,color_key},stage:1-7,urgency,value_tier,customer_level,owner:{id,name},last_event_at,drop_in_x_days,overdue,competition,amount|amount_masked,old_customer,is_weekly}`
 - **详情** ＝ 列表项 ＋ `{next_action_hint,sea_status,round_no（当前轮次号＝已掉海次数+1，派生不落表）,prev_round?:{round_no,owner:{id,name},dead_or_churn?:reason,dropped_at,claimed_at?,event_count},competitors:[{id,name,positioning}],labels:{risk:[{label_id,label_code,label}],other:[]},members:[{employee:{id,name},member_type:"owner"|"collaborator",source,valid_until?}],stage_logs:[{from_stage,to_stage,action,reason?,operator:{id,name},created_at}],try_count_30d}`
 - `POST /relations`（激活）req `{company_id,dept_id,product_line_id}`（撞 `uk_active_rel` → **409/20401**）

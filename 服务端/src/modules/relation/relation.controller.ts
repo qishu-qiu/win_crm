@@ -14,12 +14,12 @@
 //   · 同 §2.3：**成功响应 HTTP 状态码一律 200**（2026-09-15 定）⇒ 两个 POST 显式 `@HttpCode(200)`；
 //     §2.4：400 / 401 / 403 / 409 / 422 由横切层统一出口，**controller 不自己拼错误响应**。
 //   · 同 §2.5：非幂等写操作应带 `Idempotency-Key`；该横切能力**尚未实现**（M2 起同一现状），
-//     已记入交接说明 §五 —— 本批按现状不额外要求请求头，免得写了不校验（假契约）。
+//     已记入《欠账登记表》D-06 —— 本批按现状不额外要求请求头，免得写了不校验（假契约）。
 // =============================================================================
 import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
-import { Audit } from '../../kernel/index';
+import { Audit, type PageResult } from '../../kernel/index';
 import type { RelationListTab } from './domain/relation-scope';
 import {
   AddRelationMemberDto,
@@ -30,6 +30,7 @@ import {
 import {
   RelationDetailVoDto,
   RelationMemberVoDto,
+  RelationPageVoDto,
   RelationVoDto,
 } from './dto/relation-response.dto';
 import {
@@ -55,12 +56,18 @@ export class RelationController {
       '`tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。' +
       '**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；' +
       '经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。' +
+      '**M6-07 起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝' +
+      ' §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；' +
+      '排序恒 `id desc`（`order_by` / `keyword` 等筛选属后续）。' +
       '⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly`' +
-      ' 属其它域（M4/M7/E），本批**不返回**（不填假值）；分页属 M6',
+      ' 属其它域（M4/M7/E），本批**不返回**（不填假值）',
   })
-  @ApiOkResponse({ type: [RelationVoDto] })
-  listRelations(@Query() query: ListRelationQueryDto): Promise<RelationVo[]> {
-    return this.relation.listRelations(query.tab === 'sea' ? 'sea' : ('private' as RelationListTab));
+  @ApiOkResponse({ type: RelationPageVoDto })
+  listRelations(@Query() query: ListRelationQueryDto): Promise<PageResult<RelationVo>> {
+    return this.relation.listRelations(query.tab === 'sea' ? 'sea' : ('private' as RelationListTab), {
+      page: query.page,
+      pageSize: query.page_size,
+    });
   }
 
   @Audit(RELATION_AUDIT_ACTIONS.activate, 'business_relation')

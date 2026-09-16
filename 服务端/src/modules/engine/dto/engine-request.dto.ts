@@ -209,7 +209,7 @@ export class CreateCommitmentDto {
  * `PUT /relations/:id/commitments`（改承诺）。
  * ⚠ 规格只给了「`G/P/U /relations/:id/commitments`」这一行（→ 接口 §三 总览 / §5.7），
  *   **没给 U 的入参形状** —— 本批按「`id` 指认目标承诺 ＋ 要改的字段」实现，
- *   冲突 / 欠账已登记（→ 交接说明 §五）。
+ *   冲突 / 缺口已登记（→《欠账登记表》D-16）。
  */
 export class UpdateCommitmentDto {
   @ApiProperty({ description: '要改哪条承诺（十进制字符串）', example: '9' })

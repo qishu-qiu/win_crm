@@ -100,7 +100,7 @@ export function resolveRelationListScope(
  *   ⇒ 可写集合 ＝ `sale` / `dept_manager` / `gm`。
  *   ★ 「管理员 ＋ 销售」这种叠加仍**可写**（走销售那份权利）—— 与 `resolveDataScope`
  *     「多角色取更宽」同一条思路，**不是**「有一个只读角色就全禁」。
- *   → 已登记待确认（交接说明 §五）。
+ *   → 已登记待确认（《欠账登记表》D-17）。
  */
 export function isRelationWriteRole(roleCodes: readonly string[]): boolean {
   // ★ 判定**已上移 kernel**（`kernel/data-scope/write-role.ts`，2026-09-15）：B 域建档也要同一口径，

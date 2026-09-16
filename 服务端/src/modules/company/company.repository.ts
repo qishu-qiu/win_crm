@@ -270,7 +270,7 @@ export class CompanyRepository {
     });
   }
 
-  /** 联系人列表（M2 最小列表；同上，分页属 M6） */
+  /** 联系人列表（M2 最小列表；同上，分页待补，→《欠账登记表》D-08） */
   listContacts(limit = 100) {
     return this.prisma.contact.findMany({
       where: { deleted_at: null, merged_into: null },

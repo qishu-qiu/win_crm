@@ -15,7 +15,8 @@
 //   将来加值只改 domain（漏改 DTO 会立刻编译不过）。
 // =============================================================================
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Length } from 'class-validator';
 
 import {
   COMPETITION_VALUES,
@@ -53,7 +54,15 @@ export class CreateRelationDto {
   product_line_id!: string;
 }
 
-/** `GET /relations` 查询参数（⚠ 规格未定义筛选参数，本批只给页签；分页属 M6） */
+/**
+ * `GET /relations` 查询参数。
+ * ⚠ 规格**未定义本接口的筛选参数**（前端文档 §5 的 seg 视图 / 紧迫档 chip 是**展示层诉求**，
+ *   接口侧尚无对应 query）—— 故本批只给「页签 ＋ 通用分页」两项，**不自造筛选参数**
+ *   （自造＝替上游拍板；缺的筛选能力已登记为欠账，→ 交接说明 §三）。
+ * ★ 分页两项**只校验「是不是整数」**（类型层，§2.4「类型错 → 400」）；
+ *   默认值 1 / 20 与上限 100 的**归一化归 kernel 一处**（→ §2.7）—— 这里不写 `@Min` / `@Max`，
+ *   否则同一套夹紧规则会变成两份（`page=0` 该报错还是该回第 1 页，两处说法就分叉了）。
+ */
 export class ListRelationQueryDto {
   @ApiPropertyOptional({
     enum: RELATION_TABS,
@@ -63,6 +72,18 @@ export class ListRelationQueryDto {
   @IsOptional()
   @IsIn([...RELATION_TABS], { message: 'tab 只能是 private 或 sea' })
   tab?: string;
+
+  @ApiPropertyOptional({ description: '页码（默认 1；`< 1` 回第 1 页）', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page 必须是整数' })
+  page?: number;
+
+  @ApiPropertyOptional({ description: '每页条数（默认 20；超 100 按 100 计）', example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page_size 必须是整数' })
+  page_size?: number;
 }
 
 /** `PUT /relations/:id`（改属性） */

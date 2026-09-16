@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, type TablePaginationConfig } from 'ant-design-vue'
 
 import {
   createCommitment,
@@ -12,7 +12,12 @@ import {
   type Commitment,
   type RecordEventInput,
 } from '../api/engine'
-import { listRelations, type RelationTab, type RelationVo } from '../api/relation'
+import {
+  RELATION_PAGE_SIZE_DEFAULT,
+  listRelations,
+  type RelationTab,
+  type RelationVo,
+} from '../api/relation'
 import {
   ACTION_TYPE_OPTIONS,
   COMMITMENT_CTYPE_OPTIONS,
@@ -53,11 +58,35 @@ import {
  * ★ 时间线抽屉**不自己写业务规则**：有效沟通要不要写「一句话结果」、快速标记算不算有效跟进、
  *   同内容重复提交算不算重复 —— 全部由服务端判（页面只把服务端的人话 show 出来）。
  *   前端再判一遍＝第二套规则，迟早与后端分叉（本项目点名的坑）。
+ *
+ * ★ **M6-07 分页**（→ 接口 §2.3 分页形态 / §2.7；设计规范 §4.3「列表类一律分页、不用无限滚动」）：
+ *   页码 / 每页条数交给**表格自带分页器**（表格右下、「共 N 条」＋ 20/50/100 ＋ 快速跳页）；
+ *   翻页即**重新取数**（服务端分页）。
+ *   ⚠ **不许把全量拉回来在前端切片**：那是假分页 —— 数据一多就白拉全表，且「共 N 条」
+ *     会退化成「本页 N 条」（`list.length` 不是总数，`total` 只有服务端知道）。
  */
 const tab = ref<RelationTab>('private')
 const rows = ref<RelationVo[]>([])
 const loading = ref(false)
 const errorText = ref('')
+
+/** 页码（从 1 起）/ 每页条数 / 总条数：三者**都以后端出参为准**，页面不自己算 */
+const page = ref(1)
+const pageSize = ref(RELATION_PAGE_SIZE_DEFAULT)
+const total = ref(0)
+
+/** 每页条数可选值：逐字取设计规范 §4.3「20 / 50 / 100」（AntD 的 `pageSizeOptions` 收字符串） */
+const PAGE_SIZE_OPTIONS = ['20', '50', '100']
+
+const paginationConfig = computed(() => ({
+  current: page.value,
+  pageSize: pageSize.value,
+  total: total.value,
+  showSizeChanger: true,
+  pageSizeOptions: PAGE_SIZE_OPTIONS,
+  showQuickJumper: true,
+  showTotal: (count: number) => `共 ${count} 条`,
+}))
 
 const tabLabel = computed(() => (tab.value === 'private' ? '私海' : '公海'))
 
@@ -77,17 +106,30 @@ async function load(): Promise<void> {
   errorText.value = ''
   loading.value = true
   try {
-    rows.value = await listRelations(tab.value)
+    const result = await listRelations(tab.value, page.value, pageSize.value)
+    rows.value = result.list
+    total.value = result.total
   } catch (error) {
     // 403（交付 / 客服不进公海）与网络错误都走这里：**内联**说清，列表清空（不显示上次的残留）
     rows.value = []
+    total.value = 0
     errorText.value = error instanceof Error ? error.message : '加载失败，请稍后重试'
   } finally {
     loading.value = false
   }
 }
 
+/** 分页器交互（翻页 / 改每页条数）→ 重新取数 */
+function onPageChange(pager: TablePaginationConfig): void {
+  page.value = pager.current ?? 1
+  pageSize.value = pager.pageSize ?? RELATION_PAGE_SIZE_DEFAULT
+  void load()
+}
+
 watch(tab, () => {
+  // ★ 换页签＝换一份结果集，页码必须回第 1 页：停在第 3 页切过去时新页签可能只有 1 页，
+  //   用户看到空表会以为「没数据」（实际只是页码越界）
+  page.value = 1
   void load()
 })
 
@@ -329,9 +371,10 @@ async function submitWaive(commitment: Commitment): Promise<void> {
       :columns="columns"
       :data-source="rows"
       :loading="loading"
-      :pagination="false"
+      :pagination="paginationConfig"
       row-key="id"
       size="middle"
+      @change="onPageChange"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'company'">

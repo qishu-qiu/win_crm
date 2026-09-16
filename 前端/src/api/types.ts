@@ -261,7 +261,7 @@ export interface paths {
         };
         /**
          * 业务关系列表
-         * @description `tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly` 属其它域（M4/M7/E），本批**不返回**（不填假值）；分页属 M6
+         * @description `tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。**M6-07 起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；排序恒 `id desc`（`order_by` / `keyword` 等筛选属后续）。⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly` 属其它域（M4/M7/E），本批**不返回**（不填假值）
          */
         get: operations["RelationController_listRelations"];
         put?: never;
@@ -865,6 +865,25 @@ export interface components {
             created_at: string;
             /** @description 最近更新时间（ISO） */
             updated_at: string;
+        };
+        RelationPageVoDto: {
+            /** @description 当前页数据 */
+            list: components["schemas"]["RelationVoDto"][];
+            /**
+             * @description 符合筛选条件的全量条数（前端「共 N 条」）
+             * @example 120
+             */
+            total: number;
+            /**
+             * @description 当前页码（从 1 开始）
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description 每页条数（默认 20，最大 100，→ §2.7）
+             * @example 20
+             */
+            page_size: number;
         };
         CreateRelationDto: {
             /**
@@ -1545,6 +1564,10 @@ export interface operations {
             query?: {
                 /** @description `private`＝私海（我参与 / 管辖部门 / 全部）；`sea`＝公海（＝无 owner 的关系） */
                 tab?: "private" | "sea";
+                /** @description 页码（默认 1；`< 1` 回第 1 页） */
+                page?: number;
+                /** @description 每页条数（默认 20；超 100 按 100 计） */
+                page_size?: number;
             };
             header?: never;
             path?: never;
@@ -1557,7 +1580,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RelationVoDto"][];
+                    "application/json": components["schemas"]["RelationPageVoDto"];
                 };
             };
         };

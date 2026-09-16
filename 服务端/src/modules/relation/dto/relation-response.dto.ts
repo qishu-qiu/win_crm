@@ -12,7 +12,7 @@
 //   · 同 §2.6：出参 **snake_case**；id 一律**十进制字符串**（`bigint` 由统一出参拦截器转）。
 //
 // ⚠ **M3 只给出本规模块真能算出来的字段**（设计规范 §3.2 第 11 条「禁假数据撑页面」的同类原则：
-//   不填假值、也不假装有字段）。未落地的字段与原因**逐条列出**，全部登记在交接说明 §五：
+//   不填假值、也不假装有字段）。未落地的字段与原因**逐条列出**，全部登记在《欠账登记表》（`过程产出/`）：
 //   · `drop_in_x_days` —— 掉海规则（L1-L4）属公海域，M7 才有；本批不猜
 //   · `overdue` —— 逾期＝承诺（D 域）判定，M4 才有
 //   · `amount` / `amount_masked` —— 合同（E 域）回款，未接
@@ -116,6 +116,27 @@ export class RelationVoDto {
 
   @ApiProperty({ description: '最近更新时间（ISO）' })
   updated_at!: string;
+}
+
+/**
+ * 关系列表**分页出参**（→ 接口 §2.3 统一响应包 · 分页形态 / §五 PageResult）。
+ * ★ 键名逐字固定为 `list / total / page / page_size`（§2.3 G2）—— 别改成 `pageSize`：
+ *   出参 snake_case 是 §2.6 的硬口径，改了整个前端拆包层都要跟着动。
+ * ★ 列表类**一律分页**（→ 设计规范 §4.3「不用无限滚动」）⇒ 从 M6-07 起 `GET /relations`
+ *   的 `data` 就是这个对象，**不再是裸数组**。
+ */
+export class RelationPageVoDto {
+  @ApiProperty({ type: [RelationVoDto], description: '当前页数据' })
+  list!: RelationVoDto[];
+
+  @ApiProperty({ description: '符合筛选条件的全量条数（前端「共 N 条」）', example: 120 })
+  total!: number;
+
+  @ApiProperty({ description: '当前页码（从 1 开始）', example: 1 })
+  page!: number;
+
+  @ApiProperty({ description: '每页条数（默认 20，最大 100，→ §2.7）', example: 20 })
+  page_size!: number;
 }
 
 /** 关系成员（→ §5.6 `members[]`） */

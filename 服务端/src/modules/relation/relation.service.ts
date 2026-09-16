@@ -8,7 +8,7 @@
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM接口API文档》§5.6（关系入参出参）、§2.2（数据范围四档）、§2.4（错误码）。
 //     ⚠ 计划行 M3-10 写的是 `PATCH /relations/:id`，而 §5.6 写的是 **`PUT`** ——
-//       按铁律 A（与规格冲突以规格为准）**实现 PUT**，冲突已记入本批报告与交接说明 §五。
+//       按铁律 A（与规格冲突以规格为准）**实现 PUT**，冲突当时已在批次报告写明，按规格落地（不再欠）。
 //   · 《销售CRM数据架构文档》C1 / C2（表与校验）、C7（竞品名册）。
 //   · 《销售CRM架构设计说明》§5.2 跨域三条路：
 //       ① 同步调对方 **exports 的 service** —— 本文件取公司 / 部门 / 产品线 / 员工引用走这条
@@ -37,10 +37,15 @@ import {
   //   类型导入会被编译期擦除 → 元数据退化成 `Function` → 启动即报「依赖解析失败」。
   EventBus,
   ErrorCode,
+  buildPageResult,
   createDomainEvent,
   getRequestContext,
   jsonToBigint,
   mapPrismaError,
+  resolvePagination,
+  type PageResult,
+  type Pagination,
+  type PaginationQuery,
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CompanyService } from '../company/company.service';
@@ -124,9 +129,6 @@ export const RELATION_AUDIT_ACTIONS = {
   /** 加关系成员（owner / 协同 / @求助）→ `POST /relations/:id/members` */
   addMember: 'relation.add_member',
 } as const;
-
-/** 列表上限（M3 最小列表；分页 / 筛选属 M6，→ 接口 §2.7） */
-const LIST_LIMIT = 100;
 
 /** @求助默认 7 天（→ C2：`dept_rule.ask_help_days` 可配；**配置化尚未排期**，本批取规格默认值） */
 const ASK_HELP_DEFAULT_DAYS = 7;
@@ -232,13 +234,18 @@ export class RelationService {
   // ===== M3-07 / M3-08 列表（私海 / 公海）=====
 
   /**
-   * 关系列表（→ §5.6 `GET /relations`）。
+   * 关系列表（→ §5.6 `GET /relations`；**M6-07 起带分页**）。
    *
    * ★ 档位判定走 kernel 唯一入口（→ `kernel/data-scope/data-scope-target.ts`，M5-02），
    *   C 域语义在 `domain/relation-scope.ts`；本层只做「按范围选一个仓储方法」—— **不拼 `where`**。
    * ★ 交付 / 客服看**公海** → **403**（§2.2「不进公海」）：返回空列表是**静默错误**。
+   * ★ 分页默认值与上限（1 / 20 / 100）的归一化**只在 kernel 一处**（→ §2.7）：本层不自己夹紧，
+   *   否则同一套夹紧规则会有两份（改了这里漏了那里就分叉）。
    */
-  async listRelations(tab: RelationListTab): Promise<RelationVo[]> {
+  async listRelations(
+    tab: RelationListTab,
+    query: PaginationQuery = {},
+  ): Promise<PageResult<RelationVo>> {
     const viewer = requireViewer();
     const scope = resolveRelationListScope(tab, viewer);
     if (scope.kind === 'denied') {
@@ -247,16 +254,25 @@ export class RelationService {
       });
     }
 
+    const pagination = resolvePagination(query);
     const now = new Date();
-    const rows =
+    const { rows, total } =
       scope.kind === 'all'
-        ? await this.listAll(tab)
+        ? await this.listAll(tab, pagination)
         : scope.kind === 'dept'
-          ? await this.listByDepts(tab, scope.deptIds)
-          : await this.repository.listPrivateRelationsOfEmployee(viewer.employeeId, now, LIST_LIMIT);
+          ? await this.listByDepts(tab, scope.deptIds, pagination)
+          : await this.repository.listPrivateRelationsOfEmployee(
+              viewer.employeeId,
+              now,
+              pagination,
+            );
 
     const refs = await this.loadRefs(rows);
-    return rows.map((row) => this.buildVo(row, refs));
+    return buildPageResult(
+      rows.map((row) => this.buildVo(row, refs)),
+      total,
+      pagination,
+    );
   }
 
   // ===== M3-10 详情 / 改属性 =====
@@ -282,7 +298,7 @@ export class RelationService {
    * 判据＝两条叠加：
    *   ① **看得见**（`checkRelationRead`）：owner ∪ **有效协同人** ∪ 部门档管辖 ∪ `all` 档；
    *   ② **可写角色**（`isRelationWriteRole`）：`sale` / `dept_manager` / `gm`
-   *      —— 管理员（`all` 档但只读）与交付 · 客服（`serving` 档）一律拒（→ §2.2 / 交接说明 §五 #14）。
+   *      —— 管理员（`all` 档但只读）与交付 · 客服（`serving` 档）一律拒（→ §2.2 /《欠账登记表》D-01）。
    *
    * ★ 为什么用**读**口径而不用 `checkRelationWrite`（那条只认 **owner**）：
    *   §10.2 原文「可见性继承业务关系权限（本人全文 / **协同可读写** / 他人私海不可见）」——
@@ -522,18 +538,18 @@ export class RelationService {
 
   // ===== 私有：取数 / 装配 =====
 
-  /** 私海 / 公海 × `all` 档 */
-  private listAll(tab: RelationListTab) {
+  /** 私海 / 公海 × `all` 档（分页） */
+  private listAll(tab: RelationListTab, pagination: Pagination) {
     return tab === 'private'
-      ? this.repository.listPrivateRelations(LIST_LIMIT)
-      : this.repository.listSeaRelations(LIST_LIMIT);
+      ? this.repository.listPrivateRelations(pagination)
+      : this.repository.listSeaRelations(pagination);
   }
 
-  /** 私海 / 公海 × `dept` 档（部门公海＝本部门的关系集合，→ C1） */
-  private listByDepts(tab: RelationListTab, deptIds: readonly bigint[]) {
+  /** 私海 / 公海 × `dept` 档（部门公海＝本部门的关系集合，→ C1；分页） */
+  private listByDepts(tab: RelationListTab, deptIds: readonly bigint[], pagination: Pagination) {
     return tab === 'private'
-      ? this.repository.listPrivateRelationsOfDepts(deptIds, LIST_LIMIT)
-      : this.repository.listSeaRelationsOfDepts(deptIds, LIST_LIMIT);
+      ? this.repository.listPrivateRelationsOfDepts(deptIds, pagination)
+      : this.repository.listSeaRelationsOfDepts(deptIds, pagination);
   }
 
   /** 解析 url 上的关系 id → 取行；不存在给 **400 参数错误**（与 B 域同款，→ §2.4） */

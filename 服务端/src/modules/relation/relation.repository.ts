@@ -22,6 +22,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { Prisma } from '../../generated/prisma/client';
+import { type Pagination } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   COMPANY_SEA_STATUS,
@@ -199,6 +200,84 @@ export class RelationRepository {
   }
 
   // ===== M3-07 私海列表（三种范围，方法名即范围）=====
+  //
+  // ★ **M6-07 起带分页**（→ 接口 §2.7）：五个列表方法都收 `Pagination`、都返回 `{ rows, total }`。
+  //   · `total` ＝ 同一个 `where` 的**全量条数**（前端「共 N 条」，→ 设计规范 §4.3）——
+  //     故筛选条件抽成私有 `*Where()`，**findMany 与 count 共用一份**；两处各写一遍
+  //     ＝「改一处漏一处」（本项目一号坑）。
+  //   · 取页与计数包在**本域只读事务**里（§5.2 ③ 只禁跨域大事务）：否则 `total` 与 `rows`
+  //     可能来自两个瞬间，并发新建时会出现「共 21 条」却翻不到第 2 页的自相矛盾数字。
+  //   · 排序恒 `id desc`（新建的在前）：§2.7 的 `order_by` / `desc` 属后续（→ 交接说明 §三 欠账）。
+
+  /** 私海 · **我参与**（`self` 档：我 owner ∪ 我**有效**协同）的筛选条件 */
+  private privateSeaWhereOfEmployee(
+    employeeId: bigint,
+    now: Date,
+  ): Prisma.BusinessRelationWhereInput {
+    return {
+      deleted_at: null,
+      merged_into: null,
+      sea_status: PRIVATE_SEA_STATUS,
+      members: {
+        some: {
+          employee_id: employeeId,
+          revoked_at: null,
+          OR: [
+            { member_type: OWNER_MEMBER_TYPE },
+            {
+              member_type: COLLABORATOR_MEMBER_TYPE,
+              OR: [{ valid_until: null }, { valid_until: { gt: now } }],
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  /** 私海 · **这些部门的**（`dept` 档：经理＝管辖部门）条件 */
+  private privateSeaWhereOfDepts(deptIds: readonly bigint[]): Prisma.BusinessRelationWhereInput {
+    return {
+      deleted_at: null,
+      merged_into: null,
+      sea_status: PRIVATE_SEA_STATUS,
+      dept_id: { in: [...deptIds] },
+    };
+  }
+
+  /** 私海 · **全部**（`all` 档：总经理 / 管理员；管理员只读在 service 层拦）条件 */
+  private privateSeaWhere(): Prisma.BusinessRelationWhereInput {
+    return { deleted_at: null, merged_into: null, sea_status: PRIVATE_SEA_STATUS };
+  }
+
+  /** 公海 · **这些部门的**条件（→ C1：部门公海＝`company_sea` 中 `dept_id`=本部门的关系集合） */
+  private companySeaWhereOfDepts(deptIds: readonly bigint[]): Prisma.BusinessRelationWhereInput {
+    return {
+      deleted_at: null,
+      merged_into: null,
+      sea_status: COMPANY_SEA_STATUS,
+      dept_id: { in: [...deptIds] },
+    };
+  }
+
+  /** 公海 · **全部**条件 */
+  private companySeaWhere(): Prisma.BusinessRelationWhereInput {
+    return { deleted_at: null, merged_into: null, sea_status: COMPANY_SEA_STATUS };
+  }
+
+  /** 一个条件 ＋ 分页 → `{ rows, total }`（五个列表方法共用，避免同一段事务抄五遍） */
+  private async pageOf(where: Prisma.BusinessRelationWhereInput, pagination: Pagination) {
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.businessRelation.findMany({
+        where,
+        select: RELATION_SELECT,
+        orderBy: { id: 'desc' },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.businessRelation.count({ where }),
+    ]);
+    return { rows, total };
+  }
 
   /**
    * 私海 · **我参与**（`self` 档：我 owner ∪ 我**有效**协同）。
@@ -207,82 +286,30 @@ export class RelationRepository {
    *   `domain/relation-owner.ts` 的 `isEffectiveCollaborator` **同一个时刻**，
    *   否则「列表里有它、点进去说没权限」这种自相矛盾迟早发生；传参也让单测可控。
    */
-  listPrivateRelationsOfEmployee(employeeId: bigint, now: Date, limit: number) {
-    return this.prisma.businessRelation.findMany({
-      where: {
-        deleted_at: null,
-        merged_into: null,
-        sea_status: PRIVATE_SEA_STATUS,
-        members: {
-          some: {
-            employee_id: employeeId,
-            revoked_at: null,
-            OR: [
-              { member_type: OWNER_MEMBER_TYPE },
-              {
-                member_type: COLLABORATOR_MEMBER_TYPE,
-                OR: [{ valid_until: null }, { valid_until: { gt: now } }],
-              },
-            ],
-          },
-        },
-      },
-      select: RELATION_SELECT,
-      orderBy: { id: 'desc' },
-      take: limit,
-    });
+  listPrivateRelationsOfEmployee(employeeId: bigint, now: Date, pagination: Pagination) {
+    return this.pageOf(this.privateSeaWhereOfEmployee(employeeId, now), pagination);
   }
 
   /** 私海 · **这些部门的**（`dept` 档：经理＝管辖部门） */
-  listPrivateRelationsOfDepts(deptIds: readonly bigint[], limit: number) {
-    return this.prisma.businessRelation.findMany({
-      where: {
-        deleted_at: null,
-        merged_into: null,
-        sea_status: PRIVATE_SEA_STATUS,
-        dept_id: { in: [...deptIds] },
-      },
-      select: RELATION_SELECT,
-      orderBy: { id: 'desc' },
-      take: limit,
-    });
+  listPrivateRelationsOfDepts(deptIds: readonly bigint[], pagination: Pagination) {
+    return this.pageOf(this.privateSeaWhereOfDepts(deptIds), pagination);
   }
 
   /** 私海 · **全部**（`all` 档：总经理 / 管理员；管理员只读在 service 层拦） */
-  listPrivateRelations(limit: number) {
-    return this.prisma.businessRelation.findMany({
-      where: { deleted_at: null, merged_into: null, sea_status: PRIVATE_SEA_STATUS },
-      select: RELATION_SELECT,
-      orderBy: { id: 'desc' },
-      take: limit,
-    });
+  listPrivateRelations(pagination: Pagination) {
+    return this.pageOf(this.privateSeaWhere(), pagination);
   }
 
   // ===== M3-08 公海列表（同上三种范围）=====
 
   /** 公海 · **这些部门的**（→ C1：部门公海＝`company_sea` 中 `dept_id`=本部门的关系集合） */
-  listSeaRelationsOfDepts(deptIds: readonly bigint[], limit: number) {
-    return this.prisma.businessRelation.findMany({
-      where: {
-        deleted_at: null,
-        merged_into: null,
-        sea_status: COMPANY_SEA_STATUS,
-        dept_id: { in: [...deptIds] },
-      },
-      select: RELATION_SELECT,
-      orderBy: { id: 'desc' },
-      take: limit,
-    });
+  listSeaRelationsOfDepts(deptIds: readonly bigint[], pagination: Pagination) {
+    return this.pageOf(this.companySeaWhereOfDepts(deptIds), pagination);
   }
 
   /** 公海 · **全部** */
-  listSeaRelations(limit: number) {
-    return this.prisma.businessRelation.findMany({
-      where: { deleted_at: null, merged_into: null, sea_status: COMPANY_SEA_STATUS },
-      select: RELATION_SELECT,
-      orderBy: { id: 'desc' },
-      take: limit,
-    });
+  listSeaRelations(pagination: Pagination) {
+    return this.pageOf(this.companySeaWhere(), pagination);
   }
 
   // ===== M3-10 改属性 =====

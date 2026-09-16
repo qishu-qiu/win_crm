@@ -32,6 +32,7 @@ const navItems = computed<Array<{ to: string; label: string }>>(() => [
   { to: '/', label: homeNameOf(currentUser.value?.role ?? '') },
   { to: '/entry', label: '建档' },
   { to: '/relations', label: '业务关系' },
+  { to: '/contacts', label: '联系人' },
 ])
 
 const roleName = computed(() => roleNameOf(currentUser.value?.role ?? ''))

@@ -51,3 +51,21 @@ export async function listCompanyContacts(companyId: string): Promise<ContactBri
   const { data } = await request.get<ContactBrief[]>(`/companies/${companyId}/contacts`)
   return data
 }
+
+/**
+ * 联系人列表（→ §5.5 `GET /contacts`）—— 联系人档案页（M6-09 片 2）用。
+ *
+ * ★ `onlyUnlinked: true` ＝ 只看「**未关联公司**」的待跟进（＝「待关联」视图，→ 需求 §6.1 ③）：
+ *   判定在**服务端**（该联系人**无任何 `company_contact` 记录**，派生、不加字段）。
+ * ★ 可见范围**由服务端收敛**（服务端 §5.5：未挂公司的「待关联」**只给归属人自己**；
+ *   已挂公司者暂按现状 —— 公司维度收敛待补，→《欠账登记表》D-28）：
+ *   页面**不为了"看到更多"自己拼参数**（前端再筛一遍＝第二套范围口径）。
+ * ★ 出参一律 `phone_masked`（**出参形态、不是权限**）—— 页面**不要再打一次码**。
+ */
+export async function listContacts(options: { onlyUnlinked?: boolean } = {}): Promise<ContactBrief[]> {
+  const { data } = await request.get<ContactBrief[]>('/contacts', {
+    // ⚠ 不筛就**整个不带这个参数**（而不是带 `false`）：别把"空值语义"当协议传出去
+    params: options.onlyUnlinked === true ? { only_unlinked: 'true' } : {},
+  })
+  return data
+}

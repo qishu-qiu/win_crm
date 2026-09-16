@@ -1,7 +1,7 @@
 # 服务端 / Prisma —— 落库口径唯一落点
 
 > **定位**：本目录承载「**数据落库口径**」——Prisma 版本硬口径 / 必须手写 migration 的部分 / 真库结构约束 / 上线前必做。
-> **真相源**：《需求规格/销售CRM数据架构文档》**V1.34**（§三~§九 表、§十 索引、§十五 落库口径）。本文只记「Prisma 与 MySQL 层面的落法」，不重复业务规则。
+> **真相源**：《需求规格/销售CRM数据架构文档》**V1.35**（§三~§九 表、§十 索引、§十五 落库口径）。本文只记「Prisma 与 MySQL 层面的落法」，不重复业务规则。
 > **读者**：改 `schema.prisma` / 写 migration / 首次部署前**必读**。所有 prisma 命令**一律在 `服务端/` 内执行**。
 > 版本沿革查 git。
 
@@ -9,7 +9,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| `prisma/schema.prisma` | **46 张业务表**，与数据架构 V1.34 一致 |
+| `prisma/schema.prisma` | **46 张业务表**，与数据架构 V1.35 一致 |
 | `prisma/migrations/0001_init/` | baseline（46 表 / 索引 / 外键）＋ 结尾**「手工补充段」**（生成列 / 3 张分区表 / 视图 / CHECK / 46 表中文 COMMENT）。**已 `migrate resolve --applied` 登记为基线** |
 | `prisma/migrations/0002_company_capital_legal_person/` | 增量（详见 §四.2） |
 | `prisma/migrations/0003_username_and_phone_lock/` | 增量（详见 §四.3） |
@@ -58,7 +58,7 @@ npx prisma format   --schema prisma/schema.prisma
 
 ## 三、schema.prisma
 
-- **46 张表**，真相源＝数据架构文档 **V1.34**。
+- **46 张表**，真相源＝数据架构文档 **V1.35**。
 - **教训一（P1012 · 关系未双向声明）**：`SignChecklist.product_line` 曾缺 `ProductLine` 侧对向字段 → 已在 `ProductLine` 补 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**。**规律：Prisma 关系字段是双向的 —— 加表 / 加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败。**
 - **教训二（P1012 · v7 移除 `datasource.url`）**：见 §二。**规律：主版本升级先跑只读的 `migrate status` 验证迁移历史兼容，再动 schema。**
 

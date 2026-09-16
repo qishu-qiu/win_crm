@@ -106,6 +106,12 @@ export interface CreateContactData {
   name: string;
   phone: string;
   created_by: bigint;
+  /**
+   * ★ 待关联（未挂公司）联系人的**归属人** ＝ 建档录入人（→ 需求 §6.1 ⑦，migration `0007`）。
+   * ⚠ 建档时**总是**写（哪怕当场就挂了公司）：挂公司后归属改走 `business_relation` 的 owner 成员、
+   *   本列不再参与判定 —— 保留值无害，且「先建档、后补公司」的路径不必再回填一次。
+   */
+  owner_id: bigint;
   extra_phones?: { type: string; number: string; note?: string }[];
   wechat?: string;
   email?: string;
@@ -225,6 +231,7 @@ export class CompanyRepository {
         phone: data.phone,
         created_by: data.created_by,
         updated_by: data.created_by,
+        owner_id: data.owner_id,
         ...(data.extra_phones === undefined ? {} : { extra_phones: data.extra_phones }),
         ...(data.wechat === undefined ? {} : { wechat: data.wechat }),
         ...(data.email === undefined ? {} : { email: data.email }),
@@ -270,10 +277,35 @@ export class CompanyRepository {
     });
   }
 
-  /** 联系人列表（M2 最小列表；同上，分页待补，→《欠账登记表》D-08） */
-  listContacts(limit = 100) {
+  /**
+   * 联系人列表（M2 最小列表；分页待补，→《欠账登记表》D-08）。
+   *
+   * ★ 可见范围（2026-09-16 起，→ 需求 §6.1 ⑪）**分三档**：
+   *   ① **`all` 档**（总经理 / 管理员，→ 需求 §4.2 数据范围）→ **看全部**（不套过滤）；
+   *   ② **待关联**（没挂公司的人）→ 只给**归属人自己**（`owner_id = 我`）：
+   *      线索属私人待跟进，此前"任何登录人都能看最近 100 条"＝全公司裸奔（含号码）；
+   *   ③ **已挂公司的人** → **暂维持原样**（只要有就职记录就可见）。
+   *      ⚠ ③ 的严格口径是"我关系下公司的联系人"，但**判定要复用 C 域的数据范围** ——
+   *      而 `company`(L2) → `relation`(L3) 是**反向依赖**（架构 §3 层级禁止），故落地方式待定
+   *      （→《欠账登记表》**D-28**）。**过渡期刻意"放松"**：若现在就按关系收紧，
+   *      销售会连**自己客户**的联系人都看不到 —— 那比现状更差。
+   */
+  listContacts(
+    input: { viewerId: bigint; onlyUnlinked: boolean; allScope: boolean },
+    limit = 100,
+  ) {
     return this.prisma.contact.findMany({
-      where: { deleted_at: null, merged_into: null },
+      where: {
+        deleted_at: null,
+        merged_into: null,
+        AND: [
+          // 「未关联公司」＝无任何 `company_contact` 记录（派生判定，→ 需求 §6.1 ③）
+          ...(input.onlyUnlinked ? [{ company_contacts: { none: {} } }] : []),
+          ...(input.allScope
+            ? []
+            : [{ OR: [{ owner_id: input.viewerId }, { company_contacts: { some: {} } }] }]),
+        ],
+      },
       select: CONTACT_SELECT,
       orderBy: { id: 'desc' },
       take: limit,

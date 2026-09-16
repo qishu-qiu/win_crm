@@ -105,6 +105,12 @@ export interface CreatedContactVo {
 /** 「同部门 / 别的部门」等提示不进本批；`take` 上限集中在仓储，这里只做去重与排序 */
 const MAX_CANDIDATES = 20;
 
+/** `GET /contacts` 的查询条件（controller 从 query 翻译过来；→ §5.5） */
+export interface ListContactsQuery {
+  /** 只看「**未关联公司**」的待跟进联系人（「待关联」视图，→ 需求 §6.1 ③） */
+  onlyUnlinked?: boolean;
+}
+
 @Injectable()
 export class CompanyService {
   constructor(
@@ -295,6 +301,8 @@ export class CompanyService {
             name: dto.name.trim(),
             phone,
             created_by: operatorId,
+            // ★ 归属＝建档人自己（→ 需求 §6.1 ⑦）：未挂公司期间，这条线索出现在**他**的「我的待关联」里
+            owner_id: operatorId,
             ...(dto.extra_phones === undefined ? {} : { extra_phones: dto.extra_phones }),
             ...(dto.wechat === undefined ? {} : { wechat: dto.wechat }),
             ...(dto.email === undefined ? {} : { email: dto.email }),
@@ -344,10 +352,22 @@ export class CompanyService {
    *   （唯一判定点＝`domain/contact-lock.ts`；**落锁人＝上锁时的归属 owner**，等价性论证见该文件头 ★ 段）。
    * ⚠ 本接口因此**必须先有身份**：拿不到上下文 → 401（`requireOperatorId`）——
    *   锁的可见性取决于「我是谁」，**没有身份就不能猜**（猜「没锁」会把「已上锁」这条提示吞掉）。
+   * ★ 2026-09-16：入参加 `only_unlinked`（只看未关联公司的待跟进），可见范围见 `repository.listContacts` 注释（→ 需求 §6.1 ⑪）。
    */
-  async listContacts(): Promise<ContactBriefVo[]> {
-    const viewerId = this.requireOperatorId();
-    const rows = await this.repository.listContacts();
+  async listContacts(query: ListContactsQuery = {}): Promise<ContactBriefVo[]> {
+    const context = getRequestContext();
+    if (context === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+        constraint: 'company.no_context',
+      });
+    }
+    const viewerId = context.employeeId;
+    const rows = await this.repository.listContacts({
+      viewerId,
+      onlyUnlinked: query.onlyUnlinked === true,
+      // ★ `all` 档（总经理 / 管理员）看全部；其余按「我的待关联 ＋ 已挂公司的人」（→ 需求 §4.2 / §6.1 ⑪）
+      allScope: context.dataScope.type === 'all',
+    });
     return rows.map((row) => toContactBrief(row, viewerId, { position: null, is_current: true }));
   }
 

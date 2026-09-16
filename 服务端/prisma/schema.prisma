@@ -425,6 +425,7 @@ model Contact {
   phone_frozen_until DateTime? @db.DateTime(0) // 手机号变更冻结期（24h）
   phone_locked_at    DateTime? @db.DateTime(0) // ★ 2026-09-14 新增：联系方式上锁时间（NULL=未锁；全局锁：任一部门被 owner 上锁后全部部门都看不到）
   phone_locked_by    BigInt?   @db.UnsignedBigInt // ★ 2026-09-14 新增：落锁人（＝解锁申请的审批人；其离职/转岗或不再持有任一活跃关系 → 锁自动消失）
+  owner_id           BigInt?   @db.UnsignedBigInt // ★ 2026-09-16 新增：待关联（未挂公司）联系人的归属人（建档＝录入人）；已挂公司者不看本列，归属走 business_relation 的 owner 成员（→ 需求 §6.1 ⑦）
   created_by         BigInt?   @db.UnsignedBigInt
   created_at         DateTime  @default(now()) @db.DateTime(0)
   updated_by         BigInt?   @db.UnsignedBigInt
@@ -437,6 +438,7 @@ model Contact {
 
   @@index([name], map: "idx_name")
   @@index([merged_into], map: "idx_merged_contact")
+  @@index([owner_id], map: "idx_owner")
   @@map("contact")
 }
 

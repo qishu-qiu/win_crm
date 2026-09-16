@@ -237,7 +237,7 @@ export interface paths {
         };
         /**
          * 联系人列表
-         * @description **列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）
+         * @description **列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）。可见范围：「待关联」（未挂公司）**只给归属人自己**；已挂公司的人**暂按现状**（公司维度收敛待复用的数据范围判定，→《欠账登记表》D-28）
          */
         get: operations["CompanyController_listContacts"];
         put?: never;
@@ -1614,7 +1614,10 @@ export interface operations {
     };
     CompanyController_listContacts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 只看「**未关联公司**」的待跟进联系人（＝「待关联」视图，→ 需求 §6.1 ③：判定＝该联系人**无任何 `company_contact` 记录**） */
+                only_unlinked?: "true" | "false";
+            };
             header?: never;
             path?: never;
             cookie?: never;

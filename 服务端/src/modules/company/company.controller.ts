@@ -12,7 +12,7 @@
 //   · 同 §2.3：**成功响应 HTTP 状态码一律 200**（2026-09-15 定）⇒ 三个 POST 显式 `@HttpCode(200)`；
 //     §2.4：400 / 401 / 403 / 409 / 422 由横切层统一出口，**controller 不自己拼错误响应**。
 // =============================================================================
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
 import { Audit, AuditSkip } from '../../kernel/index';
@@ -24,7 +24,12 @@ import {
   type CreatedContactVo,
   type SearchDupResult,
 } from './company.service';
-import { CreateCompanyDto, CreateContactDto, SearchDupDto } from './dto/company-request.dto';
+import {
+  CreateCompanyDto,
+  CreateContactDto,
+  ListContactsQueryDto,
+  SearchDupDto,
+} from './dto/company-request.dto';
 import {
   CompanyVoDto,
   ContactBriefVoDto,
@@ -88,10 +93,17 @@ export class CompanyController {
 
   @Get('contacts')
   @ApiBearerAuth('bearer')
-  @ApiOperation({ summary: '联系人列表', description: '**列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）' })
+  @ApiOperation({
+    summary: '联系人列表',
+    description:
+      '**列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。' +
+      '入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）。' +
+      '可见范围：「待关联」（未挂公司）**只给归属人自己**；已挂公司的人**暂按现状**' +
+      '（公司维度收敛待复用的数据范围判定，→《欠账登记表》D-28）',
+  })
   @ApiOkResponse({ type: [ContactBriefVoDto] })
-  listContacts(): Promise<ContactBriefVo[]> {
-    return this.company.listContacts();
+  listContacts(@Query() query: ListContactsQueryDto): Promise<ContactBriefVo[]> {
+    return this.company.listContacts({ onlyUnlinked: query.only_unlinked === 'true' });
   }
 
   @Audit(COMPANY_AUDIT_ACTIONS.createContact, 'contact')

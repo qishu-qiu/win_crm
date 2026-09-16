@@ -171,6 +171,20 @@ export class SearchDupDto {
   name?: string;
 }
 
+/** `GET /contacts`（联系人列表查询参数，→ §5.5） */
+export class ListContactsQueryDto {
+  @ApiPropertyOptional({
+    description:
+      '只看「**未关联公司**」的待跟进联系人（＝「待关联」视图，→ 需求 §6.1 ③：' +
+      '判定＝该联系人**无任何 `company_contact` 记录**）',
+    enum: ['true', 'false'],
+    example: 'true',
+  })
+  @IsOptional()
+  @IsIn(['true', 'false'], { message: 'only_unlinked 取值只能是 true / false' })
+  only_unlinked?: string;
+}
+
 /** 联系人附加号（→ 数据架构 B3 `extra_phones`：**不参与撞单**、无唯一约束） */
 export class ExtraPhoneDto {
   @ApiProperty({ description: '类型', enum: ['mobile', 'tel', 'wechat'], example: 'mobile' })

@@ -163,7 +163,12 @@ function createRepository(options: FakeOptions = {}) {
     findHistoricalPhoneOwner: jest.fn(async () =>
       options.historyOwner === undefined || options.historyOwner === null ? null : { contact: options.historyOwner },
     ),
-    listContacts: jest.fn(async () => options.contacts ?? []),
+    // 收一个占位入参（函数体里 `void` 一下过 lint）：**不是要用它**，而是让
+    // `mock.calls[n][0]` 在类型上存在 —— 用例要断言传下来的可见范围参数（`allScope` / `onlyUnlinked`）
+    listContacts: jest.fn(async (input: Record<string, unknown>) => {
+      void input;
+      return options.contacts ?? [];
+    }),
     findCompanyContacts: jest.fn(async () => options.companyContacts ?? []),
   };
 }
@@ -352,11 +357,29 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       const created = await runWithContext(CONTEXT, () => service.createContact(dto));
 
       expect(created.phone).toBe('13800000000');
-      expect(repository.createContact.mock.calls[0]?.[0]).toMatchObject({ phone: '13800000000', name: '张伟' });
+      expect(repository.createContact.mock.calls[0]?.[0]).toMatchObject({
+        phone: '13800000000',
+        name: '张伟',
+        // ★ 归属＝建档人（→ 需求 §6.1 ⑦）
+        owner_id: OPERATOR_ID,
+      });
       expect(repository.createCompanyContact).toHaveBeenCalledWith(
         { company_id: 3n, contact_id: 11n, position: '采购总监' },
         expect.anything(),
       );
+    });
+
+    it('**待关联**（不传 company_id）也写归属＝建档人 —— 需求 §6.1 ⑦ 的落点本体', async () => {
+      const { service, repository } = createService({});
+
+      await runWithContext(CONTEXT, () =>
+        service.createContact({ name: '张伟', phone: '13800000000' }),
+      );
+
+      // 没有公司 → 不写就职关系（「待关联」的判定＝`company_contact` 里没有行）
+      expect(repository.createCompanyContact).not.toHaveBeenCalled();
+      const written = repository.createContact.mock.calls[0]?.[0] as { owner_id: bigint };
+      expect(written.owner_id).toBe(OPERATOR_ID);
     });
 
     it('重复手机号 → 409 且**人话不含 DB 原话**（判据本体）', async () => {
@@ -442,6 +465,26 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       expect(briefs).toHaveLength(1);
       expect(briefs[0]?.phone_masked).toBe('138****0000');
       expect(briefs[0]?.phone_locked).toBe(false);
+    });
+
+    it('可见范围：`self` 档套「归属人 / 已挂公司」过滤；`all` 档（总经理 / 管理员）**看全部**（→ 需求 §4.2 / §6.1 ⑪）', async () => {
+      const { service, repository } = createService({ contacts: [] });
+
+      await runWithContext(CONTEXT, () => service.listContacts());
+
+      expect(repository.listContacts.mock.calls[0]?.[0]).toMatchObject({
+        viewerId: OPERATOR_ID,
+        onlyUnlinked: false,
+        allScope: false,
+      });
+
+      const allContext: RequestContext = { ...CONTEXT, dataScope: { type: 'all', deptIds: [] } };
+      await runWithContext(allContext, () => service.listContacts({ onlyUnlinked: true }));
+
+      expect(repository.listContacts.mock.calls[1]?.[0]).toMatchObject({
+        onlyUnlinked: true,
+        allScope: true,
+      });
     });
 
     it('★ M5-04：被上锁 ＋ 查看者**不是落锁人** → `phone_locked:true`（列表仍打码，**不因上锁改形态**）', async () => {

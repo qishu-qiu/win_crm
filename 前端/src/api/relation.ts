@@ -7,14 +7,16 @@ import request from './request'
  * ★ 类型**一律取自 OpenAPI 生成物**（`src/api/types.ts`，由 `npm run gen:types` 生成）：
  *   前后端各维护一份接口类型是本项目点名的「双真相源」重灾区（M0-57 判据：禁止手写）。
  *
- * ⚠ 本批（M3-14）**只封装列表页真正用到的那一个接口**：
- *   详情 / 激活 / 改属性 / 加成员（`M3-09~11` 后端已可用）随对应页面（后续里程碑）接入 ——
+ * ⚠ **只封装页面真正用到的那几个**：
+ *   列表（M3-14）／详情（M6-08）／**激活（M6-09 片 1）**；
+ *   改属性 / 加成员 / 换阶段（后端已可用）随对应页面（后续里程碑）接入 ——
  *   先写一堆没人调的封装，等于把「契约」和「调用方」拆开维护，改一处漏一处。
  */
 export type RelationVo = components['schemas']['RelationVoDto']
 export type RelationDetail = components['schemas']['RelationDetailVoDto']
 export type RelationMember = components['schemas']['RelationMemberVoDto']
 export type RelationPage = components['schemas']['RelationPageVoDto']
+export type CreateRelationInput = components['schemas']['CreateRelationDto']
 
 /** 列表页签（→ 接口 §4.4：私海 / 公海） */
 export type RelationTab = 'private' | 'sea'
@@ -69,5 +71,20 @@ export async function listRelations(query: ListRelationsQuery): Promise<Relation
  */
 export async function getRelation(id: string): Promise<RelationDetail> {
   const { data } = await request.get<RelationDetail>(`/relations/${id}`)
+  return data
+}
+
+/**
+ * 激活业务关系（`POST /relations`，→ 接口 §5.6）—— 录入页第 3 步「确认」用。
+ *
+ * ★ **归属＝发起人自己**（服务端定；换人走 `transfer` 审批）—— 前端**不传归属人**。
+ * ★ 三元组（公司 × 部门 × 产品线）已有活跃关系 → **409 / 20401**，服务端给的是**人话**
+ *   （「该公司在该部门·产品线下已有归属，请走转交或协同」）—— 页面**把那句直接显示**，
+ *   不翻译、不自己判「是不是重复」（前端再判一遍＝第二套规则，迟早与后端分叉）。
+ * ★ `dept_id` **必须落在我可建范围内**（销售＝我所属部门含兼职、经理＝管辖部门…），
+ *   否则服务端 **403**；这个判定**只在服务端**，前端不自己筛部门列表。
+ */
+export async function createRelation(input: CreateRelationInput): Promise<RelationVo> {
+  const { data } = await request.post<RelationVo>('/relations', input)
   return data
 }

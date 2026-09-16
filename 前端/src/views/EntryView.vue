@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 
 import {
   createCompany,
@@ -10,144 +12,77 @@ import {
   type CreatedContact,
   type DupCandidate,
 } from '../api/company'
+import {
+  listDepartments,
+  listProductLines,
+  type DepartmentVo,
+  type ProductLineVo,
+} from '../api/org'
+import { createRelation, type RelationVo } from '../api/relation'
 
 /**
- * 建档页（M2-17 · 方案 A 最小页）—— **建公司 ＋ 查重提示 ＋ 建联系人**。
- *
- * 判据逐字（《开发计划-V1》M2-17）：「页面上建成 1 公司 + 1 联系人；重复手机号显示人话提示」。
+ * 录入页（M6-09 片 1）—— **3 步步骤条：① 联系人 → ② 公司 → ③ 确认**，
+ * 第 3 步「确认」＝**激活一条业务关系**（第 2 步也可跳过，只建联系人）。
  *
  * 口径来源（★ 真相源，勿自造）：
- *   · 流程与分支 →《销售CRM业务需求文档》§12.1 撞库 4 分支之**分支 4「挂现有公司」**：
- *     输入公司名 / 信用代码 → 命中候选 → **由人点选**「挂在现有公司」或「确认新建（强行）」；
- *     **系统不自动合并、不阻断销售**。
- *   · 出参形态 →《销售CRM接口API文档》§5.4 / §5.5：查重候选带 `credit_code_masked`（打码）、
- *     公司联系人列表带 `phone_masked`（打码）、**建档联系人出参给全号**（详情形态）。
- *   · 校验与错误态 →《前端页面与交互文档》§4.6「blur 即时 ＋ 提交汇总；错误文案红 12px 置于控件下」；
- *     §5.1 空态（`a-empty`）；设计规范 §3.2 第 11 条「**禁假数据撑页面**」⇒ 本页**不预填任何演示数据**。
+ *   · 步骤与跳过的语义 →《销售CRM前端页面与交互文档》**§5 第 7 条**：3 步步骤条；
+ *     第 2 步「公司」可跳过（「暂不填公司，先存为待跟进」→ 只建联系人＝「待关联公司」）；
+ *     第 3 步「确认」＝激活业务关系。**跳过时不让选部门 / 产品线** —— 部门 × 产品线是
+ *     **业务关系**的属性，没有公司就没有关系（→ 需求 §6.1 ⑧）。
+ *   · 撞库 4 分支 →《销售CRM业务需求文档》**§12.1**（本片做到哪几支见下方 ★）。
+ *   · 「待关联」＝**没挂公司**（判定＝该联系人无任何 `company_contact` 记录，**派生、不加字段**）、
+ *     归属＝**建档人**、未关联期间**不占部门 / 不占产品线 / 不进业务关系列表 / 不掉海**（→ 需求 §6.1 ③⑦⑧）。
+ *   · 出参形态 →《接口API文档》§5.4 / §5.5：查重候选带 `credit_code_masked`（打码）、
+ *     公司联系人列表带 `phone_masked`（打码）、建档联系人出参给全号（详情形态）。
  *
- * ★ 状态机只有两步（不引 router、不做步骤条组件）：
- *   ① 选公司（查重 → 新建 / 用现有）→ ② 建联系人。这正是 §12.1 分支 4 的最小可用形态。
- * ★ 「用现有公司」为什么不显示公司详情：**`GET /companies/:id` 不在本批**（M2 只交付列表 / 建档 /
- *   查重 / 联系人），拿不到详情就**不假装有** —— 只带 `id ＋ 全称` 往下走，不编字段。
+ * ★ **本片落地的撞库分支**（§12.1）：
+ *   · **分支 4「挂现有公司」**：查重命中候选 → 由**人**点选「用这家」或「确认新建（强行）」；
+ *     系统**不自动合并、不阻断销售**（强行新建的留痕由**服务端**在 `POST /companies` 里写，前端不代办）。
+ *   · **触发点 ①（按手机号查重）**：第 1 步提交时先查一次 —— 命中说明这个号**已建过档**，
+ *     同号**不能再建**（服务端 `uk_phone_active` → 409「该手机号已存在」），故**当场提示并停住**，
+ *     给「去联系人档案」的出口，而不是等用户在最后一步撞 409。
+ *   · **分支 2「本部门已激活」**：撞单是**服务端**在 `POST /relations` 判的（**409 / 20401**）——
+ *     页面**把服务端那句人话直接显示**，不自己判「是不是重复」；「申请转交 / 协同」属 G 域审批（未建），
+ *     **不摆假入口**（→ 欠账）。
+ *   · ⛔ **做不了（不摆假入口）**：**分支 1**（公海可直领 → 依赖 F 域认领）、
+ *     **分支 3**（跨部门可并行 → 需要「该公司的其它部门关系」信息，`search-dup` 候选**不含部门**、
+ *     也没有「某公司已有关系」的端点 → 已登记欠账 `D-30`）。
+ *
+ * ★ **前端不许自己判业务规则**（→ 施工单 §二.4）：能不能建关系（部门越权 → 403）、
+ *   算不算撞单（409）、这个号能不能再建 —— **全看服务端返回值与人话**；前端再判一遍＝第二套规则，
+ *   迟早与后端分叉。
+ * ★ 禁假数据撑页面（→ 设计规范 §3.2 第 11 条）：本页**不预填任何演示数据**，空态用 `a-empty`。
+ * ★ 页码 / 步骤以外的状态一律**页内**：本页不把中间态写进 URL（刷新即重来，录入页是一次性动线）。
  */
-interface TargetCompany {
-  id: string
-  full_name: string
-  /** 新建时为服务端生成的 `name_core`（查重第一段用的核心词）；用现有公司时为 `null`（列表候选里没有该字段） */
-  name_core: string | null
-  /** 是否为本次新建（用于文案「已建档」/「沿用已有档案」） */
-  isNew: boolean
-}
 
-const fullName = ref('')
-const creditCode = ref('')
-const checking = ref(false)
-const creating = ref(false)
-const companyError = ref('')
-const candidates = ref<DupCandidate[]>([])
-const target = ref<TargetCompany | null>(null)
+/** 步骤：① 联系人 → ② 公司 → ③ 确认（顺序照前端文档 §5 第 7 条，**不是**「先公司后联系人」） */
+type Step = 1 | 2 | 3
 
-const contacts = ref<ContactBrief[]>([])
-const contactForm = reactive({ name: '', phone: '', position: '' })
-const savingContact = ref(false)
-const contactError = ref('')
-const createdContacts = ref<CreatedContact[]>([])
+const STEP_ITEMS = [{ title: '联系人' }, { title: '公司' }, { title: '确认' }]
 
-const hasCandidates = computed(() => candidates.value.length > 0)
-
-/** 判级标签（→ §5.4 `match_type`，只用这两个码；中文是**展示文案**，不另造码） */
-function matchLabel(matchType: string): string {
-  return matchType === 'same' ? '核心词完全相同' : '高度疑似'
-}
+const router = useRouter()
+const step = ref<Step>(1)
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-/** 拉一次该公司的联系人（**打码形态**，证明 M2-14 这条链路也通） */
-async function refreshContacts(): Promise<void> {
-  if (target.value === null) return
-  contacts.value = await listCompanyContacts(target.value.id)
-}
+// ===== 第 1 步：联系人 =====
+
+const contactForm = reactive({ name: '', phone: '', position: '' })
+const contactError = ref('')
+const checkingPhone = ref(false)
+/** 手机号命中：这个号**已被建档**（返回的是它现在的公司）⇒ 同号不能再建，当场停住 */
+const phoneDupCompanies = ref<DupCandidate[]>([])
 
 /**
- * 第一步：**先查重，再决定建不建**。
- * ★ 命中候选时**不建档**，把选择权交回给人（分支 4 的原话：「疑似同一家默认选现有，
- *   仍须保留『强行新建』出口」）。
+ * 第 1 步提交：**先按手机号查重，再放行**（→ 需求 §12.1 触发点 ①）。
+ * ★ 命中时**不进第 2 步**：不是"疑似"而是**硬冲突**（服务端 `uk_phone_active`），
+ *   往下走只会在最后一步撞 409、白填一遍公司信息。
  */
-async function submitCompany(): Promise<void> {
-  companyError.value = ''
-  candidates.value = []
-
-  const name = fullName.value.trim()
-  const code = creditCode.value.trim()
-  if (name === '' && code === '') {
-    companyError.value = '请填写公司全称或统一社会信用代码'
-    return
-  }
-
-  checking.value = true
-  try {
-    const result = await searchDupCompanies({
-      ...(name === '' ? {} : { name }),
-      ...(code === '' ? {} : { credit_code: code }),
-    })
-    if (result.candidates.length > 0) {
-      candidates.value = result.candidates
-      return
-    }
-    await createNewCompany()
-  } catch (error) {
-    companyError.value = errorText(error, '查重失败，请稍后重试')
-  } finally {
-    checking.value = false
-  }
-}
-
-/** 「确认新建」——分支 4 的出口之一（另一出口是「用这家」） */
-async function createNewCompany(): Promise<void> {
-  const name = fullName.value.trim()
-  const code = creditCode.value.trim()
-  if (name === '') {
-    // 只给了信用代码时，也必须先有全称（数据架构 B1：`full_name` 非空）
-    companyError.value = '新建档案需要填写公司全称'
-    return
-  }
-
-  creating.value = true
-  try {
-    const company = await createCompany({
-      full_name: name,
-      ...(code === '' ? {} : { credit_code: code }),
-    })
-    target.value = { id: company.id, full_name: company.full_name, name_core: company.name_core ?? null, isNew: true }
-    candidates.value = []
-    await refreshContacts()
-  } catch (error) {
-    companyError.value = errorText(error, '建档失败，请稍后重试')
-  } finally {
-    creating.value = false
-  }
-}
-
-/** 「用这家」——沿用已有档案（**不新建、不合并**，只是把后续联系人挂到它下面） */
-function useExisting(candidate: DupCandidate): void {
-  target.value = { id: candidate.id, full_name: candidate.full_name, name_core: null, isNew: false }
-  candidates.value = []
-}
-
-/** 换一家重来（清掉目标与列表，回到第一步） */
-function resetCompany(): void {
-  target.value = null
-  candidates.value = []
-  contacts.value = []
-  createdContacts.value = []
+async function submitContactStep(): Promise<void> {
   contactError.value = ''
-}
-
-/** 第二步：建档联系人（挂到已选公司下） */
-async function submitContact(): Promise<void> {
-  contactError.value = ''
+  phoneDupCompanies.value = []
 
   const name = contactForm.name.trim()
   const phone = contactForm.phone.trim()
@@ -156,164 +91,557 @@ async function submitContact(): Promise<void> {
     return
   }
 
-  savingContact.value = true
+  checkingPhone.value = true
   try {
-    const created = await createContact({
-      name,
-      phone,
-      ...(target.value === null ? {} : { company_id: target.value.id }),
-      ...(contactForm.position.trim() === '' ? {} : { position: contactForm.position.trim() }),
-    })
-    // 详情形态：**给全号**（§5.5；与列表的 `phone_masked` 是两个出口，别混）
-    createdContacts.value = [created, ...createdContacts.value]
-    contactForm.name = ''
-    contactForm.phone = ''
-    contactForm.position = ''
-    await refreshContacts()
+    const result = await searchDupCompanies({ phone })
+    if (result.candidates.length > 0) {
+      phoneDupCompanies.value = result.candidates
+      return
+    }
+    step.value = 2
   } catch (error) {
-    // 重复手机号 → 后端 409「该手机号已存在」（**人话，不是 DB 原话**）；此处内联显示
-    contactError.value = errorText(error, '建档联系人失败，请稍后重试')
+    contactError.value = errorText(error, '手机号查重失败，请稍后重试')
   } finally {
-    savingContact.value = false
+    checkingPhone.value = false
   }
+}
+
+// ===== 第 2 步：公司 =====
+
+/**
+ * 选定的公司：
+ * · `existing` ＝ 沿用已有档案（查重候选里选中的，**或**「本次新建」成功后的实际档案）
+ * · `new` ＝ **将新建**（还没写库 —— 真正的 `POST /companies` 发生在第 3 步提交时）
+ */
+type CompanyChoice =
+  | { kind: 'existing'; id: string; full_name: string }
+  | { kind: 'new'; full_name: string; credit_code: string }
+
+const companyForm = reactive({ full_name: '', credit_code: '' })
+const companyChoice = ref<CompanyChoice | null>(null)
+const companyCandidates = ref<DupCandidate[]>([])
+const companyError = ref('')
+const checkingCompany = ref(false)
+
+/** 沿用已有公司时：这家已有哪些联系人（**打码形态**，用来确认"是不是同一家"） */
+const companyContacts = ref<ContactBrief[]>([])
+const contactsLoading = ref(false)
+
+/** 判级标签（→ §5.4 `match_type`，只有这两个码；中文是**展示文案**，不另造码） */
+function matchLabel(matchType: string): string {
+  return matchType === 'same' ? '核心词完全相同' : '高度疑似'
+}
+
+async function loadCompanyContacts(companyId: string): Promise<void> {
+  contactsLoading.value = true
+  try {
+    companyContacts.value = await listCompanyContacts(companyId)
+  } catch {
+    // 打不开就**空着**（这只是辅助判断，不是本步的前置条件）——错误由请求层统一表达
+    companyContacts.value = []
+  } finally {
+    contactsLoading.value = false
+  }
+}
+
+/**
+ * 第 2 步：查重 → 命中候选就**交回给人选**（分支 4 原话：疑似默认选现有，仍须保留「强行新建」出口）。
+ * ★ 一条候选都没有才直接用输入的名字标成「将新建」——**此时仍不写库**。
+ */
+async function searchCompany(): Promise<void> {
+  companyError.value = ''
+  companyCandidates.value = []
+
+  const fullName = companyForm.full_name.trim()
+  const creditCode = companyForm.credit_code.trim()
+  if (fullName === '' && creditCode === '') {
+    companyError.value = '请填写公司全称或统一社会信用代码'
+    return
+  }
+
+  checkingCompany.value = true
+  try {
+    const result = await searchDupCompanies({
+      ...(fullName === '' ? {} : { name: fullName }),
+      ...(creditCode === '' ? {} : { credit_code: creditCode }),
+    })
+    if (result.candidates.length > 0) {
+      companyCandidates.value = result.candidates
+      return
+    }
+    chooseNew()
+  } catch (error) {
+    companyError.value = errorText(error, '查重失败，请稍后重试')
+  } finally {
+    checkingCompany.value = false
+  }
+}
+
+/** 「用这家」——沿用已有档案（**不新建、不合并**，只是把后续联系人与关系挂到它下面） */
+function chooseExisting(candidate: DupCandidate): void {
+  companyChoice.value = { kind: 'existing', id: candidate.id, full_name: candidate.full_name }
+  companyCandidates.value = []
+  companyError.value = ''
+  void loadCompanyContacts(candidate.id)
+}
+
+/** 「都不是，确认新建（强行）」——分支 4 的另一出口；**留痕由服务端写**，前端不代办 */
+function chooseNew(): void {
+  const fullName = companyForm.full_name.trim()
+  if (fullName === '') {
+    // 只给了信用代码时也必须先有全称（数据架构 B1：`full_name` 非空）
+    companyError.value = '新建档案需要填写公司全称'
+    return
+  }
+  companyChoice.value = {
+    kind: 'new',
+    full_name: fullName,
+    credit_code: companyForm.credit_code.trim(),
+  }
+  companyCandidates.value = []
+  companyError.value = ''
+  companyContacts.value = []
+}
+
+/** 重选（退回"未选"状态；已写库的公司在第 3 步不会重复建，见 `submitEntry`） */
+function resetCompanyChoice(): void {
+  companyChoice.value = null
+  companyContacts.value = []
+  companyError.value = ''
+}
+
+// ===== 第 3 步：确认 / 激活 =====
+
+const departments = ref<DepartmentVo[]>([])
+const productLines = ref<ProductLineVo[]>([])
+const optionsLoading = ref(false)
+const optionsError = ref('')
+const optionsLoaded = ref(false)
+const relationForm = reactive({ dept_id: '', product_line_id: '' })
+
+const submitting = ref(false)
+const submitError = ref('')
+/** 提交结果：建成的关系 / 建成的联系人（**只建联系人＝跳过了公司**） */
+const createdRelation = ref<RelationVo | null>(null)
+const createdContact = ref<CreatedContact | null>(null)
+
+/**
+ * 部门 / 产品线下拉的数据源（进入第 3 步且有公司时才拉）。
+ * ★ **不按数据范围筛**：「这个部门我能不能建」由服务端在 `POST /relations` 判（越权 → 403）——
+ *   前端筛一遍＝第二套权限口径（改了服务端忘了前端就分叉）。
+ * ★ **不隐藏停用项、只标注**：能不能用是**服务端**的判断，前端把状态**显示出来**即可
+ *   （隐藏＝替服务端做了决定，且用户看不到"为什么少了那条线"）。
+ */
+async function loadOptions(): Promise<void> {
+  optionsError.value = ''
+  optionsLoading.value = true
+  try {
+    const [deptRows, lineRows] = await Promise.all([listDepartments(), listProductLines()])
+    departments.value = deptRows
+    productLines.value = lineRows
+    optionsLoaded.value = true
+  } catch (error) {
+    optionsError.value = errorText(error, '部门 / 产品线加载失败，请稍后重试')
+  } finally {
+    optionsLoading.value = false
+  }
+}
+
+/** 部门显示名：停用的**标注出来**（不隐藏、也不拦 —— 能不能建由服务端判） */
+function deptLabelOf(dept: DepartmentVo): string {
+  return dept.status === 'active' ? dept.name : `${dept.name}（已停用）`
+}
+
+/** 产品线显示名（同上；色块另由 `color_key` 画出，为 `null` 时**不画**） */
+function productLineLabelOf(line: ProductLineVo): string {
+  return line.status === 'active' ? line.name : `${line.name}（已停用）`
+}
+
+const canSubmit = computed(() => {
+  if (companyChoice.value === null) return true
+  return relationForm.dept_id !== '' && relationForm.product_line_id !== ''
+})
+
+async function goConfirm(): Promise<void> {
+  step.value = 3
+  // 有公司才需要部门 / 产品线；没有公司（跳过）时**不拉**（也不必选，见文件头口径）
+  if (companyChoice.value !== null && !optionsLoaded.value) await loadOptions()
+}
+
+/** 「暂不填公司，先存为待跟进」——只建联系人＝「待关联」，**下一步不选部门 / 产品线** */
+function skipCompany(): void {
+  companyChoice.value = null
+  companyContacts.value = []
+  void goConfirm()
+}
+
+/**
+ * 第 3 步提交：**公司（若新建）→ 联系人 → 业务关系**，顺序不能反
+ * （联系人要带 `company_id` 才写得出就职关系，→ 接口 §5.5）。
+ *
+ * ★ **重试不重复写**：公司建成 / 联系人建成后立刻记下来，下次提交直接复用 ——
+ *   否则「撞了 409 改一下再交」就会在库里留下第二条空档案 / 第二个联系人。
+ *   （这不是幂等键：`Idempotency-Key` 横切能力尚未做，→《欠账登记表》D-06；
+ *     这里只保证**同一个页面会话内**不重复提交。）
+ */
+async function submitEntry(): Promise<void> {
+  submitError.value = ''
+
+  submitting.value = true
+  try {
+    // ① 公司：选「新建」时才真正建档（选「沿用已有」不动库）
+    let companyId: string | null = null
+    const choice = companyChoice.value
+    if (choice !== null) {
+      if (choice.kind === 'existing') {
+        companyId = choice.id
+      } else {
+        const company = await createCompany({
+          full_name: choice.full_name,
+          ...(choice.credit_code === '' ? {} : { credit_code: choice.credit_code }),
+        })
+        companyId = company.id
+        // ★ 建成即改写为「沿用已有档案」：再提交时**不会又建一家**
+        companyChoice.value = { kind: 'existing', id: company.id, full_name: company.full_name }
+      }
+    }
+
+    // ② 联系人（**详情形态：给全号**，→ §5.5；重试时直接复用上次建成的那条）
+    if (createdContact.value === null) {
+      createdContact.value = await createContact({
+        name: contactForm.name.trim(),
+        phone: contactForm.phone.trim(),
+        ...(companyId === null ? {} : { company_id: companyId }),
+        ...(contactForm.position.trim() === '' ? {} : { position: contactForm.position.trim() }),
+      })
+    }
+
+    // ③ 业务关系（跳过了公司就没有这一步；归属＝发起人自己，由服务端定）
+    if (companyId === null) {
+      message.success('已建档（待关联）')
+      return
+    }
+
+    createdRelation.value = await createRelation({
+      company_id: companyId,
+      dept_id: relationForm.dept_id,
+      product_line_id: relationForm.product_line_id,
+    })
+    message.success('业务关系已激活')
+  } catch (error) {
+    // 409（手机号已存在 / 撞单已有归属）与 403（部门越权）都是**服务端人话**，内联显示
+    submitError.value = errorText(error, '提交失败，请稍后重试')
+  } finally {
+    submitting.value = false
+  }
+}
+
+/** 再录一个（清空全部状态，回到第 1 步） */
+function resetAll(): void {
+  step.value = 1
+  contactForm.name = ''
+  contactForm.phone = ''
+  contactForm.position = ''
+  contactError.value = ''
+  phoneDupCompanies.value = []
+  companyForm.full_name = ''
+  companyForm.credit_code = ''
+  companyChoice.value = null
+  companyCandidates.value = []
+  companyError.value = ''
+  companyContacts.value = []
+  relationForm.dept_id = ''
+  relationForm.product_line_id = ''
+  submitError.value = ''
+  createdRelation.value = null
+  createdContact.value = null
+}
+
+function goContacts(): void {
+  void router.push('/contacts')
+}
+
+function goRelationDetail(): void {
+  const relation = createdRelation.value
+  if (relation === null) return
+  void router.push(`/relations/${relation.id}`)
 }
 </script>
 
 <template>
   <section class="entry">
-    <h2 class="entry-title">建档</h2>
+    <h2 class="entry-title">录入</h2>
     <p class="entry-hint">
-      先查重再建档：命中候选时由你决定——沿用已有公司，还是确认新建（系统不自动合并、也不拦你建）。
+      三步走完一次录入：先记人，再挂公司，最后确认激活业务关系。第 2 步可以跳过（暂不填公司，
+      先存为待跟进）。
     </p>
 
-    <!-- 第一步：公司 -->
-    <div class="entry-card">
-      <h3 class="entry-card-title">1 · 公司</h3>
+    <!-- 结果态：建成后不再显示步骤条与表单（避免"填了会怎样"的误会） -->
+    <div v-if="createdRelation !== null" class="entry-card">
+      <a-result
+        status="success"
+        title="业务关系已激活"
+        :sub-title="`${contactForm.name}（${contactForm.phone}）· ${createdRelation.company?.name ?? '（档案已删除）'}`"
+      >
+        <template #extra>
+          <a-button type="primary" @click="goRelationDetail">查看关系详情</a-button>
+          <a-button @click="resetAll">再录一个</a-button>
+        </template>
+      </a-result>
+    </div>
 
-      <a-form layout="vertical" @finish="submitCompany">
-        <a-form-item label="公司全称">
-          <a-input
-            v-model:value="fullName"
-            :disabled="target !== null"
-            placeholder="例如：安徽鑫中网信息技术有限公司"
-            allow-clear
+    <div v-else-if="createdContact !== null" class="entry-card">
+      <a-result
+        status="success"
+        title="已建档（待关联）"
+        :sub-title="`${createdContact.name}（${createdContact.phone}）—— 未挂公司，归你待跟进`"
+      >
+        <template #extra>
+          <a-button type="primary" @click="goContacts">去联系人档案</a-button>
+          <a-button @click="resetAll">再录一个</a-button>
+        </template>
+      </a-result>
+    </div>
+
+    <template v-else>
+      <a-steps class="entry-steps" :current="step - 1" :items="STEP_ITEMS" size="small" />
+
+      <!-- ===== 第 1 步：联系人 ===== -->
+      <div v-if="step === 1" class="entry-card">
+        <h3 class="entry-card-title">1 · 联系人</h3>
+
+        <a-form layout="vertical" @finish="submitContactStep">
+          <a-form-item label="姓名">
+            <a-input v-model:value="contactForm.name" placeholder="例如：张伟" allow-clear />
+          </a-form-item>
+
+          <a-form-item label="手机号（主号，撞库校验核心）">
+            <a-input
+              v-model:value="contactForm.phone"
+              placeholder="138 0000 0000（空格 / +86 / - 都会被归一）"
+              allow-clear
+            />
+          </a-form-item>
+
+          <a-form-item label="职位（可空）">
+            <a-input v-model:value="contactForm.position" placeholder="例如：采购总监" allow-clear />
+          </a-form-item>
+
+          <p v-if="contactError" class="entry-error">{{ contactError }}</p>
+
+          <a-button type="primary" html-type="submit" :loading="checkingPhone">
+            下一步：选公司
+          </a-button>
+        </a-form>
+
+        <!-- 手机号命中：同号不能重复建档（→ 需求 §12.1 触发点 ①） -->
+        <div v-if="phoneDupCompanies.length > 0" class="entry-dups">
+          <a-alert
+            type="warning"
+            show-icon
+            message="这个手机号已有档案"
+            description="同一号码不能重复建档（服务端会拦）。要跟进这个人，请到已有档案里写跟单；如果是同一个人换了公司，「跳槽」动线随后续版本提供。"
           />
-        </a-form-item>
-
-        <a-form-item label="统一社会信用代码（可空）">
-          <a-input
-            v-model:value="creditCode"
-            :disabled="target !== null"
-            placeholder="撞码时会提示改用已有档案"
-            allow-clear
-          />
-        </a-form-item>
-
-        <p v-if="companyError" class="entry-error">{{ companyError }}</p>
-
-        <a-button
-          v-if="target === null"
-          type="primary"
-          html-type="submit"
-          :loading="checking || creating"
-        >
-          查重并建档
-        </a-button>
-        <a-button v-else type="text" @click="resetCompany">换一家</a-button>
-      </a-form>
-
-      <!-- 查重命中：交给人选（分支 4） -->
-      <div v-if="hasCandidates" class="entry-dups">
-        <a-alert
-          type="warning"
-          show-icon
-          message="疑似已有这家公司"
-          description="以下候选按判级排序；确认是同一家请点「用这家」，确认不是再点「确认新建」。"
-        />
-        <ul class="entry-dup-list">
-          <li v-for="item in candidates" :key="item.id" class="entry-dup-item">
-            <div class="entry-dup-main">
-              <span class="entry-dup-name">{{ item.full_name }}</span>
-              <a-tag :color="item.match_type === 'same' ? 'red' : 'orange'">
-                {{ matchLabel(item.match_type) }}
-              </a-tag>
-              <span class="entry-dup-meta">
-                相似度 {{ item.similarity }}<template v-if="item.credit_code_masked">
-                  ｜信用代码 {{ item.credit_code_masked }}</template>
-              </span>
-            </div>
-            <a-button size="small" @click="useExisting(item)">用这家</a-button>
-          </li>
-        </ul>
-        <a-button type="link" :loading="creating" @click="createNewCompany">
-          都不是，确认新建（强行）
-        </a-button>
-      </div>
-
-      <!-- 已选定目标公司 -->
-      <div v-if="target !== null" class="entry-target">
-        <div class="entry-target-main">
-          <span class="entry-target-name">{{ target.full_name }}</span>
-          <a-tag :color="target.isNew ? 'green' : 'blue'">
-            {{ target.isNew ? '本次新建' : '沿用已有档案' }}
-          </a-tag>
-          <span v-if="target.name_core" class="entry-dup-meta">核心词 {{ target.name_core }}</span>
-        </div>
-
-        <div class="entry-contacts">
-          <h4 class="entry-contacts-title">该公司的联系人（列表形态，号码打码）</h4>
-          <a-empty v-if="contacts.length === 0" description="还没有联系人" />
-          <ul v-else class="entry-contact-list">
-            <li v-for="person in contacts" :key="person.id" class="entry-contact-item">
-              <span class="entry-contact-name">{{ person.name }}</span>
-              <span class="entry-dup-meta">
-                {{ person.phone_masked }}<template v-if="person.position">
-                  ｜{{ person.position }}</template>
-              </span>
-              <a-tag v-if="!person.is_current" color="default">已离职</a-tag>
+          <ul class="entry-dup-list">
+            <li v-for="item in phoneDupCompanies" :key="item.id" class="entry-dup-item">
+              <div class="entry-dup-main">
+                <span class="entry-dup-name">{{ item.full_name }}</span>
+                <span class="entry-dup-meta">该号码现挂在这家公司下</span>
+              </div>
             </li>
           </ul>
+          <a-button type="link" @click="goContacts">去联系人档案看看</a-button>
         </div>
       </div>
-    </div>
 
-    <!-- 第二步：联系人（选定公司后才出现） -->
-    <div v-if="target !== null" class="entry-card">
-      <h3 class="entry-card-title">2 · 联系人</h3>
+      <!-- ===== 第 2 步：公司（可跳过） ===== -->
+      <div v-else-if="step === 2" class="entry-card">
+        <h3 class="entry-card-title">2 · 公司</h3>
 
-      <a-form layout="vertical" @finish="submitContact">
-        <a-form-item label="姓名">
-          <a-input v-model:value="contactForm.name" placeholder="例如：张伟" allow-clear />
-        </a-form-item>
+        <a-form layout="vertical" @finish="searchCompany">
+          <a-form-item label="公司全称">
+            <a-input
+              v-model:value="companyForm.full_name"
+              :disabled="companyChoice !== null"
+              placeholder="例如：安徽鑫中网信息技术有限公司"
+              allow-clear
+            />
+          </a-form-item>
 
-        <a-form-item label="手机号（主号，撞单校验核心）">
-          <a-input
-            v-model:value="contactForm.phone"
-            placeholder="138 0000 0000（空格 / +86 / - 都会被归一）"
-            allow-clear
+          <a-form-item label="统一社会信用代码（可空）">
+            <a-input
+              v-model:value="companyForm.credit_code"
+              :disabled="companyChoice !== null"
+              placeholder="撞码时会提示改用已有档案"
+              allow-clear
+            />
+          </a-form-item>
+
+          <p v-if="companyError" class="entry-error">{{ companyError }}</p>
+
+          <a-button
+            v-if="companyChoice === null"
+            type="primary"
+            html-type="submit"
+            :loading="checkingCompany"
+          >
+            查重
+          </a-button>
+        </a-form>
+
+        <!-- 查重命中：交给人选（分支 4） -->
+        <div v-if="companyCandidates.length > 0" class="entry-dups">
+          <a-alert
+            type="warning"
+            show-icon
+            message="疑似已有这家公司"
+            description="以下候选按判级排序；确认是同一家请点「用这家」，确认不是再点「确认新建」。"
           />
-        </a-form-item>
+          <ul class="entry-dup-list">
+            <li v-for="item in companyCandidates" :key="item.id" class="entry-dup-item">
+              <div class="entry-dup-main">
+                <span class="entry-dup-name">{{ item.full_name }}</span>
+                <a-tag :color="item.match_type === 'same' ? 'red' : 'orange'">
+                  {{ matchLabel(item.match_type) }}
+                </a-tag>
+                <span class="entry-dup-meta">
+                  相似度 {{ item.similarity }}<template v-if="item.credit_code_masked">
+                    ｜信用代码 {{ item.credit_code_masked }}</template>
+                </span>
+              </div>
+              <a-button size="small" @click="chooseExisting(item)">用这家</a-button>
+            </li>
+          </ul>
+          <a-button type="link" @click="chooseNew">都不是，确认新建（强行）</a-button>
+        </div>
 
-        <a-form-item label="职位（可空）">
-          <a-input v-model:value="contactForm.position" placeholder="例如：采购总监" allow-clear />
-        </a-form-item>
+        <!-- 已选定公司 -->
+        <div v-if="companyChoice !== null" class="entry-target">
+          <div class="entry-target-main">
+            <span class="entry-target-name">{{ companyChoice.full_name }}</span>
+            <a-tag :color="companyChoice.kind === 'new' ? 'green' : 'blue'">
+              {{ companyChoice.kind === 'new' ? '待新建（提交时建档）' : '沿用已有档案' }}
+            </a-tag>
+            <a-button type="text" size="small" @click="resetCompanyChoice">重选</a-button>
+          </div>
 
-        <p v-if="contactError" class="entry-error">{{ contactError }}</p>
+          <!-- 沿用已有公司时：看看这家已有哪些人（列表形态、号码打码） -->
+          <div v-if="companyChoice.kind === 'existing'" class="entry-contacts">
+            <h4 class="entry-contacts-title">该公司的联系人（列表形态，号码打码）</h4>
+            <a-empty v-if="!contactsLoading && companyContacts.length === 0" description="还没有联系人" />
+            <ul v-else class="entry-contact-list">
+              <li v-for="person in companyContacts" :key="person.id" class="entry-contact-item">
+                <span class="entry-contact-name">{{ person.name }}</span>
+                <span class="entry-dup-meta">
+                  {{ person.phone_masked }}<template v-if="person.position">
+                    ｜{{ person.position }}</template>
+                </span>
+                <a-tag v-if="!person.is_current" color="default">已离职</a-tag>
+              </li>
+            </ul>
+          </div>
+        </div>
 
-        <a-button type="primary" html-type="submit" :loading="savingContact">建档联系人</a-button>
-      </a-form>
-
-      <div v-if="createdContacts.length > 0" class="entry-created">
-        <a-alert
-          v-for="item in createdContacts"
-          :key="item.id"
-          type="success"
-          show-icon
-          :message="`已建档：${item.name}（${item.phone}）`"
-          :description="item.phone_history_hint ?? ''"
-        />
+        <div class="entry-actions">
+          <a-button v-if="companyChoice !== null" type="primary" @click="goConfirm">
+            下一步：确认
+          </a-button>
+          <a-button type="link" @click="skipCompany">暂不填公司，先存为待跟进</a-button>
+          <a-button type="text" @click="step = 1">上一步</a-button>
+        </div>
       </div>
-    </div>
+
+      <!-- ===== 第 3 步：确认（＝激活业务关系） ===== -->
+      <div v-else class="entry-card">
+        <h3 class="entry-card-title">3 · 确认</h3>
+
+        <dl class="entry-summary">
+          <div class="entry-summary-row">
+            <dt class="entry-summary-label">联系人</dt>
+            <dd class="entry-summary-value">
+              {{ contactForm.name }} ｜ {{ contactForm.phone }}<template v-if="contactForm.position">
+                ｜{{ contactForm.position }}</template>
+            </dd>
+          </div>
+          <div class="entry-summary-row">
+            <dt class="entry-summary-label">公司</dt>
+            <dd class="entry-summary-value">
+              <template v-if="companyChoice !== null">
+                {{ companyChoice.full_name }}
+                <a-tag :color="companyChoice.kind === 'new' ? 'green' : 'blue'">
+                  {{ companyChoice.kind === 'new' ? '本次新建' : '沿用已有档案' }}
+                </a-tag>
+              </template>
+              <template v-else>不挂公司（存为「待关联」）</template>
+            </dd>
+          </div>
+        </dl>
+
+        <!-- 有公司才需要"部门 × 产品线"（它们是**业务关系**的属性） -->
+        <template v-if="companyChoice !== null">
+          <p v-if="optionsError" class="entry-error">{{ optionsError }}</p>
+
+          <a-form layout="vertical">
+            <a-form-item label="承接部门">
+              <a-select
+                v-model:value="relationForm.dept_id"
+                :loading="optionsLoading"
+                placeholder="选一个我能建的部门"
+                allow-clear
+              >
+                <a-select-option v-for="dept in departments" :key="dept.id" :value="dept.id">
+                  {{ deptLabelOf(dept) }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+
+            <a-form-item label="产品线">
+              <a-select
+                v-model:value="relationForm.product_line_id"
+                :loading="optionsLoading"
+                placeholder="选一条产品线"
+                allow-clear
+              >
+                <a-select-option v-for="line in productLines" :key="line.id" :value="line.id">
+                  <span class="entry-line-option">
+                    <!-- `color_key` 为 null 时**不画色块**（不编默认色，→ 数据架构 A7） -->
+                    <span
+                      v-if="line.color_key"
+                      class="entry-line-dot"
+                      :style="{ background: line.color_key }"
+                    />
+                    {{ productLineLabelOf(line) }}
+                  </span>
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-form>
+
+          <p class="entry-note">
+            激活后这条关系归你（换人要走转交审批）。同公司 × 同部门 × 同产品线只能有一条关系，
+            已有归属时服务端会拦下并说明原因。
+          </p>
+        </template>
+
+        <p v-else class="entry-note">
+          不挂公司 → 只建联系人＝「待关联」：这条线索归你待跟进，不进业务关系列表、不掉海。
+        </p>
+
+        <p v-if="submitError" class="entry-error">{{ submitError }}</p>
+
+        <div class="entry-actions">
+          <a-button
+            type="primary"
+            :loading="submitting"
+            :disabled="!canSubmit"
+            @click="submitEntry"
+          >
+            {{ companyChoice === null ? '确认建档（存为待关联）' : '确认并激活业务关系' }}
+          </a-button>
+          <a-button type="text" :disabled="submitting" @click="step = 2">上一步</a-button>
+        </div>
+      </div>
+    </template>
   </section>
 </template>
 
@@ -333,6 +661,10 @@ async function submitContact(): Promise<void> {
   margin: 0 0 var(--crm-space-lg);
   font-size: var(--crm-font-size-base);
   color: var(--crm-color-text-tertiary);
+}
+
+.entry-steps {
+  margin-bottom: var(--crm-space-md);
 }
 
 .entry-card {
@@ -355,6 +687,13 @@ async function submitContact(): Promise<void> {
   margin: 0 0 var(--crm-space-sm);
   font-size: var(--crm-font-size-xs);
   color: var(--crm-color-error);
+}
+
+/** 说明文字：中性小字，不抢表单主体（与 `.entry-hint` 同族） */
+.entry-note {
+  margin: var(--crm-space-md) 0 0;
+  font-size: var(--crm-font-size-xs);
+  color: var(--crm-color-text-tertiary);
 }
 
 .entry-dups {
@@ -416,10 +755,46 @@ async function submitContact(): Promise<void> {
   color: var(--crm-color-text-secondary);
 }
 
-.entry-created {
-  margin-top: var(--crm-space-md);
+/** 第 3 步的汇总：`dt/dd` 两列（左标签、右值），与表单字段的左对齐保持一致 */
+.entry-summary {
+  margin: 0 0 var(--crm-space-md);
+}
+
+.entry-summary-row {
   display: flex;
-  flex-direction: column;
-  gap: var(--crm-space-xs);
+  gap: var(--crm-space-sm);
+  padding: var(--crm-space-xs) 0;
+}
+
+.entry-summary-label {
+  flex: 0 0 72px;
+  font-size: var(--crm-font-size-base);
+  color: var(--crm-color-text-tertiary);
+}
+
+.entry-summary-value {
+  margin: 0;
+  font-size: var(--crm-font-size-base);
+  color: var(--crm-color-text);
+}
+
+.entry-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--crm-space-sm);
+  margin-top: var(--crm-space-md);
+}
+
+/** 产品线选项里的色块（`color_key` 为 null 时不画，→ 数据架构 A7「不编默认色」） */
+.entry-line-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--crm-space-xxs);
+}
+
+.entry-line-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--crm-radius-pill);
 }
 </style>

@@ -6,7 +6,7 @@
 //   回写决策在 `domain/last-event.ts`、幂等键在 `domain/event-idempotency.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.32 D1（`commitment`）／D2（`action_event`）。
+//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》D1（`commitment`）／D2（`action_event`）。
 //   · D2：`action_event` **不分区**（故主键即 `id`，`uk_idem` 无需含分区键）；
 //     索引 `idx_rel_time(relation_id, event_at)` —— 时间线**倒序**扫描正好命中它；
 //     `idx_contact(contact_id, event_at)` 供「待关联公司」按联系人查孤儿跟单（M6 用）。

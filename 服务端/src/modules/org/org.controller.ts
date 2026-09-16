@@ -5,13 +5,13 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**（故本文件零 `if` 业务分支）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
+//   · 《销售CRM接口API文档》§三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
 //     ·`GET /account/me`（G）·`GET /org/departments|employees|roles|permissions`（G）。
 //   · 同 §2.2：除登录 / 刷新外**一律带** `Authorization: Bearer <access_token>` ——
 //     故本文件只给 login / refresh 打 `@Public()`（守卫自 M0-38 起全局生效，不打就被 401 挡死）。
 //   · 同 §2.4：401 / 20002（未认证）、403 / 20003（无权限）、400 / 20001（参数错）由横切层统一出口，
 //     **controller 不自己拼错误响应**。
-//   · 《销售CRM架构设计说明》V1.3 §7.4：审计要记 IP / UA / req_id → 由本文件从请求头取，交给 service。
+//   · 《销售CRM架构设计说明》§7.4：审计要记 IP / UA / req_id → 由本文件从请求头取，交给 service。
 //
 // ★ 成功状态码 **200**（2026-09-15 七叔拍板，→ API §2.3）：
 //   POST 若不显式声明，NestJS 默认返回 **201 Created** —— 规格只定义了失败码、没说成功，

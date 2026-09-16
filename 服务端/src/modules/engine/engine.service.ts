@@ -5,11 +5,11 @@
 //   **不写业务规则**（有效沟通 / 回写 / 幂等键全在 `domain/`）、**不写 SQL**（在 `engine.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §5.7（事件项出参、`POST /relations/:id/events` 入参）；
+//   · 《销售CRM接口API文档》§5.7（事件项出参、`POST /relations/:id/events` 入参）；
 //     §5.6（数据范围）；§2.4（错误码）。
-//   · 《销售CRM数据架构文档》V1.32 D2（`action_event`）：快速标记三型**不**回写 `last_event_at`。
+//   · 《销售CRM数据架构文档》D2（`action_event`）：快速标记三型**不**回写 `last_event_at`。
 //   · 《销售CRM业务需求文档》§10.2：有效沟通**必须写一句话结果**；无效沟通**点一下即可**。
-//   · 《销售CRM架构设计说明》V1.3 §5.2 跨域三条路：
+//   · 《销售CRM架构设计说明》§5.2 跨域三条路：
 //       ① 同步调对方 **exports 的 service** —— 本文件取「关系在不在 / 归谁 / 我能不能写」、
 //         以及回写 `last_event_at` 全走 **C 域 `RelationService`** 这一个跨域出口
 //         （**禁止**查 C 域的表）；③ 本域多表一致性 → **本域 `$transaction`**。

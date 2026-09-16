@@ -2,7 +2,7 @@
 // D 域出参 DTO（M4-07 / M4-08）—— **只服务于 Swagger 文档**，不参与运行时转换
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §5.7 事件项：
+//   · 《销售CRM接口API文档》§5.7 事件项：
 //       `{id,action_type,summary,outcome,pain_point:{id,label}?,competition?,actor:{id,name},
 //         owner_snapshot?,contact:{id,name}?,duration_min?,event_at,branch:"main"|"sub",
 //         round_no,attachments:[]}`

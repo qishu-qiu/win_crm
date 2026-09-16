@@ -5,7 +5,7 @@
 //   解析请求、调**一个** service 方法、返回。**不写业务判断、不碰 Prisma**。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §5.7：`G/P /relations/:id/events`、
+//   · 《销售CRM接口API文档》§5.7：`G/P /relations/:id/events`、
 //     `G/P/U /relations/:id/commitments`、`G /today-agenda`；§三 总览同。
 //     ⚠ 「承诺的 U」规格只给了这一行端点，**没给入参形状** —— 本批按
 //       「`id` 指认目标承诺 ＋ 要改的字段」实现，欠账已登记（→ 交接说明 §五）。

@@ -2,9 +2,9 @@
 // 访问令牌（JWT）声明契约（M0-32 前置）—— 签发方（M1 登录）与校验方（鉴权守卫）的唯一事实源
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §2.2：登录返回 `access_token`（Bearer JWT，**建议 2h**）
+//   · 《销售CRM接口API文档》§2.2：登录返回 `access_token`（Bearer JWT，**建议 2h**）
 //     ＋ `refresh_token`；请求头 `Authorization: Bearer <access_token>`。
-//   · 《销售CRM架构设计说明》V1.3 §7.1：`RequestContext = { employeeId, deptIds, roleCodes,
+//   · 《销售CRM架构设计说明》§7.1：`RequestContext = { employeeId, deptIds, roleCodes,
 //     dataScope: { type, deptIds } }`，且 ★ 「横切层只读上下文、**不查数据库**」——
 //     故「我是谁」必须**随令牌带进来**，守卫里绝不许回查 org 域（否则就是「A 域调权限、
 //     权限查 A 域」的循环依赖）。

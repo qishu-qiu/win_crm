@@ -88,7 +88,7 @@ text{font-family:var(--font-family);}
   <rect x="60" y="166" width="744" height="84" rx="8" style="fill:var(--color-primary-bg2);stroke:var(--color-primary);stroke-width:1.6"/>
   <text class="bt" x="80" y="192" style="fill:var(--color-primary-dark)">第 2 层 · 业务关系（CRM 最小业务单元）</text>
   <text class="bs" x="80" y="214" style="fill:rgba(0,0,0,.78)">公司 × 部门 × 产品线 × 归属销售 ｜ 部门公海里的一条，就是它（不是公司）</text>
-  <text class="bs" x="80" y="236" style="fill:rgba(0,0,0,.78)">有 owner ＝ 员工私海 ／ 无 owner ＝ 掉公海（部门恒定不变）</text>
+  <text class="bs" x="80" y="236" style="fill:rgba(0,0,0,.78)">有 owner ＝ 本人私海 ／ 无 owner ＝ 掉公海（部门恒定不变）</text>
 
   <!-- 设计铁律 -->
   <rect x="828" y="74" width="312" height="176" rx="8" style="fill:var(--color-fill-quaternary);stroke:var(--color-border);stroke-width:1"/>
@@ -145,14 +145,14 @@ text{font-family:var(--font-family);}
 
     <rect x="998" y="350" width="136" height="66" rx="6" style="fill:var(--color-success-bg);stroke:var(--color-success);stroke-width:1.2"/>
     <text class="bt" x="1066" y="382" text-anchor="middle" style="fill:var(--color-success-dark)" font-size="13">续约 / 流失</text>
-    <text class="bx" x="1066" y="404" text-anchor="middle">维护人持续跟进</text>
+    <text class="bx" x="1066" y="404" text-anchor="middle">owner 管维护</text>
   </g>
 
   <!-- 掉公海（只有一步） -->
   <text class="ntb" x="62" y="452">掉公海（只掉一步：有 owner → 无 owner，部门恒定不变）</text>
 
   <rect x="62" y="464" width="210" height="54" rx="6" style="fill:var(--color-fill-quaternary);stroke:var(--color-border);stroke-width:1"/>
-  <text class="bt" x="167" y="488" text-anchor="middle" font-size="13">员工私海（有 owner）</text>
+  <text class="bt" x="167" y="488" text-anchor="middle" font-size="13">本人私海（有 owner）</text>
   <text class="bx" x="167" y="507" text-anchor="middle">跟进频次 / 成单周期不达标</text>
 
   <line x1="272" y1="491" x2="304" y2="491" style="stroke:var(--color-error)" stroke-width="1.4" marker-end="url(#ar-error)"/>
@@ -202,7 +202,7 @@ text{font-family:var(--font-family);}
   <text class="nt" x="490" y="654">• 销售 = 本人私海（owner ＋ 协同）＋ 公海 ｜ 经理 = 管辖部门 ｜ 总经理 = 全公司</text>
   <text class="nt" x="490" y="680">• 他人私海一律不可见（除非协同 / @求助授权）</text>
   <text class="nt" x="490" y="706">• 跨业务线 / 跨部门自动脱敏：合同金额 · 续约日期 · 跟单内容 · 工单详情</text>
-  <text class="nt" x="490" y="732">• 手机号按归属脱敏：非归属部门 ****后 4 位 ＋ 一键申请解锁</text>
+  <text class="nt" x="490" y="732">• 手机号：详情全可见 · 列表打码 · owner 可上锁（解锁由落锁人批）</text>
   <text class="nt" x="490" y="758">• 跨部门同产品线 = 竞争并行，跟单互不可见（防策略泄露）</text>
   <text class="nt" x="490" y="784">• 报表 / 看板金额不脱敏（管理出口看得见数才管得了盘）</text>
 

@@ -6,8 +6,8 @@
 //   故此处不做「是不是经理」「角色该给什么范围」这类判断，只把行取回来、把 JSON 列**拉直**。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.32 域 A（A1~A7）。
-//   · 出参字段形状 →《销售CRM接口API文档》V1.18 §5.3：
+//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》域 A（A1~A7）。
+//   · 出参字段形状 →《销售CRM接口API文档》§5.3：
 //       部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`
 //       员工 `{id,work_no,name,phone,username?,primary_dept:{id,name},extra_depts:[],product_lines:[],
 //              direct_manager:{id,name},roles:["sale"],status}`

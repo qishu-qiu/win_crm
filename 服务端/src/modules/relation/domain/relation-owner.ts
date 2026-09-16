@@ -2,7 +2,7 @@
 // C 域纯规则（M3-05）—— 「一关系一 owner」
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM数据架构文档》V1.32 C2：`member_type` ∈ `owner`（主责销售，**1**）/
+//   · 《销售CRM数据架构文档》C2：`member_type` ∈ `owner`（主责销售，**1**）/
 //     `collaborator`（协同人：正式协同或被 @求助者，**多**）；DB 侧由生成列
 //     `owner_flag = IF(member_type='owner', relation_id, NULL)` ＋ `uk_owner` 兜底
 //     （→ `migrations/0001_init/migration.sql` 文末 ③）。
@@ -10,7 +10,7 @@
 //     `NULL`＝长期，仅正式协同）；`source` ∈ `collaborate`（协同审批通过）/ `ask_help`（@求助，默认 7 天）。
 //   · 同 C2「主责变更」：换人＝`transfer` 审批；短期＝带期限 collaborator ——
 //     ⇒ **本文件不做「直接改 owner」**，只判「能不能加 owner」（换人另有入口，M3 不做）。
-//   · 《销售CRM架构设计说明》V1.3 §7.5：`P2002` + `uk_owner` → **409**；
+//   · 《销售CRM架构设计说明》§7.5：`P2002` + `uk_owner` → **409**；
 //     `kernel/errors/prisma-error.mapper.ts` 的人话是「该业务关系已有归属销售」。
 //   · 《销售CRM业务需求文档》§4.3：@求助**限同部门**；跨部门走**正式协同审批**（→ 废止口径 #10）。
 //     ⚠ 该约束落在**协同人**上（本文件 `canAddCollaborator`），**不影响** owner 判定。

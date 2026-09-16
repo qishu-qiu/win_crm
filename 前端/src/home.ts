@@ -1,5 +1,5 @@
 /**
- * 角色 → 登录后首屏名（→《销售CRM业务需求文档》V1.27 §4.1 角色表「主入口」列）。
+ * 角色 → 登录后首屏名（→《销售CRM业务需求文档》§4.1 角色表「主入口」列）。
  *
  * 口径逐字：
  *   销售 → **工作台**（今日动线）｜交付 / 客服 → **工作台·工单待办版**｜
@@ -27,7 +27,7 @@ export function homeNameOf(role: string): string {
   }
 }
 
-/** 角色码 → 中文名（内置 6 条，→《数据架构文档》V1.32 A4）；用于空壳上的角色小标 */
+/** 角色码 → 中文名（内置 6 条，→《数据架构文档》A4）；用于空壳上的角色小标 */
 export function roleNameOf(role: string): string {
   const names: Record<string, string> = {
     sale: '销售',

@@ -6,7 +6,7 @@
 //     「符合等保标准，所有的增删改都有迹可查」）—— 实现方式＝**统一审计切面**
 //     （→ `shared/interceptors/audit-log.interceptor.ts`），**不许在每个 service 里各写一遍**
 //     （那正是 §七 首段「散在 ~80 个接口里各写一遍，必然有漏的」）。
-//   · 《销售CRM数据架构文档》V1.32 A10：`action` 统一编码 `模块.动词`
+//   · 《销售CRM数据架构文档》A10：`action` 统一编码 `模块.动词`
 //     （例：`approval.approve` / `event.create` / `sea.phone.view`）；
 //     `target_type / target_id` 记「对什么对象」。
 //   · 《销售CRM业务需求文档》§4.2 ★ ＋ §4.3 三：管理员「每次查看写 `operation_log`」——

@@ -2,7 +2,7 @@
 // 横切装配模块（M0-38）—— 守卫 / 拦截器 / 过滤器 / 管道**一处可见**
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM架构设计说明》V1.3 §5.2：`shared/` ＝ 横切装配（guards / interceptors / filters / pipes）；
+//   · 《销售CRM架构设计说明》§5.2：`shared/` ＝ 横切装配（guards / interceptors / filters / pipes）；
 //     §5.4：`shared/**` 只依赖更低层（kernel）。
 //   · §7.1 ~ §7.5 定义四件套各自的职责（上下文只读 / 数据范围注入 / 脱敏渲染 / 审计 / 异常映射）。
 //

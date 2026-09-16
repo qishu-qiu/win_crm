@@ -2,9 +2,9 @@
 // 鉴权守卫（M0-32）—— 解 JWT → 填请求上下文
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §2.2：`Authorization: Bearer <access_token>`；
+//   · 《销售CRM接口API文档》§2.2：`Authorization: Bearer <access_token>`；
 //     §2.4：缺 / 错 Authorization → **401 / 20002**「未认证 / token 失效」。
-//   · 《销售CRM架构设计说明》V1.3 §7.1：守卫解析登录凭证后把「当前是谁」塞进上下文 ——
+//   · 《销售CRM架构设计说明》§7.1：守卫解析登录凭证后把「当前是谁」塞进上下文 ——
 //     即本守卫的**唯一职责**；★ 横切层**只读上下文、不查库**，故「我是谁」全部来自令牌声明
 //     （映射契约见 `kernel/context/jwt-claims.ts`），**这里绝不注入 org 域的 service**。
 //   · 同 §5.4：`shared/**` 只依赖更低层 —— 本文件只 import `kernel`、`@nestjs/*`。

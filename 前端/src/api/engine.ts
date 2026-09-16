@@ -2,7 +2,7 @@ import type { components } from './types'
 import request from './request'
 
 /**
- * 行动引擎接口封装（→《销售CRM接口API文档》V1.18 §5.7）。
+ * 行动引擎接口封装（→《销售CRM接口API文档》§5.7）。
  *
  * ★ 类型**一律取自 OpenAPI 生成物**（`src/api/types.ts`，`npm run gen:types` 生成）：
  *   前后端各维护一份接口类型是本项目点名的「双真相源」重灾区（禁止手写对接，→ M0-57）。

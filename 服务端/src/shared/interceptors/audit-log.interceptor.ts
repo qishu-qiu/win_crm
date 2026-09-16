@@ -7,7 +7,7 @@
 //     §7.4 括号里的动作（登录 / 改手机号 / 审批 / 公海 / 金额）是**举例，不是穷尽清单** ——
 //     早期 `company.service.ts` / `relation.service.ts` 文件头把它当穷尽读、写下「不写审计」，
 //     那两句已按本口径修正。
-//   · 《销售CRM数据架构文档》V1.32 A10：`action` ＝ `模块.动词`、`target_type/target_id` 记对象、
+//   · 《销售CRM数据架构文档》A10：`action` ＝ `模块.动词`、`target_type/target_id` 记对象、
 //     写入「由应用层**统一审计切面**在业务事务内写入」—— 本类即该切面；**敏感动作的 before/after**
 //     仍由各域 service 在业务事务内调 `AuditService.record()`（本类拿不到改前值）。
 //   · 《销售CRM业务需求文档》§4.2 ★ ＋ §4.3 三：管理员**每次查看**写 `operation_log` ——

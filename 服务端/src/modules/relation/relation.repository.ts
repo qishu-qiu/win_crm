@@ -6,7 +6,7 @@
 //   范围判定在 `domain/relation-scope.ts`、owner 判定在 `domain/relation-owner.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》V1.32 C1（`business_relation`）/
+//   · 表 / 字段 / 索引 →《销售CRM数据架构文档》C1（`business_relation`）/
 //     C2（`relation_member`）。
 //   · 逻辑删除一律 `deleted_at IS NULL`（数据架构 §二 总则）；`merged_into IS NOT NULL`
 //     是**被并分支**（→ C1：跟单仍挂原节点、展示层当分支）⇒ **列表与详情都要跳过它**，

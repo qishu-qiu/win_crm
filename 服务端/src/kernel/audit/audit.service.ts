@@ -8,10 +8,10 @@
 //     操作人快照 ＋ before/after ＋ IP/UA ＋ req_id；业务失败一起回滚。
 //   · 《销售CRM业务需求文档》§4.2 ★ ＋ §4.3 三：管理员「**每次查看写 `operation_log`**」
 //     （谁、何时、看了哪个客户）—— 查看是**读路径**，没有业务事务，走 `recordStandalone`。
-//   · 《销售CRM数据架构文档》V1.32 A10 `operation_log`：本文件的 `AuditLogInput` 与该表**字段 1:1**，
+//   · 《销售CRM数据架构文档》A10 `operation_log`：本文件的 `AuditLogInput` 与该表**字段 1:1**，
 //     **键名沿用 schema.prisma 的字段名（snake_case）** —— Prisma 生成的键名就是 snake_case，
 //     故此映射零转换、零抄错（与 《接口API文档》§2.6 出参 snake_case 口径亦一致）。
-//   · 《销售CRM接口API文档》V1.18 §2.4：未预期错误 → 500 / 20099。
+//   · 《销售CRM接口API文档》§2.4：未预期错误 → 500 / 20099。
 //   · 《开发计划-V1》M0-30 判据：无事务上下文时**抛错** → 见 `transaction-context.ts`。
 //
 // ★ 两条写入路径（**别合并、别互相替代**）：

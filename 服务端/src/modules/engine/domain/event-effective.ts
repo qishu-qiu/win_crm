@@ -2,7 +2,7 @@
 // D 域纯规则（M4-04）—— 「有效沟通」判定（**快速标记不算**）
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM数据架构文档》V1.32 D2（`action_event`）：
+//   · 《销售CRM数据架构文档》D2（`action_event`）：
 //       `action_type` ∈ phone / wechat / visit / onsite / email / meal / gift / greeting /
 //                       ask_help / note / system；
 //       `outcome` 可空：**有效沟通**＝ advanced / stalled / await_reply；

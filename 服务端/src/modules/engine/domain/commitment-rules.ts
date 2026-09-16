@@ -2,7 +2,7 @@
 // D 域纯规则（M4-09）—— 承诺三型 / 类型 / 状态流转
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM数据架构文档》V1.32 D1（`commitment`）：
+//   · 《销售CRM数据架构文档》D1（`commitment`）：
 //       `party` ∈ **me**（我答应客户）/ **them**（客户答应我）/ **verdict**（我定的判定点）；
 //       `ctype` ∈ reply / quote / meet / deliver / decision / followup /
 //                 social_meal / social_gift / social_greeting；
@@ -16,7 +16,7 @@
 //   （`commitment.waive_reason`，migration `0005`）后**开放**：
 //     · `cancelled` 取消 ＝ **录错了 / 这事不成立了**（**不需原因**，纠正误录）；
 //     · `waived` 豁免 ＝ **确有其事但做不成**（客户变卦 / 特殊原因…）—— **必须填原因**。
-//   （→ 需求 §10.1 / 数据架构 D1 V1.32）
+//   （→ 需求 §10.1 / 数据架构 D1）
 //
 // ★ `expired` 不在这里判：它是**派生态**（`due_at` 过了还没 done），由「每日组装」或
 //   查询时按时间算，**不靠写库流转** —— 此处只列允许**由人**触发的目标态。

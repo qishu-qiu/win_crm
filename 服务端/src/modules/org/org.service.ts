@@ -5,14 +5,14 @@
 //   **不写业务规则**（口径在 `domain/`）、**不写 SQL**（在 `*.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §5.2：`POST /account/login` req **`{account,password}`**
+//   · 《销售CRM接口API文档》§5.2：`POST /account/login` req **`{account,password}`**
 //     （`account` ＝ 手机号 或 登录账号名，**服务端判别**，→ 登记表 #32）、
 //     resp `{access_token, refresh_token, user: UserVO}`；`GET /account/me` → `UserVO`
 //     ＝ `{id,name,username?,role,dept:{id,name},managed_dept_ids:[],permissions:{}}`。
 //   · 同 §4.2：`GET /org/employees` **服务端按 `managed_dept_ids` 收敛**（G7）、**销售只能看同部门**
 //     → 收敛规则在 `domain/employee-visibility.ts`（纯函数）。
 //   · 同 §2.2：`access_token` Bearer JWT（建议 2h）＋ `refresh_token`；§2.4：401/20002、403/20003。
-//   · 《销售CRM架构设计说明》V1.3 §7.1：`RequestContext` 随令牌带进请求，
+//   · 《销售CRM架构设计说明》§7.1：`RequestContext` 随令牌带进请求，
 //     **横切层只读上下文、不查库** —— 故登录时把「我是谁、管哪些部门、什么角色、什么范围」一次性签进令牌。
 //   · 同 §7.4：登录是**敏感动作**，须在业务事务内写 `operation_log`（→ M0-30 的 `AuditService`）。
 //

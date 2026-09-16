@@ -2,12 +2,12 @@
 // `@Public()` —— 免鉴权路由标记（M0-32 配套；M0-44c 由 `shared/decorators/` 归位至此）
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §2.2：「所有请求头 Authorization: Bearer <access_token>」
+//   · 《销售CRM接口API文档》§2.2：「所有请求头 Authorization: Bearer <access_token>」
 //     —— 即**默认全站要鉴权**；而登录 `POST /account/login`、刷新 `POST /account/refresh`
 //     本身不可能带 token（→ §四 认证分组）。这两处必须能豁免，否则无人能登录。
-//   · 《销售CRM架构设计说明》V1.3 §5.4：业务域**只许 import `kernel/**`**，不得直连 `shared/**`
+//   · 《销售CRM架构设计说明》§5.4：业务域**只许 import `kernel/**`**，不得直连 `shared/**`
 //     （横切能力由 `APP_GUARD` / `APP_INTERCEPTOR` / `APP_FILTER` / `APP_PIPE` 全局生效）。
-//   · 《销售CRM架构设计说明》V1.3 §七.1 ＋ §4 目录树：`kernel/context/` ＝ 请求上下文
+//   · 《销售CRM架构设计说明》§七.1 ＋ §4 目录树：`kernel/context/` ＝ 请求上下文
 //     （当前人 / 角色 / 管辖部门 / 数据范围）—— 本装饰器正是「本路由**不建**上下文」的标记。
 //
 // ★ 为什么住在 `kernel/context/` 而不是 `shared/decorators/`：

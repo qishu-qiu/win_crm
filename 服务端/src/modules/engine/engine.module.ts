@@ -5,7 +5,7 @@
 //   · 《过程产出/开发计划-V1.md》M4-01 判据：建 `modules/engine/` 四层
 //     （controller / service / domain / repository）＋ `engine.module.ts`，
 //     **`app.module` import 后起服正常**。
-//   · 《销售CRM架构设计说明》V1.3 §5.1 分层：第 1 层 org(A) ＜ 第 2 层 company(B)
+//   · 《销售CRM架构设计说明》§5.1 分层：第 1 层 org(A) ＜ 第 2 层 company(B)
 //     ＜ 第 3 层 relation(C) ＜ **第 4 层 engine(D)** —— 故本模块**可以** import A / B / C 域
 //     （严格更低的层），但**不许** import 同层的 `trade(E)` / `sea(F)` / `approval(G)`，
 //     由 ESLint `no-restricted-imports` 硬卡（M0-44 系列）。

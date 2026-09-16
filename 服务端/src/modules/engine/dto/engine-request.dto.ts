@@ -2,11 +2,11 @@
 // D 域入参 DTO（M4-07 写跟单）
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §5.7：
+//   · 《销售CRM接口API文档》§5.7：
 //       `POST /relations/:id/events` req `{contact_id?,action_type,summary?,outcome?,
 //        stage_forward?,pain_point_id?,competition?,competitor_id?,competition_note?,
 //        duration_min?,mentioned_user_ids?:[],promise?:{...},appointment_id?,visit_log_id?}`
-//   · 《销售CRM数据架构文档》V1.32 D2：`action_type` / `outcome` / `summary` ≤ 200 字；
+//   · 《销售CRM数据架构文档》D2：`action_type` / `outcome` / `summary` ≤ 200 字；
 //       `competition` ∈ none / in_use / comparing；`competition_note` ≤ 100 字。
 //   · 同 §2.4：字段缺失 / 类型错 / **枚举非法** → **400 / 20001**（横切校验管道统一出口）。
 //   · 同 §2.6：入参出参 **snake_case**；id 一律**十进制字符串**（后端 `bigint`）。

@@ -3,7 +3,7 @@
 //   `POST /contacts` / `GET /companies/:id/contacts`
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM接口API文档》V1.18 §5.4：
+//   · 《销售CRM接口API文档》§5.4：
 //       建档 / 改 公司 req `{full_name,industry_l1?,industry_l2?,province?,city?,district?,scale?,
 //         website?,address?,bank_name?,invoice_title?,tax_no?,credit_code?,registered_capital?,
 //         legal_person?,longitude?,latitude?,aliases?:[]}`

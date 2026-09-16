@@ -366,6 +366,7 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
 
       expect(repository.listPrivateRelationsOfDepts).toHaveBeenCalledWith(
         [MANAGED_DEPT_ID],
+        {}, // 没给筛选 → 空条件（**不是**空数组，空数组会变成 `IN ()`）
         expect.objectContaining({ page: 1, pageSize: 20, skip: 0, take: 20 }),
       );
       expect(repository.listPrivateRelations).not.toHaveBeenCalled();
@@ -390,6 +391,7 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
 
       expect(repository.listSeaRelationsOfDepts).toHaveBeenCalledWith(
         [DEPT_ID, MANAGED_DEPT_ID],
+        {},
         expect.objectContaining({ page: 1, pageSize: 20 }),
       );
       expect(repository.listSeaRelations).not.toHaveBeenCalled();
@@ -434,6 +436,7 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
         ME,
         expect.any(Date),
+        {},
         expect.objectContaining({ page: 2, pageSize: 1, skip: 1, take: 1 }),
       );
       // ⚠ `total` **不来自本页行数**：它是仓储给的**全量**计数（桩件＝2 行 → total 2，
@@ -461,7 +464,55 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
         ME,
         expect.any(Date),
+        {},
         expect.objectContaining({ pageSize: 100, take: 100 }),
+      );
+    });
+
+    // ===== P-01 判据：筛选（视图 / 紧迫档）→ 落到仓储的复合条件（2026-09-16 拍板）=====
+
+    it('筛选：`view=following` → **阶段 1~5**（判定在 domain，service 只翻译不判断）', async () => {
+      const { service, repository } = createService({ rows: [] });
+
+      await runWithContext(contextOf(), () =>
+        service.listRelations('private', { view: 'following' }),
+      );
+
+      expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
+        ME,
+        expect.any(Date),
+        { stages: [1, 2, 3, 4, 5] },
+        expect.any(Object),
+      );
+    });
+
+    it('筛选：紧迫档多选落到 `urgencies`；`view=all` **不带**阶段条件', async () => {
+      const { service, repository } = createService({ rows: [] });
+
+      await runWithContext(contextOf(), () =>
+        service.listRelations('private', { view: 'all', urgencies: ['weekly', 'gray'] }),
+      );
+
+      expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
+        ME,
+        expect.any(Date),
+        { urgencies: ['weekly', 'gray'] },
+        expect.any(Object),
+      );
+    });
+
+    it('筛选：**不传就是不过滤** —— 给空条件（空数组会变成 `IN ()`，一条都不返回）', async () => {
+      const { service, repository } = createService({ rows: [] });
+
+      await runWithContext(contextOf(), () =>
+        service.listRelations('private', { view: 'all', urgencies: [''] }),
+      );
+
+      expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
+        ME,
+        expect.any(Date),
+        {},
+        expect.any(Object),
       );
     });
   });

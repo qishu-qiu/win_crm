@@ -261,7 +261,7 @@ export interface paths {
         };
         /**
          * 业务关系列表
-         * @description `tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。**M6-07 起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；排序恒 `id desc`（`order_by` / `keyword` 等筛选属后续）。⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly` 属其它域（M4/M7/E），本批**不返回**（不填假值）
+         * @description `tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。**M6-07 起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；**筛选**：`view`（视图：`all` / `following` / `cooperated` / `churned`）＋ `urgency`（紧迫档**多选**、逗号分隔）—— `total` 数的是**筛完之后**的总数。排序恒 `id desc`（`order_by` / `keyword` 等属后续）。⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly` 属其它域（M4/M7/E），本批**不返回**（不填假值）
          */
         get: operations["RelationController_listRelations"];
         put?: never;
@@ -1568,6 +1568,10 @@ export interface operations {
                 page?: number;
                 /** @description 每页条数（默认 20；超 100 按 100 计） */
                 page_size?: number;
+                /** @description 视图（→ 前端文档 §5）：`all`＝我的全部（不过滤）/ `following`＝跟进中（阶段 1~5）/`cooperated`＝已合作（阶段 6）/ `churned`＝已流失（阶段 7）。⚠ 前端 §5 另有一档「逾期未跟进」，**本批不提供** —— 它要判「逾期」，而逾期唯一来源是承诺 / 预约（D 域），字段尚未落地（→《欠账登记表》D-10）；**不编一个假的逾期定义** */
+                view?: "all" | "following" | "cooperated" | "churned";
+                /** @description 紧迫档**多选**，逗号分隔（→ 需求 §8.2 五档）：`weekly` 周重点 / `monthly` 月重点 / `quarterly` 季度跟 / `long_term` 长期跟 / `gray` 灰度；不传＝不筛。空串按「没筛」处理 */
+                urgency?: string[];
             };
             header?: never;
             path?: never;

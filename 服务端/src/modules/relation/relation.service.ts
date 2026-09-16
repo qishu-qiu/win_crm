@@ -51,6 +51,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CompanyService } from '../company/company.service';
 import { OrgService } from '../org/org.service';
 import { checkValueTierForUrgency } from './domain/relation-attributes';
+import { buildRelationListFilter, type RelationListFilter } from './domain/relation-list-filter';
 import {
   COLLABORATOR_MEMBER_TYPE,
   OWNER_MEMBER_TYPE,
@@ -106,6 +107,18 @@ export interface RelationMemberVo {
 /** 关系详情 ＝ 列表项 ＋ 成员 */
 export interface RelationDetailVo extends RelationVo {
   members: RelationMemberVo[];
+}
+
+/**
+ * 列表入参（分页 ＋ 筛选）：controller 从 query DTO 翻译过来。
+ * ★ 这里收的是**原始视图码 / 紧迫档数组**，各档判定交给 `domain/relation-list-filter.ts`
+ *   —— service 只编排、不写规则（架构 §5.4）。
+ */
+export interface RelationListQuery extends PaginationQuery {
+  /** 视图（→ 前端文档 §5：`all` / `following` / `cooperated` / `churned`） */
+  view?: string;
+  /** 紧迫档多选（→ 需求 §8.2 五档） */
+  urgencies?: readonly string[];
 }
 
 /**
@@ -244,7 +257,7 @@ export class RelationService {
    */
   async listRelations(
     tab: RelationListTab,
-    query: PaginationQuery = {},
+    query: RelationListQuery = {},
   ): Promise<PageResult<RelationVo>> {
     const viewer = requireViewer();
     const scope = resolveRelationListScope(tab, viewer);
@@ -255,15 +268,20 @@ export class RelationService {
     }
 
     const pagination = resolvePagination(query);
+    // ★ 筛选（视图 / 紧迫档）与**数据范围是两层**：范围＝我能看到谁（domain 判定），
+    //   筛选项＝我看到的那批里我想挑哪些（也是 domain 判定）—— 两者在 repository 里
+    //   以**同一个复合 where** 落到 SQL，故 `total` 数的是**筛完之后**的总数。
+    const filter = buildRelationListFilter(query.view, query.urgencies);
     const now = new Date();
     const { rows, total } =
       scope.kind === 'all'
-        ? await this.listAll(tab, pagination)
+        ? await this.listAll(tab, filter, pagination)
         : scope.kind === 'dept'
-          ? await this.listByDepts(tab, scope.deptIds, pagination)
+          ? await this.listByDepts(tab, scope.deptIds, filter, pagination)
           : await this.repository.listPrivateRelationsOfEmployee(
               viewer.employeeId,
               now,
+              filter,
               pagination,
             );
 
@@ -538,18 +556,23 @@ export class RelationService {
 
   // ===== 私有：取数 / 装配 =====
 
-  /** 私海 / 公海 × `all` 档（分页） */
-  private listAll(tab: RelationListTab, pagination: Pagination) {
+  /** 私海 / 公海 × `all` 档（分页 ＋ 筛选） */
+  private listAll(tab: RelationListTab, filter: RelationListFilter, pagination: Pagination) {
     return tab === 'private'
-      ? this.repository.listPrivateRelations(pagination)
-      : this.repository.listSeaRelations(pagination);
+      ? this.repository.listPrivateRelations(filter, pagination)
+      : this.repository.listSeaRelations(filter, pagination);
   }
 
-  /** 私海 / 公海 × `dept` 档（部门公海＝本部门的关系集合，→ C1；分页） */
-  private listByDepts(tab: RelationListTab, deptIds: readonly bigint[], pagination: Pagination) {
+  /** 私海 / 公海 × `dept` 档（部门公海＝本部门的关系集合，→ C1；分页 ＋ 筛选） */
+  private listByDepts(
+    tab: RelationListTab,
+    deptIds: readonly bigint[],
+    filter: RelationListFilter,
+    pagination: Pagination,
+  ) {
     return tab === 'private'
-      ? this.repository.listPrivateRelationsOfDepts(deptIds, pagination)
-      : this.repository.listSeaRelationsOfDepts(deptIds, pagination);
+      ? this.repository.listPrivateRelationsOfDepts(deptIds, filter, pagination)
+      : this.repository.listSeaRelationsOfDepts(deptIds, filter, pagination);
   }
 
   /** 解析 url 上的关系 id → 取行；不存在给 **400 参数错误**（与 B 域同款，→ §2.4） */

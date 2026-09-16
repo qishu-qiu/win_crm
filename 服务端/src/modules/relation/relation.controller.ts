@@ -58,7 +58,9 @@ export class RelationController {
       '经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。' +
       '**M6-07 起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝' +
       ' §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；' +
-      '排序恒 `id desc`（`order_by` / `keyword` 等筛选属后续）。' +
+      '**筛选**：`view`（视图：`all` / `following` / `cooperated` / `churned`）＋ `urgency`' +
+      '（紧迫档**多选**、逗号分隔）—— `total` 数的是**筛完之后**的总数。' +
+      '排序恒 `id desc`（`order_by` / `keyword` 等属后续）。' +
       '⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly`' +
       ' 属其它域（M4/M7/E），本批**不返回**（不填假值）',
   })
@@ -67,6 +69,8 @@ export class RelationController {
     return this.relation.listRelations(query.tab === 'sea' ? 'sea' : ('private' as RelationListTab), {
       page: query.page,
       pageSize: query.page_size,
+      view: query.view,
+      urgencies: query.urgency,
     });
   }
 

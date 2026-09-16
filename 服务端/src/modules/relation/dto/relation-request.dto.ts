@@ -15,14 +15,23 @@
 //   将来加值只改 domain（漏改 DTO 会立刻编译不过）。
 // =============================================================================
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsInt, IsOptional, IsString, Length } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Length,
+} from 'class-validator';
 
 import {
   COMPETITION_VALUES,
   URGENCY_VALUES,
   VALUE_TIER_VALUES,
 } from '../domain/relation-attributes';
+import { RELATION_VIEWS } from '../domain/relation-list-filter';
 import { COLLABORATOR_MEMBER_TYPE, OWNER_MEMBER_TYPE } from '../domain/relation-owner';
 
 /** 页签取值（→ 接口 §4.4：私海 / 公海） */
@@ -55,10 +64,13 @@ export class CreateRelationDto {
 }
 
 /**
- * `GET /relations` 查询参数。
- * ⚠ 规格**未定义本接口的筛选参数**（前端文档 §5 的 seg 视图 / 紧迫档 chip 是**展示层诉求**，
- *   接口侧尚无对应 query）—— 故本批只给「页签 ＋ 通用分页」两项，**不自造筛选参数**
- *   （自造＝替上游拍板；缺的筛选能力已登记为欠账，→ 交接说明 §三）。
+ * `GET /relations` 查询参数：**页签 ＋ 分页 ＋ 筛选（视图 / 紧迫档）**。
+ *
+ * ★ 筛选两项是 **P-01 拍板（2026-09-16，七叔）**新增：前端文档 §5 要求该页有「seg 视图」
+ *   与「紧迫档 chip」，而接口侧原本没有任何对应 query —— 拍板结论＝**由后端开参数**
+ *   （**不是**前端本地过滤：一分页就只能筛当前页，且「共 N 条」会退化成"本页条数"）。
+ * ★ 各档**判定**不写在本文件（DTO 只管"形状"，§2.4）—— 唯一落点＝
+ *   `domain/relation-list-filter.ts`（纯函数、可单测）。
  * ★ 分页两项**只校验「是不是整数」**（类型层，§2.4「类型错 → 400」）；
  *   默认值 1 / 20 与上限 100 的**归一化归 kernel 一处**（→ §2.7）—— 这里不写 `@Min` / `@Max`，
  *   否则同一套夹紧规则会变成两份（`page=0` 该报错还是该回第 1 页，两处说法就分叉了）。
@@ -84,6 +96,33 @@ export class ListRelationQueryDto {
   @Type(() => Number)
   @IsInt({ message: 'page_size 必须是整数' })
   page_size?: number;
+
+  @ApiPropertyOptional({
+    enum: RELATION_VIEWS,
+    default: 'all',
+    description:
+      '视图（→ 前端文档 §5）：`all`＝我的全部（不过滤）/ `following`＝跟进中（阶段 1~5）/' +
+      '`cooperated`＝已合作（阶段 6）/ `churned`＝已流失（阶段 7）。' +
+      '⚠ 前端 §5 另有一档「逾期未跟进」，**本批不提供** —— 它要判「逾期」，而逾期唯一来源是承诺 / ' +
+      '预约（D 域），字段尚未落地（→《欠账登记表》D-10）；**不编一个假的逾期定义**',
+  })
+  @IsOptional()
+  @IsIn([...RELATION_VIEWS], { message: 'view 取值不合法' })
+  view?: string;
+
+  @ApiPropertyOptional({
+    description:
+      '紧迫档**多选**，逗号分隔（→ 需求 §8.2 五档）：`weekly` 周重点 / `monthly` 月重点 / ' +
+      '`quarterly` 季度跟 / `long_term` 长期跟 / `gray` 灰度；不传＝不筛。空串按「没筛」处理',
+    example: 'weekly,gray',
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.split(',').map((part) => part.trim()) : value,
+  )
+  @IsArray({ message: 'urgency 需为逗号分隔的字符串' })
+  @IsIn([...URGENCY_VALUES], { each: true, message: 'urgency 含非法取值' })
+  urgency?: string[];
 }
 
 /** `PUT /relations/:id`（改属性） */

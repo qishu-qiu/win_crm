@@ -29,6 +29,7 @@ import {
   PRIVATE_SEA_STATUS,
   type RelationTriple,
 } from './domain/relation-active-key';
+import { type RelationListFilter } from './domain/relation-list-filter';
 import { COLLABORATOR_MEMBER_TYPE, OWNER_MEMBER_TYPE } from './domain/relation-owner';
 
 /** 交互式事务客户端（同 M2：直接取 Prisma 的 `TransactionClient`，类型上就没有 `$transaction`） */
@@ -264,8 +265,33 @@ export class RelationRepository {
     return { deleted_at: null, merged_into: null, sea_status: COMPANY_SEA_STATUS };
   }
 
-  /** 一个条件 ＋ 分页 → `{ rows, total }`（五个列表方法共用，避免同一段事务抄五遍） */
-  private async pageOf(where: Prisma.BusinessRelationWhereInput, pagination: Pagination) {
+  /**
+   * 筛选条件（视图 / 紧迫档）→ Prisma `where` 片段。
+   * ★ **翻译只在这一处**：上游 `domain/relation-list-filter.ts` 给的是**纯数据**
+   *   （要按哪些阶段 / 哪些紧迫档过滤），到这里才落成表列名 —— domain 不许碰 Prisma，
+   *   repository 才是那一层（架构 §5.4）。
+   */
+  private filterWhere(filter: RelationListFilter): Prisma.BusinessRelationWhereInput {
+    return {
+      ...(filter.stages === undefined ? {} : { stage_id: { in: [...filter.stages] } }),
+      ...(filter.urgencies === undefined ? {} : { urgency: { in: [...filter.urgencies] } }),
+    };
+  }
+
+  /**
+   * 一个范围条件 ＋ 筛选 ＋ 分页 → `{ rows, total }`（五个列表方法共用，避免同一段事务抄五遍）。
+   * ★ `total` 必须与 `rows` 用**同一个复合条件**（范围 ∩ 筛选）：否则筛出 3 条却显示「共 20 条」，
+   *   翻页还会翻出空页 —— 假数字比没数字更坏（→ 铁律坑 16 同类）。
+   */
+  private async pageOf(
+    scopeWhere: Prisma.BusinessRelationWhereInput,
+    filter: RelationListFilter,
+    pagination: Pagination,
+  ) {
+    const where: Prisma.BusinessRelationWhereInput = {
+      ...scopeWhere,
+      ...this.filterWhere(filter),
+    };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.businessRelation.findMany({
         where,
@@ -286,30 +312,43 @@ export class RelationRepository {
    *   `domain/relation-owner.ts` 的 `isEffectiveCollaborator` **同一个时刻**，
    *   否则「列表里有它、点进去说没权限」这种自相矛盾迟早发生；传参也让单测可控。
    */
-  listPrivateRelationsOfEmployee(employeeId: bigint, now: Date, pagination: Pagination) {
-    return this.pageOf(this.privateSeaWhereOfEmployee(employeeId, now), pagination);
+  listPrivateRelationsOfEmployee(
+    employeeId: bigint,
+    now: Date,
+    filter: RelationListFilter,
+    pagination: Pagination,
+  ) {
+    return this.pageOf(this.privateSeaWhereOfEmployee(employeeId, now), filter, pagination);
   }
 
   /** 私海 · **这些部门的**（`dept` 档：经理＝管辖部门） */
-  listPrivateRelationsOfDepts(deptIds: readonly bigint[], pagination: Pagination) {
-    return this.pageOf(this.privateSeaWhereOfDepts(deptIds), pagination);
+  listPrivateRelationsOfDepts(
+    deptIds: readonly bigint[],
+    filter: RelationListFilter,
+    pagination: Pagination,
+  ) {
+    return this.pageOf(this.privateSeaWhereOfDepts(deptIds), filter, pagination);
   }
 
   /** 私海 · **全部**（`all` 档：总经理 / 管理员；管理员只读在 service 层拦） */
-  listPrivateRelations(pagination: Pagination) {
-    return this.pageOf(this.privateSeaWhere(), pagination);
+  listPrivateRelations(filter: RelationListFilter, pagination: Pagination) {
+    return this.pageOf(this.privateSeaWhere(), filter, pagination);
   }
 
   // ===== M3-08 公海列表（同上三种范围）=====
 
   /** 公海 · **这些部门的**（→ C1：部门公海＝`company_sea` 中 `dept_id`=本部门的关系集合） */
-  listSeaRelationsOfDepts(deptIds: readonly bigint[], pagination: Pagination) {
-    return this.pageOf(this.companySeaWhereOfDepts(deptIds), pagination);
+  listSeaRelationsOfDepts(
+    deptIds: readonly bigint[],
+    filter: RelationListFilter,
+    pagination: Pagination,
+  ) {
+    return this.pageOf(this.companySeaWhereOfDepts(deptIds), filter, pagination);
   }
 
   /** 公海 · **全部** */
-  listSeaRelations(pagination: Pagination) {
-    return this.pageOf(this.companySeaWhere(), pagination);
+  listSeaRelations(filter: RelationListFilter, pagination: Pagination) {
+    return this.pageOf(this.companySeaWhere(), filter, pagination);
   }
 
   // ===== M3-10 改属性 =====

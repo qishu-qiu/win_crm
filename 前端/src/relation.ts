@@ -58,6 +58,32 @@ export function urgencyColorOf(urgency: string): string {
   return URGENCY_TOKENS[urgency] ?? 'var(--crm-color-urgency-gray)'
 }
 
+/**
+ * 紧迫档**筛选选项**（→ 需求 §8.2，**顺序照规格表**：周 / 月 / 季度 / 长期 / 灰度）。
+ * ★ 为什么另列一份而不是拿 `URGENCY_NAMES` 的键：对象键序在语义上不可依赖，
+ *   而筛选 chip 的**排列顺序是规格要求的**（周重点必须在最前）。
+ */
+export const URGENCY_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: 'weekly', label: '周重点' },
+  { value: 'monthly', label: '月重点' },
+  { value: 'quarterly', label: '季度跟' },
+  { value: 'long_term', label: '长期跟' },
+  { value: 'gray', label: '灰度' },
+]
+
+/**
+ * 视图筛选选项（→ 接口 §5.6；**各档判定在服务端** `domain/relation-list-filter.ts`）。
+ * ⚠ **只有 4 档**：前端文档 §5 的第五档「逾期未跟进」**服务端暂不提供**
+ *   （它要判"逾期"，而逾期来自承诺 / 预约，字段尚未落地，→《欠账登记表》D-09 / D-10）——
+ *   **页面上不摆一个点了没用的按钮**（那等于骗用户"这功能有"）。
+ */
+export const RELATION_VIEW_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: 'all', label: '我的全部' },
+  { value: 'following', label: '跟进中' },
+  { value: 'cooperated', label: '已合作' },
+  { value: 'churned', label: '已流失' },
+]
+
 /** 开发价值档中文名（→ 需求 §5 术语表：高 / 中 / 低 / 待定） */
 const VALUE_TIER_NAMES: Record<string, string> = {
   high: '高',

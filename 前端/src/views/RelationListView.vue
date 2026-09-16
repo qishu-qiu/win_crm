@@ -31,6 +31,8 @@ import {
   outcomeNameOf,
 } from '../engine'
 import {
+  RELATION_VIEW_OPTIONS,
+  URGENCY_OPTIONS,
   formatDateTime,
   stageNameOf,
   urgencyColorOf,
@@ -75,6 +77,14 @@ const page = ref(1)
 const pageSize = ref(RELATION_PAGE_SIZE_DEFAULT)
 const total = ref(0)
 
+/**
+ * 筛选状态（→ 接口 §5.6）：`view` 单选（视图 4 档）、`urgencies` **多选**（紧迫档 5 档，空＝不筛）。
+ * ★ **筛选一律由服务端做**（`GET /relations?view=&urgency=`）—— 页面**不许**本地过滤：
+ *   一分页就只能筛当前页（第 2 页的「周重点」会被漏掉），「共 N 条」也会退化成"本页条数"。
+ */
+const view = ref('all')
+const urgencies = ref<string[]>([])
+
 /** 每页条数可选值：逐字取设计规范 §4.3「20 / 50 / 100」（AntD 的 `pageSizeOptions` 收字符串） */
 const PAGE_SIZE_OPTIONS = ['20', '50', '100']
 
@@ -106,7 +116,13 @@ async function load(): Promise<void> {
   errorText.value = ''
   loading.value = true
   try {
-    const result = await listRelations(tab.value, page.value, pageSize.value)
+    const result = await listRelations({
+      tab: tab.value,
+      page: page.value,
+      pageSize: pageSize.value,
+      view: view.value,
+      urgencies: urgencies.value,
+    })
     rows.value = result.list
     total.value = result.total
   } catch (error) {
@@ -124,6 +140,30 @@ function onPageChange(pager: TablePaginationConfig): void {
   page.value = pager.current ?? 1
   pageSize.value = pager.pageSize ?? RELATION_PAGE_SIZE_DEFAULT
   void load()
+}
+
+/**
+ * 筛选变化 → **页码必须回第 1 页**再取数。
+ * ★ 不回会看到**空表**：停在第 3 页时一筛，结果集可能只剩 1 页 ——
+ *   用户会以为"没数据"，实际只是页码越界（这类假空态最费口舌）。
+ */
+function onFilterChange(): void {
+  page.value = 1
+  void load()
+}
+
+function selectView(next: string): void {
+  if (view.value === next) return
+  view.value = next
+  onFilterChange()
+}
+
+/** 紧迫档**多选**：再点一次＝取消该档（与 chip 的通用交互一致，不另造"清空"按钮） */
+function toggleUrgency(code: string): void {
+  urgencies.value = urgencies.value.includes(code)
+    ? urgencies.value.filter((item) => item !== code)
+    : [...urgencies.value, code]
+  onFilterChange()
 }
 
 watch(tab, () => {
@@ -365,6 +405,34 @@ async function submitWaive(commitment: Commitment): Promise<void> {
       </button>
     </div>
 
+    <!-- 筛选栏（→ 前端文档 §5；**筛选在服务端做**，见脚本头注释） -->
+    <div class="relations-filters">
+      <span class="relations-filter-label">视图</span>
+      <button
+        v-for="item in RELATION_VIEW_OPTIONS"
+        :key="item.value"
+        type="button"
+        class="relations-chip"
+        :class="{ 'is-active': view === item.value }"
+        @click="selectView(item.value)"
+      >
+        {{ item.label }}
+      </button>
+
+      <span class="relations-filter-label">紧迫档</span>
+      <button
+        v-for="item in URGENCY_OPTIONS"
+        :key="item.value"
+        type="button"
+        class="relations-chip"
+        :class="{ 'is-active': urgencies.includes(item.value) }"
+        @click="toggleUrgency(item.value)"
+      >
+        <span class="relations-dot" :style="{ background: urgencyColorOf(item.value) }" />
+        {{ item.label }}
+      </button>
+    </div>
+
     <p v-if="errorText" class="relations-error">{{ errorText }}</p>
 
     <a-table
@@ -574,6 +642,46 @@ async function submitWaive(commitment: Commitment): Promise<void> {
 }
 
 .relations-tab.is-active {
+  color: var(--crm-color-primary);
+  border-color: var(--crm-color-primary);
+  background: var(--crm-color-primary-bg);
+}
+
+/** 筛选栏：视图 seg ＋ 紧迫档 chip（→ 设计规范 §4.2 单行 inline、控件高统一、高频筛选项 ≤5） */
+.relations-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--crm-space-xs);
+  margin-bottom: var(--crm-space-md);
+}
+
+.relations-filter-label {
+  margin-left: var(--crm-space-sm);
+  font-size: var(--crm-font-size-xs);
+  color: var(--crm-color-text-tertiary);
+}
+
+.relations-filter-label:first-child {
+  margin-left: 0;
+}
+
+/** chip 与页签**同一族视觉**（选中＝主色描边 ＋ 浅底），不为一处控件新造一套 */
+.relations-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--crm-space-xxs);
+  height: 28px;
+  padding: 0 var(--crm-space-sm);
+  font-size: var(--crm-font-size-xs);
+  color: var(--crm-color-text-secondary);
+  background: var(--crm-color-bg-container);
+  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
+  border-radius: var(--crm-radius-pill);
+  cursor: pointer;
+}
+
+.relations-chip.is-active {
   color: var(--crm-color-primary);
   border-color: var(--crm-color-primary);
   background: var(--crm-color-primary-bg);

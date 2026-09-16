@@ -33,13 +33,30 @@ export const RELATION_PAGE_SIZE_DEFAULT = 20
  * ★ 页码 / 每页条数的归一（默认 1 / 20、上限 100）**由后端做**（→ §2.7）：
  *   前端再夹一遍＝第二套夹紧规则，改了后端忘了前端就分叉。
  */
-export async function listRelations(
-  tab: RelationTab,
-  page = 1,
-  pageSize = RELATION_PAGE_SIZE_DEFAULT,
-): Promise<RelationPage> {
+export interface ListRelationsQuery {
+  tab: RelationTab
+  /** 页码（从 1 起；默认 1 —— **归一只在后端**，→ 接口 §2.7） */
+  page?: number
+  /** 每页条数（默认 20、最大 100 —— 归一只在后端） */
+  pageSize?: number
+  /** 视图（→ 接口 §5.6：`all` / `following` / `cooperated` / `churned`） */
+  view?: string
+  /** 紧迫档**多选**（→ 需求 §8.2 五档）；空数组＝不筛 */
+  urgencies?: readonly string[]
+}
+
+export async function listRelations(query: ListRelationsQuery): Promise<RelationPage> {
+  const { tab, page = 1, pageSize = RELATION_PAGE_SIZE_DEFAULT, view, urgencies = [] } = query
   const { data } = await request.get<RelationPage>('/relations', {
-    params: { tab, page, page_size: pageSize },
+    params: {
+      tab,
+      page,
+      page_size: pageSize,
+      // ⚠ 没筛就**整个不带这个参数**（而不是带空串）：少一个参数更干净，
+      //   后端两种都当"没筛"，但前端不该把"空值语义"当协议传出去
+      ...(view === undefined ? {} : { view }),
+      ...(urgencies.length === 0 ? {} : { urgency: urgencies.join(',') }),
+    },
   })
   return data
 }

@@ -6,6 +6,7 @@ import {
   createCommitment,
   listCommitments,
   listEvents,
+  quickMark,
   recordEvent,
   updateCommitment,
   type ActionEvent,
@@ -88,6 +89,69 @@ const urgencies = ref<string[]>([])
 /** 每页条数可选值：逐字取设计规范 §4.3「20 / 50 / 100」（AntD 的 `pageSizeOptions` 收字符串） */
 const PAGE_SIZE_OPTIONS = ['20', '50', '100']
 
+/**
+ * 批量快速标记（M6-09 片 3）—— 勾选多行 → 三选一（未联系 / 未接电话 / 说两句挂了）。
+ *
+ * 口径来源（★ 真相源，勿自造）：
+ *   · 功能 →《销售CRM前端页面与交互文档》§5 第 5 条（业务关系列表「含批量快速标记」）
+ *     ＋ §3（「勾选多客户 → 一次性标记」；落库但**不算有效跟进、不重置掉海倒计时**）。
+ *   · ⚠ **公海不提供标记**（同文档 §9/10「公海内不做任何动作」，2026-09-12 定）：
+ *     故动作条**只在「私海」页签出现** —— 公海是"看号 → 打 → 领取"的动线，领取后才进推进态。
+ *     （⚠ 已知缺口：服务端 `requireWritableRelation` **暂未拦公海关系**，写跟单 / 快速标记
+ *     在公海也能落库 —— 已登记欠账，本页**不据此放宽**：规格说不行就是不行。）
+ *
+ * ★ 判定全在服务端（→ 接口 §5.7）：关系侧判**可写**（越权 / 只读 → 403）；
+ *   页面**不自己判**"这条能不能标"（判一遍＝第二套规则）。
+ * ★ 报数**只信服务端**的 `marked`（＝实际落库条数），不拿"勾了几条"当结果 ——
+ *   服务端会做去重（同一对象勾两次＝一条）。
+ */
+type QuickMarkOutcome = (typeof QUICK_MARK_OUTCOME_OPTIONS)[number]
+
+/** 勾选中的关系 id（**只是选择状态**，不代表能标 —— 能不能标由服务端说了算） */
+const selectedRelationIds = ref<string[]>([])
+/** 正在提交的那一型（用于按钮 loading；同时也用来禁用其它两个按钮，防连点两下写两批） */
+const markingOutcome = ref<QuickMarkOutcome | null>(null)
+
+/** 勾选框只在**私海**出现：公海不提供任何动作（→ 前端文档 §9/10），给了勾选框就是给假入口 */
+const rowSelection = computed(() =>
+  tab.value === 'private'
+    ? {
+        selectedRowKeys: selectedRelationIds.value,
+        onChange: (keys: (string | number)[]): void => {
+          selectedRelationIds.value = keys.map((key) => String(key))
+        },
+      }
+    : undefined,
+)
+
+/**
+ * 提交批量标记。
+ * ★ 成功后**清空勾选**并重新取数：服务端不回写 `last_event_at`，列表看着可能"没变化"，
+ *   但勾选必须清掉 —— 留着勾选会让人以为"上一批没标上"，再点一次就多落一批。
+ */
+async function batchMark(outcome: QuickMarkOutcome): Promise<void> {
+  if (selectedRelationIds.value.length === 0) return
+
+  markingOutcome.value = outcome
+  try {
+    const result = await quickMark({
+      relation_ids: [...selectedRelationIds.value],
+      outcome,
+    })
+    message.success(`已标记 ${result.marked} 条`)
+    selectedRelationIds.value = []
+    await load()
+  } catch {
+    // 失败原因（403 / 参数）由请求层统一弹出，这里不重复堆一层提示；勾选**保留**，便于换了再试
+  } finally {
+    markingOutcome.value = null
+  }
+}
+
+function clearSelection(): void {
+  selectedRelationIds.value = []
+}
+
 const paginationConfig = computed(() => ({
   current: page.value,
   pageSize: pageSize.value,
@@ -114,6 +178,9 @@ const columns = [
 
 async function load(): Promise<void> {
   errorText.value = ''
+  // ★ 每次重新取数前**先清勾选**：翻页 / 换页签 / 改筛选之后，选中的行可能已经不在这一屏 ——
+  //   留着勾选会让人对着一屏没勾的行点「快速标记」，标到他看不见的旧行上
+  selectedRelationIds.value = []
   loading.value = true
   try {
     const result = await listRelations({
@@ -435,11 +502,39 @@ async function submitWaive(commitment: Commitment): Promise<void> {
 
     <p v-if="errorText" class="relations-error">{{ errorText }}</p>
 
+    <!-- 批量快速标记动作条（→ 前端文档 §5 第 5 条 / §3）：**只在私海**（公海不提供动作，→ §9/10） -->
+    <div v-if="tab === 'private' && selectedRelationIds.length > 0" class="relations-bulk">
+      <span class="relations-bulk-count">已选 {{ selectedRelationIds.length }} 条</span>
+      <span class="relations-filter-label">快速标记</span>
+      <a-button
+        v-for="code in QUICK_MARK_OUTCOME_OPTIONS"
+        :key="code"
+        size="small"
+        :loading="markingOutcome === code"
+        :disabled="markingOutcome !== null"
+        @click="batchMark(code)"
+      >
+        {{ outcomeNameOf(code) }}
+      </a-button>
+      <a-button
+        type="text"
+        size="small"
+        :disabled="markingOutcome !== null"
+        @click="clearSelection"
+      >
+        取消选择
+      </a-button>
+      <span class="relations-bulk-hint">
+        快速标记只记一笔「尝试联系」：不算有效跟进、也不重置掉海倒计时。
+      </span>
+    </div>
+
     <a-table
       :columns="columns"
       :data-source="rows"
       :loading="loading"
       :pagination="paginationConfig"
+      :row-selection="rowSelection"
       row-key="id"
       size="middle"
       @change="onPageChange"
@@ -689,6 +784,30 @@ async function submitWaive(commitment: Commitment): Promise<void> {
   color: var(--crm-color-primary);
   border-color: var(--crm-color-primary);
   background: var(--crm-color-primary-bg);
+}
+
+/** 批量动作条：同类操作聚成一条、只勾选后才出现（→ 设计规范 §4.4） */
+.relations-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--crm-space-xs);
+  padding: var(--crm-space-xs) var(--crm-space-sm);
+  margin-bottom: var(--crm-space-md);
+  background: var(--crm-color-primary-bg);
+  border: var(--crm-border-width) solid var(--crm-color-primary);
+  border-radius: var(--crm-radius-sm);
+}
+
+.relations-bulk-count {
+  font-size: var(--crm-font-size-base);
+  font-weight: var(--crm-font-weight-strong);
+  color: var(--crm-color-primary);
+}
+
+.relations-bulk-hint {
+  font-size: var(--crm-font-size-xs);
+  color: var(--crm-color-text-secondary);
 }
 
 /** 错误态：§4.6「错误文案红 12px」（与登录页 / 建档页同一形态） */

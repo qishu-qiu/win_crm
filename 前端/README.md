@@ -24,7 +24,7 @@ npm run preview  # 预览打包产物
 | 路由 | 页面 | 文件 | 状态 |
 | --- | --- | --- | --- |
 | `/login` | 登录 | `src/views/LoginView.vue` | M1-18 ＋ M6-05 打磨（一个输入框＝手机号或登录账号名 ＋ 密码） |
-| `/` | 工作台（今日动线） | `src/views/WorkbenchView.vue` | M4-17 最小版（**M6-06 补全**） |
+| `/` | 工作台（今日动线） | `src/views/WorkbenchView.vue` | **M6-06 补全**（今日概览 3 数 ＋ 今日安排 ＋ 同类合并；动作条只放「写跟进」） |
 | `/entry` | 建档 | `src/views/EntryView.vue` | M2-17 最小版 |
 | `/relations` | 业务关系列表 | `src/views/RelationListView.vue` | M3-14 最小版（**M6-07 补全**） |
 

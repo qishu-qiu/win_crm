@@ -61,6 +61,14 @@ const REF_TYPE_NAMES: Record<string, string> = {
   relation: '掉海提醒',
 }
 
+/** 动线处理状态（→ D4 `daily_agenda.status`；列表只会来 `open` / `snoozed`，`done` / `ignored` 不再推） */
+const AGENDA_STATUS_NAMES: Record<string, string> = {
+  open: '待办',
+  done: '已办',
+  snoozed: '已推明天',
+  ignored: '已忽略',
+}
+
 /** 通用：查表取中文，查不到**原样返回码**（不编一个像中文的东西） */
 function nameOf(table: Record<string, string>, code: string): string {
   return table[code] ?? code
@@ -85,6 +93,10 @@ export function commitmentStatusNameOf(code: string): string {
 
 export function refTypeNameOf(code: string): string {
   return nameOf(REF_TYPE_NAMES, code)
+}
+
+export function agendaStatusNameOf(code: string): string {
+  return nameOf(AGENDA_STATUS_NAMES, code)
 }
 
 /** 时间线卡片的分线（→ D2 / 接口 §5.7 `branch`：`main`＝该关系 owner 写的） */

@@ -1,5 +1,3 @@
-import { homeNameOf } from './home'
-
 /**
  * 角色 × 页面可见性（M6-10）—— 本项目「谁看得到哪个页面」的**唯一落点**。
  *
@@ -114,26 +112,95 @@ export function isPageVisible(role: string, page: PageKey): boolean {
   return pageAccessOf(role, page) !== 'hidden'
 }
 
-/** 顶栏导航项（顺序沿用现行顶栏；**只下发对本人可见的项**） */
-const NAV_ITEMS: ReadonlyArray<{ page: PageKey; path: string; label?: string }> = [
-  // 工作台的名字按角色不同（销售＝工作台 / 交付·客服＝工作台（工单待办版）…），故不写死
-  { page: 'workbench', path: '/' },
-  { page: 'entry', path: '/entry', label: '建档' },
-  { page: 'relations', path: '/relations', label: '业务关系' },
-  { page: 'contacts', path: '/contacts', label: '联系人' },
-]
-
-export interface NavItem {
+/** 菜单叶子 ＝ 一个真实页面 */
+export interface NavLeaf {
+  page: PageKey
   path: string
   label: string
 }
 
-/** 该角色的导航项（不可见者**不下发**，不是"显示了再禁用"） */
+/**
+ * 一级菜单（→《销售CRM前端页面与交互文档》§四.1「一级菜单顺序**固定，不可改**」
+ * ＋《销售CRM业务需求文档》§13.4「侧边栏子菜单可折叠」）。
+ */
+export interface NavGroup {
+  /** 分组键（`localStorage` 记展开 / 收起状态用它；**不是路径**） */
+  key: string
+  label: string
+  /** 本项**自己就是一个页面**时给（纯分组不给 —— 点它只展开 / 收起） */
+  page?: PageKey
+  path?: string
+  /** 子项；**空数组＝顶级项直接可点** */
+  children: NavLeaf[]
+}
+
+/**
+ * 侧边栏一级菜单与顺序（2026-09-18 由顶栏横排改为侧栏时补齐 —— → 欠账 D-36）。
+ *
+ * ★ 命名取**页面名**，不取 `home.ts` 的 `homeNameOf(role)`：
+ *   后者回答的是「**登录后该去哪个页面**」（§4.1 角色表「主入口」列，**目标形态**），
+ *   拿它当"这一项叫什么"就**名实不符** —— 经理看到「数据看板」、点进去却是工作台页
+ *   （D-36 记的原话）。**这一项指向哪个页面，就叫哪个页面的名字**（§五 页面清单逐字）。
+ *
+ * ★ 只登记**已建成的页面**（同本文件 `ACCESS` 表的口径）：§4.1 的 15 个一级菜单里，
+ *   数据看板 / 预约管理 / 高级搜索 / 客户管理 / 合同管理 / 工单管理 / 交付管理 / 审批中心 /
+ *   报表分析 / 组织架构 / 系统设置**一页未建** ⇒ **不摆**（摆了就是"点了报错"的假入口，
+ *   → M6-05 立的规矩）。**建一页在这里加一行**，别在页面 / 守卫里另写一套。
+ *
+ * ★ 「客户档案」是 §4.1 里**带子菜单**的一级菜单（原文：客户档案(公司档案/联系人档案)），
+ *   现只建成「联系人档案」一项，故它此刻是**只有一个子项的分组** —— 结构是对的，
+ *   子项少是页面少的必然结果；**不把子项提成一级菜单**（那是"由实现反过来定义菜单结构"）。
+ */
+const NAV_GROUPS: ReadonlyArray<NavGroup> = [
+  // §4.1 顺序：数据看板 → 工作台 → 预约管理 → 业务关系 → 录入 → …（未建的整段跳过）
+  { key: 'workbench', label: '工作台', page: 'workbench', path: '/', children: [] },
+  { key: 'relations', label: '业务关系', page: 'relations', path: '/relations', children: [] },
+  { key: 'entry', label: '录入', page: 'entry', path: '/entry', children: [] },
+  {
+    // 纯分组：§4.1 的一级菜单「客户档案」，自身没有页面
+    key: 'companyFiles',
+    label: '客户档案',
+    children: [{ page: 'contacts', path: '/contacts', label: '联系人档案' }],
+  },
+]
+
+/** 扁平化的菜单叶子（顺序＝侧栏从上到下；落点计算与测试用） */
+export interface NavItem {
+  page: PageKey
+  path: string
+  label: string
+}
+
+/**
+ * 该角色的侧边栏分组（不可见者**不下发**，不是"显示了再禁用"）。
+ * 纯分组若**子项全不可见**则**整组不出现**（否则就是一个点开空空如也的组）。
+ */
+export function navGroupsOf(role: string): NavGroup[] {
+  const visible: NavGroup[] = []
+  for (const group of NAV_GROUPS) {
+    if (group.children.length === 0) {
+      if (group.page !== undefined && isPageVisible(role, group.page)) visible.push(group)
+      continue
+    }
+    const children = group.children.filter((leaf) => isPageVisible(role, leaf.page))
+    if (children.length > 0) visible.push({ ...group, children })
+  }
+  return visible
+}
+
+/** 该角色的菜单叶子（扁平；`firstVisiblePathOf` 与外壳的选中态用它） */
 export function navItemsOf(role: string): NavItem[] {
-  return NAV_ITEMS.filter((item) => isPageVisible(role, item.page)).map((item) => ({
-    path: item.path,
-    label: item.label ?? homeNameOf(role),
-  }))
+  const items: NavItem[] = []
+  for (const group of navGroupsOf(role)) {
+    if (group.children.length === 0) {
+      if (group.page !== undefined && group.path !== undefined) {
+        items.push({ page: group.page, path: group.path, label: group.label })
+      }
+      continue
+    }
+    items.push(...group.children)
+  }
+  return items
 }
 
 /**

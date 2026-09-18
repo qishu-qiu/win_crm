@@ -227,6 +227,22 @@ export class OrgRepository {
   }
 
   /**
+   * 按 id 批量取**字典项文案**（`dict_item`，→ 数据架构 A11）。
+   *
+   * ★ 为什么由 A 域提供：`dict_item` 是 A 域的表（架构 §5.1 第 1 层含「字典」）——
+   *   B 域要出 `traits:[{trait_id,trait_code,label}]` 的 `label` 时**不许直查本表**（§5.2 路之①）。
+   * ★ 只回 `{id,label}` 这**两列**：字典项还有 `builtin` / `status` / 审计列等，跨域不需要。
+   * ⚠ 与其它引用出口同口径：**只回未删除**的行；查不到的 id 由调用方回落（**不编文案**）。
+   */
+  async findDictItemLabels(ids: readonly bigint[]): Promise<{ id: bigint; label: string }[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.dictItem.findMany({
+      where: { id: { in: uniqueBigints(ids) }, deleted_at: null },
+      select: { id: true, label: true },
+    });
+  }
+
+  /**
    * 按 id 批量取**产品线**引用（供 C 域 `product_line:{id,name,color_key}` 装配，→ 接口 §5.6）。
    *
    * ★ `color_key`（固定配色键）原**无数据源**：需求 §13.3「产品线 = 全系统固定配色（7 条线各一色）」

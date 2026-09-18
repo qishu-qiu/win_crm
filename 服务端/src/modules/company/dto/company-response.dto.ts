@@ -134,6 +134,141 @@ export class ContactBriefVoDto {
   is_current!: boolean;
 }
 
+/** 「实体引用」`{id,name}`（→ §四；此处用于 `phone_locked_by`） */
+export class ContactRefVoDto {
+  @ApiProperty({ type: String, example: '7' })
+  id!: string;
+
+  @ApiProperty({ example: '王海涛' })
+  name!: string;
+}
+
+/** 备用号（→ §5.5 详情 `extra_phones[]`；`note` 可空） */
+export class ContactExtraPhoneVoDto {
+  @ApiProperty({ description: '号型：`mobile` / `landline` / `other`', example: 'mobile' })
+  type!: string;
+
+  @ApiProperty({ description: '号码（与主号同待遇：**被上锁时整个 `extra_phones` 都不返回**）' })
+  number!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: '备注（如「他助理」）' })
+  note?: string;
+}
+
+/** 就职 / 跳槽历史项（→ §5.5 详情 `employments[]`，B5 含历史） */
+export class ContactEmploymentVoDto {
+  @ApiProperty({ type: String, example: '3' })
+  company_id!: string;
+
+  @ApiProperty({ description: '公司全称（就职记录指向的公司）', example: '合肥测试建材有限公司' })
+  company_name!: string;
+
+  @ApiProperty({ type: String, nullable: true, description: '职位' })
+  position!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '入职时间（可空）' })
+  joined_at!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '离职时间（在职为 `null`）' })
+  left_at!: string | null;
+
+  @ApiProperty({ description: '是否当前在职（`true` 的排在最前）' })
+  is_current!: boolean;
+}
+
+/** 谈判特质项（→ §5.5 详情 `traits[]`，B4） */
+export class ContactTraitVoDto {
+  @ApiProperty({ type: String, description: '字典项 id（→ A11）', example: '12' })
+  trait_id!: string;
+
+  @ApiProperty({ description: '特质码（英文码，落库时冗余存了一份）', example: 'price_sensitive' })
+  trait_code!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '中文文案（取自字典 `dict_item`；字典项被停用 / 删除时为 `null`，**不编文案**）',
+    example: '价格敏感',
+  })
+  label!: string | null;
+}
+
+/**
+ * 联系人**详情**（→ 接口 §5.5「详情」）。
+ *
+ * ★ 出参形态（→ §2.8，**是形态、不是权限**）：**详情一律给全号 `phone`** ；
+ *   唯一例外＝该联系人**被上锁**且查看者**不是落锁人** —— 此时 `phone` 与 `extra_phones`
+ *   **两个键都不出现**（锁跟人：主号与备用号一并隐藏），改给 `phone_locked` ＋ `phone_locked_by`。
+ *   故这两个字段声明成 `@ApiPropertyOptional`（**没有值 ≠ 空值**，前端要按"键不存在"判）。
+ * ⚠ 规格详情里的 `unlocked_until`（申请解锁通过后 24h 内可见）依赖 G 域审批，本批**不返回**
+ *   （也不给 `null` 占位）→《欠账登记表》D-04。
+ */
+export class ContactDetailVoDto {
+  @ApiProperty({ type: String, example: '1' })
+  id!: string;
+
+  @ApiProperty({ example: '张伟' })
+  name!: string;
+
+  @ApiPropertyOptional({
+    description:
+      '主号**全号**（→ §2.8：详情给全号，与角色无关）。' +
+      '**被上锁且查看者不是落锁人时该键不存在**',
+    example: '13800000000',
+  })
+  phone?: string;
+
+  @ApiProperty({
+    description:
+      '手机号是否**对当前查看者**处于上锁态（＝锁开着且查看者不是落锁人，→ 需求 §4.3 二）。' +
+      '⚠ 这是**状态**：为 `true` 时本出参不含 `phone` / `extra_phones`',
+  })
+  phone_locked!: boolean;
+
+  @ApiProperty({
+    type: ContactRefVoDto,
+    nullable: true,
+    description: '落锁人（未上锁时为 `null`，→ 需求 §4.3 二「被上锁时显示 by XX」）',
+  })
+  phone_locked_by!: ContactRefVoDto | null;
+
+  @ApiPropertyOptional({
+    type: [ContactExtraPhoneVoDto],
+    description: '备用号（**被上锁且查看者不是落锁人时该键不存在** —— 锁跟人，主号备用号一并隐藏）',
+  })
+  extra_phones?: ContactExtraPhoneVoDto[];
+
+  @ApiProperty({ type: String, nullable: true, description: '微信' })
+  wechat!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '邮箱' })
+  email!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '性别' })
+  gender!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '生日（`YYYY-MM-DD`）', example: '1985-03-12' })
+  birthday!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '决策角色', enum: ['decision', 'influence', 'execute'] })
+  decision_role!: string | null;
+
+  @ApiProperty({ type: [String], description: '个人自由标签（与谈判特质分栏并存，→ B3）' })
+  tags!: string[];
+
+  @ApiProperty({ type: [ContactTraitVoDto], description: '谈判特质（上限＝`dept_rule.contact_trait_max`，→ B4）' })
+  traits!: ContactTraitVoDto[];
+
+  @ApiProperty({ description: '状态', enum: ['active', 'left', 'freelance'], example: 'active' })
+  status!: string;
+
+  @ApiProperty({
+    type: [ContactEmploymentVoDto],
+    description: '就职 / 跳槽历史（**在职的在前**；含历史 → B5）',
+  })
+  employments!: ContactEmploymentVoDto[];
+}
+
 /** 建档联系人出参（详情形态：主号**给全号**，→ §5.5 详情口径） */
 export class ContactCreatedVoDto {
   @ApiProperty({ type: String, example: '1' })

@@ -272,6 +272,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/contacts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 联系人详情
+         * @description **详情出参一律给全号 `phone`**（→ §2.8：这是**出参形态、不是权限**）；唯一例外＝该联系人**被上锁**且查看者**不是落锁人** —— 此时 `phone` 与 `extra_phones`**两个键都不出现**（锁跟人：主号与备用号一并隐藏），改给 `phone_locked` ＋ `phone_locked_by`。含**就职 / 跳槽历史**（在职在前）与**谈判特质**（`label` 取自字典）。可见性：「待关联」（没挂公司）**只给归属人自己**（→ 需求 §6.1 ⑪，别人拿 id 也 403）；已挂公司的人暂按现状（公司维度收敛待补，→《欠账登记表》D-28）。⚠ 规格里的 `unlocked_until`（解锁后 24h 内可见）依赖审批域，本批**不返回**（→ D-04）
+         */
+        get: operations["CompanyController_getContact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{id}/contacts": {
         parameters: {
             query?: never;
@@ -922,6 +942,102 @@ export interface components {
             phone: string;
             /** @description 命中历史号时的提示（**提示不拦截**，→ §5.5） */
             phone_history_hint?: string;
+        };
+        ContactRefVoDto: {
+            /** @example 7 */
+            id: string;
+            /** @example 王海涛 */
+            name: string;
+        };
+        ContactExtraPhoneVoDto: {
+            /**
+             * @description 号型：`mobile` / `landline` / `other`
+             * @example mobile
+             */
+            type: string;
+            /** @description 号码（与主号同待遇：**被上锁时整个 `extra_phones` 都不返回**） */
+            number: string;
+            /** @description 备注（如「他助理」） */
+            note?: string | null;
+        };
+        ContactTraitVoDto: {
+            /**
+             * @description 字典项 id（→ A11）
+             * @example 12
+             */
+            trait_id: string;
+            /**
+             * @description 特质码（英文码，落库时冗余存了一份）
+             * @example price_sensitive
+             */
+            trait_code: string;
+            /**
+             * @description 中文文案（取自字典 `dict_item`；字典项被停用 / 删除时为 `null`，**不编文案**）
+             * @example 价格敏感
+             */
+            label: string | null;
+        };
+        ContactEmploymentVoDto: {
+            /** @example 3 */
+            company_id: string;
+            /**
+             * @description 公司全称（就职记录指向的公司）
+             * @example 合肥测试建材有限公司
+             */
+            company_name: string;
+            /** @description 职位 */
+            position: string | null;
+            /** @description 入职时间（可空） */
+            joined_at: string | null;
+            /** @description 离职时间（在职为 `null`） */
+            left_at: string | null;
+            /** @description 是否当前在职（`true` 的排在最前） */
+            is_current: boolean;
+        };
+        ContactDetailVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @example 张伟 */
+            name: string;
+            /**
+             * @description 主号**全号**（→ §2.8：详情给全号，与角色无关）。**被上锁且查看者不是落锁人时该键不存在**
+             * @example 13800000000
+             */
+            phone?: string;
+            /** @description 手机号是否**对当前查看者**处于上锁态（＝锁开着且查看者不是落锁人，→ 需求 §4.3 二）。⚠ 这是**状态**：为 `true` 时本出参不含 `phone` / `extra_phones` */
+            phone_locked: boolean;
+            /** @description 落锁人（未上锁时为 `null`，→ 需求 §4.3 二「被上锁时显示 by XX」） */
+            phone_locked_by: components["schemas"]["ContactRefVoDto"] | null;
+            /** @description 备用号（**被上锁且查看者不是落锁人时该键不存在** —— 锁跟人，主号备用号一并隐藏） */
+            extra_phones?: components["schemas"]["ContactExtraPhoneVoDto"][];
+            /** @description 微信 */
+            wechat: string | null;
+            /** @description 邮箱 */
+            email: string | null;
+            /** @description 性别 */
+            gender: string | null;
+            /**
+             * @description 生日（`YYYY-MM-DD`）
+             * @example 1985-03-12
+             */
+            birthday: string | null;
+            /**
+             * @description 决策角色
+             * @enum {string|null}
+             */
+            decision_role: "decision" | "influence" | "execute" | null;
+            /** @description 个人自由标签（与谈判特质分栏并存，→ B3） */
+            tags: string[];
+            /** @description 谈判特质（上限＝`dept_rule.contact_trait_max`，→ B4） */
+            traits: components["schemas"]["ContactTraitVoDto"][];
+            /**
+             * @description 状态
+             * @example active
+             * @enum {string}
+             */
+            status: "active" | "left" | "freelance";
+            /** @description 就职 / 跳槽历史（**在职的在前**；含历史 → B5） */
+            employments: components["schemas"]["ContactEmploymentVoDto"][];
         };
         RelationRefDto: {
             /**
@@ -1822,6 +1938,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactCreatedVoDto"];
+                };
+            };
+        };
+    };
+    CompanyController_getContact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 联系人 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactDetailVoDto"];
                 };
             };
         };

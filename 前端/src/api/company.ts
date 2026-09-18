@@ -70,6 +70,26 @@ export async function listContacts(options: { onlyUnlinked?: boolean } = {}): Pr
   return data
 }
 
+/** 联系人详情（→ §5.5 `GET /contacts/:id`） */
+export type ContactDetail = components['schemas']['ContactDetailVoDto']
+
+/**
+ * 联系人详情（→ §5.5 `GET /contacts/:id`）—— 联系人详情页（页 15）用（页面未建 → D-03 后半）。
+ *
+ * ★ **详情一律给全号**（→ §2.8：这是**出参形态、不是权限**，与角色无关）—— 页面**不要再打一次码**。
+ * ★ 唯一例外：该联系人**被上锁**且**你不是落锁人** ⇒ 出参里**根本没有 `phone` / `extra_phones`
+ *   这两个键**（不是空串、也不是 `null`）⇒ 页面必须按 **`'phone' in detail`** 判：
+ *   写成 `detail.phone ?? '—'` 会把「已上锁」误显示成「没填号码」。
+ * ★ 可见性由服务端给：「待关联」（没挂公司）**只给归属人自己**，别人拿到 id 也 **403**
+ *   （→ 需求 §6.1 ⑪）；已挂公司者暂按现状（→ D-28）。
+ * ⚠ 规格里的 `unlocked_until`（申请解锁通过后 24h 内可见）依赖审批域（G），本批**不返回**
+ *   （→ D-04）—— 页面**不要**自己摆「申请解锁」入口。
+ */
+export async function getContact(id: string): Promise<ContactDetail> {
+  const { data } = await request.get<ContactDetail>(`/contacts/${id}`)
+  return data
+}
+
 /** 「关联公司并激活业务关系」的入参 / 出参（→ §5.6，欠账 D-29） */
 export type ActivateRelationInput = components['schemas']['ActivateRelationDto']
 export type ActivateRelationResult = components['schemas']['ActivateRelationResultDto']

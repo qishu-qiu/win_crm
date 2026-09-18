@@ -21,6 +21,7 @@ import {
   CompanyService,
   type CompanyVo,
   type ContactBriefVo,
+  type ContactDetailVo,
   type CreatedContactVo,
   type SearchDupResult,
 } from './company.service';
@@ -34,6 +35,7 @@ import {
   CompanyVoDto,
   ContactBriefVoDto,
   ContactCreatedVoDto,
+  ContactDetailVoDto,
   SearchDupResultVoDto,
 } from './dto/company-response.dto';
 
@@ -119,6 +121,27 @@ export class CompanyController {
   @ApiOkResponse({ type: ContactCreatedVoDto })
   createContact(@Body() body: CreateContactDto): Promise<CreatedContactVo> {
     return this.company.createContact(body);
+  }
+
+  // ===== M6-15 联系人详情（欠账 D-03）=====
+
+  @Get('contacts/:id')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '联系人详情',
+    description:
+      '**详情出参一律给全号 `phone`**（→ §2.8：这是**出参形态、不是权限**）；' +
+      '唯一例外＝该联系人**被上锁**且查看者**不是落锁人** —— 此时 `phone` 与 `extra_phones`' +
+      '**两个键都不出现**（锁跟人：主号与备用号一并隐藏），改给 `phone_locked` ＋ `phone_locked_by`。' +
+      '含**就职 / 跳槽历史**（在职在前）与**谈判特质**（`label` 取自字典）。' +
+      '可见性：「待关联」（没挂公司）**只给归属人自己**（→ 需求 §6.1 ⑪，别人拿 id 也 403）；' +
+      '已挂公司的人暂按现状（公司维度收敛待补，→《欠账登记表》D-28）。' +
+      '⚠ 规格里的 `unlocked_until`（解锁后 24h 内可见）依赖审批域，本批**不返回**（→ D-04）',
+  })
+  @ApiParam({ name: 'id', description: '联系人 id（十进制字符串）' })
+  @ApiOkResponse({ type: ContactDetailVoDto })
+  getContact(@Param('id') id: string): Promise<ContactDetailVo> {
+    return this.company.getContact(id);
   }
 
   // ===== M2-14 公司联系人 =====

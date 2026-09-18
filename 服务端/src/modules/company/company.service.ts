@@ -36,6 +36,8 @@ import {
   maskPhone,
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
+// A 域出口（架构 §5.2 路之①）：字典文案 ＋ 员工姓名 —— B 域**不许**直查 `dict_item` / `employee`
+import { OrgService } from '../org/org.service';
 import { compareCompanyNameCore, type CompanyMatchType } from './domain/company-name-similarity';
 import { isPhoneLockedForViewer } from './domain/contact-lock';
 import { toNameCore } from './domain/company-name';
@@ -102,6 +104,54 @@ export interface CreatedContactVo {
   phone_history_hint?: string;
 }
 
+/** 就职 / 跳槽历史项（→ §5.5 详情 `employments`，B5 `company_contact` 含历史） */
+export interface ContactEmploymentVo {
+  company_id: bigint;
+  company_name: string;
+  position: string | null;
+  joined_at: string | null;
+  left_at: string | null;
+  is_current: boolean;
+}
+
+/**
+ * 谈判特质项（→ §5.5 详情 `traits`，B4 `contact_trait`）。
+ * ★ `trait_code` 取自 `contact_trait` **建标记时冗余落库**的那一列；`label` 是**字典文案**
+ *   （`dict_item`，A 域的表）—— 字典项被停用 / 删除时给 `null`（**不编文案**，前端显示码本身）。
+ */
+export interface ContactTraitVo {
+  trait_id: bigint;
+  trait_code: string;
+  label: string | null;
+}
+
+/**
+ * 联系人**详情**（→ §5.5「详情」形态）。
+ * ★ 出参形态（→ §2.8，**是形态不是权限**）：**详情一律全号**；唯一例外＝被上锁且查看者
+ *   不是落锁人 —— 此时 `phone` 与 `extra_phones` **两个键都不出现**（锁跟人：主号备用号一并隐藏）。
+ * ⚠ 规格详情里还有 `unlocked_until`（申请解锁通过后 24h 内可见）：依赖 G 域审批（`phone_unlock`），
+ *   未建 ⇒ 本批**既不给值也不给 `null` 占位**（→《欠账登记表》D-04）。
+ */
+export interface ContactDetailVo {
+  id: bigint;
+  name: string;
+  /** 主号（全号）；**上锁且查看者非落锁人时该键不出现** */
+  phone?: string;
+  phone_locked: boolean;
+  phone_locked_by: { id: bigint; name: string } | null;
+  /** 备用号；**上锁且查看者非落锁人时该键不出现** */
+  extra_phones?: { type: string; number: string; note?: string }[];
+  wechat: string | null;
+  email: string | null;
+  gender: string | null;
+  birthday: string | null;
+  decision_role: string | null;
+  tags: string[];
+  traits: ContactTraitVo[];
+  status: string;
+  employments: ContactEmploymentVo[];
+}
+
 /** 「同部门 / 别的部门」等提示不进本批；`take` 上限集中在仓储，这里只做去重与排序 */
 const MAX_CANDIDATES = 20;
 
@@ -124,6 +174,8 @@ export class CompanyService {
   constructor(
     private readonly repository: CompanyRepository,
     private readonly prisma: PrismaService,
+    /** A 域出口（M6-15 起：联系人详情要字典文案 ＋ 落锁人姓名） */
+    private readonly org: OrgService,
   ) {}
 
   // ===== M2-08 建档（公司）=====
@@ -477,6 +529,102 @@ export class CompanyService {
     );
   }
 
+  // ===== M6-15 联系人详情（→ 接口 §5.5 `GET /contacts/:id`；欠账 D-03）=====
+
+  /**
+   * 联系人详情（→ §5.5「详情」形态：主号全号 ＋ 备用号 ＋ 就职历史 ＋ 谈判特质 ＋ 锁状态）。
+   *
+   * ★ **可见性**（与 `listContacts` **同一套判定**，两处不许各写一遍 —— 分叉就会
+   *   「列表里看得到、点进去 403」或反过来）：
+   *   ① `all` 档（总经理 / 管理员）→ 看全部（不套过滤）；
+   *   ② 「待关联」（没挂公司）→ **只给归属人自己**（→ 需求 §6.1 ⑪）：线索属私人待跟进，
+   *      别人拿到 id 也看不了 → **403**；
+   *   ③ 已挂公司的人 → **暂按现状**（只要有就职记录就可见）。严格口径是"我关系下公司的联系人"，
+   *      判定要复用 C 域的数据范围，而 `company`(L2) → `relation`(L3) 属**反向依赖**（架构 §3 禁止），
+   *      故落地方式待定（→《欠账登记表》**D-28**；本处刻意与列表同宽，不自己收紧）。
+   *
+   * ★ **脱敏**（→ §2.8：详情给全号，是**出参形态、不是权限**）：唯一例外＝该联系人**被上锁**
+   *   且查看者**不是落锁人** ⇒ `phone` 与 `extra_phones` **两个键都不给**（锁跟人：主号与备用号
+   *   一并隐藏），改给 `phone_locked` ＋ `phone_locked_by`。
+   *   ⚠ 判定唯一落点仍是 `domain/contact-lock.ts`（本层只按结论决定给不给号）。
+   *
+   * ⚠ 规格详情里的 `unlocked_until`（申请解锁通过后 24h 内可见）依赖 G 域审批，**本批不返**
+   *   （也不返 `null` 占位 —— 那会让人以为"字段在、只是没解锁"）→《欠账登记表》D-04。
+   */
+  async getContact(id: string): Promise<ContactDetailVo> {
+    const context = getRequestContext();
+    if (context === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+        constraint: 'company.no_context',
+      });
+    }
+    const viewerId = context.employeeId;
+    const contactId = jsonToBigint(id, 'id');
+
+    const row = await this.repository.findContactDetailById(contactId);
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：联系人不存在（或已删除 / 已合并）', {
+        constraint: 'company.contact_missing',
+      });
+    }
+
+    const [employments, traits] = await Promise.all([
+      this.repository.findContactEmployments(contactId),
+      this.repository.findContactTraits(contactId),
+    ]);
+
+    // 可见性（见方法头 ★②）：`all` 档看全部；「待关联」只有归属人能看；已挂公司的暂按现状
+    const allScope = context.dataScope.type === 'all';
+    if (!allScope && employments.length === 0 && row.owner_id !== viewerId) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权查看：未挂公司的待跟进线索只对归属人可见', {
+        constraint: 'contact.out_of_scope',
+      });
+    }
+
+    // 锁：唯一判定点在 `domain/contact-lock.ts`；未上锁时 `lockerId` 为 `null`（不必白问 A 域）
+    const locked = isPhoneLockedForViewer(row, viewerId);
+    const lockerId = locked ? row.phone_locked_by : null;
+
+    // 跨域取名 / 取文案（A 域出口；两次都是**批量**形式，未上锁 / 无特质时传空数组不发查询）
+    const [labels, lockers] = await Promise.all([
+      this.org.getDictItemLabels(traits.map((trait) => trait.trait_id)),
+      this.org.getEmployeeRefs(lockerId === null ? [] : [lockerId]),
+    ]);
+    const labelById = new Map(labels.map((item) => [item.id.toString(), item.label]));
+    const locker = lockers[0];
+
+    return {
+      id: row.id,
+      name: row.name,
+      // 上锁 ⇒ **整个键不出现**（→ §2.8「`phone` 与 `extra_phones` 只在一种情况下缺省」）
+      ...(locked ? {} : { phone: row.phone }),
+      phone_locked: locked,
+      phone_locked_by: locker === undefined ? null : { id: locker.id, name: locker.name },
+      ...(locked ? {} : { extra_phones: parseExtraPhones(row.extra_phones) }),
+      wechat: row.wechat,
+      email: row.email,
+      gender: row.gender,
+      // DATE 列（无时刻）：按 UTC 年-月-日 截断，避免时区把生日挪一天
+      birthday: row.birthday === null ? null : row.birthday.toISOString().slice(0, 10),
+      decision_role: row.decision_role,
+      tags: parseStringArray(row.tags),
+      traits: traits.map((trait) => ({
+        trait_id: trait.trait_id,
+        trait_code: trait.trait_code,
+        label: labelById.get(trait.trait_id.toString()) ?? null,
+      })),
+      status: row.status,
+      employments: employments.map((item) => ({
+        company_id: item.company.id,
+        company_name: item.company.full_name,
+        position: item.position,
+        joined_at: item.joined_at === null ? null : item.joined_at.toISOString(),
+        left_at: item.left_at === null ? null : item.left_at.toISOString(),
+        is_current: item.is_current,
+      })),
+    };
+  }
+
   /** 当前登录人 id；拿不到 → 401（正常链路上守卫已在前，走到这里还没有上下文＝装配问题） */
   private requireOperatorId(): bigint {
     const context = getRequestContext();
@@ -543,6 +691,29 @@ function toContactBrief(
     decision_role: row.decision_role,
     is_current: extras.is_current,
   };
+}
+
+/**
+ * JSON 列 → 字符串数组：**脏值 / 非字符串元素一律丢弃**（列可空、也可能存着历史遗留形状）。
+ *
+ * ⚠ A 域 `org.repository.ts` 里有一份同姿势的 `parseStringList`；此处**没有 import 它**，
+ *   是因为「跨域直连对方的 repository」被 ESLint 硬卡（架构 §5.4）。若要收口，
+ *   应把这类「JSON 列拉直」的纯函数上移 `kernel/common/`，而不是让 B 域引 A 域仓储。
+ */
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+}
+
+/** JSON 列 → 备用号数组：**逐项校验形状**，坏项丢弃（宁可少显一条，也不把脏数据抛给页面） */
+function parseExtraPhones(value: unknown): { type: string; number: string; note?: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (typeof item !== 'object' || item === null) return [];
+    const { type, number, note } = item as Record<string, unknown>;
+    if (typeof type !== 'string' || typeof number !== 'string') return [];
+    return [{ type, number, ...(typeof note === 'string' ? { note } : {}) }];
+  });
 }
 
 /** 公司行 → 出参（`Decimal` 显式转字符串：别指望 JSON 序列化替我们做） */

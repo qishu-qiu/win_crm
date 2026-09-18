@@ -15,6 +15,7 @@
 // =============================================================================
 import { AppError, ErrorCode, runWithContext, type RequestContext } from '../../kernel/index';
 import { type PrismaService } from '../../prisma/prisma.service';
+import type { OrgService } from '../org/org.service';
 import { CompanyRepository, type CreateCompanyData } from './company.repository';
 import { CompanyService } from './company.service';
 import type { CreateCompanyDto, CreateContactDto } from './dto/company-request.dto';
@@ -125,6 +126,32 @@ function contactRow(overrides: Partial<ContactRowFixture> = {}): ContactRowFixtu
   };
 }
 
+/**
+ * M6-15：造一条仓储读出的**联系人详情行**（字段与 `CONTACT_DETAIL_SELECT` 对齐 ——
+ * 简卡那些 ＋ `owner_id` / `deleted_at`）。默认＝**未上锁、有归属、有备用号**的普通联系人。
+ */
+function contactDetailRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 11n,
+    name: '张伟',
+    phone: '13800000000',
+    extra_phones: [{ type: 'landline', number: '0551-12345678' }],
+    wechat: 'zhangwei',
+    email: null,
+    gender: 'male',
+    birthday: new Date('1985-03-12T00:00:00Z'),
+    decision_role: 'decision',
+    tags: ['爱喝茶'],
+    status: 'active',
+    phone_locked_at: null,
+    phone_locked_by: null,
+    merged_into: null,
+    owner_id: OPERATOR_ID,
+    deleted_at: null,
+    ...overrides,
+  };
+}
+
 interface FakeOptions {
   candidates?: CompanyRowFixture[];
   byCreditCode?: CompanyRowFixture | null;
@@ -142,6 +169,16 @@ interface FakeOptions {
   contactRefs?: { id: bigint; name: string }[];
   /** M6-14：该联系人**已有几条就职记录**（`0` ＝ 「待关联」） */
   contactLinkCount?: number;
+  /** M6-15：联系人**详情行**（显式给 `null` ＝ 查不到 / 已删 / 已合并） */
+  contactDetail?: Record<string, unknown> | null;
+  /** M6-15：就职历史（默认空数组 ＝ 「待关联」） */
+  employments?: Record<string, unknown>[];
+  /** M6-15：谈判特质（`{trait_id,trait_code}`，label 由 A 域字典出口给） */
+  traits?: { trait_id: bigint; trait_code: string }[];
+  /** M6-15：A 域字典出口返回的文案（**查不到即无 label**，用来钉「不编文案」） */
+  dictLabels?: { id: bigint; label: string }[];
+  /** M6-15：A 域员工出口返回的人（落锁人姓名用） */
+  employeeRefs?: { id: bigint; name: string }[];
 }
 
 function createRepository(options: FakeOptions = {}) {
@@ -188,6 +225,18 @@ function createRepository(options: FakeOptions = {}) {
       void contactId;
       return options.contactLinkCount ?? 0;
     }),
+    // M6-15：联系人详情的三个读（详情行 / 就职历史 / 谈判特质）
+    findContactDetailById: jest.fn(async (id: bigint) =>
+      options.contactDetail === undefined ? contactDetailRow({ id }) : options.contactDetail,
+    ),
+    findContactEmployments: jest.fn(async (contactId: bigint) => {
+      void contactId;
+      return options.employments ?? [];
+    }),
+    findContactTraits: jest.fn(async (contactId: bigint) => {
+      void contactId;
+      return options.traits ?? [];
+    }),
   };
 }
 
@@ -200,9 +249,32 @@ function createPrisma() {
   return client as unknown as PrismaService;
 }
 
+/** A 域替身（M6-15 起 B 域要用它的两个出口：字典文案 / 员工姓名） */
+function createOrg(options: FakeOptions = {}) {
+  return {
+    getDictItemLabels: jest.fn(async (ids: readonly bigint[]) =>
+      (options.dictLabels ?? []).filter((item) => ids.includes(item.id)),
+    ),
+    getEmployeeRefs: jest.fn(async (ids: readonly bigint[]) =>
+      (options.employeeRefs ?? [{ id: LOCKER_ID, name: '李强' }]).filter((item) =>
+        ids.includes(item.id),
+      ),
+    ),
+  };
+}
+
 function createService(options: FakeOptions = {}) {
   const repository = createRepository(options);
-  return { service: new CompanyService(repository as unknown as CompanyRepository, createPrisma()), repository };
+  const org = createOrg(options);
+  return {
+    service: new CompanyService(
+      repository as unknown as CompanyRepository,
+      createPrisma(),
+      org as unknown as OrgService,
+    ),
+    repository,
+    org,
+  };
 }
 
 async function captureAppError(run: () => Promise<unknown>): Promise<AppError> {
@@ -685,6 +757,155 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         expect(error.constraint).toBe('company.read_only');
         expect(repository.createCompanyContact).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  // ===========================================================================
+  // M6-15 联系人详情（→ 接口 §5.5 `GET /contacts/:id`；欠账 D-03）
+  //
+  // 两条最要紧的判据：**锁跟人**（上锁时主号与备用号一并隐藏）与
+  // **「待关联」只给归属人**（列表与详情必须是同一套判定，不许一处宽一处严）。
+  // ===========================================================================
+  describe('M6-15 getContact（联系人详情）', () => {
+    const EMPLOYMENTS = [
+      {
+        is_current: true,
+        position: '采购总监',
+        joined_at: new Date('2020-01-01T00:00:00Z'),
+        left_at: null,
+        company: { id: 3n, full_name: '合肥测试建材有限公司' },
+      },
+      {
+        is_current: false,
+        position: '采购经理',
+        joined_at: new Date('2015-01-01T00:00:00Z'),
+        left_at: new Date('2019-12-31T00:00:00Z'),
+        company: { id: 5n, full_name: '安徽鑫中网信息技术有限公司' },
+      },
+    ];
+
+    it('正常：**给全号** ＋ 备用号 ＋ 就职历史 ＋ 特质文案取自字典（→ §2.8 / §5.5）', async () => {
+      const { service } = createService({
+        employments: EMPLOYMENTS,
+        traits: [{ trait_id: 12n, trait_code: 'price_sensitive' }],
+        dictLabels: [{ id: 12n, label: '价格敏感' }],
+      });
+
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+
+      expect(detail.phone).toBe('13800000000');
+      expect(detail.phone_locked).toBe(false);
+      expect(detail.phone_locked_by).toBeNull();
+      expect(detail.extra_phones).toEqual([{ type: 'landline', number: '0551-12345678' }]);
+      expect(detail.traits).toEqual([
+        { trait_id: 12n, trait_code: 'price_sensitive', label: '价格敏感' },
+      ]);
+      // 顺序＝仓储给的顺序（在职在前由 `orderBy` 保证，service 不重排）
+      expect(detail.employments.map((item) => [item.company_id, item.is_current])).toEqual([
+        [3n, true],
+        [5n, false],
+      ]);
+      // DATE 列按 UTC 年-月-日 截断：不能被时区把生日挪一天
+      expect(detail.birthday).toBe('1985-03-12');
+      expect(detail.tags).toEqual(['爱喝茶']);
+    });
+
+    it('★ 锁跟人：被上锁 ＋ 查看者**不是落锁人** → `phone` 与 `extra_phones` **两个键都不出现**', async () => {
+      const { service } = createService({
+        contactDetail: contactDetailRow({
+          phone_locked_at: LOCKED_AT,
+          phone_locked_by: LOCKER_ID,
+        }),
+        employeeRefs: [{ id: LOCKER_ID, name: '李强' }],
+      });
+
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+
+      expect('phone' in detail).toBe(false);
+      expect('extra_phones' in detail).toBe(false);
+      expect(detail.phone_locked).toBe(true);
+      expect(detail.phone_locked_by).toEqual({ id: LOCKER_ID, name: '李强' });
+    });
+
+    it('被上锁但查看者**就是落锁人** → 照常全号（锁是自我保护，不挡自己，→ 需求 §4.3 二）', async () => {
+      const { service } = createService({
+        contactDetail: contactDetailRow({
+          phone_locked_at: LOCKED_AT,
+          phone_locked_by: OPERATOR_ID,
+        }),
+      });
+
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+
+      expect(detail.phone).toBe('13800000000');
+      expect(detail.phone_locked).toBe(false);
+    });
+
+    it('★ 「待关联」（没挂公司）＋ 查看者不是归属人 → **403**（别人拿到 id 也看不了）', async () => {
+      const { service, org } = createService({
+        contactDetail: contactDetailRow({ owner_id: LOCKER_ID }),
+        employments: [],
+      });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.getContact('11')),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('contact.out_of_scope');
+      // 看不到就**不该再往下取**（字典 / 人名一次都不该问）
+      expect(org.getDictItemLabels).not.toHaveBeenCalled();
+    });
+
+    it('「待关联」但**归属人是我** → 正常返回（这就是"我的待跟进"）', async () => {
+      const { service } = createService({ employments: [] });
+
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+
+      expect(detail.id).toBe(11n);
+    });
+
+    it('`all` 档（总经理 / 管理员）→ 别人的「待关联」也看得到（与列表同一口径）', async () => {
+      const { service } = createService({
+        contactDetail: contactDetailRow({ owner_id: LOCKER_ID }),
+        employments: [],
+      });
+
+      const detail = await runWithContext({ ...CONTEXT, dataScope: { type: 'all', deptIds: [] } }, () =>
+        service.getContact('11'),
+      );
+
+      expect(detail.id).toBe(11n);
+    });
+
+    it('字典项查不到 → `label` 给 `null`（**不编文案**）', async () => {
+      const { service } = createService({
+        traits: [{ trait_id: 99n, trait_code: 'unknown' }],
+        dictLabels: [],
+      });
+
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+
+      expect(detail.traits).toEqual([{ trait_id: 99n, trait_code: 'unknown', label: null }]);
+    });
+
+    it('联系人不存在（已删 / 已合并）→ 400（不是 403：先答"有没有"，再答"能不能看"）', async () => {
+      const { service } = createService({ contactDetail: null });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.getContact('999')),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('company.contact_missing');
+    });
+
+    it('没有请求上下文 → 401（可见性取决于「我是谁」，没有身份就不能猜）', async () => {
+      const { service } = createService();
+
+      const error = await captureAppError(() => service.getContact('11'));
+
+      expect(error.httpStatus).toBe(401);
     });
   });
 });

@@ -77,6 +77,19 @@ const CONTACT_SELECT = {
   merged_into: true,
 } as const;
 
+/**
+ * 联系人**详情**读出的列 ＝ 简卡那些 ＋ 两项**判定用**的列：
+ *   · `owner_id` —— 判「这条『待关联』线索是不是归当前查看者」（→ 需求 §6.1 ⑦⑪）；
+ *   · `deleted_at` —— 判「联系人还在不在」（简卡走的是列表，本来就筛过）。
+ * ★ 出参形态（→ §2.8）：**详情一律给全号 `phone`**（列表 / 卡片才是 `phone_masked`）——
+ *   是否给号由「锁 ＋ 查看者是不是落锁人」决定（→ `domain/contact-lock.ts`），与角色无关。
+ */
+const CONTACT_DETAIL_SELECT = {
+  ...CONTACT_SELECT,
+  owner_id: true,
+  deleted_at: true,
+} as const;
+
 /** 建档公司时写入的列（由 service 组装好，仓储只管落库） */
 export interface CreateCompanyData {
   full_name: string;
@@ -194,6 +207,56 @@ export class CompanyRepository {
     return this.prisma.contact.findMany({
       where: { id: { in: [...new Set(ids)] }, deleted_at: null, merged_into: null },
       select: { id: true, owner_id: true },
+    });
+  }
+
+  // ===== M6-15 联系人详情（D-03）=====
+
+  /**
+   * 按主键取**未删除、未合并**的联系人**详情行**（→ 接口 §5.5 详情出参）。
+   * ⚠ 只取一条整行，**不带任何可见性过滤**：可见性（「待关联」只给归属人）是业务判定，
+   *   由 service 用返回的 `owner_id` 判 —— 仓储不掺和判权（同 `findCommitmentById` 的姿势）。
+   */
+  findContactDetailById(id: bigint) {
+    return this.prisma.contact.findFirst({
+      where: { id, deleted_at: null, merged_into: null },
+      select: CONTACT_DETAIL_SELECT,
+    });
+  }
+
+  /**
+   * 联系人的**就职 / 跳槽历史**（→ §5.5 `employments`，B5 `company_contact` N:M 含历史）。
+   * ★ **在职的排前面**（`is_current desc`）——「现在在哪家」是看这条时最先要知道的事。
+   * ★ 不再按公司是否逻辑删 / 已合并过滤：合并时 loser 的**任职记录会整批改指 winner**
+   *   （→ 需求 §7.3 合并第 ⑤ 步），故历史里本就不该出现墓碑；此处再筛一道反而会吞掉真历史。
+   */
+  findContactEmployments(contactId: bigint) {
+    return this.prisma.companyContact.findMany({
+      where: { contact_id: contactId },
+      select: {
+        is_current: true,
+        position: true,
+        joined_at: true,
+        left_at: true,
+        company: { select: { id: true, full_name: true } },
+      },
+      orderBy: [{ is_current: 'desc' }, { id: 'desc' }],
+    });
+  }
+
+  /**
+   * 联系人的**谈判特质**（→ §5.5 `traits`，B4 `contact_trait`）。
+   *
+   * ★ 只取 `trait_id` / `trait_code` 两列：`trait_code` 在建标记时就**冗余落库**了
+   *   （→ 数据架构 B4），出参要的 `{trait_id,trait_code}` 本表就够；
+   *   **`label`（中文文案）不在本表** —— 它是字典项（A 域 `dict_item`），
+   *   由 service 走 A 域出口取（跨域不查对方的表，→ 架构 §5.2）。
+   */
+  findContactTraits(contactId: bigint) {
+    return this.prisma.contactTrait.findMany({
+      where: { contact_id: contactId },
+      select: { trait_id: true, trait_code: true },
+      orderBy: { id: 'asc' },
     });
   }
 

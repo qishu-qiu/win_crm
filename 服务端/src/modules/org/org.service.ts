@@ -512,6 +512,19 @@ export class OrgService {
     return this.repository.findEmployeeDeptIds(employeeId);
   }
 
+  /**
+   * 字典项 `{id,label}` 引用（→ 数据架构 A11）—— 供别的域把**已落库的英文码**翻成中文文案。
+   *
+   * ★ 为什么要有这条：全站口径是「**枚举一律英文码落库、文案走字典**」（→ `CODEBUDDY.md` §5），
+   *   所以出参里凡是要中文的地方，都得回来问 A 域 —— `dict_item` 是 A 域的表，
+   *   别的域**不许直查**（架构 §5.2 路之①）。首个调用方＝B 域联系人详情的
+   *   `traits:[{trait_id,trait_code,label}]`。
+   * ★ 只做一件事：**按 id 批量取 label**；查不到的 id 由调用方回落（**不编文案**）。
+   */
+  getDictItemLabels(ids: readonly bigint[]): Promise<{ id: bigint; label: string }[]> {
+    return this.repository.findDictItemLabels(ids);
+  }
+
   // ===== 私有：装载 / 装配 / 签发 / 审计 =====
 
   /** 按主键装载**在职**员工；不存在或非在职一律拒绝（刷新与 me 共用） */

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 
 import { listContacts, type ContactBrief } from '../api/company'
 import {
@@ -30,10 +31,19 @@ import {
  *     `phone_locked` **标注出来**（那是服务端给的**状态**），不摆一个点了没用的按钮；
  *   · **联系人姓名可点跳转** —— 落点页未建（→《欠账登记表》D-13），此处**是纯文本**。
  *
+ * · **筛选状态写入 URL query**（→ 设计规范 §4.2「筛选 / 查询栏」：可分享 / 刷新不丢）——
+ *   实现见下方「URL ↔ 筛选 双向同步」一段（原欠账 D-39）。
+ *
  * ★ 空态用 `a-empty`、**不预填演示数据**（→ 设计规范 §3.2 第 11 条）。
  */
 
-const filter = ref<ContactLinkFilter>('all')
+/** 默认档 ＝**选项表的第一项**（不另写 `'all'` 字面量：选项表一改，这里就静默分叉） */
+const DEFAULT_FILTER: ContactLinkFilter = CONTACT_LINK_FILTERS[0].value
+
+const route = useRoute()
+const router = useRouter()
+
+const filter = ref<ContactLinkFilter>(DEFAULT_FILTER)
 const rows = ref<ContactBrief[]>([])
 const loading = ref(false)
 const errorText = ref('')
@@ -47,6 +57,70 @@ const filterHint = computed(() =>
     ? '只显示「未关联公司」的待跟进联系人：没挂公司，归建档人待跟进，不进业务关系列表、不掉海。'
     : '包含已挂公司与「未关联公司」的联系人；能看到谁由服务端按你的数据范围收敛。'
 )
+
+// ===== URL ↔ 筛选 双向同步（→ 设计规范 §4.2：筛选状态写入 URL query，可分享 / 刷新不丢 · 原欠账 D-39）=====
+//
+// 判据：**分享出去的链接 / 刷新回来，看到的必须是同一份结果**；地址栏与页面筛选永远同源。
+// ★ 与业务关系列表页（`RelationListView.vue`）**同款写法**：本项目只允许这一套 URL 同步范式，
+//   不在第二页另造一种（改一处漏一处是本项目一号坑）。
+
+/** URL query 键名 —— **与接口 §5.5 的参数名同字**（`only_unlinked`），两边对照时不易错位 */
+const LINK_QUERY_KEY = 'only_unlinked'
+
+/** 该键在 URL 上的**唯一合法取值**（接口只认 `true`／不给：`api/company.ts` 里就是这么传的） */
+const LINK_QUERY_ON = 'true'
+
+/**
+ * 把 URL 上的一个键**摊平成候选值**。
+ * · 兼容 `?only_unlinked=true` 与手拼的重复键形态（`?only_unlinked=true&only_unlinked=true`）；
+ * · URL 是**不可信输入**（可手改、可被别人改了分享过来），形状先归一，后面才好比对。
+ */
+function queryValues(raw: LocationQuery[string]): string[] {
+  const list = Array.isArray(raw) ? raw : [raw]
+  return list
+    .filter((item): item is string => typeof item === 'string')
+    .flatMap((item) => item.split(','))
+    .map((item) => item.trim())
+    .filter((item) => item !== '')
+}
+
+/**
+ * 当前筛选的**规范形态**（＝ URL 该写成什么样，也是"是否已归一"的判据）—— 一份逻辑两处用。
+ * · 默认档给空串＝**该键不该出现在 URL 上**：链接才短（默认档 ⇒ 裸 `/contacts`）。
+ */
+function normalizedLink(): string {
+  return filter.value === DEFAULT_FILTER ? '' : LINK_QUERY_ON
+}
+
+/**
+ * 从 URL query 还原筛选。
+ * ★ **只认值域内的值**：认不出的（手改的 `?only_unlinked=1` / `?only_unlinked=yes`）一律
+ *   **丢弃回落默认** —— 原样转发给服务端只会换来一个错误页，而"链接是别人发来的"不该由用户买单。
+ *   ⚠ 这里收敛的是**URL 形状**（不可信输入），不是业务规则：值域仍取自**同一份接口约定**。
+ */
+function parseFilterFromQuery(query: LocationQuery): ContactLinkFilter {
+  return queryValues(query[LINK_QUERY_KEY]).includes(LINK_QUERY_ON) ? 'unlinked' : DEFAULT_FILTER
+}
+
+/** URL 上的筛选是否已是**规范形态**（不是才纠正一次 —— 免得每次进页都平白多一次导航） */
+function queryIsNormalized(): boolean {
+  return queryValues(route.query[LINK_QUERY_KEY]).join(',') === normalizedLink()
+}
+
+/**
+ * 筛选 → URL。
+ * ★ 用 `replace` 而非 `push`：改筛选不该让人按"后退"退出一串中间态（后退应回上一页，不是上一次筛选）。
+ * ★ 保留 URL 上**其它键**（将来加了别的参数，别在这里被抹掉）；但默认档那键要**先删后写**——
+ *   只 `Object.assign` 是删不掉的（默认档时该键会一直赖在地址栏）。
+ * ★ 改 query 不会重建本组件（同路由复用），故**不会**再触发一次 `onMounted` / 取数，不会自激。
+ */
+function syncQuery(): void {
+  const query: LocationQueryRaw = { ...route.query }
+  delete query[LINK_QUERY_KEY]
+  const value = normalizedLink()
+  if (value !== '') query[LINK_QUERY_KEY] = value
+  void router.replace({ query })
+}
 
 const columns = [
   { title: '姓名', dataIndex: 'name', key: 'name', width: 140 },
@@ -70,17 +144,25 @@ async function load(): Promise<void> {
   }
 }
 
+/**
+ * 切档 → 写 URL ＋ 重新取数。
+ * ★ 两者都是同步动作，同一次交互里完成，地址栏不会短暂地与页面不一致（与关系列表页同款）。
+ * ★ 页面**不本地过滤**：筛选在服务端做（→ `only_unlinked`，见 `api/company.ts`）——
+ *   前端再筛一遍＝第二套范围口径（改了服务端忘了前端就露客户）。
+ */
 function selectFilter(next: ContactLinkFilter): void {
   if (filter.value === next) return
   filter.value = next
+  syncQuery()
+  void load()
 }
 
-// 筛选一变**重新取数**（筛选在服务端做，→ `only_unlinked`）
-watch(filter, () => {
-  void load()
-})
-
 onMounted(() => {
+  // ★ 进页（刷新 / 深链 / 别人分享来的链接）**先从 URL 还原筛选**，再按它取数（→ 设计规范 §4.2）。
+  //   URL 带脏值（手改的非法档 / 别名形态）时顺手把地址栏归一化：否则就成了
+  //   「地址栏写着 A、页面筛着 B」的第二套真相 —— 本页头注释点名的那个坑。
+  filter.value = parseFilterFromQuery(route.query)
+  if (!queryIsNormalized()) syncQuery()
   void load()
 })
 </script>

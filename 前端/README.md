@@ -1,6 +1,6 @@
 # 前端（销售 CRM）
 
-Vue 3 + TypeScript + Vite ＋ Ant Design Vue ＋ **Vue Router**（→《销售CRM架构设计说明》V1.5 §四）。
+Vue 3 + TypeScript + Vite ＋ Ant Design Vue ＋ **Vue Router**（→《销售CRM架构设计说明》V1.8 §四）。
 
 ## 命令
 

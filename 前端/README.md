@@ -16,6 +16,10 @@ npm run preview  # 预览打包产物
   `npm run gen:types`。手写对接＝双真相源（本项目一号坑）。
 - **视觉数值走 token**：`src/styles/tokens.css`（＝《销售CRM设计规范》V1.0 §二）；组件一律用 Ant Design，
   禁自定义视觉语言（设计规范 §3.2）。
+- **主题（白天 / 夜间）**：唯一落点是 `src/theme.ts`（`setTheme`）＋ `styles/tokens.css` 的
+  `[data-theme='dark']` 块 ＋ `index.html` 的内联预置脚本（**Vue 起来前先定主题＝无闪烁**）。
+  `theme.ts` 还会把 tokens.css 的当前值**原样喂给 AntD 的 ConfigProvider**（不新增色值）——
+  改了 token 就别再在组件里另设颜色，否则夜间会出现两套色。
 - **后端统一包**：`HTTP 200` 不等于成功，判 `body.code === 0`；统一在 `src/api/request.ts` 收口
   （401 自动刷新；登录/刷新自身的失败不做全局提示，由页面做内联错误态）。
 
@@ -27,6 +31,9 @@ npm run preview  # 预览打包产物
 | `/` | 工作台（今日动线） | `src/views/WorkbenchView.vue` | **M6-06 补全**（今日概览 3 数 ＋ 今日安排 ＋ 同类合并；动作条只放「写跟进」） |
 | `/entry` | 建档 | `src/views/EntryView.vue` | M2-17 最小版 |
 | `/relations` | 业务关系列表 | `src/views/RelationListView.vue` | M3-14 最小版（**M6-07 补全**） |
+| `/relations/:id` | 业务关系详情 | `src/views/RelationDetailView.vue` | M6-08（详情 ＋ 成员；8 Tab 数据未就绪 → 欠账 D-22） |
+| `/contacts` | 联系人档案 | `src/views/ContactListView.vue` | M6-09 片 2（列表 ＋ 未关联筛选；详情随 M9 → 欠账 D-03） |
+| `/me/appearance` | 外观设置 | `src/views/AppearanceView.vue` | **M6-11**（白天 / 夜间主题切换；个人资料 / 改密 / 通知偏好未建 → 欠账 D-37） |
 
 - **路由**：`src/router/index.ts`（**M6-05 引入 `vue-router`**，2026-09-16 拍板）。**未登录拦截在守卫**
   （读 token、同步、零网络）；**会话是否还有效**由 `src/session.ts` 的 `restoreSession()`

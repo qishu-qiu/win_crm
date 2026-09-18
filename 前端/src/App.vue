@@ -7,10 +7,11 @@ import { firstVisiblePathOf, isPageVisible, navItemsOf, type PageKey } from './a
 import { UNAUTHORIZED_EVENT } from './api/request'
 import { roleNameOf } from './home'
 import { currentUser, restoreSession, sessionReady, signOut } from './session'
+import { antdThemeConfig } from './theme'
 
 /**
- * 应用外壳（M1-18 登录页 ＋ M2-17 建档页 ＋ **M6-05 路由收口**）——
- * 顶栏（身份 / 导航 / 退出）＋ `<router-view>` 页面出口。
+ * 应用外壳（M1-18 登录页 ＋ M2-17 建档页 ＋ **M6-05 路由收口** ＋ **M6-11 主题**）——
+ * 顶栏（身份 / 导航 / 外观 / 退出）＋ `<router-view>` 页面出口。
  *
  * ★ **M6-05 起引入 `vue-router`**（新增依赖，2026-09-16 七叔执行令）：
  *   原先用「一条 `view` 状态 ＋ `v-if`」手切三个视图 —— 那是骨架期的临时做法
@@ -39,6 +40,13 @@ const navItems = computed<Array<{ to: string; label: string }>>(() =>
 
 const roleName = computed(() => roleNameOf(currentUser.value?.role ?? ''))
 const deptName = computed(() => currentUser.value?.dept?.name ?? '未分配部门')
+
+/**
+ * 「外观」入口的可见性（**M6-11**）：同样问 `access.ts` 那张矩阵，不在这里手写角色判断。
+ * 现状＝5 类角色全可见（§4.2「登录 / 消息中心 / 个人中心」一行）；写成计算属性是为了
+ * **将来改矩阵时不必回来改壳**（壳里散一个角色判断＝第二套真相源）。
+ */
+const canSeeAppearance = computed(() => isPageVisible(currentUser.value?.role ?? '', 'appearance'))
 
 function onLogout(): void {
   signOut()
@@ -87,40 +95,61 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="!sessionReady" class="app-booting">正在进入…</div>
+  <!--
+    AntD 也要跟着换主题（**M6-11**）：`--crm-*` 变量只管本项目自己的样式，
+    AntD 组件（表格 / 抽屉 / 按钮 / 弹层…）的观感由它自己的 algorithm ＋ token 决定。
+    `antdThemeConfig` 把 tokens.css 的当前值搬给它 —— 数值仍只有一个落点。
+  -->
+  <a-config-provider :theme="antdThemeConfig">
+    <div v-if="!sessionReady" class="app-booting">正在进入…</div>
 
-  <!-- 未登录：只可能是登录页（守卫保证），全屏、无顶栏 -->
-  <router-view v-else-if="currentUser === null" />
+    <!-- 未登录：只可能是登录页（守卫保证），全屏、无顶栏 -->
+    <router-view v-else-if="currentUser === null" />
 
-  <!-- 已登录：顶栏 ＋ 页面出口 -->
-  <div v-else class="shell">
-    <header class="shell-header">
-      <div class="shell-identity">
-        <span class="shell-name">{{ currentUser.name }}</span>
-        <span class="shell-meta">{{ roleName }}</span>
-        <span class="shell-meta">{{ deptName }}</span>
-      </div>
+    <!-- 已登录：顶栏 ＋ 页面出口 -->
+    <div v-else class="shell">
+      <header class="shell-header">
+        <div class="shell-identity">
+          <span class="shell-name">{{ currentUser.name }}</span>
+          <span class="shell-meta">{{ roleName }}</span>
+          <span class="shell-meta">{{ deptName }}</span>
+        </div>
 
-      <nav class="shell-nav">
+        <nav class="shell-nav">
+          <router-link
+            v-for="item in navItems"
+            :key="item.to"
+            :to="item.to"
+            class="shell-nav-item"
+            active-class="is-active"
+            exact-active-class="is-active"
+          >
+            {{ item.label }}
+          </router-link>
+        </nav>
+
+        <!--
+          外观入口（**M6-11**）：§4.1 把「个人中心 / 外观设置」挂在**顶部头像菜单**，
+          头像菜单本身（含消息铃铛、个人资料…）随 §4.1 收口一起做（→ 欠账 D-36）；
+          本轮先在这里放一个**直达**项 —— 落点页是真的（`/me/appearance`），不是假入口。
+        -->
         <router-link
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="shell-nav-item"
+          v-if="canSeeAppearance"
+          to="/me/appearance"
+          class="shell-nav-item shell-appearance"
           active-class="is-active"
-          exact-active-class="is-active"
         >
-          {{ item.label }}
+          外观
         </router-link>
-      </nav>
 
-      <a-button type="text" @click="onLogout">退出登录</a-button>
-    </header>
+        <a-button type="text" @click="onLogout">退出登录</a-button>
+      </header>
 
-    <main class="shell-body">
-      <router-view />
-    </main>
-  </div>
+      <main class="shell-body">
+        <router-view />
+      </main>
+    </div>
+  </a-config-provider>
 </template>
 
 <style scoped>
@@ -204,6 +233,13 @@ onUnmounted(() => {
 .shell-nav-item.is-active {
   color: var(--crm-color-primary);
   background: var(--crm-color-primary-bg);
+}
+
+/** 「外观」是**账号级**入口（不属一级菜单），故与导航之间留一道分割线，别混成一排 */
+.shell-appearance {
+  margin-left: var(--crm-space-md);
+  padding-left: var(--crm-space-md);
+  border-left: var(--crm-border-width) solid var(--crm-color-border-secondary);
 }
 
 .shell-body {

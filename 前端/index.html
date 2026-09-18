@@ -5,6 +5,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>销售 CRM</title>
+    <script>
+      // 主题预置（M6-11「**切换生效且无闪烁**」的关键一半）。
+      //
+      // 为什么必须内联、必须同步、必须在这里：Vue 起来之前页面就已经在画了，
+      // 若等 `src/theme.ts` 再挂 `data-theme`，用户会先看到一帧白天版再翻成夜间
+      // ——那正是判据里说的「闪烁」。故在 <head> 里先按本地存储把主题定下来。
+      //
+      // ⚠ 下面的键名 / 属性名 / 取值必须与 `src/theme.ts` 的
+      //   `THEME_STORAGE_KEY` / `THEME_ATTR` / `ThemeName` **一致**（改一处必须改另一处）。
+      // ⚠ 这里**只读不写**：真正写入由 `setTheme()` 负责（唯一写入点）。
+      // ⚠ `colorScheme` 不是装饰：它让浏览器**原生**部分（首屏画布 / 滚动条 / 日期面板）
+      //   跟着走 —— 只挂 `data-theme` 的话，夜间刷新时右侧仍会先闪一条亮色滚动条。
+      (function () {
+        var theme = 'light'
+        try {
+          if (localStorage.getItem('crm_theme') === 'dark') theme = 'dark'
+        } catch (error) {
+          // localStorage 不可用（隐私模式 / 被禁）→ 用默认白天，不能让脚本在这里断掉
+        }
+        document.documentElement.setAttribute('data-theme', theme)
+        document.documentElement.style.colorScheme = theme
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -14,8 +14,8 @@ import { homeNameOf } from './home'
  *   （→《数据架构文档》A6、《废止口径登记表》#31）——**不是菜单权限**。
  *   把它们当菜单开关＝造出一张无人消费的矩阵。
  *
- * ★ 只登记**已建成的页面**（工作台 / 建档 / 业务关系列表与详情 / 联系人档案）：
- *   §五 页面清单的其余 25 页属后续里程碑，不在这里预写规则（写了也没有消费者）——
+ * ★ 只登记**已建成的页面**（工作台 / 建档 / 业务关系列表与详情 / 联系人档案 / 外观设置）：
+ *   §五 页面清单的其余 24 页属后续里程碑，不在这里预写规则（写了也没有消费者）——
  *   与 M6-05「不注册空路由」同款做法。加页面时**在这里扩一行**，不要在页面 / 守卫里
  *   另写一套判断（那是第二套真相源）。
  *
@@ -29,7 +29,13 @@ import { homeNameOf } from './home'
 export type RoleCode = 'sale' | 'service' | 'delivery' | 'dept_manager' | 'gm' | 'admin'
 
 /** 已建页面的键（与 §五 页面清单的编号对应关系写在下方各行注释里） */
-export type PageKey = 'workbench' | 'entry' | 'relations' | 'relationDetail' | 'contacts'
+export type PageKey =
+  | 'workbench'
+  | 'entry'
+  | 'relations'
+  | 'relationDetail'
+  | 'contacts'
+  | 'appearance'
 
 /** ✅ 全功能 ｜ 🔒 受限（只读 / 个人范围）｜ ➖ 不显示 */
 export type PageAccess = 'full' | 'readonly' | 'hidden'
@@ -69,6 +75,17 @@ const ACCESS: Record<PageKey, Record<RoleCode, PageAccess>> = {
   relationDetail: RELATION_PAGE_ROW,
   // 公司档案 / 联系人档案：销售 ✅ ｜ 交付 / 客服 🔒 ｜ 经理 ✅ ｜ 总经理 ✅ ｜ 管理员 🔒
   contacts: RELATION_PAGE_ROW,
+  // 个人中心 / 外观设置（§五 页 28）：矩阵那一行是「登录 / 消息中心 / 个人中心」＝ 5 类角色全 ✅
+  // ⚠ 它**不进 `NAV_ITEMS`**：§4.1 把它挂在「顶部头像菜单」，不是一级菜单 ——
+  //   塞进导航会凭空多出一项、打乱 §4.1 的一级菜单顺序（→ 欠账 D-36）。
+  appearance: {
+    sale: 'full',
+    service: 'full',
+    delivery: 'full',
+    dept_manager: 'full',
+    gm: 'full',
+    admin: 'full',
+  },
 }
 
 /** 内置角色码清单（用于识别未知 / 自定义码） */

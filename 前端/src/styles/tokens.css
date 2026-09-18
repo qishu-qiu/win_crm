@@ -118,7 +118,8 @@
 
 /* ========== dark（夜间） ========== */
 [data-theme='dark'] {
-  /* 背景/文字/边框反转；语义色按 §八.3 在深底上保持可读 */
+  /* 背景/文字/边框 / 命中色：整体按 §八.3 上移一档（**不用纯黑底**，取深灰 #141414 系；
+     容器比布局亮一档＝ #1f1f1f，卡片才浮得起来） */
   --crm-color-bg-layout: #141414;
   --crm-color-bg-container: #1f1f1f;
   --crm-color-bg-elevated: #1f1f1f;
@@ -133,6 +134,23 @@
   --crm-color-border-secondary: #303030;
   --crm-color-bg-hover: rgba(255, 255, 255, 0.08);
   --crm-color-bg-active: rgba(255, 255, 255, 0.15);
+
+  /* 语义色 / 业务色（§八.3「红/橙/绿在深底上提亮一档」＋ §二「正文对比 ≥ 4.5:1」）：
+     判据＝**在深底上实测达不达 AA**，只调不达标的那几个 —— 已达标的原值再提亮只会被洗淡、
+     反而削弱语义（红变粉、绿变黄绿）。
+     底取 #1f1f1f（--crm-color-bg-container，比 #141414 更亮的**最严**一档），实测对比度：
+       #1677ff → 3.18:1 ✗ ⇒ #3c89e8（4.66:1 ✓）｜ #cf1322 → 2.96:1 ✗ ⇒ #e86e6b（5.40:1 ✓）
+       #ff4d4f 5.04 ✓ ｜ #fa8c16 6.93 ✓ ｜ #52c41a 7.28 ✓ ｜ #faad14 8.68 ✓ ｜ #8c8c8c 4.90 ✓ ⇒ 保持原值
+     提亮取的都是 AntD 官方暗色调色板（`@ant-design/colors` `theme:'dark'`）**上一档**，
+     不是自己调的色（→ §一.2「数值不凭感觉：取 AntD 官方默认值」）。 */
+  --crm-color-primary: #3c89e8;
+  --crm-color-primary-hover: #65a9f3;
+  --crm-color-primary-active: #1554ad;
+  --crm-color-primary-bg: #111a2c;
+  --crm-color-info: #3c89e8;
+  --crm-color-up: #e86e6b;
+  --crm-color-urgency-quarter: #3c89e8;
+  --crm-color-grade-b: #3c89e8;
 
   /* 阴影在暗色下弱化 */
   --crm-shadow-1: 0 1px 2px 0 rgba(0, 0, 0, 0.25),

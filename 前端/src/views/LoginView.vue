@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { firstVisiblePathOf, isPageVisible, type PageKey } from '../access'
 import { login } from '../api/auth'
 import { setTokens } from '../api/request'
 import { signIn } from '../session'
@@ -38,9 +39,14 @@ async function submit(): Promise<void> {
     const result = await login({ account: form.account, password: form.password })
     setTokens(result.access_token, result.refresh_token)
     signIn(result.user)
-    // 登录后去处：守卫拦下来的原页面（`?redirect=`）优先，否则回工作台
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    await router.replace(redirect)
+    // 登录后去处（**M6-10**）：守卫拦下来的原页面（`?redirect=`）优先，但**必须是本人可见的页面**
+    //   —— 否则回自己的首个可见页（例：管理员被守卫从 `/entry` 弹回来时，`redirect` 里仍写着 `/entry`，
+    //   照它跳会被守卫再弹一次）。页面清单里的其余 25 页尚未建，故不引《需求》§4.1 的「主入口」。
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const target = redirect === '' ? undefined : router.resolve(redirect)
+    const page = target?.meta.page as PageKey | undefined
+    const allowed = target !== undefined && (page === undefined || isPageVisible(result.user.role, page))
+    await router.replace(allowed ? redirect : firstVisiblePathOf(result.user.role))
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : '登录失败，请稍后重试'
   } finally {

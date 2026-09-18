@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { message } from 'ant-design-vue'
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { firstVisiblePathOf, isPageVisible, navItemsOf, type PageKey } from './access'
 import { UNAUTHORIZED_EVENT } from './api/request'
-import { homeNameOf, roleNameOf } from './home'
+import { roleNameOf } from './home'
 import { currentUser, restoreSession, sessionReady, signOut } from './session'
 
 /**
@@ -27,13 +29,13 @@ import { currentUser, restoreSession, sessionReady, signOut } from './session'
  */
 const router = useRouter()
 
-/** 导航项：首屏名取自规格（§4.1 角色表「主入口」列），不写「首页 / 主页」这类自造名 */
-const navItems = computed<Array<{ to: string; label: string }>>(() => [
-  { to: '/', label: homeNameOf(currentUser.value?.role ?? '') },
-  { to: '/entry', label: '建档' },
-  { to: '/relations', label: '业务关系' },
-  { to: '/contacts', label: '联系人' },
-])
+/**
+ * 导航项（**M6-10**）：由 `access.ts` 的角色矩阵过滤后下发 —— 不可见的页面**不出现**
+ * （不是"显示了再禁用"）。首屏名仍取自规格（§4.1 角色表「主入口」列），不写自造名。
+ */
+const navItems = computed<Array<{ to: string; label: string }>>(() =>
+  navItemsOf(currentUser.value?.role ?? '').map((item) => ({ to: item.path, label: item.label })),
+)
 
 const roleName = computed(() => roleNameOf(currentUser.value?.role ?? ''))
 const deptName = computed(() => currentUser.value?.dept?.name ?? '未分配部门')
@@ -45,7 +47,28 @@ function onLogout(): void {
 
 async function bootstrap(): Promise<void> {
   const authenticated = await restoreSession()
-  if (!authenticated) await router.replace('/login')
+  if (!authenticated) {
+    await router.replace('/login')
+    return
+  }
+  await ensureVisibleRoute()
+}
+
+/**
+ * 首屏（刷新 / 深链 / 登录后）落点校正（**M6-10**）。
+ *
+ * 守卫是**同步、零网络**的（管"能不能进来"），判角色要等 `GET /account/me` ——
+ * 首屏时守卫跑在 `me` 之前，判不了角色，故在这里补一次；之后守卫就能判了。
+ * ⚠ **只有这一处补**，别在页面里各判一次（那是第二套规则，迟早分叉）。
+ */
+async function ensureVisibleRoute(): Promise<void> {
+  const user = currentUser.value
+  if (user === null) return
+  const page = router.currentRoute.value.meta.page as PageKey | undefined
+  if (page !== undefined && !isPageVisible(user.role, page)) {
+    message.warning('该页面当前账号无权访问')
+    await router.replace(firstVisiblePathOf(user.role))
+  }
 }
 
 onMounted(() => {

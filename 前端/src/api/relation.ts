@@ -8,8 +8,8 @@ import request from './request'
  *   前后端各维护一份接口类型是本项目点名的「双真相源」重灾区（M0-57 判据：禁止手写）。
  *
  * ⚠ **只封装页面真正用到的那几个**：
- *   列表（M3-14）／详情（M6-08）／**激活（M6-09 片 1）**；
- *   改属性 / 加成员 / 换阶段（后端已可用）随对应页面（后续里程碑）接入 ——
+ *   列表（M3-14）／详情（M6-08）／激活（M6-09 片 1）／**改属性（D-32：公海标开发价值）**；
+ *   加成员 / 换阶段（后端已可用）随对应页面（后续里程碑）接入 ——
  *   先写一堆没人调的封装，等于把「契约」和「调用方」拆开维护，改一处漏一处。
  */
 export type RelationVo = components['schemas']['RelationVoDto']
@@ -17,6 +17,7 @@ export type RelationDetail = components['schemas']['RelationDetailVoDto']
 export type RelationMember = components['schemas']['RelationMemberVoDto']
 export type RelationPage = components['schemas']['RelationPageVoDto']
 export type CreateRelationInput = components['schemas']['CreateRelationDto']
+export type UpdateRelationInput = components['schemas']['UpdateRelationDto']
 
 /** 列表页签（→ 接口 §4.4：私海 / 公海） */
 export type RelationTab = 'private' | 'sea'
@@ -86,5 +87,23 @@ export async function getRelation(id: string): Promise<RelationDetail> {
  */
 export async function createRelation(input: CreateRelationInput): Promise<RelationVo> {
   const { data } = await request.post<RelationVo>('/relations', input)
+  return data
+}
+
+/**
+ * 改关系属性（`PUT /relations/:id`，→ 接口 §5.6）。
+ *
+ * ★★ **本端点是公海（无主）关系唯一的写口**（2026-09-18 拍板，→ D-32）：
+ *   **只传 `value_tier`** 时放行（开发价值＝**部门共同维护**，**销售也能标**）；
+ *   **再带任何一个别的字段** → 服务端 **422 / `20408`**（「该公司还在公海（未领取）…」）。
+ *   ⇒ 公海那边**只准**用 `{ value_tier }` 调它 —— 这条不靠页面自觉，是**服务端的硬口径**，
+ *     页面只要不加别的字段就不会踩（→ 前端文档 §5 第 9/10 条「其余动作不出现」）。
+ * ★ 私海侧照旧：判定（能不能改这条）**全在服务端**，`403 / 409 / 422` 的人话直接显示。
+ */
+export async function updateRelation(
+  id: string,
+  input: UpdateRelationInput,
+): Promise<RelationVo> {
+  const { data } = await request.put<RelationVo>(`/relations/${id}`, input)
   return data
 }

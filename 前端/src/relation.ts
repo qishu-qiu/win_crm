@@ -98,6 +98,38 @@ export function valueTierNameOf(valueTier: string | null): string {
   return VALUE_TIER_NAMES[valueTier] ?? valueTier
 }
 
+/**
+ * 开发价值档**选项**（→ 需求 §5 术语表；值与《数据架构文档》C1 的 `VALUE_TIER_VALUES` 逐字一致）。
+ * ★ `pending`（待定）**是合法档位**，不是"没填" —— 需求 §8.3：非灰度**必标**，而「已标」＝
+ *   有值且合法即可、**`pending` 也算标过**（2026-09-15 拍板）。故它必须在选项里。
+ * ★ **公海唯一可改的属性**就是它（开发价值＝部门共同维护，销售也能标，→ 前端文档 §5 第 9/10 条）。
+ * ★ `as const`：让下面的 `ValueTierValue` **从这个表推出**，而不是再手抄一份字面量
+ *   （手抄的那份迟早与这张表分叉，→ 本项目点名的双真相源）。
+ */
+export const VALUE_TIER_OPTIONS = [
+  { value: 'high', label: '高' },
+  { value: 'medium', label: '中' },
+  { value: 'low', label: '低' },
+  { value: 'pending', label: '待定' },
+] as const
+
+/** 开发价值档**值域**（唯一落点＝上面的选项表） */
+export type ValueTierValue = (typeof VALUE_TIER_OPTIONS)[number]['value']
+
+/**
+ * 任意来源的值 → 合法的开发价值档；**不认识就给 `null`（＝未标）**。
+ * ★ 用在「接口出参 → 表单草稿」这一步：出参的 `value_tier` 是**宽 `string`**
+ *   （OpenAPI 里是 `string | null`），而提交时要的是**收窄后的值域**。
+ *   `some(...)` 逐个比对＝**真校验**（不是 `as` 硬转），库里若先于规格冒出新码，
+ *   这里会**当未标处理**（而不是把非法值原样回传，被服务端 400/422 打回来）。
+ */
+export function toValueTier(value: string | null | undefined): ValueTierValue | null {
+  if (value === null || value === undefined || value === '') return null
+  return VALUE_TIER_OPTIONS.some((item) => item.value === value)
+    ? (value as ValueTierValue)
+    : null
+}
+
 /** ISO 时间 → `YYYY-MM-DD HH:mm`（本地时区）；`null` → `—`（**不显示 `null` 字面量**） */
 export function formatDateTime(value: string | null): string {
   if (value === null || value === '') return '—'

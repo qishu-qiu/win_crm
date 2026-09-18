@@ -7,14 +7,30 @@
 // =============================================================================
 import type { DataScope } from '../../../kernel/context/request-context';
 
+import { OWNER_MEMBER_TYPE, type RelationMemberLike } from './relation-owner';
 import {
   checkActivateScope,
+  checkRelationRead,
   checkRelationWrite,
+  checkSeaUnclaimed,
+  checkSeaValueTierWrite,
   isRelationWriteRole,
   resolveRelationListScope,
   seaStatusOfTab,
   type RelationViewer,
 } from './relation-scope';
+
+/** 成员行构造器：`owner` ＝ 有主（私海）；不传 `ownerId` ＝ **无主（公海）** */
+function members(ownerId?: bigint): RelationMemberLike[] {
+  return ownerId === undefined
+    ? []
+    : [{ employeeId: ownerId, memberType: OWNER_MEMBER_TYPE, revokedAt: null }];
+}
+
+/** 「就这几个人」的读 / 写入参（部门 ＋ 成员） */
+function inputOf(deptId: bigint, ownerId?: bigint) {
+  return { deptId, members: members(ownerId) };
+}
 
 function viewer(
   type: DataScope['type'],
@@ -184,11 +200,42 @@ describe('relation-scope（M3-07 / M3-08 的范围收敛）', () => {
       });
     });
 
-    it('销售：无 owner（公海）的关系 → 拒（领取要走公海动作，不是直接改）', () => {
+    it('★ 销售：**本部门**公海（无 owner）→ `sea_locked`（422 / `20408`）—— 口径变更锚点', () => {
+      // 2026-09-18（D-32②）前这里给的是 `out_of_scope`（403）：那是**撞**上的
+      // （`null !== employeeId` 顺带拒了），不是判出来的。现在显式判「未领取」——
+      // 因为「公海的唯一例外（只传 `value_tier`）」必须与「其余写」**在同一层**分开，
+      // 而"顺带拒"给不出这个区分点。
       expect(checkRelationWrite({ deptId: 2n, ownerId: null }, viewer('self'))).toEqual({
         ok: false,
-        kind: 'out_of_scope',
+        kind: 'sea_locked',
       });
+    });
+
+    it('★ 销售：**别部门**公海 → 仍是 `out_of_scope`（403）：不许用 422 反推「这条存在且无主」', () => {
+      expect(
+        checkRelationWrite({ deptId: 9n, ownerId: null }, viewer('self', { deptIds: [1n, 2n] })),
+      ).toEqual({ ok: false, kind: 'out_of_scope' });
+    });
+
+    it('★ 经理：**管辖部门**的公海 → `sea_locked`（**D-31 的修复锚点**：原先整条放行、真库落过无主跟单）', () => {
+      expect(
+        checkRelationWrite(
+          { deptId: 3n, ownerId: null },
+          viewer('dept', { roleCodes: ['dept_manager'], managedDeptIds: [3n] }),
+        ),
+      ).toEqual({ ok: false, kind: 'sea_locked' });
+    });
+
+    it('★ 总经理：公海 → `sea_locked`（`all` 档不过滤**范围**，但「没领取」是**状态**，不是范围）', () => {
+      expect(
+        checkRelationWrite({ deptId: 99n, ownerId: null }, viewer('all', { roleCodes: ['gm'] })),
+      ).toEqual({ ok: false, kind: 'sea_locked' });
+    });
+
+    it('管理员 ＋ 公海 → `read_only`（**角色先判**：他的问题是"只读"，不是"未领取"）', () => {
+      expect(
+        checkRelationWrite({ deptId: 1n, ownerId: null }, viewer('all', { roleCodes: ['admin'] })),
+      ).toEqual({ ok: false, kind: 'read_only' });
     });
 
     it('经理：管辖部门内的关系 → 放行（含他人 owner）', () => {
@@ -220,6 +267,159 @@ describe('relation-scope（M3-07 / M3-08 的范围收敛）', () => {
         ok: false,
         kind: 'read_only',
       });
+    });
+  });
+
+  // ==========================================================================
+  // 公海（无主）＝ 可读不可写（2026-09-18 拍板 → D-32）
+  // 口径：读＝**该关系所属部门**（销售本部门 / 经理管辖 / 总 · 管全部；别部门 403；
+  //       交付 · 客服不进公海）；写＝一律 422 / `20408`，例外只有「只传 `value_tier`」。
+  // ==========================================================================
+
+  describe('checkRelationRead：公海（无主）按**所属部门**放行（D-32①）', () => {
+    const now = new Date('2026-09-18T10:00:00Z');
+
+    it('★ 销售：**本部门**公海 → 可读（看不到历史就判断不出值不值得捞）', () => {
+      expect(checkRelationRead(inputOf(2n), viewer('self', { deptIds: [1n, 2n] }), now)).toEqual({
+        ok: true,
+      });
+    });
+
+    it('★ 销售：**别部门**公海 → 403（`out_of_scope`）', () => {
+      expect(checkRelationRead(inputOf(9n), viewer('self', { deptIds: [1n, 2n] }), now)).toEqual({
+        ok: false,
+        kind: 'out_of_scope',
+      });
+    });
+
+    it('★ 交付 / 客服：公海 → 403（§2.2 明文「**不进公海**」）', () => {
+      expect(checkRelationRead(inputOf(2n), viewer('serving', { roleCodes: ['delivery'], deptIds: [2n] }), now)).toEqual({
+        ok: false,
+        kind: 'out_of_scope',
+      });
+    });
+
+    it('交付 / 客服：**我参与**的私海照旧可读（公海口径**不许**把这一档也一起关掉）', () => {
+      expect(
+        checkRelationRead(inputOf(2n, 7n), viewer('serving', { roleCodes: ['service'], deptIds: [] }), now),
+      ).toEqual({ ok: true });
+    });
+
+    it('★ 销售：**他人私海**（有主、不是我）→ 403 —— 公海口径**不许**顺手放宽成"同部门都能看"', () => {
+      expect(checkRelationRead(inputOf(2n, 8n), viewer('self', { deptIds: [1n, 2n] }), now)).toEqual({
+        ok: false,
+        kind: 'out_of_scope',
+      });
+    });
+
+    it('经理：管辖部门公海 → 可读；管辖外公海 → 403', () => {
+      const manager = viewer('dept', { roleCodes: ['dept_manager'], managedDeptIds: [3n] });
+      expect(checkRelationRead(inputOf(3n), manager, now)).toEqual({ ok: true });
+      expect(checkRelationRead(inputOf(4n), manager, now)).toEqual({
+        ok: false,
+        kind: 'out_of_scope',
+      });
+    });
+
+    it('总经理 / 管理员（`all` 档）→ 任意公海可读（管理员**只读** ≠ 不可见）', () => {
+      expect(checkRelationRead(inputOf(99n), viewer('all', { roleCodes: ['gm'] }), now)).toEqual({
+        ok: true,
+      });
+      expect(checkRelationRead(inputOf(99n), viewer('all', { roleCodes: ['admin'] }), now)).toEqual({
+        ok: true,
+      });
+    });
+
+    it('有效协同人读私海 → 可读（原有口径不受公海分支影响）', () => {
+      const collaborators: RelationMemberLike[] = [
+        {
+          employeeId: 7n,
+          memberType: 'collaborator',
+          source: 'collaborate',
+          validUntil: null,
+          revokedAt: null,
+        },
+      ];
+      expect(checkRelationRead({ deptId: 9n, members: collaborators }, viewer('self', { deptIds: [1n] }), now)).toEqual(
+        { ok: true },
+      );
+    });
+  });
+
+  describe('checkSeaUnclaimed：无主 → 拒，**但别部门照旧 403**（不许用 422 泄露"存在且无主"）', () => {
+    it('有主 → `null`（不是公海，交给调用方按各自口径继续判）', () => {
+      expect(checkSeaUnclaimed({ deptId: 2n, ownerId: 7n }, viewer('self'))).toBeNull();
+    });
+
+    it('无主 ＋ 销售本部门 → `sea_locked`；无主 ＋ 销售别部门 → `out_of_scope`', () => {
+      const sale = viewer('self', { deptIds: [1n, 2n] });
+      expect(checkSeaUnclaimed({ deptId: 2n, ownerId: null }, sale)).toEqual({
+        ok: false,
+        kind: 'sea_locked',
+      });
+      expect(checkSeaUnclaimed({ deptId: 9n, ownerId: null }, sale)).toEqual({
+        ok: false,
+        kind: 'out_of_scope',
+      });
+    });
+
+    it('无主 ＋ 总经理（`all`）→ `sea_locked`（范围不过滤，状态仍要判）', () => {
+      expect(checkSeaUnclaimed({ deptId: 99n, ownerId: null }, viewer('all', { roleCodes: ['gm'] }))).toEqual({
+        ok: false,
+        kind: 'sea_locked',
+      });
+    });
+  });
+
+  describe('checkSeaValueTierWrite：公海唯一放行口 ＝ 只传 `value_tier`（D-32②）', () => {
+    const now = new Date('2026-09-18T10:00:00Z');
+    const sale = viewer('self', { deptIds: [1n, 2n] });
+
+    it('★ 销售 ＋ 本部门公海 ＋ **只传 value_tier** → 放行（开发价值＝**部门共同维护**，销售也能标）', () => {
+      expect(
+        checkSeaValueTierWrite({ ...inputOf(2n), valueTierOnly: true }, sale, now),
+      ).toEqual({ ok: true });
+    });
+
+    it('★ 销售 ＋ 本部门公海 ＋ **带了别的字段** → `sea_locked`（"其余字段一起传也算写"）', () => {
+      expect(
+        checkSeaValueTierWrite({ ...inputOf(2n), valueTierOnly: false }, sale, now),
+      ).toEqual({ ok: false, kind: 'sea_locked' });
+    });
+
+    it('★ 别部门公海 → 403（连读都读不到，谈不到"标价值"）', () => {
+      expect(
+        checkSeaValueTierWrite({ ...inputOf(9n), valueTierOnly: true }, sale, now),
+      ).toEqual({ ok: false, kind: 'out_of_scope' });
+    });
+
+    it('★ 交付 / 客服、管理员 → `read_only`（**角色先判**：他们连私海都不可写，谈不到"公海例外"）', () => {
+      // ⚠ 注意这里**不是** `out_of_scope`：「不进公海」是**读门**的说法（见上面 checkRelationRead 那组），
+      //   到了写门，交付 · 客服 / 管理员的第一问题是「**只读角色**」—— 同一件事别在两处给两种解释。
+      expect(
+        checkSeaValueTierWrite(
+          { ...inputOf(2n), valueTierOnly: true },
+          viewer('serving', { roleCodes: ['service'], deptIds: [2n] }),
+          now,
+        ),
+      ).toEqual({ ok: false, kind: 'read_only' });
+      expect(
+        checkSeaValueTierWrite(
+          { ...inputOf(2n), valueTierOnly: true },
+          viewer('all', { roleCodes: ['admin'] }),
+          now,
+        ),
+      ).toEqual({ ok: false, kind: 'read_only' });
+    });
+
+    it('经理 ＋ **管辖部门**公海 ＋ 只传 value_tier → 放行（管辖内同样是"本部门"）', () => {
+      expect(
+        checkSeaValueTierWrite(
+          { ...inputOf(3n), valueTierOnly: true },
+          viewer('dept', { roleCodes: ['dept_manager'], managedDeptIds: [3n] }),
+          now,
+        ),
+      ).toEqual({ ok: true });
     });
   });
 });

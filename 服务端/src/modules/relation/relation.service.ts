@@ -64,10 +64,13 @@ import {
   checkActivateScope,
   checkRelationRead,
   checkRelationWrite,
+  checkSeaUnclaimed,
+  checkSeaValueTierWrite,
   isRelationWriteRole,
   resolveRelationListScope,
   type RelationListTab,
   type RelationViewer,
+  type RelationWriteDenied,
 } from './domain/relation-scope';
 import { RelationRepository, type RelationTxClient } from './relation.repository';
 import type {
@@ -129,6 +132,12 @@ const RELATION_DUPLICATED_MESSAGE = '该公司在该部门·产品线下已有�
 const OWNER_OCCUPIED_MESSAGE = '该业务关系已有归属销售';
 
 /**
+ * 公海（无主）关系被写时的人话 —— 与《接口API文档》§5.6 的 `20408` 说明**逐字一致**。
+ * （写动作拒的是「**未领取**」这个状态，不是「你没权限」：故 422 而非 403。）
+ */
+const SEA_UNCLAIMED_MESSAGE = '该公司还在公海（未领取）：要写跟单请先领取到私海';
+
+/**
  * C 域写动作的审计动作名（→ A10 口径 `模块.动词`；2026-09-15 定）。
  * ★ 与 `ORG_AUDIT_ACTIONS` 同一理由**集中一处导出**：动作名是「谁在何时干了什么」的检索键，
  *   写歪一次就再也查不到那条记录（双真相源＝本项目一号坑）。
@@ -178,7 +187,7 @@ export class RelationService {
     };
 
     const activateVerdict = checkActivateScope(triple.deptId, viewer);
-    if (!activateVerdict.ok) throw scopeError(activateVerdict);
+    if (!activateVerdict.ok) throw verdictError(activateVerdict);
 
     await this.requireTripleExists(triple);
 
@@ -301,7 +310,7 @@ export class RelationService {
     const row = await this.requireRelation(id);
 
     const readVerdict = checkRelationRead(memberInputOf(row), viewer, new Date());
-    if (!readVerdict.ok) throw scopeError(readVerdict);
+    if (!readVerdict.ok) throw verdictError(readVerdict);
 
     const refs = await this.loadRefs([row]);
     return { ...this.buildVo(row, refs), members: buildMemberVos(row, refs) };
@@ -313,10 +322,13 @@ export class RelationService {
    * **D 域写跟单 / 建承诺前的准入校验**（→ §5.2 路之①：跨域只能调对方 exports 的 service，
    * D 域**不许**查 `business_relation` 这张表，也不许自己判范围 —— 范围规则只有本域有）。
    *
-   * 判据＝两条叠加：
-   *   ① **看得见**（`checkRelationRead`）：owner ∪ **有效协同人** ∪ 部门档管辖 ∪ `all` 档；
+   * 判据＝三条叠加：
+   *   ① **看得见**（`checkRelationRead`）：owner ∪ **有效协同人** ∪ 部门档管辖 ∪ `all` 档
+   *      ∪（**公海**）本部门 —— 公海读门口径 2026-09-18 补（→ D-32①）；
    *   ② **可写角色**（`isRelationWriteRole`）：`sale` / `dept_manager` / `gm`
-   *      —— 管理员（`all` 档但只读）与交付 · 客服（`serving` 档）一律拒（→ §2.2 /《欠账登记表》D-01）。
+   *      —— 管理员（`all` 档但只读）与交付 · 客服（`serving` 档）一律拒（→ §2.2 /《欠账登记表》D-01）；
+   *   ③ **不是公海（已领取）**（`checkSeaUnclaimed`）→ 无主一律 **422 / `20408`**
+   *      —— ⚠ 这条是**2026-09-18 新加**的：①②**都挡不住它**（→ D-31 真库实测）。
    *
    * ★ 为什么用**读**口径而不用 `checkRelationWrite`（那条只认 **owner**）：
    *   §10.2 原文「可见性继承业务关系权限（本人全文 / **协同可读写** / 他人私海不可见）」——
@@ -327,13 +339,14 @@ export class RelationService {
    * @returns 关系 id ＋ **当前 owner**（D 域要拿它填 `action_event.owner_snapshot`、
    *          并判时间线里哪条是「主线」，→ D2 / 接口 §5.7 `branch`）
    * @throws 400 关系不存在 ｜ 403 越界（`out_of_scope`）或只读角色（`read_only`）
+   *         ｜ **422 / `20408`** 公海（无主）未领取（→ D-32②）
    */
   async requireWritableRelation(id: string): Promise<{ id: bigint; ownerId: bigint | null }> {
     const viewer = requireViewer();
     const row = await this.requireRelation(id);
 
     const readVerdict = checkRelationRead(memberInputOf(row), viewer, new Date());
-    if (!readVerdict.ok) throw scopeError(readVerdict);
+    if (!readVerdict.ok) throw verdictError(readVerdict);
 
     if (!isRelationWriteRole(viewer.roleCodes)) {
       throw new AppError(ErrorCode.FORBIDDEN, 403, '当前角色对业务关系只读（管理员 / 交付 · 客服）', {
@@ -342,7 +355,18 @@ export class RelationService {
     }
 
     const owner = findActiveOwner(row.members.map(toMemberLike));
-    return { id: row.id, ownerId: owner?.employeeId ?? null };
+    const ownerId = owner?.employeeId ?? null;
+
+    // ★ **公海（无主）未领取 ⇒ 一票否决**（→ D-32②，2026-09-18 拍板）：写跟单只能在私海。
+    //   上面两条门**都挡不住它**：经理 / 总经理对管辖内公海原本整条放行（真库实测落过无主跟单，
+    //   →《欠账登记表》D-31）；销售那边则是"撞"上的（旧读门顺带拒了）—— 读门口径一放宽就会漏。
+    //   ⇒ 必须**显式判**，不许靠别的门顺带兜住。
+    //   ⚠ `sea_locked`（422）与 `out_of_scope`（403）的分工见 `checkSeaUnclaimed`：别部门的公海
+    //     照旧 403，不许用 422 反推出「这条存在且无主」。
+    const seaVerdict = checkSeaUnclaimed({ deptId: row.dept_id, ownerId }, viewer);
+    if (seaVerdict !== null) throw verdictError(seaVerdict);
+
+    return { id: row.id, ownerId };
   }
 
   /**
@@ -387,13 +411,32 @@ export class RelationService {
    * ★ 「非灰度必标开发价值」判的是**合并后的最终态**（`urgency` / `value_tier` 各自取改完的样子）：
    *   只改 `urgency` 的关系，若库里**已经**标过价值，就该放行 —— 否则销售每次都得把两个字段
    *   一起提交一遍（→ `domain/relation-attributes.ts` 文件头 ★）。
+   *
+   * ★★ **本端点是公海唯一放行的写口**（→ D-32②）：无主关系**只传 `value_tier`** 时放行
+   *    （开发价值＝**部门共同维护**，**销售也能标**），其余情况一律 **422 / `20408`**。
+   *    判定口径见 `domain/relation-scope.ts` 的 `checkSeaValueTierWrite`（**规则不在本层**）。
    */
   async updateRelation(id: string, dto: UpdateRelationDto): Promise<RelationVo> {
     const viewer = requireViewer();
     const row = await this.requireRelation(id);
 
-    const writeVerdict = checkRelationWrite(writeInputOf(row), viewer);
-    if (!writeVerdict.ok) throw scopeError(writeVerdict);
+    const writeInput = writeInputOf(row);
+    if (writeInput.ownerId === null) {
+      // 公海（无主）：走**唯一例外**那条判定 —— 不是"放宽了写权限"，是"开发价值本来就不归 owner"。
+      const seaVerdict = checkSeaValueTierWrite(
+        {
+          deptId: row.dept_id,
+          members: row.members.map(toMemberLike),
+          valueTierOnly: hasOnlyValueTier(dto),
+        },
+        viewer,
+        new Date(),
+      );
+      if (!seaVerdict.ok) throw verdictError(seaVerdict);
+    } else {
+      const writeVerdict = checkRelationWrite(writeInput, viewer);
+      if (!writeVerdict.ok) throw verdictError(writeVerdict);
+    }
 
     const urgency = dto.urgency ?? row.urgency;
     const valueTier = dto.value_tier ?? row.value_tier;
@@ -442,7 +485,7 @@ export class RelationService {
     const row = await this.requireRelation(id);
 
     const readVerdict = checkRelationRead(memberInputOf(row), viewer, new Date());
-    if (!readVerdict.ok) throw scopeError(readVerdict);
+    if (!readVerdict.ok) throw verdictError(readVerdict);
 
     return buildMemberVos(row, await this.loadRefs([row]));
   }
@@ -462,7 +505,7 @@ export class RelationService {
     const row = await this.requireRelation(id);
 
     const writeVerdict = checkRelationWrite(writeInputOf(row), viewer);
-    if (!writeVerdict.ok) throw scopeError(writeVerdict);
+    if (!writeVerdict.ok) throw verdictError(writeVerdict);
 
     const employeeId = jsonToBigint(dto.employee_id, 'employee_id');
     const employeeRefs = await this.org.getEmployeeRefs([employeeId]);
@@ -710,8 +753,21 @@ function requireViewer(): RelationViewer {
   };
 }
 
-/** 权限判定 → `AppError`（403：只读角色 / 超出数据范围**分开说**，别给一句糊的） */
-function scopeError(verdict: { kind: 'read_only' | 'out_of_scope' }): AppError {
+/**
+ * 判定结果 → `AppError`。
+ *
+ * ★ 三档**分开说**，别给一句糊的：
+ *   · `read_only` / `out_of_scope` → **403**（「你压根没这个权利」）；
+ *   · `sea_locked` → **422 / `20408`**（「权利有，但这条**还没领取**」）——→ D-32②。
+ *     `20408` 与 `20404`（预约未完成）同为「状态不允许」一族（→ 接口 §2.4）。
+ */
+function verdictError(verdict: RelationWriteDenied): AppError {
+  if (verdict.kind === 'sea_locked') {
+    return new AppError(ErrorCode.SEA_WRITE_FORBIDDEN, 422, SEA_UNCLAIMED_MESSAGE, {
+      constraint: 'relation.sea.unclaimed',
+    });
+  }
+
   return verdict.kind === 'read_only'
     ? new AppError(ErrorCode.FORBIDDEN, 403, '当前角色对业务关系只读（管理员 / 交付 · 客服）', {
         constraint: 'relation.read_only',
@@ -719,6 +775,22 @@ function scopeError(verdict: { kind: 'read_only' | 'out_of_scope' }): AppError {
     : new AppError(ErrorCode.FORBIDDEN, 403, '无权限：该业务关系不在你的数据范围内', {
         constraint: 'relation.out_of_scope',
     });
+}
+
+/**
+ * 「**只传了 `value_tier`**」＝ 其余字段**一个都没给**（→ D-32②：其余字段一起传**也算写**）。
+ *
+ * ⚠ 空 body（什么都没传）**不算**：它不是"只想改开发价值"，而是一次**没有内容的写请求** ——
+ *   公海关系上照拒（真要什么都不改，就不该发这个请求）。
+ */
+function hasOnlyValueTier(dto: UpdateRelationDto): boolean {
+  return (
+    dto.value_tier !== undefined &&
+    dto.urgency === undefined &&
+    dto.next_action_hint === undefined &&
+    dto.competition === undefined &&
+    dto.competitor_id === undefined
+  );
 }
 
 /** 域内成员形状（camelCase）← 仓储行（snake_case）：**翻译只在这一处** */

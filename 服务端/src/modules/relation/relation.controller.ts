@@ -97,7 +97,9 @@ export class RelationController {
   @ApiOperation({
     summary: '业务关系详情',
     description:
-      '列表项 ＋ `members`（本批范围；`stage_logs` / `labels` / `competitors` / `rounds` 属后续里程碑）',
+      '列表项 ＋ `members`（本批范围；`stage_logs` / `labels` / `competitors` / `rounds` 属后续里程碑）。' +
+      '**公海（无主）关系可读**（2026-09-18 定）：按**所属部门**开放 —— 销售＝本部门、经理＝管辖部门、' +
+      '总经理 / 管理员＝全部；**别部门 → 403**；**交付 / 客服不进公海**（→ §2.2）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
   @ApiOkResponse({ type: RelationDetailVoDto })
@@ -114,6 +116,9 @@ export class RelationController {
       '`{urgency?, value_tier?, next_action_hint?, competition?, competitor_id?}`。' +
       '⚠ **非灰度关系必标开发价值**：「已标」＝**有值且合法即可，`pending` 也算标过**（2026-09-15 拍板）；' +
       '**完全没标**的非灰度关系 → **422 / 20403**（→ 数据架构 C1）。' +
+      '★ **公海（无主）关系的唯一写口**（2026-09-18 定）：**只传 `value_tier`** 时放行' +
+      '（开发价值＝**部门共同维护**，**销售也能标**；判定＝在本人读范围内 ＋ 可写角色，**不看 owner**）；' +
+      '**再带任何一个别的字段**（含空 body）→ **422 / `20408`**。' +
       '⚠ 规格 §5.6 是 **`PUT`**（计划行写 PATCH，按铁律以规格为准）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
@@ -142,7 +147,8 @@ export class RelationController {
     description:
       '`{employee_id, member_type, source?, valid_until?}`。`owner` **一关系仅一人**（第二位 → 409）；' +
       '`collaborator` 的 `source` 必填：`ask_help`（@求助）**限同部门**（跨部门 403，走正式协同审批），' +
-      '未给 `valid_until` 时默认 **7 天**。出参＝**加完之后的成员列表**',
+      '未给 `valid_until` 时默认 **7 天**。出参＝**加完之后的成员列表**。' +
+      '★ **公海（无主）关系 → 422 / `20408`**（未领取不加成员；2026-09-18 定）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
   @ApiOkResponse({ type: [RelationMemberVoDto] })

@@ -14,6 +14,16 @@
 //   · 同 C1「★ `dept_id` 恒定不可变」⇒ 激活时给的 `dept_id` 必须落在**可建范围内**，
 //     否则就是「替别的部门建档」——那是越权，不是业务便捷。
 //
+// ★ 公海（无主）＝**可读不可写**（2026-09-18 拍板 → 需求 §6.3 / §十六 N12、接口 §2.4 `20408` /
+//   §5.6、前端 §5 第 9/10 条）：
+//     ① **读**：跟单 ＋ 承诺 ＋ 阶段留痕对**该关系所属部门**开放（销售＝本部门 / 经理＝管辖部门 /
+//        总经理 · 管理员＝全部；**别部门 403**；**交付 · 客服不进公海**）—— 看不到历史就判断不出
+//        值不值得捞。⚠ 本档**早就写在架构 §7.2**（「∪ 公海」），只是一直没实现。
+//     ② **写**：无主关系一律 **422 / `20408`**；唯一例外 ＝ `PUT /relations/:id` **只传
+//        `value_tier`**（开发价值＝**部门共同维护**，**销售也能标**，判定＝在本人**读范围内** ＋
+//        可写角色，**不看 owner** —— 无主关系没有 owner 可看）。
+//     ⚠ 写门**不许**用 422 泄露「这条关系存在且无主」：看不到的公海照旧给 403 越界。
+//
 // ★ 为什么 M3 就要做范围收敛（而架构把「数据范围注入」排到 M5）：
 //   M3 交付的是**第一个客户数据列表**。不收敛 ＝ 上线即越权口子（能列出全公司的私海）。
 //   M1 的 `/org/employees` 同样提前做了 G7 收敛 —— 同一判断，不重复论证。
@@ -31,7 +41,12 @@
 import type { DataScope } from '../../../kernel/context/request-context';
 import { resolveDataScopeTarget } from '../../../kernel/data-scope/data-scope-target';
 import { isBusinessWriteRole } from '../../../kernel/data-scope/write-role';
-import { OWNER_MEMBER_TYPE, isEffectiveCollaborator, type RelationMemberLike } from './relation-owner';
+import {
+  OWNER_MEMBER_TYPE,
+  hasActiveOwner,
+  isEffectiveCollaborator,
+  type RelationMemberLike,
+} from './relation-owner';
 
 /** 关系列表的两个页签（→ 接口 §4.4 / 前端 §四：私海 / 公海） */
 export type RelationListTab = 'private' | 'sea';
@@ -109,11 +124,30 @@ export function isRelationWriteRole(roleCodes: readonly string[]): boolean {
   return isBusinessWriteRole(roleCodes);
 }
 
-/** 写权限判定结果（service 据此给 403 人话） */
-export type RelationWriteVerdict = { ok: true } | { ok: false; kind: 'read_only' | 'out_of_scope' };
+/**
+ * 读 / 写判定结果（service 据此给 403 / 422 人话）。
+ *
+ * · `read_only`    → **403**：角色对业务关系只读（管理员 / 交付 · 客服）
+ * · `out_of_scope` → **403**：越出数据范围
+ * · `sea_locked`   → **422 / `20408`**：**公海（无主）未领取** ⇒ 不可写
+ *                    （→ D-32②；唯一例外＝ `PUT /relations/:id` **只传 `value_tier`**，
+ *                    见 `checkSeaValueTierWrite`）
+ */
+export type RelationWriteVerdict = { ok: true } | RelationWriteDenied;
 
 /**
- * 能不能**看这条关系**（详情 / 成员列表）。
+ * 「拒」的那一半。
+ * ★ 单列出来是给 `checkSeaUnclaimed` 这类**只可能给拒绝或"不归我管"**（`null`）的判定用：
+ *   它的返回类型写成 `RelationWriteVerdict | null` 时，TypeScript **无法**从 `!== null`
+ *   推出「正好不是 `{ok:true}`」，调用方就得再写一次 `!verdict.ok`（多一层没意义的判断）。
+ */
+export type RelationWriteDenied = {
+  ok: false;
+  kind: 'read_only' | 'out_of_scope' | 'sea_locked';
+};
+
+/**
+ * 能不能**看这条关系**（详情 / 成员列表 / 跟单 / 承诺 / 阶段留痕）。
  *
  * ⚠ 与 `checkRelationWrite` 的关键差别：**这里不判「可写角色」** —— 管理员与交付 / 客服
  *   是「只读」而非「不可见」（→ §2.2：管理员可查看业务数据、交付 · 客服看服务中的客户）。
@@ -121,6 +155,12 @@ export type RelationWriteVerdict = { ok: true } | { ok: false; kind: 'read_only'
  *
  * ★ `self` / `serving` 档＝「我参与的关系」（我主责 ∪ 我有效协同），与列表口径一致
  *   （列表能看见的东西，点进去必须打得开，否则就是「列表骗人」）。
+ *
+ * ★★ **公海（无主）关系另开一档**（2026-09-18 拍板，→ 文件头 ★）：
+ *   「我参与」不含公海 —— 但**列表本来就把本部门公海列出来了**（`resolveRelationListScope`
+ *   的公海页签），点进去却 403 ⇒ 那是「列表骗人」的**既有不一致**（→《欠账登记表》D-32①）。
+ *   故：**无主关系按「所属部门」放行**（销售＝本部门；经理＝管辖部门，上面的 `dept` 档已覆盖；
+ *   总经理 / 管理员＝全部），**别部门 → 403**；**交付 · 客服不进公海**（→ §2.2 明文）。
  */
 export function checkRelationRead(
   input: { deptId: bigint; members: readonly RelationMemberLike[] },
@@ -142,7 +182,18 @@ export function checkRelationRead(
         (member.revokedAt ?? null) === null) ||
       (member.employeeId === viewer.employeeId && isEffectiveCollaborator(member, now)),
   );
-  return mine ? { ok: true } : { ok: false, kind: 'out_of_scope' };
+  if (mine) return { ok: true };
+
+  // ★ 公海（无主）：本部门内可翻阅历史（跟单 / 承诺 / 阶段留痕）—— 看不到历史就判断不出值不值得捞
+  if (!hasActiveOwner(input.members)) {
+    // 交付 / 客服**不进公海**（→ §2.2）：此处给 403，**不返回空**（空看着像「公海今天没人」）
+    if (type === 'serving') return { ok: false, kind: 'out_of_scope' };
+    return viewer.myDeptIds.includes(input.deptId)
+      ? { ok: true }
+      : { ok: false, kind: 'out_of_scope' };
+  }
+
+  return { ok: false, kind: 'out_of_scope' };
 }
 
 /**
@@ -183,6 +234,13 @@ export function checkRelationWrite(
 ): RelationWriteVerdict {
   if (!isRelationWriteRole(viewer.roleCodes)) return { ok: false, kind: 'read_only' };
 
+  // ★ **公海（无主）＝未领取 ⇒ 一律拒**（→ D-32②，2026-09-18 拍板）。
+  //   必须**先于** owner 比较：无主时 `ownerId` 恒 `null`，拿它去比 `=== viewer.employeeId`
+  //   会把「**本部门**公海」误报成越界（403），而真相是「未领取」（422 / `20408`）；
+  //   反过来对经理 / 总经理更要紧 —— 他们原本**整条都放行**（真库实测已落过无主跟单，→ D-31）。
+  const seaVerdict = checkSeaUnclaimed(input, viewer);
+  if (seaVerdict !== null) return seaVerdict;
+
   const { type } = viewer.dataScope;
   if (type === 'all') return { ok: true };
   if (type === 'dept') {
@@ -191,6 +249,62 @@ export function checkRelationWrite(
       : { ok: false, kind: 'out_of_scope' };
   }
   return input.ownerId === viewer.employeeId ? { ok: true } : { ok: false, kind: 'out_of_scope' };
+}
+
+/**
+ * **公海（无主）未领取**的写判定（→ D-32②）—— 两条写门共用的**唯一一份**规则。
+ *
+ * ★ 为什么抽出来而不是各写一遍：`checkRelationWrite`（改属性 / 加成员）与 D 域的
+ *   `requireWritableRelation`（写跟单 / 快速标记 / 建改承诺）是两条**口径不同**的写门
+ *   （前者认 owner，后者是「读口径 ＋ 写角色」，→ 各自的文件头），但「公海不可写」是**同一条**。
+ *   写成两处 ⇒ 改一处漏一处（本项目一号坑）。
+ *
+ * ★ **看不到的公海照旧给 403**：若无条件返回 `sea_locked`，别部门经理就能靠错误文案
+ *   （422「该公司还在公海」）反推出「这个 id 存在且无主」—— 那是**用错误码泄露数据范围**。
+ *   故判据＝「在我读范围内」：销售＝本部门、经理＝管辖部门、总经理＝全部。
+ *
+ * @returns `null` ＝ **不是公海**（有主），交给调用方继续按各自口径判；否则给出拒绝档位
+ * ⚠ 调用方须**已判过写角色**（本函数不重复判 —— 否则「管理员对公海」会被说成 422，而他的
+ *   真实问题是「只读角色」）
+ */
+export function checkSeaUnclaimed(
+  input: { deptId: bigint; ownerId: bigint | null },
+  viewer: RelationViewer,
+): RelationWriteDenied | null {
+  if (input.ownerId !== null) return null;
+
+  const { type } = viewer.dataScope;
+  const inScope =
+    type === 'all' ||
+    (type === 'dept'
+      ? viewer.dataScope.deptIds.includes(input.deptId)
+      : viewer.myDeptIds.includes(input.deptId));
+
+  return inScope ? { ok: false, kind: 'sea_locked' } : { ok: false, kind: 'out_of_scope' };
+}
+
+/**
+ * **公海唯一放行的写动作**：`PUT /relations/:id` **只传 `value_tier`**（→ D-32② / 需求 §6.3）。
+ *
+ * 口径逐字（2026-09-18 拍板）：开发价值＝**部门共同维护**的属性 ⇒ **销售也能标本部门公海**；
+ * 判定＝「**在本人读范围内** ＋ **可写角色**」，⚠ **不看 owner**（无主关系没有 owner 可看）。
+ * `value_tier` 之外的字段**只要带了一个**就算写（→ `sea_locked`）。
+ *
+ * ★ 复用 `checkRelationRead` 判「读范围内」而不是再写一遍部门比较：
+ *   公海读门已经定义好了「销售＝本部门 / 经理＝管辖部门 / 总 · 管＝全部 / 交付 · 客服不进公海」，
+ *   写例外要用的是**同一套范围**——重写一遍，将来读门一改这里就悄悄放宽（或收紧）。
+ */
+export function checkSeaValueTierWrite(
+  input: { deptId: bigint; members: readonly RelationMemberLike[]; valueTierOnly: boolean },
+  viewer: RelationViewer,
+  now: Date,
+): RelationWriteVerdict {
+  if (!isRelationWriteRole(viewer.roleCodes)) return { ok: false, kind: 'read_only' };
+
+  const readVerdict = checkRelationRead(input, viewer, now);
+  if (!readVerdict.ok) return readVerdict;
+
+  return input.valueTierOnly ? { ok: true } : { ok: false, kind: 'sea_locked' };
 }
 
 /** 数据范围档位（转出去给 service 判「私海 / 公海」时用，避免 service 重复写字符串） */

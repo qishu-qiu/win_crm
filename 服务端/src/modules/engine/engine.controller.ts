@@ -62,6 +62,9 @@ export class EngineController {
     description:
       '**按事件时间倒序**；默认近 1 个月（`range=1m`），`range=all` 取全部。' +
       '可见性**继承业务关系权限**（→ 需求 §10.2）：他人私海 **403**；' +
+      '**公海（无主）关系的跟单全文可读**（2026-09-18 定）：按**所属部门** —— 销售＝本部门、' +
+      '经理＝管辖部门、总经理 / 管理员＝全部，**别部门 403**、**交付 / 客服不进公海**' +
+      '（看不到历史就判断不出值不值得捞）。' +
       '`branch` 的分界基准是**该关系的 owner**（不是当前登录人，→ 决策 #30）。' +
       '⚠ 规格 §5.7 的 `pain_point` / `round_no` 本批**不返回**（卡点字典未接 / 轮次来源未落库）',
   })
@@ -81,6 +84,7 @@ export class EngineController {
       '`{contact_id?,action_type,summary?,outcome?,competition?,competition_note?,duration_min?,' +
       'mentioned_user_ids?}`。' +
       '**有效沟通必须写一句话结果**；快速标记三型（未联系 / 未接 / 说两句挂了）**点一下即可**（→ 需求 §10.2）。' +
+      '★ **写跟单只能在私海**：公海（无主）关系 → **422 / `20408`**（要写跟单请先领取到私海；2026-09-18 定）。' +
       '重复提交（同内容）→ **409**；快速标记**不重置**掉海倒计时（→ 数据架构 D2）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
@@ -101,7 +105,8 @@ export class EngineController {
       '（→ 需求 §6.3 / §10.2：点一下不能保号）。重复点同一条**会落多条** ——' +
       '「这个客户打过 N 次」正是这么统计的。' +
       '⚠ 判定分两组：关系侧判**可写**（越权 / 只读 → 403）；「待关联」联系人侧判**归属人**' +
-      '（只有当前归属人能标，别人 → 403；→ 需求 §6.1 ⑦⑨）',
+      '（只有当前归属人能标，别人 → 403；→ 需求 §6.1 ⑦⑨）。' +
+      '★ 关系侧另加**非公海**：公海（无主）关系 → **422 / `20408`**（未领取不标记；2026-09-18 定）',
   })
   @ApiOkResponse({ type: QuickMarkResultDto })
   quickMark(@Body() body: QuickMarkDto): Promise<QuickMarkResultVo> {
@@ -114,7 +119,8 @@ export class EngineController {
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: '某关系的承诺列表',
-    description: '可见性同时间线（**继承业务关系权限**）；本批**不分页**（→ 接口 §2.7，M6）',
+    description:
+      '可见性同时间线（**继承业务关系权限**，含**公海按所属部门可读**）；本批**不分页**（→ 接口 §2.7，M6）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
   @ApiOkResponse({ type: [CommitmentVoDto] })
@@ -131,7 +137,8 @@ export class EngineController {
     description:
       '`{contact_id?,party,ctype,content,due_at?,remind_at?,source_event_id?}`。' +
       '`party`：`me` 我答应客户（催自己）/ `them` 客户答应我（催客户）/ `verdict` 给结论（→ 需求 §10.1）；' +
-      '`due_at` 不给＝**未定**（「三快选默认明天」由前端给，服务端不替销售定时间）',
+      '`due_at` 不给＝**未定**（「三快选默认明天」由前端给，服务端不替销售定时间）。' +
+      '★ 公海（无主）关系 → **422 / `20408`**（未领取不建承诺；2026-09-18 定）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
   @ApiOkResponse({ type: CommitmentVoDto })
@@ -151,7 +158,8 @@ export class EngineController {
     description:
       '`{id,status?,waive_reason?,due_at?,remind_at?}`，`status` ∈ `done` 兑现 / `cancelled` 取消' +
       '（**录错了 / 不成立**，不需原因）/ `waived` 豁免（**确有其事但做不成，必填 `waive_reason`**）。' +
-      '已结束的承诺（兑现 / 取消 / 豁免）再改 → **422 / 20403**',
+      '已结束的承诺（兑现 / 取消 / 豁免）再改 → **422 / 20403**；' +
+      '★ 公海（无主）关系 → **422 / `20408`**（2026-09-18 定）',
   })
   @ApiParam({ name: 'id', description: '关系 id（十进制字符串）' })
   @ApiOkResponse({ type: CommitmentVoDto })

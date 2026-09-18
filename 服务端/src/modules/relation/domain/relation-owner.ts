@@ -53,6 +53,19 @@ export function findActiveOwner(
 }
 
 /**
+ * 这条关系**有没有主人**（→ 需求 §5「有 owner ＝ 本人私海 / 无 owner ＝ 掉公海」）。
+ *
+ * ★ 「公海」的业务含义 ＝ **无主**（→ 数据架构 C1 `sea_status` 的语义），不是另一个物理池。
+ *   本函数就是那个判据的**唯一落点**：读门（销售能不能翻本部门公海的历史）与写门
+ *   （公海未领取一律拒，→ D-32）都调它 —— 各写一份 `members.some(...)` 就是双真相源。
+ * ★ 判据取**成员行**而不是 `sea_status` 列：出参里的 `owner: null` 与写门的 `ownerId: null`
+ *   本来都由 `findActiveOwner` 推出，三处同源才可能同时为真（改一处漏一处就分叉）。
+ */
+export function hasActiveOwner(members: readonly RelationMemberLike[]): boolean {
+  return findActiveOwner(members) !== undefined;
+}
+
+/**
  * 能不能给这条关系再加一个 owner（→ M3-05 判据本体：「加入第二 owner 被拒」）。
  *
  * ★ 三种结果都**必须**能表达：「位子空着」放行、「同一个人」与「别人占着」都要拒，

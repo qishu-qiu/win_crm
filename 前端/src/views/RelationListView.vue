@@ -16,6 +16,7 @@ import {
 import {
   RELATION_PAGE_SIZE_DEFAULT,
   listRelations,
+  updateRelation,
   type RelationTab,
   type RelationVo,
 } from '../api/relation'
@@ -34,16 +35,22 @@ import {
 import {
   RELATION_VIEW_OPTIONS,
   URGENCY_OPTIONS,
+  VALUE_TIER_OPTIONS,
   formatDateTime,
   stageNameOf,
+  toValueTier,
   urgencyColorOf,
   urgencyNameOf,
   valueTierNameOf,
+  type ValueTierValue,
 } from '../relation'
 
 /**
  * 业务关系列表页（M3-14 起 · 方案 A 最小页）—— **私海 / 公海两个页签**，
  * M4-17 起每行可**点开时间线**（写跟单 / 看承诺）。
+ *
+ * ★ **公海（无主）＝可读不可写**（2026-09-18 拍板）：抽屉在公海只给「**开发价值**」一个入口，
+ *   其余写动作一概不出现；跟单 / 承诺**照旧可读**（→ 前端文档 §5 第 9/10 条 / D-32）。
  *
  * 判据逐字（《开发计划-V1》M3-14 / M4-17）：
  *   · M3-14「页面上能看到两条列表，**数据与 curl 一致**」；
@@ -95,10 +102,12 @@ const PAGE_SIZE_OPTIONS = ['20', '50', '100']
  * 口径来源（★ 真相源，勿自造）：
  *   · 功能 →《销售CRM前端页面与交互文档》§5 第 5 条（业务关系列表「含批量快速标记」）
  *     ＋ §3（「勾选多客户 → 一次性标记」；落库但**不算有效跟进、不重置掉海倒计时**）。
- *   · ⚠ **公海不提供标记**（同文档 §9/10「公海内不做任何动作」，2026-09-12 定）：
- *     故动作条**只在「私海」页签出现** —— 公海是"看号 → 打 → 领取"的动线，领取后才进推进态。
- *     （⚠ 已知缺口：服务端 `requireWritableRelation` **暂未拦公海关系**，写跟单 / 快速标记
- *     在公海也能落库 —— 已登记欠账，本页**不据此放宽**：规格说不行就是不行。）
+ *   · ⚠ **公海不提供标记**（同文档 §9/10「公海内不做任何动作」，2026-09-12 定；
+ *     2026-09-18 补例外「唯一可改开发价值」）：故动作条**只在「私海」页签出现** ——
+ *     公海是"看号 → 翻历史 → 打 → 领取"的动线，领取后才进推进态。
+ *     ★ 原先此处记的「服务端暂未拦公海」**已修复**（2026-09-18，→《欠账登记表》D-32②：
+ *     `requireWritableRelation` / `checkRelationWrite` 均已判无主 → 422 / `20408`）——
+ *     服务端已是硬口径，但**页面照旧不摆这些入口**：不靠"点了会报错"来体现规则。
  *
  * ★ 判定全在服务端（→ 接口 §5.7）：关系侧判**可写**（越权 / 只读 → 403）；
  *   页面**不自己判**"这条能不能标"（判一遍＝第二套规则）。
@@ -255,6 +264,43 @@ const timelineError = ref('')
 const submittingEvent = ref(false)
 const submittingCommitment = ref(false)
 
+/**
+ * 公海（无主）＝**可读不可写**（2026-09-18 拍板 → 前端文档 §5 第 9/10 条 / 需求 §6.3。
+ * ⚠ 原文「公海内不做任何动作」已于同日**补例外**：「改开发价值」是唯一可做的）：
+ *   · **留读**：跟单全文 ＋ 承诺**照旧拉出来**（看不到历史就判断不出值不值得捞）——
+ *     服务端已按「所属部门」放开（销售＝本部门 / 经理＝管辖部门；→《欠账登记表》D-32①）；
+ *   · **封写**：「记一条跟单」「建承诺」「兑现 / 豁免」在公海**一律不出现**（**不是禁用**）——
+ *     摆一个点了报 422 的按钮＝假入口（设计规范 §3.2 第 11 条，本项目已犯过）；
+ *   · **唯一例外**：改「开发价值」`value_tier` —— 开发价值＝**部门共同维护**，**销售也能标**。
+ *
+ * ★ 判据取服务端出的 `sea_status`（`company_sea` ＝ 无主），**不自己拿 `owner === null` 再推一遍**：
+ *   同一件事两处判定，将来 owner 语义一变（例：掉海时留着 `owner` 行做留痕）就分叉。
+ */
+const activeIsSea = computed(() => activeRelation.value?.sea_status === 'company_sea')
+
+/**
+ * 开发价值草稿：打开抽屉时按**当前值**初始化（`null` ＝ 未标，**与「待定」是两回事**）。
+ * ⚠ 类型是**收窄后的值域**（`toValueTier` 逐项校验得来），不是 `string` ——
+ *   出参是宽 `string | null`，直接塞进表单再原样回传，就会把库里的怪值送回去挨 400。
+ */
+const valueTierDraft = ref<ValueTierValue | null>(null)
+const savingValueTier = ref(false)
+
+/** 选项顺序照规格表（→ `relation.ts` 的 `VALUE_TIER_OPTIONS`），本层只做形状转换 */
+const valueTierOptions = VALUE_TIER_OPTIONS.map((item) => ({ value: item.value, label: item.label }))
+
+/**
+ * 「保存」只在**选了值且与当前值不同**时可点。
+ * ★ 为什么卡这么死：公海的写入被服务端限定为「**只传 `value_tier`**」（→ 接口 §5.6）——
+ *   草稿为空时提交出去就是一个**空 body**，服务端照判「写」→ 422 / `20408`。
+ *   与其让用户点了报错，不如让按钮本来就点不动（**不让用户走到会失败的那一步**）。
+ */
+const canSaveValueTier = computed(
+  () =>
+    valueTierDraft.value !== null &&
+    valueTierDraft.value !== activeRelation.value?.value_tier,
+)
+
 const drawerTitle = computed(() =>
   activeRelation.value === null
     ? '关系时间线'
@@ -305,8 +351,34 @@ const outcomeOptions = [
 
 function openTimeline(record: RelationVo): void {
   activeRelation.value = record
+  valueTierDraft.value = toValueTier(record.value_tier)
   drawerOpen.value = true
   void refreshTimeline()
+}
+
+/**
+ * 保存开发价值（**公海唯一放行的写动作**，→ 接口 §5.6 / D-32②）。
+ *
+ * ⚠ 请求体**只有 `value_tier`** —— 多带任何一个字段，服务端就按「写」判 **422 / `20408`**。
+ * ★ 成功后就地更新 `activeRelation`（抽屉里的值立刻为准），并重新取列表：
+ *   列表有「开发价值」列，同一次动作两处显示不能不一致（与写跟单后的做法一致）。
+ */
+async function saveValueTier(): Promise<void> {
+  const relation = activeRelation.value
+  if (relation === null || !canSaveValueTier.value) return
+
+  savingValueTier.value = true
+  try {
+    const updated = await updateRelation(relation.id, { value_tier: valueTierDraft.value ?? undefined })
+    activeRelation.value = updated
+    valueTierDraft.value = toValueTier(updated.value_tier)
+    message.success('开发价值已更新')
+    await load()
+  } catch {
+    // 失败原因（403 / 422 / 网络）由请求层统一弹出，这里不重复堆一层提示
+  } finally {
+    savingValueTier.value = false
+  }
 }
 
 async function refreshTimeline(): Promise<void> {
@@ -336,6 +408,7 @@ function onDrawerClose(): void {
   events.value = []
   commitments.value = []
   timelineError.value = ''
+  valueTierDraft.value = null
 }
 
 async function submitEvent(): Promise<void> {
@@ -585,31 +658,53 @@ async function submitWaive(commitment: Commitment): Promise<void> {
     >
       <p v-if="timelineError" class="relations-error">{{ timelineError }}</p>
 
-      <h3 class="drawer-section">记一条跟单</h3>
-      <div class="drawer-form">
-        <a-select
-          v-model:value="eventForm.action_type"
-          :options="actionTypeOptions"
-          style="width: 120px"
-        />
-        <a-select
-          v-model:value="eventForm.outcome"
-          :options="outcomeOptions"
-          style="width: 170px"
-        />
-        <a-input
-          v-model:value="eventForm.summary"
-          placeholder="一句话结果（有效沟通必填）"
-          style="width: 240px"
-        />
-        <a-input-number
-          v-model:value="eventForm.duration_min"
-          :min="1"
-          placeholder="分钟"
-          style="width: 100px"
-        />
-        <a-button type="primary" :loading="submittingEvent" @click="submitEvent">记下来</a-button>
-      </div>
+      <!-- ★ 公海（无主）：**只给「开发价值」入口**，其余写动作一概不出现（→ 前端文档 §5 第 9/10 条） -->
+      <template v-if="activeIsSea">
+        <h3 class="drawer-section">开发价值</h3>
+        <div class="drawer-form">
+          <a-select
+            v-model:value="valueTierDraft"
+            :options="valueTierOptions"
+            placeholder="未标"
+            style="width: 140px"
+          />
+          <a-button type="primary" :loading="savingValueTier" :disabled="!canSaveValueTier" @click="saveValueTier">
+            保存
+          </a-button>
+          <span class="relations-bulk-hint">
+            该客户还在公海：开发价值由部门共同维护，这儿谁都能标；
+            写跟单 / 建承诺要先把这条领取到私海。
+          </span>
+        </div>
+      </template>
+
+      <template v-else>
+        <h3 class="drawer-section">记一条跟单</h3>
+        <div class="drawer-form">
+          <a-select
+            v-model:value="eventForm.action_type"
+            :options="actionTypeOptions"
+            style="width: 120px"
+          />
+          <a-select
+            v-model:value="eventForm.outcome"
+            :options="outcomeOptions"
+            style="width: 170px"
+          />
+          <a-input
+            v-model:value="eventForm.summary"
+            placeholder="一句话结果（有效沟通必填）"
+            style="width: 240px"
+          />
+          <a-input-number
+            v-model:value="eventForm.duration_min"
+            :min="1"
+            placeholder="分钟"
+            style="width: 100px"
+          />
+          <a-button type="primary" :loading="submittingEvent" @click="submitEvent">记下来</a-button>
+        </div>
+      </template>
 
       <h3 class="drawer-section">时间线（按时间倒序，默认近 1 个月）</h3>
       <a-table
@@ -634,7 +729,8 @@ async function submitWaive(commitment: Commitment): Promise<void> {
       </a-table>
 
       <h3 class="drawer-section">承诺</h3>
-      <div class="drawer-form">
+      <!-- 建承诺也是写：公海不出现（列表照旧可读） -->
+      <div v-if="!activeIsSea" class="drawer-form">
         <a-select
           v-model:value="commitmentForm.party"
           :options="COMMITMENT_PARTY_OPTIONS"
@@ -670,7 +766,9 @@ async function submitWaive(commitment: Commitment): Promise<void> {
             <span v-if="record.waive_reason">（{{ record.waive_reason }}）</span>
           </template>
           <template v-else-if="column.key === 'actions'">
-            <template v-if="record.status === 'open'">
+            <!-- 公海：承诺不收尾（唯一例外是上方的「开发价值」，→ 前端文档 §5 第 9/10 条） -->
+            <span v-if="activeIsSea">—</span>
+            <template v-else-if="record.status === 'open'">
               <template v-if="waivingId === record.id">
                 <a-input
                   v-model:value="waiveReasonDraft"

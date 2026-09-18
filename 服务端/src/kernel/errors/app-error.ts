@@ -46,6 +46,12 @@ export const ErrorCode = {
    *   故按 §2.4「422 ＋ 204xx ＝ 业务校验不通过」的归类新增本码，并同步写回接口 §2.4。
    */
   ASK_HELP_CROSS_DEPT: 20407,
+  /**
+   * 422 · **公海关系未领取禁止写入**（→ 需求 §6.3 / §十六 N12；接口 §2.4 **2026-09-18 补**）。
+   * ★ 无主关系**只可改「开发价值」`value_tier`**；写跟单 / 快速标记 / 建改承诺 / 换阶段 /
+   *   加删成员一律拒 —— 与 `20404`（预约未完成禁止）同为「**状态不允许**」一族，故归 422。
+   */
+  SEA_WRITE_FORBIDDEN: 20408,
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];

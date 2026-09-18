@@ -14,7 +14,7 @@ npm run preview  # 预览打包产物
 
 - **接口类型不手写**：`src/api/types.ts` 由后端 OpenAPI 生成 —— 在 `服务端/` 内起服（默认 3000）后跑
   `npm run gen:types`。手写对接＝双真相源（本项目一号坑）。
-- **视觉数值走 token**：`src/styles/tokens.css`（＝《销售CRM设计规范》V1.0 §二）；组件一律用 Ant Design，
+- **视觉数值走 token**：`src/styles/tokens.css`（＝《销售CRM设计规范》V1.1 §二 light ／ **§八.7 dark**）；组件一律用 Ant Design，
   禁自定义视觉语言（设计规范 §3.2）。
 - **主题（白天 / 夜间）**：唯一落点是 `src/theme.ts`（`setTheme`）＋ `styles/tokens.css` 的
   `[data-theme='dark']` 块 ＋ `index.html` 的内联预置脚本（**Vue 起来前先定主题＝无闪烁**）。

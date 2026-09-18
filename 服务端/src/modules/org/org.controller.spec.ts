@@ -17,6 +17,7 @@ type HandlerName =
   | 'login'
   | 'refresh'
   | 'me'
+  | 'updatePreferences'
   | 'listDepartments'
   | 'listProductLines'
   | 'listEmployees'
@@ -36,6 +37,8 @@ const ROUTES: RouteExpectation[] = [
   { handler: 'login', path: 'account/login', method: RequestMethod.POST, isPublic: true },
   { handler: 'refresh', path: 'account/refresh', method: RequestMethod.POST, isPublic: true },
   { handler: 'me', path: 'account/me', method: RequestMethod.GET, isPublic: false },
+  // 2026-09-18（D-37）：个人偏好，接口 §4.14.9 / §5.2 —— 需鉴权（改的是**自己**的偏好）
+  { handler: 'updatePreferences', path: 'account/preferences', method: RequestMethod.PUT, isPublic: false },
   { handler: 'listDepartments', path: 'org/departments', method: RequestMethod.GET, isPublic: false },
   { handler: 'listProductLines', path: 'org/product-lines', method: RequestMethod.GET, isPublic: false },
   { handler: 'listEmployees', path: 'org/employees', method: RequestMethod.GET, isPublic: false },
@@ -48,6 +51,7 @@ function createServiceStub() {
     login: jest.fn(async () => ({ access_token: 'a', refresh_token: 'r', user: { id: 7n } })),
     refresh: jest.fn(async () => ({ access_token: 'a2', refresh_token: 'r2' })),
     me: jest.fn(async () => ({ id: 7n })),
+    updatePreferences: jest.fn(async () => ({ id: 7n })),
     listDepartments: jest.fn(async () => [{ id: 1n }]),
     listProductLines: jest.fn(async () => [{ id: 5n }]),
     listEmployees: jest.fn(async () => [{ id: 7n }]),
@@ -94,7 +98,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       expect(Reflect.getMetadata(HTTP_CODE_METADATA, OrgController.prototype.me)).toBeUndefined();
     });
 
-    it('类级路径前缀为空（Nest 归一成 `/`），且**只挂了这 8 条路由**（多一条就是多一个没人评审过的入口）', () => {
+    it('类级路径前缀为空（Nest 归一成 `/`），且**只挂了这 9 条路由**（多一条就是多一个没人评审过的入口）', () => {
       // Nest 会把 `@Controller()` 的空前缀归一成 `/`，路径拼接时再被各 handler 的完整路径覆盖
       expect(Reflect.getMetadata(PATH_METADATA, OrgController)).toBe('/');
 
@@ -103,7 +107,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
         // `prototype.constructor` 会**继承到类级**的 PATH_METADATA（自身没有 handler 元数据），必须排掉
         .filter((name) => name !== 'constructor')
         .filter((name) => Reflect.getMetadata(PATH_METADATA, prototype[name] as object) !== undefined);
-      // `toRequestMeta` 是模块级导出（不在 prototype 上），故这里应**恰好**是 ROUTES 的 8 个 handler
+      // `toRequestMeta` 是模块级导出（不在 prototype 上），故这里应**恰好**是 ROUTES 的 9 个 handler
       expect(routed.sort()).toEqual([...ROUTES.map((route) => route.handler)].sort());
     });
   });
@@ -121,6 +125,8 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       login: [{ account: '13800000000', password: 'Passw0rd!' }, '10.0.0.8', 'jest-agent', 'req-1'],
       refresh: [{ refresh_token: 'opaque-token' }],
       me: [],
+      // 部分更新：只切主题（`nav_open` 不给 = 不改）
+      updatePreferences: [{ theme: 'dark' }],
       listDepartments: [],
       listProductLines: [],
       listEmployees: [],

@@ -10,6 +10,7 @@ import request from './request'
 export type LoginInput = components['schemas']['LoginDto']
 export type LoginResult = components['schemas']['LoginResultDto']
 export type UserVo = components['schemas']['UserVoDto']
+export type PreferencesInput = components['schemas']['UpdatePreferencesDto']
 
 /**
  * 登录：`account` ＝ **手机号 或 登录账号名**（服务端判别），两通道共用同一密码。
@@ -25,5 +26,17 @@ export async function login(input: LoginInput): Promise<LoginResult> {
  */
 export async function fetchMe(): Promise<UserVo> {
   const { data } = await request.get<UserVo>('/account/me')
+  return data
+}
+
+/**
+ * 改个人偏好（`PUT /account/preferences`）—— 主题 / 侧栏展开状态，**存账号**（→ 接口 §4.14.9）。
+ *
+ * ★ **部分更新**：只传要改的键，没传的键服务端原样保留。
+ * ★ 出参是**更新后的 `UserVO`**（结构与 `GET /account/me` 完全相同）—— 不是"只回改了什么"，
+ *   故调用方拿到直接**整体替换**当前人即可（→ `session.ts` 的 `pushPreferences`）。
+ */
+export async function updatePreferences(input: PreferencesInput): Promise<UserVo> {
+  const { data } = await request.put<UserVo>('/account/preferences', input)
   return data
 }

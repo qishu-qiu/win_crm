@@ -81,6 +81,8 @@ model Employee {
   product_line_ids  Json? // 关联产品线 JSON
   direct_manager_id BigInt?   @db.UnsignedBigInt // 直属经理（审批链）
   status            String    @default("active") @db.VarChar(32) // active / resigned / disabled
+  theme             String?   @db.VarChar(16) // ★ 2026-09-18 新增：个人主题（light / dark）；NULL = 从未设置，前端回落默认（migration 0009）
+  nav_open          Json? // ★ 2026-09-18 新增：侧栏展开分组键 JSON（→ 需求 §13.4「折叠状态按账号持久化」；migration 0009）
   created_by        BigInt?   @db.UnsignedBigInt
   created_at        DateTime  @default(now()) @db.DateTime(0)
   updated_by        BigInt?   @db.UnsignedBigInt

@@ -20,9 +20,13 @@ import { ConfigProvider, theme as antdTheme, type ConfigProviderProps } from 'an
  *   的观感由它自己的 `algorithm` ＋ token 决定 —— **光换 `--crm-*` 变量，它们不会变黑**。
  *   故这里把 tokens.css 的**计算值原样读出来**喂给它：数值仍只有一个落点，本文件只"搬运"。
  *
- * ★ 持久化现状：本轮存**浏览器本地**（`crm_theme`）。规格 §八 写的是「存账号」，
- *   对应接口 §4.14.9 的 `PUT /account/preferences {theme}` —— 该端点**服务端尚未实现**，
- *   且《数据架构文档》里没有 theme 字段的落点（→《欠账登记表》D-37）。**别在前端自造账号侧存储**。
+ * ★ 持久化（2026-09-18 收口 · D-37）：**账号侧已落地** —— 接口 §4.14.9
+ *   `PUT /account/preferences` ＋ 数据架构 `employee.theme`（migration 0009），
+ *   并由 `GET /account/me` 一并下发。
+ *   本机 `localStorage['crm_theme']` **保留**，但**角色变了**：它只负责**首屏不闪烁**
+ *   （`index.html` 内联脚本要在 Vue 起来之前就把主题定下来），**权威值以账号为准** ——
+ *   登录 / 恢复会话后由 `applyAccountTheme` 覆盖本机（→ `session.ts`）。
+ *   ⚠ 别把本机存储当权威：换台设备就该看到账号里的那套主题。
  */
 
 /** 主题码（＝接口 §4.14.9 的取值，也是规格 §八 的两套） */
@@ -92,6 +96,20 @@ export function setTheme(name: ThemeName): void {
     // localStorage 不可用（隐私模式 / 被禁）：本次会话内照样生效，只是刷新后回默认
   }
   theme.value = next
+}
+
+/**
+ * 用**账号里的主题**覆盖本机主题（登录 / 恢复会话后调一次 · 2026-09-18 · D-37）。
+ *
+ * ★ 只认 `light` / `dark`：`null`（＝**从未设置过**）与任何脏值一律**不动本机值** ——
+ *   账号侧没存过，就不该把用户本机已选的外观抹回默认（与「库里的 `null` 与 `'light'`
+ *   是两件事」同源，→ migration 0009 注释）。
+ * ★ 走 `setTheme`（而不是只改 `theme.value`）：它同时**落本机**、改根节点属性、`colorScheme`，
+ *   三者缺一就会出现"页面变了、状态没变"或刷新后回弹。不落本机的话，下次刷新会先按本机
+ *   旧值画一帧再被纠正 —— 那就是肉眼可见的一闪。
+ */
+export function applyAccountTheme(value: string | null | undefined): void {
+  if (value === 'light' || value === 'dark') setTheme(value)
 }
 
 /**

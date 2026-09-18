@@ -5,7 +5,8 @@
 //   · 《销售CRM接口API文档》§5.2：
 //       `POST /account/login` → `{access_token, refresh_token, user: UserVO}`
 //       `GET /account/me` → `UserVO = {id, name, username?, role, dept:{id,name}, managed_dept_ids:[],
-//                                      permissions:{"perm_key":"level"}}`
+//                                      permissions:{"perm_key":"level"}, theme, nav_open:[]}`
+//       `PUT /account/preferences` → 同上 `UserVO`（2026-09-18 落 · D-37；出参复用权威形状，不另造）
 //   · 同 §5.3：部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`；
 //       员工 `{id,work_no,name,phone,username?,primary_dept:{id,name},extra_depts:[],product_lines:[],
 //              direct_manager:{id,name},roles:["sale"],status}`；
@@ -72,6 +73,26 @@ export class UserVoDto {
     example: { 'customer.view': 'visible' },
   })
   permissions!: Record<string, string>;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    enum: ['light', 'dark'],
+    description:
+      '个人主题（V1 两态；→ 设计规范 §八.1 / 接口 §4.14.9）。' +
+      '**`null` = 从未设置过**（≠「显式选了白天」）—— 前端按「跟随默认值」回落',
+    example: 'dark',
+  })
+  theme!: string | null;
+
+  @ApiProperty({
+    type: [String],
+    description:
+      '侧栏展开的分组键集合（→ 需求 §13.4「折叠状态按账号持久化」）。' +
+      '**始终下发该键**：没存过给 `[]`（≠ 用户手动全部收起，后者是用户在列表里收起后的结果）',
+    example: ['relation'],
+  })
+  nav_open!: string[];
 }
 
 /** 登录出参（→ §5.2） */

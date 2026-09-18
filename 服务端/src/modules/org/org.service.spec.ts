@@ -58,6 +58,10 @@ interface EmployeeFixture {
   product_line_ids: unknown;
   direct_manager_id: bigint | null;
   status: string;
+  /** 个人主题（migration 0009）；`null` = **从未设置过**（≠ 选了白天） */
+  theme: string | null;
+  /** 侧栏展开分组键 JSON（migration 0009）；`null` = 从未设置过 */
+  nav_open: unknown;
 }
 
 interface EmployeeRowFixture {
@@ -107,6 +111,7 @@ function createRepository(options: FakeRepositories = {}) {
     findEmployeeByPhone: jest.fn(async (): Promise<EmployeeFixture | null> => options.employee ?? null),
     findEmployeeByUsername: jest.fn(async (): Promise<EmployeeFixture | null> => options.employee ?? null),
     findEmployeeById: jest.fn(async (): Promise<EmployeeFixture | null> => options.employee ?? null),
+    updateEmployeePreferences: jest.fn(async () => undefined),
     findRoleCodes: jest.fn(async (): Promise<string[]> => options.roleCodes ?? []),
     findManagedDeptIds: jest.fn(async (): Promise<bigint[]> => options.managedDeptIds ?? []),
     findDepartmentsByIds: jest.fn(async () => options.departments ?? []),
@@ -185,6 +190,9 @@ function employeeFixture(overrides: Partial<EmployeeFixture> = {}): EmployeeFixt
     product_line_ids: null,
     direct_manager_id: null,
     status: 'active',
+    // 默认＝**从未设置过**（`null`）：用例要断言"没存过 → 前端回落默认 / 空数组"
+    theme: null,
+    nav_open: null,
     ...overrides,
   };
 }
@@ -235,6 +243,9 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         dept: { id: 1n, name: '华东一部' },
         managed_dept_ids: [],
         permissions: { 'customer.export': 'denied', 'customer.view': 'visible' },
+        // 偏好未设置：`theme` 原样 `null`（前端回落默认）、`nav_open` 拉直成 `[]`
+        theme: null,
+        nav_open: [],
       });
 
       // ★ 关键：**不手搓键名**，直接过 `fromClaims`（守卫用的同一个函数）
@@ -572,6 +583,8 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         dept: { id: 1n, name: '华东一部' },
         managed_dept_ids: [3n],
         permissions: { 'customer.view': 'visible' },
+        theme: null,
+        nav_open: [],
       });
     });
 
@@ -592,6 +605,66 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
       const user = await runWithContext(context, () => service.me());
 
       expect(user.dept).toBeNull();
+    });
+  });
+
+  // ===== 2026-09-18 个人偏好（D-37 / D-36⑥ / D-41）=====
+  describe('个人偏好：`PUT /account/preferences` → 更新后的 `UserVO`', () => {
+    /** 本路径只读上下文的 `employeeId`（改的是**自己**），其余声明不影响结果 */
+    const context: RequestContext = {
+      employeeId: 7n,
+      deptIds: [1n],
+      roleCodes: ['sale'],
+      dataScope: { type: 'self', deptIds: [] },
+    };
+
+    it('不在请求链上（无上下文）→ 401 / 20002，且**一次库都不碰**（不许兜底成匿名放行）', async () => {
+      const { service, repository } = createService({});
+
+      const error = await captureAppError(() => service.updatePreferences({ theme: 'dark' }));
+
+      expect(error.httpStatus).toBe(401);
+      expect(error.constraint).toBe('account.preferences.no_context');
+      expect(repository.updateEmployeePreferences).not.toHaveBeenCalled();
+    });
+
+    it('**部分更新**：只给 `theme` → 只写 `theme`；`nav_open` 原样保留（不被顺手清掉）', async () => {
+      const { service, repository } = createService({
+        employee: employeeFixture({ theme: null, nav_open: ['relation'] }),
+        roleCodes: ['sale'],
+      });
+
+      const user = await runWithContext(context, () =>
+        service.updatePreferences({ theme: 'dark' }),
+      );
+
+      // ★ 关键：写下去的**只有** `theme` —— 没给的键不许被补成 `undefined` / 空数组
+      expect(repository.updateEmployeePreferences).toHaveBeenCalledWith(7n, { theme: 'dark' });
+      expect(user.theme).toBe('dark');
+      expect(user.nav_open).toEqual(['relation']);
+    });
+
+    it('一个键都不给：**库一次都不碰**，仍返回 200 的 `UserVO`（空 body 是合法请求）', async () => {
+      const { service, repository } = createService({
+        employee: employeeFixture({ theme: 'dark' }),
+        roleCodes: ['sale'],
+      });
+
+      const user = await runWithContext(context, () => service.updatePreferences({}));
+
+      expect(repository.updateEmployeePreferences).not.toHaveBeenCalled();
+      expect(user.theme).toBe('dark');
+    });
+
+    it('`nav_open` 的脏值（数字 / null / 嵌套对象）一律丢弃，**不让它把出参打成 500**', async () => {
+      const { service } = createService({
+        employee: employeeFixture({ nav_open: ['relation', 42, null, { key: 'x' }] }),
+        roleCodes: ['sale'],
+      });
+
+      const user = await runWithContext(context, () => service.updatePreferences({}));
+
+      expect(user.nav_open).toEqual(['relation']);
     });
   });
 

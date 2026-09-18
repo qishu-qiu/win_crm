@@ -1,7 +1,7 @@
 # 服务端 / Prisma —— 落库口径唯一落点
 
 > **定位**：本目录承载「**数据落库口径**」——Prisma 版本硬口径 / 必须手写 migration 的部分 / 真库结构约束 / 上线前必做。
-> **真相源**：《需求规格/销售CRM数据架构文档》**V1.36**（§三~§九 表、§十 索引、§十五 落库口径）。本文只记「Prisma 与 MySQL 层面的落法」，不重复业务规则。
+> **真相源**：《需求规格/销售CRM数据架构文档》**V1.37**（§三~§九 表、§十 索引、§十五 落库口径）。本文只记「Prisma 与 MySQL 层面的落法」，不重复业务规则。
 > **读者**：改 `schema.prisma` / 写 migration / 首次部署前**必读**。所有 prisma 命令**一律在 `服务端/` 内执行**。
 > 版本沿革查 git。
 
@@ -9,7 +9,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| `prisma/schema.prisma` | **46 张业务表**，与数据架构 V1.36 一致 |
+| `prisma/schema.prisma` | **46 张业务表**，与数据架构 V1.37 一致 |
 | `prisma/migrations/0001_init/` | baseline（46 表 / 索引 / 外键）＋ 结尾**「手工补充段」**（生成列 / 3 张分区表 / 视图 / CHECK / 46 表中文 COMMENT）。**已 `migrate resolve --applied` 登记为基线** |
 | `prisma/migrations/0002_company_capital_legal_person/` | 增量（详见 §四.2） |
 | `prisma/migrations/0003_username_and_phone_lock/` | 增量（详见 §四.3） |
@@ -58,13 +58,13 @@ npx prisma format   --schema prisma/schema.prisma
 
 ## 三、schema.prisma
 
-- **46 张表**，真相源＝数据架构文档 **V1.36**。
+- **46 张表**，真相源＝数据架构文档 **V1.37**。
 - **教训一（P1012 · 关系未双向声明）**：`SignChecklist.product_line` 曾缺 `ProductLine` 侧对向字段 → 已在 `ProductLine` 补 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**。**规律：Prisma 关系字段是双向的 —— 加表 / 加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败。**
 - **教训二（P1012 · v7 移除 `datasource.url`）**：见 §二。**规律：主版本升级先跑只读的 `migrate status` 验证迁移历史兼容，再动 schema。**
 
 ## 四、migration 逐份口径
 
-> **⚠ 铁律（贯穿全部历史）**：`0001_init` / `0002` / `0003` / `0004` / `0005` / `0006` **均已登记，一律不得改动**（改文件会与 `_prisma_migrations` 的**校验和不一致**）。**注释 / 结构修正一律走「新增量 migration」**。
+> **⚠ 铁律（贯穿全部历史）**：`0001_init` / `0002` / `0003` / `0004` / `0005` / `0006` / `0007` / `0008` / `0009` **均已登记，一律不得改动**（改文件会与 `_prisma_migrations` 的**校验和不一致**）。**注释 / 结构修正一律走「新增量 migration」**。
 
 ### 4.1 `0001_init`（baseline）
 
@@ -133,9 +133,19 @@ npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script >
 - **⚠ Prisma 不管列 COMMENT**（`schema.prisma` 的 `///` 是文档注释、**不落库**）→ 本笔只能手写；`migrate diff` 对它**不产生输出**（也不会被判 drift）。
 - **实测（本机 8.0.12，2026-09-16）**：`migrate status` 先报 `0006` 未应用 → `npm run prisma:deploy` 成功 → 回读 `information_schema.COLUMNS` 得**新 COMMENT**、`_prisma_migrations` **6 份全登记**。
 
-### 4.7 重建库 / 重灌顺序（**必守**）
+### 4.7 `0007` / `0008` / `0009`（增量 · **补登记**）
 
-`0001_init` → `0002_company_capital_legal_person` → `0003_username_and_phone_lock` → `0004_product_line_color_key` → `0005_commitment_waive_reason` → `0006_perm_key_comment`，**并分别** `npx prisma migrate resolve --applied <name>`。
+> 本节为**补登记**：三份均已入真库，而 §四 此前只记到 `0006`。逐份的完整口径（为什么、性质、实测）在各自 `migration.sql` 的**文件头注释**里，此处只留索引。
+
+- **`0007_contact_owner`（2026-09-16）**：`contact` 加 `owner_id`（`BIGINT UNSIGNED NULL` ＋ `idx_owner`）—— **待关联（未挂公司）联系人**的归属人（归属＝**建档录入人**）。→ 需求 §6.1 ⑦~⑪ / 数据架构 B3 /《欠账登记表》D-27。
+- **`0008_owner_flag_in_seat`（2026-09-16）**：**重建** `relation_member.owner_flag` 生成列（表达式加 `AND revoked_at IS NULL`）＋ 重建 `uk_owner` —— 撤销即**释放位子**，否则掉海重领 / 转交时落不下新 owner。→ 数据架构 §10.2-1 /《欠账登记表》D-26。
+- **`0009_employee_preferences`（2026-09-18）**：`employee` 加 `theme`（`VARCHAR(16) NULL`）/ `nav_open`（`JSON NULL`）—— **个人偏好的唯一落点**（主题 / 侧栏展开状态）；写入端＝`PUT /account/preferences`、读取端＝`GET /account/me`。→ 数据架构 A2 / 接口 §5.2 /《欠账登记表》D-37。
+- **性质**：`0007` / `0009` 是**纯加列**（可空、不回填、无破坏性；`0007` 新增 1 个索引，`0009` **无索引**）；`0008` 是**重建一个生成列 ＋ 它的唯一索引**（先删后建，不动其它列与数据）。
+- **实测（本机 8.0.12，2026-09-18）**：`npm run prisma:deploy` → `Applying migration 0009_employee_preferences` → `All migrations have been successfully applied`（**9 migrations found**，**无需手工 `resolve`**）；真库回读 `employee.theme='light'` / `employee.nav_open=["relation","customer"]`，`operation_log` 有 3 条 `account.preferences.update`。
+
+### 4.8 重建库 / 重灌顺序（**必守**）
+
+`0001_init` → `0002_company_capital_legal_person` → `0003_username_and_phone_lock` → `0004_product_line_color_key` → `0005_commitment_waive_reason` → `0006_perm_key_comment` → `0007_contact_owner` → `0008_owner_flag_in_seat` → `0009_employee_preferences`，**并分别** `npx prisma migrate resolve --applied <name>`。
 
 > ⚠ 若不 `resolve`：库内没有 `_prisma_migrations` 记录，`migrate status` 会判为「未应用」并试图**重跑整份 baseline**（在已有表上执行 → 必炸）。
 > ⚠ `migrate resolve` **不校验关系完整性**（只读 datasource）—— **别把它当作 schema 有效的证据**。
@@ -218,7 +228,7 @@ npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prism
 | 3 | **docker-compose** | 本机无 Docker，**从未跑过** | 首次部署跑 `docker compose config` ＋ `up`，确认 `mysql:8`（**≥8.0.16**）/ `redis:7` 起得来 |
 | 4 | **Redis 版本** | phpStudy **3.0.504**（**无密码**） | 换 **Redis 7**；代码里「禁用 6/7 专有命令」的临时红线（`UNLINK` / `EXPIRE … NX｜GT｜LT` / ACL）**可解禁**；**必须设密码** |
 | 5 | **密钥 / 口令** | `.env` 里 DB / Redis **均无强口令**、`JWT_SECRET` 为本地随机值 | 换生产密钥与强口令；`.env` 不入库 |
-| 6 | **migration 全量重放** | 已应用 `0001_init` ＋ `0002` ＋ `0003` ＋ `0004` ＋ `0005` ＋ `0006` | 空库上按序跑到最新 → 逐份 `migrate resolve --applied`（见 §4.7），再 `migrate status` 断言 **`up to date!`** |
+| 6 | **migration 全量重放** | 已应用 `0001_init` ＋ `0002` ＋ `0003` ＋ `0004` ＋ `0005` ＋ `0006` ＋ `0007` ＋ `0008` ＋ `0009` | 空库上按序跑到最新 → 逐份 `migrate resolve --applied`（见 **§4.8**），再 `migrate status` 断言 **`up to date!`** |
 | 7 | **`/docs` OpenAPI 暴露** | 开发环境**默认开放**（`/docs` ＋ `/docs-json`） | **生产已默认关闭** —— `main.ts` 的 `openApiEnabled()`：`NODE_ENV=production` 且未设 `OPENAPI_ENABLED=true` 时**跳过挂载**（`/docs` 是中间件直出、不经守卫，开了即等同公开全部接口定义）。确需保留必须**自加访问控制**。**部署后必查**：`curl -o /dev/null -w '%{http_code}' http://<host>/docs` 应为 **404** |
 | 8 | **构建链路（尤其 `npm ci --omit=dev`）** | `package.json` 已含 `prisma:generate` / `build` / `postinstall`，本机 `npm run build` 已实测通过 | `npm ci` 会自动跑 `postinstall → prisma generate`；⚠ 但 **`--omit=dev` 时 `prisma` CLI 不在 → `postinstall` 会失败**：改用**多阶段构建**（构建阶段装 devDeps 跑 `npm run build`，运行阶段只带 `dist/` ＋ prod deps ＋ 已生成的 client），或 `npm ci --ignore-scripts` 后自行 `npm run prisma:generate`。**首次部署必跑 `npm run build` 验证** |
 | 9 | **分区预置月数 / 滚动** | 建库时预置到 `p202712`（真实上界 `202801`）＋ `pmax(MAXVALUE)` | **有 `pmax` 兜底 → 绝不会插失败**；但 **2028-01 起全部新行落入单一 `pmax`**，且老分区**无法 `DROP PARTITION` 清理** → 生产建库**预置月数 ≥ 3 年**，并把「分区滚动」纳入定时任务（→ 数据架构 §十二 末行） |

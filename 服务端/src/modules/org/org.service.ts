@@ -43,7 +43,8 @@ import { classifyLoginAccount } from './domain/login-account';
 import { verifyPassword } from './domain/password';
 import { mergePermissionLevels } from './domain/permission';
 import type { LoginDto } from './dto/login.dto';
-import { OrgRepository, parseIdList } from './org.repository';
+import type { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { OrgRepository, parseIdList, parseStringList } from './org.repository';
 
 /** 员工鉴权行（结构直接取自仓储的 `select`，**不手抄字段** —— 避免两处漂移） */
 type EmployeeAuthRow = NonNullable<Awaited<ReturnType<OrgRepository['findEmployeeByPhone']>>>;
@@ -58,6 +59,16 @@ export interface UserVo {
   dept: { id: bigint; name: string } | null;
   managed_dept_ids: bigint[];
   permissions: Record<string, string>;
+  /**
+   * 个人主题（`light` / `dark`；→ 设计规范 §八.1 / 接口 §4.14.9）。
+   * **`null` = 从未设置过**（≠ 选了白天）—— 前端按「跟随默认」回落（→ migration 0009 注释）。
+   */
+  theme: string | null;
+  /**
+   * 侧栏展开的分组键（→ 需求 §13.4「折叠状态按账号持久化」）。
+   * **始终下发该键**：没存过给 `[]`（前端把它当"本机也没存过"用），不给 `undefined`。
+   */
+  nav_open: string[];
 }
 
 /** 登录出参（→ API §5.2） */
@@ -97,6 +108,11 @@ export const ORG_AUDIT_ACTIONS = {
   loginFail: 'account.login.fail',
   /** 凭据对但账号不可登录（停用 / 离职） */
   loginRejected: 'account.login.rejected',
+  /**
+   * 改个人偏好（主题 / 侧栏展开状态）—— 2026-09-18（D-37 / D-36⑥ / D-41）。
+   * ★ 它是**增删改**（动 `employee` 行），由统一审计切面自动留痕（→ 架构 §7.4）。
+   */
+  preferenceUpdate: 'account.preferences.update',
 } as const;
 
 /**
@@ -253,6 +269,52 @@ export class OrgService {
     }
     const employee = await this.requireActiveEmployee(context.employeeId);
     return this.toUserVo(await this.loadAuthFacts(employee));
+  }
+
+  // ===== 2026-09-18 个人偏好（D-37 / D-36⑥ / D-41） =====
+
+  /**
+   * 改个人偏好（主题 / 侧栏展开状态）→ **更新后的 `UserVO`**（→ 接口 §4.14.9 / §5.2）。
+   *
+   * ★ 为什么出参是**整个 `UserVO`**（而不是只回改过的那两个字段）：§4.1 明写「`UserVO` 的完整结构：
+   *   **唯一权威落点见 §5.2**」—— 回一个只含偏好的新形状，就是在权威落点之外**另造一个出参契约**
+   *   （本项目一号坑）。回 `UserVO` 还让前端**一次往返**把主题 / 展开状态同步进本地状态，
+   *   不必自己拼「旧值 ∪ 新值」。
+   *
+   * ★ 为什么「一个键都没给」也照常回 200：本端点是**部分更新**（没给 = 不改）—— 空 body 是
+   *   一次合法的"什么都没改"，不该报 400（报错的代价是前端每次都得先判空再决定发不发请求）。
+   *   ⚠ 但此时**库里一次都不碰**（→ `updateEmployeePreferences` 短路），只在审计里留一条访问痕。
+   *
+   * ⚠ **只能改自己**：操作对象取自**令牌上下文**，不接受任何 `employee_id` 入参 ——
+   *   一旦开了"帮别人改偏好"的口子，就是一个没有业务理由的越权写入口。
+   */
+  async updatePreferences(input: UpdatePreferencesDto): Promise<UserVo> {
+    const context = getRequestContext();
+    if (context === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+        constraint: 'account.preferences.no_context',
+      });
+    }
+    const employee = await this.requireActiveEmployee(context.employeeId);
+
+    // ★ 两个键都没给 ⇒ **连仓储都不调**：不是为了省一次查询，而是「什么都没改」这件事
+    //   不该以一次写路径调用表达（仓储那侧同样短路，那是防**别处**调用；此处是本路径的纪律）。
+    const hasChange = input.theme !== undefined || input.nav_open !== undefined;
+    if (hasChange) {
+      await this.repository.updateEmployeePreferences(employee.id, {
+        ...(input.theme === undefined ? {} : { theme: input.theme }),
+        ...(input.nav_open === undefined ? {} : { nav_open: input.nav_open }),
+      });
+    }
+
+    // ★ 用**刚写进去的值**装配出参，不再回查一遍：本路径没有并发写者（只有本人改自己的偏好），
+    //   回查反而多开一个"可能读到别人写入"的窗口；且库里存的就是这两个值，不存在不一致。
+    const updated: EmployeeAuthRow = {
+      ...employee,
+      theme: input.theme ?? employee.theme,
+      nav_open: input.nav_open === undefined ? employee.nav_open : [...input.nav_open],
+    };
+    return this.toUserVo(await this.loadAuthFacts(updated));
   }
 
   // ===== M1-13 四个只读接口 =====
@@ -530,6 +592,10 @@ export class OrgService {
       dept: primaryDept === undefined ? null : { id: primaryDept.id, name: primaryDept.name },
       managed_dept_ids: facts.managedDeptIds,
       permissions: mergePermissionLevels(permissions, facts.roleCodes),
+      // 偏好两列（migration 0009）：`theme` 原样给（`null` = 从未设置，前端回落默认）；
+      // `nav_open` 是 JSON 列，**必须拉直**（脏值 / 非字符串元素一律丢弃，→ parseStringList）。
+      theme: facts.employee.theme,
+      nav_open: parseStringList(facts.employee.nav_open),
     };
   }
 

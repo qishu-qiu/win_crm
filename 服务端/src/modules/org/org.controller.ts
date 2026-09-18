@@ -6,7 +6,8 @@
 //
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM接口API文档》§三 接口总览：`POST /account/login`（P）·`POST /account/refresh`（P）
-//     ·`GET /account/me`（G）·`GET /org/departments|employees|roles|permissions`（G）。
+//     ·`GET /account/me`（G）·`PUT /account/preferences`（U，2026-09-18 落 · D-37）
+//     ·`GET /org/departments|employees|roles|permissions`（G）。
 //   · 同 §2.2：除登录 / 刷新外**一律带** `Authorization: Bearer <access_token>` ——
 //     故本文件只给 login / refresh 打 `@Public()`（守卫自 M0-38 起全局生效，不打就被 401 挡死）。
 //   · 同 §2.4：401 / 20002（未认证）、403 / 20003（无权限）、400 / 20001（参数错）由横切层统一出口，
@@ -18,10 +19,10 @@
 //   故此前保留默认值未拍板。现定：**成功一律 200**（与 §2.3「成功 / 失败」两态对称），
 //   故 login / refresh 两个 POST 显式 `@HttpCode(200)`；前端仍按 `body.code === 0` 判成功。
 // =============================================================================
-import { Body, Controller, Get, Headers, HttpCode, Ip, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { AuditSkip, Public } from '../../kernel/index';
+import { Audit, AuditSkip, Public } from '../../kernel/index';
 import { LoginDto } from './dto/login.dto';
 import {
   DepartmentVoDto,
@@ -34,7 +35,15 @@ import {
   UserVoDto,
 } from './dto/org-response.dto';
 import { RefreshDto } from './dto/refresh.dto';
-import { OrgService, type LoginResult, type RefreshResult, type RequestMeta, type UserVo } from './org.service';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import {
+  ORG_AUDIT_ACTIONS,
+  OrgService,
+  type LoginResult,
+  type RefreshResult,
+  type RequestMeta,
+  type UserVo,
+} from './org.service';
 
 /** 链路 id 请求头（**与 M0-33 统一响应拦截器同一个头名**，前端 / 网关给的同一条链路可贯穿审计） */
 const REQUEST_ID_HEADER = 'x-request-id';
@@ -118,6 +127,23 @@ export class OrgController {
   @ApiOkResponse({ type: UserVoDto, description: '统一响应包的 `data` 即 `UserVO`' })
   me(): Promise<UserVo> {
     return this.org.me();
+  }
+
+  // ===== 2026-09-18 个人偏好（D-37 / D-36⑥ / D-41） =====
+
+  @Audit(ORG_AUDIT_ACTIONS.preferenceUpdate, 'employee')
+  @Put('account/preferences')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '改个人偏好',
+    description:
+      '个人主题（`light` 白天 / `dark` 夜间，V1 两态）与侧栏展开状态，**存账号**' +
+      '（→ 设计规范 §八.1 / 需求 §13.4）。**部分更新**：不给的键一律原样保留；' +
+      '返回**更新后的 `UserVO`**（结构与 `GET /account/me` 完全相同）',
+  })
+  @ApiOkResponse({ type: UserVoDto, description: '统一响应包的 `data` 即更新后的 `UserVO`' })
+  updatePreferences(@Body() body: UpdatePreferencesDto): Promise<UserVo> {
+    return this.org.updatePreferences(body);
   }
 
   // ===== M1-13 组织只读四接口 =====

@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/account/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 改个人偏好
+         * @description 个人主题（`light` 白天 / `dark` 夜间，V1 两态）与侧栏展开状态，**存账号**（→ 设计规范 §八.1 / 需求 §13.4）。**部分更新**：不给的键一律原样保留；返回**更新后的 `UserVO`**（结构与 `GET /account/me` 完全相同）
+         */
+        put: operations["OrgController_updatePreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/org/departments": {
         parameters: {
             query?: never;
@@ -510,6 +530,19 @@ export interface components {
             permissions: {
                 [key: string]: string;
             };
+            /**
+             * @description 个人主题（V1 两态；→ 设计规范 §八.1 / 接口 §4.14.9）。**`null` = 从未设置过**（≠「显式选了白天」）—— 前端按「跟随默认值」回落
+             * @example dark
+             * @enum {string|null}
+             */
+            theme: "light" | "dark" | null;
+            /**
+             * @description 侧栏展开的分组键集合（→ 需求 §13.4「折叠状态按账号持久化」）。**始终下发该键**：没存过给 `[]`（≠ 用户手动全部收起，后者是用户在列表里收起后的结果）
+             * @example [
+             *       "relation"
+             *     ]
+             */
+            nav_open: string[];
         };
         LoginResultDto: {
             /** @description 访问令牌（Bearer JWT，建议 2h） */
@@ -528,6 +561,21 @@ export interface components {
             access_token: string;
             /** @description 新的刷新令牌 */
             refresh_token: string;
+        };
+        UpdatePreferencesDto: {
+            /**
+             * @description 个人主题：`light` 白天 / `dark` 夜间（V1 两态）。**不传该键 = 不改**（部分更新）；清空设置本轮**不提供**（前端永远有一个明确的选中态）
+             * @example dark
+             * @enum {string}
+             */
+            theme?: "light" | "dark";
+            /**
+             * @description 侧栏展开的分组键集合（→ 需求 §13.4）。**不传该键 = 不改**（部分更新）；传空数组 = 用户手动全部收起（与「从未设置过」不同，后者库里是 `null`）
+             * @example [
+             *       "relation"
+             *     ]
+             */
+            nav_open?: string[];
         };
         DepartmentVoDto: {
             /** @example 1 */
@@ -1442,6 +1490,30 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description 统一响应包的 `data` 即 `UserVO` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserVoDto"];
+                };
+            };
+        };
+    };
+    OrgController_updatePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePreferencesDto"];
+            };
+        };
+        responses: {
+            /** @description 统一响应包的 `data` 即更新后的 `UserVO` */
             200: {
                 headers: {
                     [name: string]: unknown;

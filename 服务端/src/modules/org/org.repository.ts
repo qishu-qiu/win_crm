@@ -38,6 +38,10 @@ const EMPLOYEE_AUTH_SELECT = {
   product_line_ids: true,
   direct_manager_id: true,
   status: true,
+  // ★ 2026-09-18（migration 0009）：个人偏好 —— `GET /account/me` 要下发（前端据此应用主题 /
+  //   还原侧栏展开状态）。登录 / 刷新**复用同一行类型**，故一并取回（两个可空小列，代价可忽略）。
+  theme: true,
+  nav_open: true,
 } as const;
 
 /** 只读列表用的员工列（**不含 `password_hash`** —— 列表接口绝不带哈希出库） */
@@ -80,6 +84,19 @@ function uniqueBigints(ids: readonly bigint[]): bigint[] {
   return [...new Set(ids)];
 }
 
+/**
+ * 字符串数组 JSON 列（`nav_open`）→ `string[]`。
+ *
+ * ★ 与 `parseIdList` 同一纪律：MySQL 的 JSON 列**不保证**元素是字符串（手工 INSERT /
+ *   导入可能写进数字 / null / 嵌套对象），故**逐个筛**，非字符串一律丢弃 ——
+ *   宁可少还原一个分组，也不让脏数据把 `/account/me` 打成 500。
+ * ★ 保序去重：展开集合是**键的集合**，重复键交给 AntD 只会让 `openKeys` 越长越大。
+ */
+export function parseStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === 'string' && item !== ''))];
+}
+
 @Injectable()
 export class OrgRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -115,6 +132,30 @@ export class OrgRepository {
     return this.prisma.employee.findFirst({
       where: { id, deleted_at: null },
       select: EMPLOYEE_AUTH_SELECT,
+    });
+  }
+
+  /**
+   * 写个人偏好（→ 接口 §4.14.9 `PUT /account/preferences`；列见 migration 0009）。
+   *
+   * ★ **部分更新**：只把**本次给了的键**写进 `UPDATE` —— 没给的键**原样保留**
+   *   （前端"只切主题"不该把侧栏展开状态一起清掉；反之亦然）。
+   * ★ 一个键都没给 ⇒ **一次库都不碰**（不写等于没改；不要为了"跑个流程"发一条空 UPDATE）。
+   * ⚠ 调用方（service）**必须先验在职**：`update` 不带 `deleted_at` 条件，逻辑删除的行也写得进去。
+   */
+  async updateEmployeePreferences(
+    employeeId: bigint,
+    patch: { theme?: string; nav_open?: readonly string[] },
+  ): Promise<void> {
+    const data: { theme?: string; nav_open?: string[] } = {};
+    if (patch.theme !== undefined) data.theme = patch.theme;
+    if (patch.nav_open !== undefined) data.nav_open = [...patch.nav_open];
+    if (Object.keys(data).length === 0) return;
+
+    await this.prisma.employee.update({
+      where: { id: employeeId },
+      data,
+      select: { id: true },
     });
   }
 

@@ -13,7 +13,7 @@ import {
 } from './access'
 import { UNAUTHORIZED_EVENT } from './api/request'
 import { roleNameOf } from './home'
-import { currentUser, restoreSession, sessionReady, signOut } from './session'
+import { currentUser, pushPreferences, restoreSession, sessionReady, signOut } from './session'
 import { antdThemeConfig } from './theme'
 
 /**
@@ -44,13 +44,16 @@ const route = useRoute()
 const router = useRouter()
 
 /**
- * 侧栏展开状态的本机持久化键。
- * ⚠ 规格 §13.4 写的是「折叠状态**按账号**持久化」—— 那要存服务端（接口 §4.14.9
- *   `PUT /account/preferences`），而该端点**服务端尚未实现**、数据架构里也没有落点
- *   ⇒ 本轮只能先存**本机**（与 M6-11 主题同一处根因，→《欠账登记表》D-37）。
- *   **别在前端自造账号侧存储。**
+ * 侧栏展开状态的本机缓存键。
+ * ★ 2026-09-18 起**权威值在账号**（→ 需求 §13.4「折叠状态按账号持久化」；接口 §4.14.9
+ *   `PUT /account/preferences` ＋ 数据架构 `employee.nav_open`，migration 0009）。
+ *   本机这份只干一件事：**登录前 / 首次网络往返前**先把侧栏摆成上次的样子（与主题同理，
+ *   → `theme.ts` 文件头）。**别把它当权威** —— 换台设备就该看到账号里的那一套。
  */
 const NAV_OPEN_STORAGE_KEY = 'crm_nav_open'
+
+/** 展开集合推账号的防抖窗口（连续折叠 / 展开只发最后一次，免得刷一屏审计） */
+const NAV_PUSH_DEBOUNCE_MS = 600
 
 /** 读本机存下的展开分组；脏值 / 读不到一律回落空数组（**不让脏数据把侧栏卡死**） */
 function readStoredOpenKeys(): string[] {
@@ -94,12 +97,45 @@ watch(
   { immediate: true },
 )
 
+/**
+ * 账号里的展开集合（`UserVO.nav_open`）→ 回灌侧栏（**权威值**，→ 需求 §13.4）。
+ * ★ **空数组不回灌**：服务端把「从未设置过」与「用户手动全收起」都拉平成 `[]`（→ DTO 注释），
+ *   而本机缓存正是上一次的真实样子 ⇒ 让本机说了算，比让一个歧义值抹掉用户的选择更安全。
+ */
+watch(
+  () => currentUser.value?.nav_open,
+  (keys) => {
+    if (keys === undefined || keys.length === 0) return
+    openKeys.value = [...keys]
+  },
+  { immediate: true },
+)
+
+/** 集合比较（顺序无关）：与账号里的值一致就**不推** —— 免得把刚读回来的值又写回去 */
+function sameKeySet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  const right = [...b].sort()
+  return [...a].sort().every((key, index) => key === right[index])
+}
+
+/** 推账号的防抖定时器（卸载时必须清掉，否则组件都没了还在发请求） */
+let navPushTimer: number | undefined
+
 watch(openKeys, (keys) => {
+  // ① 本机缓存（首屏兜底）：**同步**写，一有变化就跑
   try {
     localStorage.setItem(NAV_OPEN_STORAGE_KEY, JSON.stringify(keys))
   } catch {
     // 存不了（隐私模式 / 被禁）→ 本次会话内照样生效，只是刷新后回默认
   }
+
+  // ② 账号（权威）：与账号当前值一致就跳过（含上面"回灌"那一趟，避免读回来又写回去）
+  if (sameKeySet(keys, currentUser.value?.nav_open ?? [])) return
+  window.clearTimeout(navPushTimer)
+  navPushTimer = window.setTimeout(() => {
+    // 推失败不回滚本地（用户看到的就是他要的样子），也不打扰他 —— 下次改动会再推一次
+    void pushPreferences({ nav_open: keys }).catch(() => undefined)
+  }, NAV_PUSH_DEBOUNCE_MS)
 })
 
 /** 当前选中项：按路由 `meta.page` 反查（关系详情 `/relations/:id` 也算「业务关系」选中） */
@@ -149,16 +185,35 @@ function onOpenChange(keys: string[]): void {
 }
 
 /**
- * 「外观」入口的可见性（**M6-11**）：同样问 `access.ts` 那张矩阵，不在这里手写角色判断。
+ * 「外观设置」项的可见性（**M6-11**）：同样问 `access.ts` 那张矩阵，不在这里手写角色判断。
  * 现状＝5 类角色全可见（§4.2「登录 / 消息中心 / 个人中心」一行）；写成计算属性是为了
  * **将来改矩阵时不必回来改壳**（壳里散一个角色判断＝第二套真相源）。
- * ⚠ §4.1 把「个人中心 / 外观设置」挂在**顶部头像菜单**，头像菜单本身（含消息铃铛）属后续收口
- *   （→ 欠账 D-36）；本轮先在顶栏放一个**直达**项 —— 落点页是真的，不是假入口。
  */
 const canSeeAppearance = computed(() => isPageVisible(currentUser.value?.role ?? '', 'appearance'))
 
 const roleName = computed(() => roleNameOf(currentUser.value?.role ?? ''))
 const deptName = computed(() => currentUser.value?.dept?.name ?? '未分配部门')
+
+/** 头像上的字：姓名首字（`Avatar` 无图时的常规做法）；姓名缺失给空串，**不编造占位字** */
+const avatarText = computed(() => currentUser.value?.name.slice(0, 1) ?? '')
+
+/**
+ * 头像菜单点击（**2026-09-18 · D-41①**）——→ 前端文档 §四.1
+ * 「个人中心 / 外观设置：顶部**头像菜单** → `/me/appearance`」。
+ *
+ * `logout` 是唯一的**动作项**，其余键都是**路由路径**（点了就跳）——
+ * 这样"加一项"＝在模板里加一个 `key` 是路径的 `a-menu-item`，本函数不用改。
+ * ⚠ 铃铛（消息中心）**本轮不做**：`/notifications` 页与 `GET /notifications` 都未建，
+ *   摆上去就是**假入口**（→ 欠账 D-41 ②）。
+ */
+function onUserMenuClick(info: { key: string | number }): void {
+  const key = String(info.key)
+  if (key === 'logout') {
+    onLogout()
+    return
+  }
+  void router.push(key)
+}
 
 function onLogout(): void {
   signOut()
@@ -203,6 +258,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener(UNAUTHORIZED_EVENT, onLogout)
+  // 防抖定时器不清 = 组件已经没了还可能发一次请求（弱网下尤其明显）
+  window.clearTimeout(navPushTimer)
 })
 </script>
 
@@ -240,22 +297,32 @@ onUnmounted(() => {
 
       <div class="shell-main">
         <header class="shell-header">
+          <!-- 左：身份小标（角色 / 部门）。姓名挪进右侧头像菜单，同一屏里不写两遍 -->
           <div class="shell-identity">
-            <span class="shell-name">{{ currentUser.name }}</span>
             <span class="shell-meta">{{ roleName }}</span>
             <span class="shell-meta">{{ deptName }}</span>
           </div>
 
-          <router-link
-            v-if="canSeeAppearance"
-            to="/me/appearance"
-            class="shell-appearance"
-            active-class="is-active"
-          >
-            外观
-          </router-link>
-
-          <a-button type="text" @click="onLogout">退出登录</a-button>
+          <!--
+            右：**头像菜单**（→ 前端文档 §四.1「个人中心 / 外观设置：顶部头像菜单 →
+            `/me/appearance`」；2026-09-18 · D-41①）。用 AntD `Dropdown` ＋ `Avatar`
+            （基础件，不自己写弹层与定位）。触发器是原生 `button` —— 键盘可达，
+            不需要再手写 tabindex / 回车键。
+            ⚠ 铃铛（消息中心）**不在这里**：它的落点页与接口都还没建，不摆假入口（→ D-41 ②）。
+          -->
+          <a-dropdown placement="bottomRight">
+            <button type="button" class="shell-user">
+              <a-avatar :size="28">{{ avatarText }}</a-avatar>
+              <span class="shell-name">{{ currentUser.name }}</span>
+            </button>
+            <template #overlay>
+              <!-- `:selectable="false"`：下拉里的项不该留选中态（否则下次打开还高亮上次点的） -->
+              <a-menu :selectable="false" @click="onUserMenuClick">
+                <a-menu-item v-if="canSeeAppearance" key="/me/appearance">外观设置</a-menu-item>
+                <a-menu-item key="logout">退出登录</a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </header>
 
         <main class="shell-body">
@@ -366,28 +433,29 @@ onUnmounted(() => {
   border-radius: var(--crm-radius-sm);
 }
 
-/** 「外观」是**账号级**入口（不属一级菜单）：推到右侧、与「退出登录」成一组 */
-.shell-appearance {
+/**
+ * 头像菜单触发区：推到右侧；它整体是一个原生 `button`，故要把浏览器默认的
+ * 边框 / 底色 / 字体**显式去掉**（否则会出现一圈系统灰边）。
+ * 高度取 `--crm-control-height`，与其它控件对齐（→ 设计规范 §一.2）。
+ */
+.shell-user {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--crm-space-sm);
+  gap: var(--crm-space-sm);
   height: var(--crm-control-height);
+  padding: 0 var(--crm-space-sm);
+  font-family: inherit;
   font-size: var(--crm-font-size-base);
-  color: var(--crm-color-text-secondary);
-  text-decoration: none;
-  border-radius: var(--crm-radius-sm);
-}
-
-.shell-appearance:hover {
   color: var(--crm-color-text);
-  background: var(--crm-color-fill-alter);
+  background: none;
+  border: none;
+  border-radius: var(--crm-radius-sm);
+  cursor: pointer;
 }
 
-/** 当前页：主色文字 ＋ 浅底（不靠加粗 / 下划线堆层级） */
-.shell-appearance.is-active {
-  color: var(--crm-color-primary);
-  background: var(--crm-color-primary-bg);
+.shell-user:hover {
+  background: var(--crm-color-fill-alter);
 }
 
 .shell-body {

@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 
-import { fetchMe, type UserVo } from './api/auth'
+import { fetchMe, updatePreferences, type PreferencesInput, type UserVo } from './api/auth'
 import { clearTokens, getAccessToken } from './api/request'
+import { applyAccountTheme } from './theme'
 
 /**
  * 登录态（M6-05）—— **全应用唯一一份「我是谁」**。
@@ -30,6 +31,7 @@ export async function restoreSession(): Promise<boolean> {
   }
   try {
     currentUser.value = await fetchMe()
+    applyAccountTheme(currentUser.value.theme)
     return true
   } catch {
     // me 失败（含刷新链路失败）→ 清干净：不带着坏 token 往下走
@@ -45,6 +47,19 @@ export async function restoreSession(): Promise<boolean> {
 export function signIn(user: UserVo): void {
   currentUser.value = user
   sessionReady.value = true
+  applyAccountTheme(user.theme)
+}
+
+/**
+ * 把偏好推给服务端（`PUT /account/preferences`）—— **全应用唯一的偏好发送口**。
+ *
+ * ★ 为什么返回值直接写进 `currentUser`：该端点的出参就是**更新后的整个 `UserVO`**
+ *   （→ 接口 §4.14.9），交给调用方各自拼"旧值 ∪ 新值"就是在权威形状之外再养一份状态。
+ * ★ 失败**不吞**：调用方（页 28 / 外壳）按自己的场景决定要不要提示用户；
+ *   这里不做 toast —— 那是展示层的事，写在会话层会让它也依赖 AntD。
+ */
+export async function pushPreferences(input: PreferencesInput): Promise<void> {
+  currentUser.value = await updatePreferences(input)
 }
 
 /** 退出 / 会话失效：清 token 与当前人（**不跳路由** —— 跳由 App 或页面负责） */

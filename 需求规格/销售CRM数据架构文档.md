@@ -1,4 +1,4 @@
-# 销售 CRM 数据架构文档 V1.36（现行有效）
+# 销售 CRM 数据架构文档 V1.37（现行有效）
 
 > **⚠ 开工前必读**：先读《**废止口径登记表**》（需求规格/）——已废止的旧说法不得作为实现依据（**尤其 #17**：DB 层虽报 MySQL 1062，**应用层捕获的是 Prisma `P2002`**；**#19**：表数为 **46 张**）。
 > **本文件的角色**：只回答"**数据怎么存**"——表、字段、索引、字典、权限实现口径、定时任务。
@@ -12,9 +12,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 / 日期 | **V1.36（现行有效）** / 2026-09-16 |
+| 版本 / 日期 | **V1.37（现行有效）** / 2026-09-18 |
 | 上游 | 《销售CRM业务需求文档》**V1.33**（业务规则唯一来源） |
-| 下游 | 《销售CRM接口API文档》**V1.25**、《销售CRM设计规范》**V1.1**、《销售CRM前端页面与交互文档》**V1.20** |
+| 下游 | 《销售CRM接口API文档》**V1.26**、《销售CRM设计规范》**V1.1**、《销售CRM前端页面与交互文档》**V1.20** |
 | 数据库 | MySQL 8.0+（InnoDB，utf8mb4）；JSON 用于扩展/柔性数据 |
 | 缓存 | Redis（登录态 / 字典 / 管辖部门集合 / 规则缓存） |
 | 外部依赖 | 高德开放平台：JS API（坐标拾取器）。坐标系统一 **GCJ-02**（见 §五 B7） |
@@ -85,9 +85,15 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 `name`、`parent_id`(0=根)、`service_enabled`(客服开关)、`status`(active/disabled)
 
 ### A2 employee 员工
-`work_no` UNIQUE、`name`、`phone` UNIQUE、**`username` UNIQUE（可空）**、`password_hash`、`primary_dept_id`、`extra_dept_ids` JSON、`product_line_ids` JSON、`direct_manager_id`(直属经理/审批链)、`status`(active/resigned/disabled)
+`work_no` UNIQUE、`name`、`phone` UNIQUE、**`username` UNIQUE（可空）**、`password_hash`、`primary_dept_id`、`extra_dept_ids` JSON、`product_line_ids` JSON、`direct_manager_id`(直属经理/审批链)、`status`(active/resigned/disabled)、**`theme`**、**`nav_open` JSON**
 
 > **★ `username`（2026-09-14 新增 · migration `0003`）**：**登录账号名** —— 员工自定、**可空**（为空则只能手机号登录）、**全局唯一**（MySQL 唯一索引允许多个 NULL，故"可空 + 唯一"成立）、大小写不敏感。登录＝**手机号 或 账号名 二选一 ＋ 密码**，两通道共用 `password_hash`（`→需求§7.1` / 接口 §5.2）。V1 由管理员在员工编辑里维护，**不做员工自助改名**。
+
+> **★ `theme` / `nav_open`（2026-09-18 新增 · migration `0009`）**：**个人偏好的唯一落点**。
+> ① `theme` `VARCHAR(16)` **可空** ＝ 个人主题（`light` 白天 / `dark` 夜间，V1 两态；→ 设计规范 §八.1「**存账号**」/ 接口 §4.14.9）；
+> ② `nav_open` JSON **可空** ＝ 侧栏展开的分组键集合（→ 需求 §13.4「折叠状态**按账号**持久化」）。
+> **两列都可空的理由**：「**从未设置过**」与「**显式选了默认值**」是两件事 —— 前者应跟随默认值，后者是用户的明确选择（写 `NOT NULL DEFAULT` 会让两者不可区分，将来默认值一改，存量行就被错当成"用户选过"）。
+> **不建索引**：只按主键读 / 写，没有「按 theme 筛人」这类用法。写入端＝`PUT /account/preferences`（**部分更新**）；读取端＝`GET /account/me` 随 `UserVO` 下发（→ 接口 §5.2）。
 
 ### A3 dept_manager 管辖部门（经理查数范围 = 本表集合）
 `dept_id + employee_id` 联合唯一

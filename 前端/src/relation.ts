@@ -129,12 +129,3 @@ export function toValueTier(value: string | null | undefined): ValueTierValue | 
     ? (value as ValueTierValue)
     : null
 }
-
-/** ISO 时间 → `YYYY-MM-DD HH:mm`（本地时区）；`null` → `—`（**不显示 `null` 字面量**） */
-export function formatDateTime(value: string | null): string {
-  if (value === null || value === '') return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const pad = (n: number): string => n.toString().padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-}

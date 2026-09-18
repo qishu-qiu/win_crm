@@ -24,12 +24,13 @@ import {
  *   已挂公司者暂按现状（公司维度收敛待补，→《欠账登记表》D-28）。页面**不为了"看到更多"
  *   自己拼参数**（前端再筛一遍＝第二套范围口径，改了服务端忘了前端就露客户）。
  *
- * ⛔ **本片不做、也不摆假入口**：
- *   · **详情页**（谈判特质 / 就职历史 / 上锁状态 / 「⚠ 尚未关联公司」横幅 ＋「关联公司」入口）
- *     —— 属 M9（→《欠账登记表》D-03 / D-04）；
+ * ⛔ **本页不做、也不摆假入口**：
  *   · **「申请解锁」按钮** —— 解锁审批属 G 域（→《欠账登记表》D-04）：本页只把
  *     `phone_locked` **标注出来**（那是服务端给的**状态**），不摆一个点了没用的按钮；
- *   · **联系人姓名可点跳转** —— 落点页未建（→《欠账登记表》D-13），此处**是纯文本**。
+ *   · **悬浮卡**（悬停出联系人卡）—— 跨页复用件属后续（→《欠账登记表》D-50）。
+ *
+ * ★ **姓名可点**（M6-16）：跳到**联系人详情页** `/contacts/:id`（→ 欠账 **D-13 前半** 已收口）——
+ *   实体可点铁律 A1：任何位置的人名都可点，不许出现纯文本人名（→ 需求 §13.1）。
  *
  * · **筛选状态写入 URL query**（→ 设计规范 §4.2「筛选 / 查询栏」：可分享 / 刷新不丢）——
  *   实现见下方「URL ↔ 筛选 双向同步」一段（原欠账 D-39）。
@@ -197,7 +198,12 @@ onMounted(() => {
       size="middle"
     >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'name'">{{ record.name }}</template>
+        <!-- 实体可点（A1）：人名一律可点，落点＝联系人详情页 -->
+        <template v-if="column.key === 'name'">
+          <router-link class="contacts-link" :to="`/contacts/${record.id}`">
+            {{ record.name }}
+          </router-link>
+        </template>
         <template v-else-if="column.key === 'position'">{{ record.position ?? '—' }}</template>
         <template v-else-if="column.key === 'phone'">
           {{ record.phone_masked }}
@@ -278,5 +284,14 @@ onMounted(() => {
   margin: 0 0 var(--crm-space-sm);
   font-size: var(--crm-font-size-xs);
   color: var(--crm-color-error);
+}
+
+/** 可点人名：用主色 + hover 下划线（**不用 AntD Link 组件的默认蓝**，与全局主色 token 同源） */
+.contacts-link {
+  color: var(--crm-color-primary);
+}
+
+.contacts-link:hover {
+  text-decoration: underline;
 }
 </style>

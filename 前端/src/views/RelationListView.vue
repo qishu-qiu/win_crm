@@ -37,7 +37,6 @@ import {
   RELATION_VIEW_OPTIONS,
   URGENCY_OPTIONS,
   VALUE_TIER_OPTIONS,
-  formatDateTime,
   stageNameOf,
   toValueTier,
   urgencyColorOf,
@@ -45,6 +44,7 @@ import {
   valueTierNameOf,
   type ValueTierValue,
 } from '../relation'
+import { formatDateTime } from '../format'
 
 /**
  * 业务关系列表页（M3-14 起 · 方案 A 最小页）—— **私海 / 公海两个页签**，

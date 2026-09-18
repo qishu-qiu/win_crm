@@ -16,7 +16,7 @@ import { currentUser } from '../session'
  *     ⚠ 本行原写「§四 目录树」—— 架构说明 §四 当时**只有服务端**，属**错引**（→ 欠账 D-18）；§4.4 补齐后改正。
  *
  * ★ **只收已建成的页面**（登录 / 工作台 / 建档 / 业务关系列表 / 关系详情 / **联系人档案** /
- *   **外观设置**）—— 页面清单里其余页面属后续里程碑，**不在这里先注册空路由**
+ *   **联系人详情** / **外观设置**）—— 页面清单里其余页面属后续里程碑，**不在这里先注册空路由**
  *   （注册了就是"点了报错"的假入口）。（M6-05 立的规矩，M6-08 / M6-09 / M6-11 加页面时沿用。）
  *
  * ★ 组件用**动态 import**（懒加载）：首屏不必等全部页面，`bundle` 也随之分包
@@ -70,6 +70,14 @@ const routes: RouteRecordRaw[] = [
     name: 'contacts',
     component: () => import('../views/ContactListView.vue'),
     meta: { page: 'contacts' },
+  },
+  {
+    // 联系人详情（§五 页 15）：**「关联公司」动线的落点**（→ 需求 §6.1 ③ / 欠账 D-46 / D-47），
+    // 也是联系人列表「姓名可点」的去处（→ 欠账 D-13 前半）。
+    path: '/contacts/:id',
+    name: 'contact-detail',
+    component: () => import('../views/ContactDetailView.vue'),
+    meta: { page: 'contactDetail' },
   },
   {
     // 外观设置（§五 页 28）：**主题（白天 / 夜间）的切换落点**（M6-11）；

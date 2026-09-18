@@ -3,8 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getRelation, type RelationDetail } from '../api/relation'
+import { formatDateTime } from '../format'
 import {
-  formatDateTime,
   stageNameOf,
   urgencyColorOf,
   urgencyNameOf,

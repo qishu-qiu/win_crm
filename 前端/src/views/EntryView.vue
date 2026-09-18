@@ -19,6 +19,9 @@ import {
   type ProductLineVo,
 } from '../api/org'
 import { createRelation, type RelationVo } from '../api/relation'
+import CompanyDupPicker from '../components/CompanyDupPicker.vue'
+import RelationTargetPicker from '../components/RelationTargetPicker.vue'
+import { type CompanyChoice } from '../company'
 
 /**
  * 录入页（M6-09 片 1）—— **3 步步骤条：① 联系人 → ② 公司 → ③ 确认**，
@@ -38,6 +41,9 @@ import { createRelation, type RelationVo } from '../api/relation'
  * ★ **本片落地的撞库分支**（§12.1）：
  *   · **分支 4「挂现有公司」**：查重命中候选 → 由**人**点选「用这家」或「确认新建（强行）」；
  *     系统**不自动合并、不阻断销售**（强行新建的留痕由**服务端**在 `POST /companies` 里写，前端不代办）。
+ *     ⚠ 这一支的**界面与交互已抽成复用件** `components/CompanyDupPicker.vue`（M6-16：联系人详情页的
+ *     「关联公司」走的是**同一条动线**，→ 架构 §4.4 约定 2「第二次出现就必须搬进 `components/`」）——
+ *     本页只持有**结果**（`companyChoice`）与自己那部分取数（「该公司的联系人」）。
  *   · **触发点 ①（按手机号查重）**：第 1 步提交时先查一次 —— 命中说明这个号**已建过档**，
  *     同号**不能再建**（服务端 `uk_phone_active` → 409「该手机号已存在」），故**当场提示并停住**，
  *     给「去联系人档案」的出口，而不是等用户在最后一步撞 409。
@@ -109,28 +115,22 @@ async function submitContactStep(): Promise<void> {
 // ===== 第 2 步：公司 =====
 
 /**
- * 选定的公司：
+ * 选定的公司 —— **本页只持有结果**：查重表单 / 候选 / 「用这家」与「确认新建」全在
+ * `CompanyDupPicker` 里（跨页复用件，本页与联系人详情页共用一份，→ 架构 §4.4）。
  * · `existing` ＝ 沿用已有档案（查重候选里选中的，**或**「本次新建」成功后的实际档案）
  * · `new` ＝ **将新建**（还没写库 —— 真正的 `POST /companies` 发生在第 3 步提交时）
  */
-type CompanyChoice =
-  | { kind: 'existing'; id: string; full_name: string }
-  | { kind: 'new'; full_name: string; credit_code: string }
-
-const companyForm = reactive({ full_name: '', credit_code: '' })
 const companyChoice = ref<CompanyChoice | null>(null)
-const companyCandidates = ref<DupCandidate[]>([])
-const companyError = ref('')
-const checkingCompany = ref(false)
+
+/**
+ * 撞库件的重挂键：`resetAll()` / 「跳过公司」时 +1 ⇒ 件**重新挂载**，表单与候选一并归零。
+ * ★ 重挂优于"远程调用子件方法"：少一条隐式契约（子件不必为此暴露 `reset`）。
+ */
+const companyPickerKey = ref(0)
 
 /** 沿用已有公司时：这家已有哪些联系人（**打码形态**，用来确认"是不是同一家"） */
 const companyContacts = ref<ContactBrief[]>([])
 const contactsLoading = ref(false)
-
-/** 判级标签（→ §5.4 `match_type`，只有这两个码；中文是**展示文案**，不另造码） */
-function matchLabel(matchType: string): string {
-  return matchType === 'same' ? '核心词完全相同' : '高度疑似'
-}
 
 async function loadCompanyContacts(companyId: string): Promise<void> {
   contactsLoading.value = true
@@ -144,70 +144,14 @@ async function loadCompanyContacts(companyId: string): Promise<void> {
   }
 }
 
-/**
- * 第 2 步：查重 → 命中候选就**交回给人选**（分支 4 原话：疑似默认选现有，仍须保留「强行新建」出口）。
- * ★ 一条候选都没有才直接用输入的名字标成「将新建」——**此时仍不写库**。
- */
-async function searchCompany(): Promise<void> {
-  companyError.value = ''
-  companyCandidates.value = []
-
-  const fullName = companyForm.full_name.trim()
-  const creditCode = companyForm.credit_code.trim()
-  if (fullName === '' && creditCode === '') {
-    companyError.value = '请填写公司全称或统一社会信用代码'
+/** 撞库件的选定结果回填：沿用已有档案时顺手拉「该公司的联系人」做辅助确认 */
+function onCompanyChoiceChange(choice: CompanyChoice | null): void {
+  companyChoice.value = choice
+  if (choice !== null && choice.kind === 'existing') {
+    void loadCompanyContacts(choice.id)
     return
   }
-
-  checkingCompany.value = true
-  try {
-    const result = await searchDupCompanies({
-      ...(fullName === '' ? {} : { name: fullName }),
-      ...(creditCode === '' ? {} : { credit_code: creditCode }),
-    })
-    if (result.candidates.length > 0) {
-      companyCandidates.value = result.candidates
-      return
-    }
-    chooseNew()
-  } catch (error) {
-    companyError.value = errorText(error, '查重失败，请稍后重试')
-  } finally {
-    checkingCompany.value = false
-  }
-}
-
-/** 「用这家」——沿用已有档案（**不新建、不合并**，只是把后续联系人与关系挂到它下面） */
-function chooseExisting(candidate: DupCandidate): void {
-  companyChoice.value = { kind: 'existing', id: candidate.id, full_name: candidate.full_name }
-  companyCandidates.value = []
-  companyError.value = ''
-  void loadCompanyContacts(candidate.id)
-}
-
-/** 「都不是，确认新建（强行）」——分支 4 的另一出口；**留痕由服务端写**，前端不代办 */
-function chooseNew(): void {
-  const fullName = companyForm.full_name.trim()
-  if (fullName === '') {
-    // 只给了信用代码时也必须先有全称（数据架构 B1：`full_name` 非空）
-    companyError.value = '新建档案需要填写公司全称'
-    return
-  }
-  companyChoice.value = {
-    kind: 'new',
-    full_name: fullName,
-    credit_code: companyForm.credit_code.trim(),
-  }
-  companyCandidates.value = []
-  companyError.value = ''
   companyContacts.value = []
-}
-
-/** 重选（退回"未选"状态；已写库的公司在第 3 步不会重复建，见 `submitEntry`） */
-function resetCompanyChoice(): void {
-  companyChoice.value = null
-  companyContacts.value = []
-  companyError.value = ''
 }
 
 // ===== 第 3 步：确认 / 激活 =====
@@ -247,15 +191,8 @@ async function loadOptions(): Promise<void> {
   }
 }
 
-/** 部门显示名：停用的**标注出来**（不隐藏、也不拦 —— 能不能建由服务端判） */
-function deptLabelOf(dept: DepartmentVo): string {
-  return dept.status === 'active' ? dept.name : `${dept.name}（已停用）`
-}
-
-/** 产品线显示名（同上；色块另由 `color_key` 画出，为 `null` 时**不画**） */
-function productLineLabelOf(line: ProductLineVo): string {
-  return line.status === 'active' ? line.name : `${line.name}（已停用）`
-}
+// ★ 部门 / 产品线的**显示文案与选择件**已抽到跨页复用件（`components/RelationTargetPicker.vue`
+//   ＋ 展示口径 `src/org.ts`）—— 联系人详情页的「关联公司」用的是同一份（→ 架构 §4.4 约定 2）。
 
 const canSubmit = computed(() => {
   if (companyChoice.value === null) return true
@@ -272,6 +209,9 @@ async function goConfirm(): Promise<void> {
 function skipCompany(): void {
   companyChoice.value = null
   companyContacts.value = []
+  // 跳过＝本步作废：让撞库件也归零（否则退回第 2 步时它还留着上次选过的公司，
+  // 而本页的 `companyChoice` 已经是 null —— 两处不一致就是「页面显示的 ≠ 实际提交的」）
+  companyPickerKey.value += 1
   void goConfirm()
 }
 
@@ -344,11 +284,9 @@ function resetAll(): void {
   contactForm.position = ''
   contactError.value = ''
   phoneDupCompanies.value = []
-  companyForm.full_name = ''
-  companyForm.credit_code = ''
+  // 撞库件重挂＝它的表单 / 候选 / 已选一并归零（本页只清自己持有的结果）
+  companyPickerKey.value += 1
   companyChoice.value = null
-  companyCandidates.value = []
-  companyError.value = ''
   companyContacts.value = []
   relationForm.dept_id = ''
   relationForm.product_line_id = ''
@@ -410,9 +348,19 @@ function goRelationDetail(): void {
       <div v-if="step === 1" class="entry-card">
         <h3 class="entry-card-title">1 · 联系人</h3>
 
-        <a-form layout="vertical" @finish="submitContactStep">
+        <!--
+          ⚠ **提交走 `@click` ＋ `@press-enter`，不用 `<a-form @finish>`**：本表单没有
+            `:model` / `name` 字段，实测 `@finish` **不会触发**（按钮点了没反应 —— 2026-09-18
+            浏览器走查实测；登录页有 `:model` ＋ `name` 故正常）→ 见《AI协作铁律与踩坑复盘》。
+        -->
+        <a-form layout="vertical">
           <a-form-item label="姓名">
-            <a-input v-model:value="contactForm.name" placeholder="例如：张伟" allow-clear />
+            <a-input
+              v-model:value="contactForm.name"
+              placeholder="例如：张伟"
+              allow-clear
+              @press-enter="submitContactStep"
+            />
           </a-form-item>
 
           <a-form-item label="手机号（主号，撞库校验核心）">
@@ -420,16 +368,22 @@ function goRelationDetail(): void {
               v-model:value="contactForm.phone"
               placeholder="138 0000 0000（空格 / +86 / - 都会被归一）"
               allow-clear
+              @press-enter="submitContactStep"
             />
           </a-form-item>
 
           <a-form-item label="职位（可空）">
-            <a-input v-model:value="contactForm.position" placeholder="例如：采购总监" allow-clear />
+            <a-input
+              v-model:value="contactForm.position"
+              placeholder="例如：采购总监"
+              allow-clear
+              @press-enter="submitContactStep"
+            />
           </a-form-item>
 
           <p v-if="contactError" class="entry-error">{{ contactError }}</p>
 
-          <a-button type="primary" html-type="submit" :loading="checkingPhone">
+          <a-button type="primary" :loading="checkingPhone" @click="submitContactStep">
             下一步：选公司
           </a-button>
         </a-form>
@@ -458,77 +412,23 @@ function goRelationDetail(): void {
       <div v-else-if="step === 2" class="entry-card">
         <h3 class="entry-card-title">2 · 公司</h3>
 
-        <a-form layout="vertical" @finish="searchCompany">
-          <a-form-item label="公司全称">
-            <a-input
-              v-model:value="companyForm.full_name"
-              :disabled="companyChoice !== null"
-              placeholder="例如：安徽鑫中网信息技术有限公司"
-              allow-clear
-            />
-          </a-form-item>
-
-          <a-form-item label="统一社会信用代码（可空）">
-            <a-input
-              v-model:value="companyForm.credit_code"
-              :disabled="companyChoice !== null"
-              placeholder="撞码时会提示改用已有档案"
-              allow-clear
-            />
-          </a-form-item>
-
-          <p v-if="companyError" class="entry-error">{{ companyError }}</p>
-
-          <a-button
-            v-if="companyChoice === null"
-            type="primary"
-            html-type="submit"
-            :loading="checkingCompany"
-          >
-            查重
-          </a-button>
-        </a-form>
-
-        <!-- 查重命中：交给人选（分支 4） -->
-        <div v-if="companyCandidates.length > 0" class="entry-dups">
-          <a-alert
-            type="warning"
-            show-icon
-            message="疑似已有这家公司"
-            description="以下候选按判级排序；确认是同一家请点「用这家」，确认不是再点「确认新建」。"
-          />
-          <ul class="entry-dup-list">
-            <li v-for="item in companyCandidates" :key="item.id" class="entry-dup-item">
-              <div class="entry-dup-main">
-                <span class="entry-dup-name">{{ item.full_name }}</span>
-                <a-tag :color="item.match_type === 'same' ? 'red' : 'orange'">
-                  {{ matchLabel(item.match_type) }}
-                </a-tag>
-                <span class="entry-dup-meta">
-                  相似度 {{ item.similarity }}<template v-if="item.credit_code_masked">
-                    ｜信用代码 {{ item.credit_code_masked }}</template>
-                </span>
-              </div>
-              <a-button size="small" @click="chooseExisting(item)">用这家</a-button>
-            </li>
-          </ul>
-          <a-button type="link" @click="chooseNew">都不是，确认新建（强行）</a-button>
-        </div>
-
-        <!-- 已选定公司 -->
-        <div v-if="companyChoice !== null" class="entry-target">
-          <div class="entry-target-main">
-            <span class="entry-target-name">{{ companyChoice.full_name }}</span>
-            <a-tag :color="companyChoice.kind === 'new' ? 'green' : 'blue'">
-              {{ companyChoice.kind === 'new' ? '待新建（提交时建档）' : '沿用已有档案' }}
-            </a-tag>
-            <a-button type="text" size="small" @click="resetCompanyChoice">重选</a-button>
-          </div>
-
+        <!-- 撞库选公司：**跨页复用件**（本页第 2 步 与 联系人详情页「关联公司」共用一份，→ 架构 §4.4） -->
+        <CompanyDupPicker
+          :key="companyPickerKey"
+          :search="searchDupCompanies"
+          :disabled="submitting"
+          @change="onCompanyChoiceChange"
+        >
           <!-- 沿用已有公司时：看看这家已有哪些人（列表形态、号码打码） -->
-          <div v-if="companyChoice.kind === 'existing'" class="entry-contacts">
+          <div
+            v-if="companyChoice !== null && companyChoice.kind === 'existing'"
+            class="entry-contacts"
+          >
             <h4 class="entry-contacts-title">该公司的联系人（列表形态，号码打码）</h4>
-            <a-empty v-if="!contactsLoading && companyContacts.length === 0" description="还没有联系人" />
+            <a-empty
+              v-if="!contactsLoading && companyContacts.length === 0"
+              description="还没有联系人"
+            />
             <ul v-else class="entry-contact-list">
               <li v-for="person in companyContacts" :key="person.id" class="entry-contact-item">
                 <span class="entry-contact-name">{{ person.name }}</span>
@@ -540,7 +440,7 @@ function goRelationDetail(): void {
               </li>
             </ul>
           </div>
-        </div>
+        </CompanyDupPicker>
 
         <div class="entry-actions">
           <a-button v-if="companyChoice !== null" type="primary" @click="goConfirm">
@@ -581,41 +481,15 @@ function goRelationDetail(): void {
         <template v-if="companyChoice !== null">
           <p v-if="optionsError" class="entry-error">{{ optionsError }}</p>
 
-          <a-form layout="vertical">
-            <a-form-item label="承接部门">
-              <a-select
-                v-model:value="relationForm.dept_id"
-                :loading="optionsLoading"
-                placeholder="选一个我能建的部门"
-                allow-clear
-              >
-                <a-select-option v-for="dept in departments" :key="dept.id" :value="dept.id">
-                  {{ deptLabelOf(dept) }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-
-            <a-form-item label="产品线">
-              <a-select
-                v-model:value="relationForm.product_line_id"
-                :loading="optionsLoading"
-                placeholder="选一条产品线"
-                allow-clear
-              >
-                <a-select-option v-for="line in productLines" :key="line.id" :value="line.id">
-                  <span class="entry-line-option">
-                    <!-- `color_key` 为 null 时**不画色块**（不编默认色，→ 数据架构 A7） -->
-                    <span
-                      v-if="line.color_key"
-                      class="entry-line-dot"
-                      :style="{ background: line.color_key }"
-                    />
-                    {{ productLineLabelOf(line) }}
-                  </span>
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-form>
+          <!-- 部门 / 产品线：**跨页复用件**（与联系人详情页「关联公司」共用一份，→ 架构 §4.4） -->
+          <RelationTargetPicker
+            v-model:dept-id="relationForm.dept_id"
+            v-model:product-line-id="relationForm.product_line_id"
+            :departments="departments"
+            :product-lines="productLines"
+            :loading="optionsLoading"
+            :disabled="submitting"
+          />
 
           <p class="entry-note">
             激活后这条关系归你（换人要走转交审批）。同公司 × 同部门 × 同产品线只能有一条关系，
@@ -718,8 +592,7 @@ function goRelationDetail(): void {
   padding: var(--crm-space-xs) 0;
 }
 
-.entry-dup-main,
-.entry-target-main {
+.entry-dup-main {
   display: flex;
   align-items: center;
   gap: var(--crm-space-xs);
@@ -727,7 +600,6 @@ function goRelationDetail(): void {
 }
 
 .entry-dup-name,
-.entry-target-name,
 .entry-contact-name {
   font-size: var(--crm-font-size-base);
   color: var(--crm-color-text);
@@ -736,12 +608,6 @@ function goRelationDetail(): void {
 .entry-dup-meta {
   font-size: var(--crm-font-size-xs);
   color: var(--crm-color-text-secondary);
-}
-
-.entry-target {
-  margin-top: var(--crm-space-md);
-  padding-top: var(--crm-space-md);
-  border-top: var(--crm-border-width) solid var(--crm-color-border-secondary);
 }
 
 .entry-contacts {
@@ -783,18 +649,5 @@ function goRelationDetail(): void {
   align-items: center;
   gap: var(--crm-space-sm);
   margin-top: var(--crm-space-md);
-}
-
-/** 产品线选项里的色块（`color_key` 为 null 时不画，→ 数据架构 A7「不编默认色」） */
-.entry-line-option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--crm-space-xxs);
-}
-
-.entry-line-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--crm-radius-pill);
 }
 </style>

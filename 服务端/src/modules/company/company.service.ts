@@ -105,6 +105,14 @@ export interface CreatedContactVo {
 /** 「同部门 / 别的部门」等提示不进本批；`take` 上限集中在仓储，这里只做去重与排序 */
 const MAX_CANDIDATES = 20;
 
+/**
+ * 「该联系人已挂过公司」的人话（→ 接口 §5.6：`POST /contacts/:id/activate-relation`
+ * 对**不是「待关联」**的联系人给 **409**，防重复触发）。
+ * ★ 与 `EVENT_DUPLICATED_MESSAGE` / `RELATION_DUPLICATED_MESSAGE` 同一姿势：**就一句常量** ——
+ *   「前置校验」与「写出口复核」两处共用它，改一处即两处生效（两句话＝两套口径）。
+ */
+const CONTACT_ALREADY_LINKED_MESSAGE = '该联系人已挂过公司，不能重复关联';
+
 /** `GET /contacts` 的查询条件（controller 从 query 翻译过来；→ §5.5） */
 export interface ListContactsQuery {
   /** 只看「**未关联公司**」的待跟进联系人（「待关联」视图，→ 需求 §6.1 ③） */
@@ -379,6 +387,75 @@ export class CompanyService {
    */
   getContactOwners(ids: readonly bigint[]): Promise<{ id: bigint; owner_id: bigint | null }[]> {
     return this.repository.findContactOwnersByIds(ids);
+  }
+
+  // ===== 「关联公司并激活业务关系」的跨域出口（→ 接口 §5.6 `POST /contacts/:id/activate-relation` / D-29）=====
+
+  /**
+   * **「待关联」前置校验**：这条联系人现在能不能走「关联公司并激活业务关系」动线。
+   *
+   * ★ 语义是**校验**、不是「读一条记录」⇒ 不合格**当场抛**（把人话与判定都留在 B 域一处）：
+   *   · 联系人不存在 / 已删除 / 已合并 → **400**；
+   *   · 已有就职记录（＝不是「待关联」）→ **409**（→ 接口 §5.6「防重复触发」）。
+   * ★ 调用方：D 域编排 `POST /contacts/:id/activate-relation` 时**先调本方法**（见该方法头
+   *   「为什么先 C 后 B」）——D 域不查 `contact` / `company_contact` 两张表（架构 §5.2 路之①）。
+   *
+   * @returns 联系人 `{id,name}`（调用方回显 / 日志用；本方法**不**回 `has_company`，
+   *          因为「不合格」已经用异常表达了，再给一个布尔字段就是两套判定）
+   * @throws 400 联系人不存在 ｜ 409 该联系人已挂过公司
+   */
+  async requireContactUnlinked(contactId: bigint): Promise<{ id: bigint; name: string }> {
+    const refs = await this.repository.findContactRefsByIds([contactId]);
+    if (refs.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：联系人不存在（或已删除 / 已合并）', {
+        constraint: 'company.contact_missing',
+      });
+    }
+    const contact = refs[0];
+
+    // 「待关联」＝**没有任何**就职记录（派生判定，→ 需求 §6.1 ③）
+    const linked = await this.repository.countCompanyContacts(contactId);
+    if (linked > 0) {
+      throw new AppError(ErrorCode.UNIQUE_CONFLICT, 409, CONTACT_ALREADY_LINKED_MESSAGE, {
+        constraint: 'company_contact.already_linked',
+      });
+    }
+    return { id: contact.id, name: contact.name };
+  }
+
+  /**
+   * 给「待关联」联系人补**就职关系**（→ 接口 §5.6 第 ① 件事：写 `company_contact`，
+   * `is_current=true`），由 D 域编排调用（→ D-29）。
+   *
+   * ★ 为什么由 B 域写：`company_contact` 是 B 域的表，跨域**不许查表更不许写表**（架构 §5.2）——
+   *   D 域只该说「把这个人挂到这家公司、职位是 X」。
+   * ★ 校验**复核一遍**（不是重复劳动）：调用方的前置校验与真正的写之间有窗口（跨域禁大事务，
+   *   → 架构 §5.2），故本方法自己再走一遍 `requireContactUnlinked` —— 同 B / C 域既有的
+   *   「预检 ＋ 兜底」姿势（预检给人话，兜底挡并发）。
+   * @throws 403 只读角色 ｜ 400 联系人 / 公司不存在 ｜ 409 该联系人已挂过公司
+   */
+  async linkContactEmployment(input: {
+    contactId: bigint;
+    companyId: bigint;
+    position?: string;
+  }): Promise<void> {
+    this.requireWriter();
+    await this.requireContactUnlinked(input.contactId);
+
+    const company = await this.repository.findCompanyById(input.companyId);
+    if (company === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：公司不存在', {
+        constraint: 'company.not_found',
+      });
+    }
+
+    const position = input.position?.trim();
+    await this.repository.createCompanyContact({
+      company_id: input.companyId,
+      contact_id: input.contactId,
+      // 空串＝没填职位（不写这一列，免得库里出现一个「职位＝空」的在职记录）
+      ...(position === undefined || position === '' ? {} : { position }),
+    });
   }
 
   // ===== M2-14 公司联系人 =====

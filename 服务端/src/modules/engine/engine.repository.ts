@@ -215,8 +215,29 @@ export class EngineRepository {
     });
   }
 
-  // ===== M4-03 承诺 建 / 查 =====
+  // ===== M6-14 关联公司动线：批量改挂孤儿跟单 =====
 
+  /**
+   * 把某联系人名下的**孤儿跟单**批量挂到新关系（→ 接口 §5.6 `POST /contacts/:id/activate-relation`
+   * 第 ③ 件事）。
+   *
+   * ★ 只动 `relation_id IS NULL` 的行 ⇒ **天然可重入**：规格 §5.6 明写「重复调用不会二次搬运」，
+   *   这里靠**条件本身**保证（第二次调用时这些行已经有 `relation_id` 了，条件不再命中），
+   *   不需要额外的「搬运过没有」标记。
+   * ★ **只改 `relation_id`，不回填 `owner_snapshot`**：后者的语义是「**本条创建时**该关系的归属人」
+   *   （→ D2 按轮次归组用）。这批事件创建时**没有关系**，`null` 就是**真值**；把它补成新 owner
+   *   会让「关联公司之前就发生的跟进」在时间线上伪装成「新 owner 名下的跟进」，反而失真。
+   * ★ 单条 `updateMany` 自身即原子，且本动线在 D 域**只改这一张表** ⇒ **不需要开事务**
+   *   （架构 §5.2 路之③说的是"改多表要一起成功"）。
+   */
+  rehangOrphanEventsOfContact(contactId: bigint, relationId: bigint) {
+    return this.prisma.actionEvent.updateMany({
+      where: { contact_id: contactId, relation_id: null },
+      data: { relation_id: relationId },
+    });
+  }
+
+  // ===== M4-03 承诺 建 / 查 =====
   /** 建承诺（**不写 `status`**：走 DB 默认 `open`） */
   createCommitment(data: CreateCommitmentData, tx?: EngineTxClient) {
     const client = tx ?? this.prisma;

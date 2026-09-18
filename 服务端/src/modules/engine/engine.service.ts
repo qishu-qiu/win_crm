@@ -24,10 +24,11 @@
 //   `business_relation`（**C 域的表**）—— 架构 §5.2 明令「**不发跨域大事务**」
 //   （理由：将来拆服务时跨服务事务要换成最终一致，现在写死就得处处重写）。
 //   故本实现＝ ① 本域事务写 `action_event`；② **事务提交后**调 C 域出口回写。
-//   ⚠ 架构 §5.3 把这条回写登记为领域事件 `ActionEventRecorded`（D 发 → C 收）；
-//     事件总线（M0-29 `EventBus`）**尚未接进 DI**（→ 交接说明 §三 #5），
-//     故本批先用跨域路之①（同步调 service，结果可验证、失败可透出），
-//     待 M4-11 接事件总线时改为路之②。**两者都不跨域开事务**，差别只在投递方式。
+//   ⚠ 架构 §5.3 把这条回写登记为领域事件 `ActionEventRecorded`（D 发 → C 收）。
+//     事件总线自 M4-11 起**已在 DI 里**（`EventBusModule`，`@Global()`；C 域发 `RelationCreated`
+//     用的就是它，→ `engine-event.subscriber.ts`），但**本处仍走跨域路之①（同步调 service）**：
+//     回写成不成功是**本次请求**的一部分（结果可验证、失败可透出），改走事件就是「不等结果」，
+//     语义变了。**两者都不跨域开事务**，差别只在投递方式。
 //
 // ★ P2002 的处理姿势（与 B / C 域同款，两条都要）：
 //   ① **预检**（按幂等键先查一次）→ 覆盖 99% 的「销售手快」，给人话；
@@ -50,13 +51,16 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CompanyService } from '../company/company.service';
 import { OrgService } from '../org/org.service';
-import { RelationService } from '../relation/relation.service';
+// ⚠ 只带一个**类型**（`RelationVo`）：`activateContactRelation` 的出参＝ C 域的关系列表项形状 ＋
+//   `linked_events` —— 形状的唯一落点在 C 域，在 D 域重抄约 20 个字段就是双真相源。
+import { RelationService, type RelationVo } from '../relation/relation.service';
 import {
   checkCommitmentMutable,
   checkWaiveReason,
   requiresWaiveReason,
 } from './domain/commitment-rules';
 import {
+  type ActivateRelationDto,
   type CreateCommitmentDto,
   type CreateEventDto,
   type QuickMarkDto,
@@ -80,6 +84,12 @@ export const ENGINE_AUDIT_ACTIONS = {
   commitmentUpdate: 'commitment.update',
   /** ★ 批量快速标记 → `POST /events/quick-mark`（写动作，由统一切面留痕） */
   quickMark: 'event.quick_mark',
+  /**
+   * ★ 关联公司并激活业务关系 → `POST /contacts/:id/activate-relation`（写动作，由统一切面留痕）。
+   * ⚠ 三段式动作名（`模块.动词` 的动词位不是名词）—— 本动作**写三张表**（就职 / 关系 / 跟单），
+   *   故不能拆成「像哪个对象的增删改」；记为 `contact.activate_relation` 与接口 §5.6 的端点名同字。
+   */
+  contactActivateRelation: 'contact.activate_relation',
   /** ★ 查看跟单全文 → `GET /relations/:id/events`：**读路径**，只对**管理员**写（本文件手工调 `recordStandalone`） */
   eventView: 'event.view',
 } as const;
@@ -143,6 +153,16 @@ export interface AgendaItemVo {
 export interface QuickMarkResultVo {
   /** 实际落库的事件条数（＝去重后能写的关系数） */
   marked: number;
+}
+
+/**
+ * 「关联公司并激活业务关系」出参（→ 接口 §5.6）＝ **新关系的列表项** ＋ `linked_events`。
+ * ★ 列表项形状直接**继承 C 域 `RelationVo`**：§5.6 的「列表项」只有**一份**形状，
+ *   在 D 域重抄一遍就是双真相源（前端那两个类型也会跟着分叉）。
+ */
+export interface ActivateRelationVo extends RelationVo {
+  /** 本次搬运的**孤儿跟单**条数（关联前只挂在联系人、没挂关系的那批） */
+  linked_events: number;
 }
 
 /** `RelationCreated` 事件的载荷（→ C 域 `createRelation` 发出；**最小信息**，架构 §5.3） */
@@ -409,6 +429,69 @@ export class EngineService {
       });
 
     return { marked };
+  }
+
+  // ===== M6-14 关联公司并激活业务关系（→ 接口 §5.6 `POST /contacts/:id/activate-relation`）=====
+
+  /**
+   * 关联公司并激活业务关系：**一个动作含三件事** —— ① 建关系（C）② 写就职关系（B）
+   * ③ 批量改挂孤儿跟单（D）。规格原文见接口 §5.6（2026-09-16 拍板 · D-29）。
+   *
+   * ★ 为什么由 **D 域**编排（三件事横跨 B / C / D 三域）：
+   *   ① **层级**：`B(L2) < C(L3) < D(L4)`（架构 §5.1 硬规则 1）—— 只有 D 能同时俯视 B 与 C；
+   *      而「批量改挂跟单」动的是 `action_event`（**本域的表**），C 域**不可反向依赖** D 域。
+   *   ② **出参要同步回 `linked_events`**（搬运条数）⇒ 走不了领域事件：§5.2 路之② 是「我做完一件事、
+   *      **我不等结果**」，计数拿不回来。
+   *   ⇒ 走 §5.2 路之①（同步调对方 `exports` 的 service），且**不新增领域事件**
+   *     （架构 §5.3 的事件清单一个字不动）。
+   *
+   * ★ 顺序 ＝ **前置校验 → ① 建关系（C）→ ② 写就职（B）→ ③ 搬运（D）**，
+   *   三写**不在同一个事务里**（架构 §5.2 明令禁止跨域大事务）。**先 C 后 B** 是有意的：
+   *   · `createRelation` 自带完整前置校验（部门范围 / 三元组存在性 / 活跃唯一键）且写在本域事务内
+   *     —— 它抛错时**一行都没落**；
+   *   · 若把它排在 B 之后：一旦它 409，联系人**已经被挂到公司上**、而关系不存在 ⇒ 再调一次会被
+   *     「已挂过公司」挡住，**这条线索就卡死了**（用户没有自救路径）；
+   *   · 反过来（先 C 后 B）最坏结果是「关系已建、就职没写成」，用户重试拿到的是
+   *     「该公司在该部门·产品线下已有归属，请走转交或协同」—— 这句是**真话**，
+   *     且主目标（关系）已经建成。
+   *   · 前置校验与写之间的竞态窗口由 B 域出口**复核**兜底（跨域禁大事务下的既有姿势）。
+   *
+   * ⚠ **不判「这条线索归不归我」**：接口 §5.6 给本端点的错误约定只有「三元组重复 409 /
+   *   已挂过公司 409 / 部门越权 · 只读角色 403 / 各类 id 不存在 400」，**没有**「只有归属人能激活」
+   *   —— 不自己加码（加码限制＝自造口径，与「清单外不许推出可以做」是两回事，同属不许自造）。
+   */
+  async activateContactRelation(
+    contactId: string,
+    dto: ActivateRelationDto,
+  ): Promise<ActivateRelationVo> {
+    requireViewer();
+    const contactIdValue = jsonToBigint(contactId, 'id');
+
+    // 前置校验：「待关联」＝该联系人当前**没有任何**就职记录（B 域出口；不是 → 409 防重复触发）
+    await this.company.requireContactUnlinked(contactIdValue);
+
+    // ① 建关系（C 域出口）：部门范围 / 三元组存在性 / `uk_active_rel` ＋ owner 成员（本域事务）
+    //    并发出 `RelationCreated`（→ D 域的建档事件订阅者，架构 §5.3）
+    const relation = await this.relation.createRelation({
+      company_id: dto.company_id,
+      dept_id: dto.dept_id,
+      product_line_id: dto.product_line_id,
+    });
+
+    // ② 写就职关系（B 域出口；`is_current=true`）
+    await this.company.linkContactEmployment({
+      contactId: contactIdValue,
+      companyId: jsonToBigint(dto.company_id, 'company_id'),
+      ...(dto.position === undefined ? {} : { position: dto.position }),
+    });
+
+    // ③ 批量改挂孤儿跟单（**本域的表**，单条 `updateMany` 即原子 ⇒ 不必包事务）
+    const { count } = await this.repository.rehangOrphanEventsOfContact(
+      contactIdValue,
+      relation.id,
+    );
+
+    return { ...relation, linked_events: count };
   }
 
   // ===== M4-08 关系时间线 =====

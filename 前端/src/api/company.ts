@@ -69,3 +69,33 @@ export async function listContacts(options: { onlyUnlinked?: boolean } = {}): Pr
   })
   return data
 }
+
+/** 「关联公司并激活业务关系」的入参 / 出参（→ §5.6，欠账 D-29） */
+export type ActivateRelationInput = components['schemas']['ActivateRelationDto']
+export type ActivateRelationResult = components['schemas']['ActivateRelationResultDto']
+
+/**
+ * 关联公司并激活业务关系（→ §5.6 `POST /contacts/:id/activate-relation`）：
+ * 把一条「**待关联**」联系人（还没挂公司）关联到公司 ＋ 激活一条业务关系。
+ *
+ * ★ **一个动作含三件事，全在服务端**（前端不做任何编排）：① 写就职关系 ② 建业务关系
+ *   ③ 把该联系人名下**孤儿跟单**批量挂到新关系 —— 历史不断（→ 需求 §6.1 ④）。
+ * ★ 出参 ＝ **新关系的列表项**（字段与 `api/relation.ts` 的列表项同形，可直接跳详情）
+ *   ＋ `linked_events`（本次搬运了几条跟单）。⚠ 服务端**可重入**：重复调用不会二次搬运。
+ * ★ 错误人话由服务端给、页面**照显示**：三元组已有活跃关系 → **409 / 20401**（与
+ *   `createRelation` 同一句）；该联系人已挂过公司 → **409**；部门越权 / 只读角色 → **403**；
+ *   各类 id 不存在 → **400**。
+ * ⚠ 失败后**不要自作主张"补一次"另两件事**（比如失败了自己再去调 `createRelation`）：
+ *   本动线跨 B / C / D 三域且**不共享事务**（架构 §5.2 禁跨域大事务），前端补一套补偿逻辑
+ *   就是第二套口径 —— 该由服务端决定重试语义。
+ */
+export async function activateContactRelation(
+  contactId: string,
+  input: ActivateRelationInput,
+): Promise<ActivateRelationResult> {
+  const { data } = await request.post<ActivateRelationResult>(
+    `/contacts/${contactId}/activate-relation`,
+    input,
+  )
+  return data
+}

@@ -19,6 +19,10 @@
 // =============================================================================
 import { ApiProperty } from '@nestjs/swagger';
 
+// ★ 跨域引**形状**：接口 §5.6 的「关系列表项」只有**一份**定义（C 域 `RelationVoDto`）——
+//   本域再抄一遍约 20 个字段＝双真相源（改一处漏一处）。同 `engine-request.dto.ts` 引 C 域
+//   `relation-attributes` 枚举白名单的理由：唯一落点在哪就引哪。
+import { RelationVoDto } from '../../relation/dto/relation-response.dto';
 /** 「实体引用」统一形状 `{id,name}`（同 C 域 `RelationRefDto` 的约定，→ 接口 §四） */
 export class EngineRefDto {
   @ApiProperty({ description: 'id（十进制字符串）', example: '7' })
@@ -208,4 +212,19 @@ export class AgendaItemVoDto {
 export class QuickMarkResultDto {
   @ApiProperty({ description: '实际落库的事件条数（＝去重后能写的关系数）', example: 3 })
   marked!: number;
+}
+
+/**
+ * `POST /contacts/:id/activate-relation` 出参（→ 接口 §5.6，D-29）：
+ * **新关系的列表项**（＝ §5.6 列表项形状，前端可直接跳详情）＋ `linked_events`。
+ * ★ 列表项部分**继承 C 域 `RelationVoDto`**（理由见本文件头 ★ 跨域引形状）。
+ */
+export class ActivateRelationResultDto extends RelationVoDto {
+  @ApiProperty({
+    description:
+      '本次**搬运的孤儿跟单条数**（关联前只挂在联系人、没挂关系的那批 `action_event`）。' +
+      '⚠ 可重入：重复调用**不会二次搬运**（只动 `relation_id` 为空的行），故第二次通常是 `0`',
+    example: 2,
+  })
+  linked_events!: number;
 }

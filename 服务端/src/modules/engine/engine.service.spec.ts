@@ -123,6 +123,12 @@ interface FakeOptions {
   ownerId?: bigint | null;
   /** 「待关联」联系人的归属（P-03：快速标记的联系人侧要判「归不归我」）；不给＝默认都归我 */
   contactOwners?: { id: bigint; owner_id: bigint | null }[];
+  /** 联系人**已挂过公司**（关联动线的前置校验应抛 409，→ M6-14） */
+  contactLinked?: boolean;
+  /** 关联动线：`createRelation` 抛的错（三元组重复 409 / 越权 403 / 只读 403） */
+  createRelationError?: AppError | null;
+  /** 关联动线：本次**搬运的孤儿跟单条数**（`updateMany` 的 `count`） */
+  linkedEvents?: number;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -145,6 +151,8 @@ function createService(options: FakeOptions = {}) {
       commitmentRow({ ...data, id }),
     ),
     listAgendaOfUser: jest.fn(async () => options.agenda ?? []),
+    // M6-14：把联系人名下**孤儿跟单**批量挂到新关系（`updateMany` 回 `{count}`）
+    rehangOrphanEventsOfContact: jest.fn(async () => ({ count: options.linkedEvents ?? 0 })),
   };
   const relation = {
     // C 域跨域出口：**权限在这里判**（D 域不重复实现），单测只关心「它抛了 D 域就别往下走」
@@ -164,6 +172,13 @@ function createService(options: FakeOptions = {}) {
         ids.includes(ref.id),
       ),
     ),
+    // M6-14：C 域出口「激活业务关系」（自带范围 / 存在性 / 活跃唯一键校验 ＋ 发建档事件）
+    createRelation: jest.fn(async () => {
+      if (options.createRelationError !== null && options.createRelationError !== undefined) {
+        throw options.createRelationError;
+      }
+      return { id: RELATION_ID, company: { id: 3n, name: COMPANY_NAME }, owner: null };
+    }),
   };
   const org = {
     getEmployeeRefs: jest.fn(async (ids: readonly bigint[]) =>
@@ -183,6 +198,25 @@ function createService(options: FakeOptions = {}) {
         ? ids.map((id) => ({ id, owner_id: ME }))
         : options.contactOwners,
     ),
+    // M6-14：B 域出口「待关联」前置校验（判定与人话都在 B 域；这里只模拟它按规格抛）
+    requireContactUnlinked: jest.fn(async (id: bigint) => {
+      if (options.contactMissing === true) {
+        throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：联系人不存在（或已删除 / 已合并）', {
+          constraint: 'company.contact_missing',
+        });
+      }
+      if (options.contactLinked === true) {
+        throw new AppError(ErrorCode.UNIQUE_CONFLICT, 409, '该联系人已挂过公司，不能重复关联', {
+          constraint: 'company_contact.already_linked',
+        });
+      }
+      return { id, name: '张总' };
+    }),
+    // M6-14：B 域出口「写就职关系」（收一个占位入参，用例要断言透传了什么）
+    linkContactEmployment: jest.fn(async (input: Record<string, unknown>) => {
+      void input;
+      return undefined;
+    }),
   };
   const prisma = { $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn({ tx: true })) };
   /** 审计替身（M5-07）：只替掉落库动作 —— 供「管理员查看留痕」用例断言「记了什么 / 有没有记」 */
@@ -528,6 +562,130 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
       expect(error.httpStatus).toBe(403);
       // ★ 判据：**先全判完再落库** —— 否则批量里混进一条别人的客户，会「标了一半才报错」
       expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('activateContactRelation：关联公司并激活业务关系（M6-14 · D-29）', () => {
+    const ACTIVATE_DTO = { company_id: '3', dept_id: '2', product_line_id: '1' };
+
+    it('三件事都做：建关系（C）→ 写就职（B）→ 搬孤儿跟单（D）；出参＝关系项 ＋ `linked_events`', async () => {
+      const { service, repository, relation, company } = createService({ linkedEvents: 2 });
+
+      const result = await runWithContext(contextOf(), () =>
+        service.activateContactRelation(CONTACT_ID.toString(), ACTIVATE_DTO),
+      );
+
+      expect(relation.createRelation).toHaveBeenCalledWith({
+        company_id: '3',
+        dept_id: '2',
+        product_line_id: '1',
+      });
+      expect(company.linkContactEmployment).toHaveBeenCalledWith({
+        contactId: CONTACT_ID,
+        companyId: 3n,
+      });
+      expect(repository.rehangOrphanEventsOfContact).toHaveBeenCalledWith(CONTACT_ID, RELATION_ID);
+      expect(result).toMatchObject({ id: RELATION_ID, linked_events: 2 });
+    });
+
+    it('`position` 给了就透传（空串／不给＝不传这个键，交给 B 域按「没填职位」处理）', async () => {
+      const given = createService();
+      await runWithContext(contextOf(), () =>
+        given.service.activateContactRelation(CONTACT_ID.toString(), {
+          ...ACTIVATE_DTO,
+          position: '采购经理',
+        }),
+      );
+      expect(given.company.linkContactEmployment).toHaveBeenCalledWith({
+        contactId: CONTACT_ID,
+        companyId: 3n,
+        position: '采购经理',
+      });
+
+      const omitted = createService();
+      await runWithContext(contextOf(), () =>
+        omitted.service.activateContactRelation(CONTACT_ID.toString(), ACTIVATE_DTO),
+      );
+      expect(omitted.company.linkContactEmployment.mock.calls[0]?.[0]).not.toHaveProperty(
+        'position',
+      );
+    });
+
+    it('★ 顺序＝**先 C（建关系）后 B（写就职）**：反序会让 409 时的线索卡死（→ 方法头）', async () => {
+      const { service, relation, company } = createService();
+
+      await runWithContext(contextOf(), () =>
+        service.activateContactRelation(CONTACT_ID.toString(), ACTIVATE_DTO),
+      );
+
+      expect(relation.createRelation.mock.invocationCallOrder[0]).toBeLessThan(
+        company.linkContactEmployment.mock.invocationCallOrder[0] as number,
+      );
+    });
+
+    it('前置校验：「已挂过公司」（不是「待关联」）→ **409，且一行都不落**（防重复触发）', async () => {
+      const { service, repository, relation, company } = createService({ contactLinked: true });
+
+      const error = await runWithContext(contextOf(), () =>
+        captureAppError(() =>
+          service.activateContactRelation(CONTACT_ID.toString(), ACTIVATE_DTO),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.constraint).toBe('company_contact.already_linked');
+      // ★ 校验**在最前**：不建关系、不写就职、不搬跟单
+      expect(relation.createRelation).not.toHaveBeenCalled();
+      expect(company.linkContactEmployment).not.toHaveBeenCalled();
+      expect(repository.rehangOrphanEventsOfContact).not.toHaveBeenCalled();
+    });
+
+    it('前置校验：联系人不存在 → **400，且一行都不落**', async () => {
+      const { service, repository, relation } = createService({ contactMissing: true });
+
+      const error = await runWithContext(contextOf(), () =>
+        captureAppError(() =>
+          service.activateContactRelation(CONTACT_ID.toString(), ACTIVATE_DTO),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('company.contact_missing');
+      expect(relation.createRelation).not.toHaveBeenCalled();
+      expect(repository.rehangOrphanEventsOfContact).not.toHaveBeenCalled();
+    });
+
+    it('C 域抛 409（三元组已有活跃关系）→ **不写就职、不搬跟单**（这就是「先 C 后 B」的意义）', async () => {
+      const { service, repository, company } = createService({
+        createRelationError: new AppError(
+          ErrorCode.RELATION_DUPLICATED,
+          409,
+          '该公司在该部门·产品线下已有归属，请走转交或协同',
+          { constraint: 'uk_active_rel' },
+        ),
+      });
+
+      const error = await runWithContext(contextOf(), () =>
+        captureAppError(() =>
+          service.activateContactRelation(CONTACT_ID.toString(), ACTIVATE_DTO),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.constraint).toBe('uk_active_rel');
+      expect(company.linkContactEmployment).not.toHaveBeenCalled();
+      expect(repository.rehangOrphanEventsOfContact).not.toHaveBeenCalled();
+    });
+
+    it('没有请求上下文 → 401（守卫没跑＝编程错误，不许静默写三张表）', async () => {
+      const { service, relation } = createService();
+
+      const error = await captureAppError(() =>
+        service.activateContactRelation(CONTACT_ID.toString(), ACTIVATE_DTO),
+      );
+
+      expect(error.httpStatus).toBe(401);
+      expect(relation.createRelation).not.toHaveBeenCalled();
     });
   });
 

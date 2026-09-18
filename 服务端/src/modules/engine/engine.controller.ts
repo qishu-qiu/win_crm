@@ -26,6 +26,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@
 
 import { Audit } from '../../kernel/index';
 import {
+  ActivateRelationDto,
   CreateCommitmentDto,
   CreateEventDto,
   ListEventQueryDto,
@@ -34,6 +35,7 @@ import {
 } from './dto/engine-request.dto';
 import {
   ActionEventVoDto,
+  ActivateRelationResultDto,
   AgendaItemVoDto,
   CommitmentVoDto,
   QuickMarkResultDto,
@@ -42,6 +44,7 @@ import {
   ENGINE_AUDIT_ACTIONS,
   EngineService,
   type ActionEventVo,
+  type ActivateRelationVo,
   type AgendaItemVo,
   type CommitmentVo,
   type EventRange,
@@ -111,6 +114,35 @@ export class EngineController {
   @ApiOkResponse({ type: QuickMarkResultDto })
   quickMark(@Body() body: QuickMarkDto): Promise<QuickMarkResultVo> {
     return this.engine.quickMark(body);
+  }
+
+  // ===== M6-14 关联公司并激活业务关系 =====
+
+  @Audit(ENGINE_AUDIT_ACTIONS.contactActivateRelation, 'contact')
+  @Post('contacts/:id/activate-relation')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '关联公司并激活业务关系（「待关联」联系人 → 正式客户）',
+    description:
+      '把一条「**待关联**」联系人（还没挂公司）**关联到公司 ＋ 激活一条业务关系**，' +
+      '并把该联系人名下**孤儿跟单**（`relation_id` 为空的那批）**批量挂到新关系** —— ' +
+      '**一个动作含三件事**，历史不断（→ 需求 §6.1 ④）。' +
+      '`{company_id,dept_id,product_line_id,position?}`（`position?` ＝ 此人在该公司的职位）。' +
+      '出参 ＝ **新关系的列表项**（可直接跳详情）＋ `linked_events`（本次搬运的跟单条数）。' +
+      '⚠ 三件事**不在同一个事务里**（跨域禁大事务）：顺序＝建关系 → 写就职 → 搬运。' +
+      '**可重入**：重复调用不会二次搬运（只动 `relation_id` 为空的行）。' +
+      '错误：三元组已有活跃关系 → **409 / 20401**（与 `POST /relations` **同一句人话**）；' +
+      '该联系人**已挂过公司**（不是「待关联」）→ **409**；部门越权 / 只读角色 → **403**；' +
+      '各类 id 不存在 → **400**',
+  })
+  @ApiParam({ name: 'id', description: '联系人 id（十进制字符串）' })
+  @ApiOkResponse({ type: ActivateRelationResultDto })
+  activateContactRelation(
+    @Param('id') id: string,
+    @Body() body: ActivateRelationDto,
+  ): Promise<ActivateRelationVo> {
+    return this.engine.activateContactRelation(id, body);
   }
 
   // ===== M4-13 承诺（建 / 列 / 改）=====

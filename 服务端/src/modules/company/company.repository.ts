@@ -278,6 +278,17 @@ export class CompanyRepository {
     });
   }
 
+  /**
+   * 该联系人**已有几条就职记录**（→ 需求 §6.1 ③「待关联」＝一条都没有，派生判定，不加字段）。
+   *
+   * ★ 用途：`POST /contacts/:id/activate-relation` 的**前置判定**（能不能走激活动线）——
+   *   判定条件是「就职关系」这件事，唯一落点在本域（B 的表 / B 的规则），
+   *   D 域编排时只调本域的出口，**不自己查这张表**（架构 §5.2 路之①）。
+   */
+  countCompanyContacts(contactId: bigint) {
+    return this.prisma.companyContact.count({ where: { contact_id: contactId } });
+  }
+
   /** 按手机号取**未删除**联系人（撞号时给 409 人话；也在建号前查历史号，→ B6「提示不拦截」） */
   findContactByPhone(phone: string) {
     return this.prisma.contact.findFirst({

@@ -301,3 +301,48 @@ export class QuickMarkDto {
   @IsIn([...QUICK_MARK_OUTCOMES], { message: 'outcome 取值不合法（只接受三型快速标记）' })
   outcome!: string;
 }
+
+/**
+ * `POST /contacts/:id/activate-relation`（关联公司并激活业务关系，→ 接口 §5.6 / §4.4；D-29）。
+ *
+ * 规格原文 req：`{company_id,dept_id,product_line_id,position?}`
+ * （`position?` ＝ 此人在该公司的职位，写进就职关系；可空）。
+ *
+ * ★ 前三个字段与 C 域 `POST /relations` 的入参**逐字同形**（同一套「公司 × 部门 × 产品线」语义），
+ *   本 DTO 只做「照抄形状」的入参校验（§2.4）；**业务判定**（部门范围 / 活跃唯一键 / 「待关联」）
+ *   全在 B / C 域的出口里，D 域不重判一套。
+ * ★ 这里**不收**真正的写数据（就职关系 / 关系 / 跟单三张表都不在 D 域），故本 DTO 只有形状意义。
+ */
+export class ActivateRelationDto {
+  @ApiProperty({
+    description: '公司档案 id（须是**已存在**的档案；不存在 → 400）',
+    example: '3',
+  })
+  @IsString({ message: 'company_id 必须是字符串' })
+  @Length(1, 32, { message: 'company_id 长度不合法' })
+  company_id!: string;
+
+  @ApiProperty({
+    description:
+      '承接部门 id —— **必须落在我可建范围内**（销售＝我所属部门含兼职；经理＝管辖部门；总经理＝任意），' +
+      '否则 **403**。⚠ `dept_id` 恒定不可变（→ 数据架构 C1）',
+    example: '2',
+  })
+  @IsString({ message: 'dept_id 必须是字符串' })
+  @Length(1, 32, { message: 'dept_id 长度不合法' })
+  dept_id!: string;
+
+  @ApiProperty({ description: '产品线 id（→ A7）', example: '1' })
+  @IsString({ message: 'product_line_id 必须是字符串' })
+  @Length(1, 32, { message: 'product_line_id 长度不合法' })
+  product_line_id!: string;
+
+  @ApiPropertyOptional({
+    description: '此人在该公司的职位（写进就职关系；不传 / 空串＝不写这一列）',
+    example: '采购经理',
+  })
+  @IsOptional()
+  @IsString({ message: 'position 必须是字符串' })
+  @Length(0, 64, { message: 'position 最长 64 字' })
+  position?: string;
+}

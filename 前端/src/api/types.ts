@@ -408,6 +408,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/contacts/{id}/activate-relation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 关联公司并激活业务关系（「待关联」联系人 → 正式客户）
+         * @description 把一条「**待关联**」联系人（还没挂公司）**关联到公司 ＋ 激活一条业务关系**，并把该联系人名下**孤儿跟单**（`relation_id` 为空的那批）**批量挂到新关系** —— **一个动作含三件事**，历史不断（→ 需求 §6.1 ④）。`{company_id,dept_id,product_line_id,position?}`（`position?` ＝ 此人在该公司的职位）。出参 ＝ **新关系的列表项**（可直接跳详情）＋ `linked_events`（本次搬运的跟单条数）。⚠ 三件事**不在同一个事务里**（跨域禁大事务）：顺序＝建关系 → 写就职 → 搬运。**可重入**：重复调用不会二次搬运（只动 `relation_id` 为空的行）。错误：三元组已有活跃关系 → **409 / 20401**（与 `POST /relations` **同一句人话**）；该联系人**已挂过公司**（不是「待关联」）→ **409**；部门越权 / 只读角色 → **403**；各类 id 不存在 → **400**
+         */
+        post: operations["EngineController_activateContactRelation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/relations/{id}/commitments": {
         parameters: {
             query?: never;
@@ -1256,6 +1276,83 @@ export interface components {
              */
             marked: number;
         };
+        ActivateRelationDto: {
+            /**
+             * @description 公司档案 id（须是**已存在**的档案；不存在 → 400）
+             * @example 3
+             */
+            company_id: string;
+            /**
+             * @description 承接部门 id —— **必须落在我可建范围内**（销售＝我所属部门含兼职；经理＝管辖部门；总经理＝任意），否则 **403**。⚠ `dept_id` 恒定不可变（→ 数据架构 C1）
+             * @example 2
+             */
+            dept_id: string;
+            /**
+             * @description 产品线 id（→ A7）
+             * @example 1
+             */
+            product_line_id: string;
+            /**
+             * @description 此人在该公司的职位（写进就职关系；不传 / 空串＝不写这一列）
+             * @example 采购经理
+             */
+            position?: string;
+        };
+        ActivateRelationResultDto: {
+            /**
+             * @description 业务关系 id
+             * @example 1
+             */
+            id: string;
+            /** @description 公司档案（档案被逻辑删时取不到引用 → `null`） */
+            company: components["schemas"]["RelationRefDto"] | null;
+            /** @description 承接部门（`dept_id` 恒定不可变，→ C1） */
+            dept: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线（含固定配色键 `color_key`） */
+            product_line: components["schemas"]["ProductLineRefDto"] | null;
+            /**
+             * @description 工作流阶段：1~6 ＋ 7＝已流失
+             * @example 1
+             */
+            stage: number;
+            /**
+             * @description 紧迫档
+             * @enum {string}
+             */
+            urgency: "weekly" | "monthly" | "quarterly" | "long_term" | "gray";
+            /**
+             * @description 开发价值档（非灰度关系**必标**，→ C1）
+             * @enum {string|null}
+             */
+            value_tier: "high" | "medium" | "low" | "pending" | null;
+            /** @description 客户等级（**系统按滚动 12 个月回款自动算、不手填** → E 域未接，本批恒 `null`） */
+            customer_level: string | null;
+            /** @description 主责销售（**公海关系为 `null`**） */
+            owner: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description `private`＝私海（有 owner）/ `company_sea`＝公海（无 owner）
+             * @enum {string}
+             */
+            sea_status: "private" | "company_sea";
+            /** @description 最近一次**有效沟通**时间（快速标记不计入，→ C1） */
+            last_event_at: string | null;
+            /** @description 一句话「上次说好下次干嘛」 */
+            next_action_hint: string | null;
+            /**
+             * @description 竞品态势快照（`null`＝未知）
+             * @enum {string|null}
+             */
+            competition: "none" | "in_use" | "comparing" | null;
+            /** @description 建档时间（ISO） */
+            created_at: string;
+            /** @description 最近更新时间（ISO） */
+            updated_at: string;
+            /**
+             * @description 本次**搬运的孤儿跟单条数**（关联前只挂在联系人、没挂关系的那批 `action_event`）。⚠ 可重入：重复调用**不会二次搬运**（只动 `relation_id` 为空的行），故第二次通常是 `0`
+             * @example 2
+             */
+            linked_events: number;
+        };
         CommitmentVoDto: {
             /**
              * @description 承诺 id
@@ -1970,6 +2067,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuickMarkResultDto"];
+                };
+            };
+        };
+    };
+    EngineController_activateContactRelation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 联系人 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateRelationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivateRelationResultDto"];
                 };
             };
         };

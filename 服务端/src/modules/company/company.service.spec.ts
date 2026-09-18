@@ -138,6 +138,10 @@ interface FakeOptions {
   historyOwner?: { id: bigint; name: string } | null;
   contacts?: ContactRowFixture[];
   companyContacts?: { is_current: boolean; position: string | null; contact: ContactRowFixture }[];
+  /** M6-14：`findContactRefsByIds` 的返回（不给＝按传入 id 都回「张伟」；给 `[]` ＝ 联系人取不到） */
+  contactRefs?: { id: bigint; name: string }[];
+  /** M6-14：该联系人**已有几条就职记录**（`0` ＝ 「待关联」） */
+  contactLinkCount?: number;
 }
 
 function createRepository(options: FakeOptions = {}) {
@@ -158,7 +162,11 @@ function createRepository(options: FakeOptions = {}) {
         ? (options.createdContact ?? contactRow())
         : Promise.reject(options.createContactError);
     }),
-    createCompanyContact: jest.fn(async () => ({ id: 1n })),
+    // 收一个占位入参（同 `listContacts` 的理由）：`mock.calls[n][0]` 在类型上要存在，用例才能断言写了哪几列
+    createCompanyContact: jest.fn(async (input: Record<string, unknown>) => {
+      void input;
+      return { id: 1n };
+    }),
     findContactByPhone: jest.fn(async () => options.contactByPhone ?? null),
     findHistoricalPhoneOwner: jest.fn(async () =>
       options.historyOwner === undefined || options.historyOwner === null ? null : { contact: options.historyOwner },
@@ -170,6 +178,16 @@ function createRepository(options: FakeOptions = {}) {
       return options.contacts ?? [];
     }),
     findCompanyContacts: jest.fn(async () => options.companyContacts ?? []),
+    // M6-14：关联公司动线的两个前置查询（只给「够判定」的信息：名字 ＋ 就职记录条数）
+    findContactRefsByIds: jest.fn(async (ids: readonly bigint[]) =>
+      options.contactRefs === undefined
+        ? ids.map((id) => ({ id, name: '张伟' }))
+        : options.contactRefs,
+    ),
+    countCompanyContacts: jest.fn(async (contactId: bigint) => {
+      void contactId;
+      return options.contactLinkCount ?? 0;
+    }),
   };
 }
 
@@ -539,6 +557,134 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
 
       expect(error.httpStatus).toBe(400);
       expect(error.message).toContain('公司不存在');
+    });
+  });
+
+  // ===========================================================================
+  // M6-14「关联公司并激活业务关系」的 B 域出口（→ 接口 §5.6 `POST /contacts/:id/activate-relation`）
+  //
+  // 为什么这两条要在 B 域单测（而不是只在 D 域测编排）：
+  //   「是不是『待关联』」与「就职关系怎么写」都是 **B 域的规则 / B 域的表**，
+  //   D 域只是编排者 —— 判定与人话的唯一落点在这里，就得在这里被钉住。
+  // ===========================================================================
+  describe('M6-14 关联公司动线的跨域出口', () => {
+    const CONTACT_ID = 11n;
+    const COMPANY_ID = 3n;
+
+    describe('requireContactUnlinked（前置校验）', () => {
+      it('「待关联」（**一条就职记录都没有**）→ 放行，回联系人 `{id,name}`', async () => {
+        const { service } = createService({ contactLinkCount: 0 });
+
+        await expect(service.requireContactUnlinked(CONTACT_ID)).resolves.toEqual({
+          id: CONTACT_ID,
+          name: '张伟',
+        });
+      });
+
+      it('已有就职记录（**不是「待关联」**）→ 409 防重复触发', async () => {
+        const { service } = createService({ contactLinkCount: 1 });
+
+        const error = await captureAppError(() => service.requireContactUnlinked(CONTACT_ID));
+
+        expect(error.httpStatus).toBe(409);
+        expect(error.code).toBe(ErrorCode.UNIQUE_CONFLICT);
+        expect(error.constraint).toBe('company_contact.already_linked');
+      });
+
+      it('联系人不存在（已删 / 已合并）→ 400（**不静默当成「待关联」**，那会凭空挂一条就职）', async () => {
+        const { service } = createService({ contactRefs: [] });
+
+        const error = await captureAppError(() => service.requireContactUnlinked(CONTACT_ID));
+
+        expect(error.httpStatus).toBe(400);
+        expect(error.constraint).toBe('company.contact_missing');
+      });
+    });
+
+    describe('linkContactEmployment（写就职关系）', () => {
+      it('正常：写 `company_contact`（`is_current=true`）＋ 职位透传；**不碰关系与跟单**（那两张表不归 B 域）', async () => {
+        const { service, repository } = createService({
+          companyById: companyRow({ id: COMPANY_ID }),
+        });
+
+        await runWithContext(CONTEXT, () =>
+          service.linkContactEmployment({
+            contactId: CONTACT_ID,
+            companyId: COMPANY_ID,
+            position: '采购经理',
+          }),
+        );
+
+        expect(repository.createCompanyContact).toHaveBeenCalledWith({
+          company_id: COMPANY_ID,
+          contact_id: CONTACT_ID,
+          position: '采购经理',
+        });
+        // 「就职」这件事只写 company_contact 一张表 —— 本出口不替调用方做别的
+        expect(repository.createContact).not.toHaveBeenCalled();
+      });
+
+      it('职位**空串**＝没填：不写这一列（免得库里出现一条「职位＝空」的在职记录）', async () => {
+        const { service, repository } = createService({
+          companyById: companyRow({ id: COMPANY_ID }),
+        });
+
+        await runWithContext(CONTEXT, () =>
+          service.linkContactEmployment({
+            contactId: CONTACT_ID,
+            companyId: COMPANY_ID,
+            position: '   ',
+          }),
+        );
+
+        expect(repository.createCompanyContact.mock.calls[0]?.[0]).not.toHaveProperty('position');
+      });
+
+      it('★ 复核兜底：已挂过公司 → **409 且不落库**（D 域前置校验与写之间有窗口）', async () => {
+        const { service, repository } = createService({
+          companyById: companyRow({ id: COMPANY_ID }),
+          contactLinkCount: 1,
+        });
+
+        const error = await runWithContext(CONTEXT, () =>
+          captureAppError(() =>
+            service.linkContactEmployment({ contactId: CONTACT_ID, companyId: COMPANY_ID }),
+          ),
+        );
+
+        expect(error.httpStatus).toBe(409);
+        expect(repository.createCompanyContact).not.toHaveBeenCalled();
+      });
+
+      it('公司不存在 → **400 且不落库**（不能写出一条指向不存在公司的就职记录）', async () => {
+        const { service, repository } = createService({ companyById: null });
+
+        const error = await runWithContext(CONTEXT, () =>
+          captureAppError(() =>
+            service.linkContactEmployment({ contactId: CONTACT_ID, companyId: COMPANY_ID }),
+          ),
+        );
+
+        expect(error.httpStatus).toBe(400);
+        expect(error.message).toContain('公司不存在');
+        expect(repository.createCompanyContact).not.toHaveBeenCalled();
+      });
+
+      it('只读角色（管理员 / 交付 / 客服）→ **403 且不落库**（同「建档」那道门）', async () => {
+        const { service, repository } = createService({
+          companyById: companyRow({ id: COMPANY_ID }),
+        });
+
+        const error = await runWithContext({ ...CONTEXT, roleCodes: ['admin'] }, () =>
+          captureAppError(() =>
+            service.linkContactEmployment({ contactId: CONTACT_ID, companyId: COMPANY_ID }),
+          ),
+        );
+
+        expect(error.httpStatus).toBe(403);
+        expect(error.constraint).toBe('company.read_only');
+        expect(repository.createCompanyContact).not.toHaveBeenCalled();
+      });
     });
   });
 });

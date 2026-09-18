@@ -84,19 +84,6 @@ function uniqueBigints(ids: readonly bigint[]): bigint[] {
   return [...new Set(ids)];
 }
 
-/**
- * 字符串数组 JSON 列（`nav_open`）→ `string[]`。
- *
- * ★ 与 `parseIdList` 同一纪律：MySQL 的 JSON 列**不保证**元素是字符串（手工 INSERT /
- *   导入可能写进数字 / null / 嵌套对象），故**逐个筛**，非字符串一律丢弃 ——
- *   宁可少还原一个分组，也不让脏数据把 `/account/me` 打成 500。
- * ★ 保序去重：展开集合是**键的集合**，重复键交给 AntD 只会让 `openKeys` 越长越大。
- */
-export function parseStringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.filter((item): item is string => typeof item === 'string' && item !== ''))];
-}
-
 @Injectable()
 export class OrgRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -228,6 +215,7 @@ export class OrgRepository {
 
   /**
    * 按 id 批量取**字典项文案**（`dict_item`，→ 数据架构 A11）。
+   * 对外的出口是 **`DictService.getDictItemLabels`**（别处跨域请走它，不要碰本文件）。
    *
    * ★ 为什么由 A 域提供：`dict_item` 是 A 域的表（架构 §5.1 第 1 层含「字典」）——
    *   B 域要出 `traits:[{trait_id,trait_code,label}]` 的 `label` 时**不许直查本表**（§5.2 路之①）。

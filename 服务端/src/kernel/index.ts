@@ -23,6 +23,9 @@ export * from './common/masking';
 // M5-05：跨业务线脱敏判定（「按部门比」的**唯一入口**）＋ 打码形态常量
 export * from './common/desensitize';
 export * from './common/pagination';
+// M6-15：JSON 列拉直（`nav_open` / `tags` 等）—— 原先在 A 域仓储里，B 域要用时
+// **跨域 import 对方的 repository 被 ESLint 硬卡**（§5.4），故按「通用能力上收 kernel」合并成一份
+export * from './common/json';
 export * from './context/request-context';
 export * from './context/jwt-claims';
 export * from './context/jwt-settings';

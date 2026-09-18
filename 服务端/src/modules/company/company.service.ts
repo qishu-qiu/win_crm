@@ -34,9 +34,14 @@ import {
   mapPrismaError,
   maskCreditCode,
   maskPhone,
+  // JSON 列拉直（M6-15 上收 kernel）：`contact.tags` 要用 —— 原先 A 域仓储里那份**引不动**
+  // （跨域直连对方 repository 被 ESLint 硬卡），故两域共用 kernel 这一份
+  parseStringList,
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
-// A 域出口（架构 §5.2 路之①）：字典文案 ＋ 员工姓名 —— B 域**不许**直查 `dict_item` / `employee`
+// A 域出口（架构 §5.2 路之①）：员工姓名走 `OrgService`、**字典文案走 `DictService`**
+// —— 两张表都属 A 域，B 域**不许**直查 `employee` / `dict_item`
+import { DictService } from '../org/dict.service';
 import { OrgService } from '../org/org.service';
 import { compareCompanyNameCore, type CompanyMatchType } from './domain/company-name-similarity';
 import { isPhoneLockedForViewer } from './domain/contact-lock';
@@ -174,8 +179,10 @@ export class CompanyService {
   constructor(
     private readonly repository: CompanyRepository,
     private readonly prisma: PrismaService,
-    /** A 域出口（M6-15 起：联系人详情要字典文案 ＋ 落锁人姓名） */
+    /** A 域出口·组织与权限（M6-15 起：联系人详情要落锁人姓名） */
     private readonly org: OrgService,
+    /** A 域出口·字典（M6-15 起：联系人详情的特质 `label`）—— 与 `org` 分家，见 `DictService` 文件头 */
+    private readonly dict: DictService,
   ) {}
 
   // ===== M2-08 建档（公司）=====
@@ -587,7 +594,7 @@ export class CompanyService {
 
     // 跨域取名 / 取文案（A 域出口；两次都是**批量**形式，未上锁 / 无特质时传空数组不发查询）
     const [labels, lockers] = await Promise.all([
-      this.org.getDictItemLabels(traits.map((trait) => trait.trait_id)),
+      this.dict.getDictItemLabels(traits.map((trait) => trait.trait_id)),
       this.org.getEmployeeRefs(lockerId === null ? [] : [lockerId]),
     ]);
     const labelById = new Map(labels.map((item) => [item.id.toString(), item.label]));
@@ -607,7 +614,7 @@ export class CompanyService {
       // DATE 列（无时刻）：按 UTC 年-月-日 截断，避免时区把生日挪一天
       birthday: row.birthday === null ? null : row.birthday.toISOString().slice(0, 10),
       decision_role: row.decision_role,
-      tags: parseStringArray(row.tags),
+      tags: parseStringList(row.tags),
       traits: traits.map((trait) => ({
         trait_id: trait.trait_id,
         trait_code: trait.trait_code,
@@ -694,18 +701,13 @@ function toContactBrief(
 }
 
 /**
- * JSON 列 → 字符串数组：**脏值 / 非字符串元素一律丢弃**（列可空、也可能存着历史遗留形状）。
+ * JSON 列 → 备用号数组：**逐项校验形状**，坏项丢弃（宁可少显一条，也不把脏数据抛给页面）。
  *
- * ⚠ A 域 `org.repository.ts` 里有一份同姿势的 `parseStringList`；此处**没有 import 它**，
- *   是因为「跨域直连对方的 repository」被 ESLint 硬卡（架构 §5.4）。若要收口，
- *   应把这类「JSON 列拉直」的纯函数上移 `kernel/common/`，而不是让 B 域引 A 域仓储。
+ * ⚠ 这个解析器**留在 B 域**、没有上收 kernel：它认的是 `extra_phones` 的**业务形状**
+ *   （`{type,number,note?}`），上收会让 kernel 认识业务字段。
+ *   「JSON 列 → `string[]`」那种**纯形状**的（`contact.tags` / `nav_open`）才归
+ *   `kernel/common/json.ts`（→ `parseStringList`）。
  */
-function parseStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
-}
-
-/** JSON 列 → 备用号数组：**逐项校验形状**，坏项丢弃（宁可少显一条，也不把脏数据抛给页面） */
 function parseExtraPhones(value: unknown): { type: string; number: string; note?: string }[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {

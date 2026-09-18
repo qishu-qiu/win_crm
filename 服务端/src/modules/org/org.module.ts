@@ -25,6 +25,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 
 import { ACCESS_TOKEN_TTL, requireJwtSecret } from '../../kernel/index';
+import { DictService } from './dict.service';
 import { OrgController } from './org.controller';
 import { OrgRepository } from './org.repository';
 import { OrgService } from './org.service';
@@ -42,12 +43,15 @@ import { OrgService } from './org.service';
     }),
   ],
   controllers: [OrgController],
-  providers: [OrgService, OrgRepository],
+  providers: [OrgService, DictService, OrgRepository],
   /**
-   * 对外只暴露 service（→ §5.2「跨域请走对方 exports 出来的 service」）。
+   * 对外只暴露 **service**（→ §5.2「跨域请走对方 exports 出来的 service」）。
    * ⚠ **不要**把 `OrgRepository` 加进来 —— 跨域直连仓储会让「谁的 SQL 谁负责」这条边界直接消失。
-   * 此刻还没有更高层域（B/C/D）来消费它，先按规格留出口，避免将来回头改 A 域。
+   *
+   * ★ 2026-09-18：出口**按能力分家** —— 组织与权限走 `OrgService`，**字典走 `DictService`**
+   *   （§5.1 把「字典」列为第 1 层的并列能力；§4.14.1 的字典读写端点将来也落在那边）。
+   *   B 域联系人详情要字典文案，走的就是 `DictService`（→ D-03）。
    */
-  exports: [OrgService],
+  exports: [OrgService, DictService],
 })
 export class OrgModule {}

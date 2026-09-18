@@ -15,6 +15,7 @@
 // =============================================================================
 import { AppError, ErrorCode, runWithContext, type RequestContext } from '../../kernel/index';
 import { type PrismaService } from '../../prisma/prisma.service';
+import type { DictService } from '../org/dict.service';
 import type { OrgService } from '../org/org.service';
 import { CompanyRepository, type CreateCompanyData } from './company.repository';
 import { CompanyService } from './company.service';
@@ -249,12 +250,9 @@ function createPrisma() {
   return client as unknown as PrismaService;
 }
 
-/** A 域替身（M6-15 起 B 域要用它的两个出口：字典文案 / 员工姓名） */
+/** A 域替身·组织与权限（M6-15 起 B 域要用它取落锁人姓名） */
 function createOrg(options: FakeOptions = {}) {
   return {
-    getDictItemLabels: jest.fn(async (ids: readonly bigint[]) =>
-      (options.dictLabels ?? []).filter((item) => ids.includes(item.id)),
-    ),
     getEmployeeRefs: jest.fn(async (ids: readonly bigint[]) =>
       (options.employeeRefs ?? [{ id: LOCKER_ID, name: '李强' }]).filter((item) =>
         ids.includes(item.id),
@@ -263,17 +261,29 @@ function createOrg(options: FakeOptions = {}) {
   };
 }
 
+/** A 域替身·字典（与 `createOrg` 分家 —— 出口按能力分家，两个替身也照着分） */
+function createDict(options: FakeOptions = {}) {
+  return {
+    getDictItemLabels: jest.fn(async (ids: readonly bigint[]) =>
+      (options.dictLabels ?? []).filter((item) => ids.includes(item.id)),
+    ),
+  };
+}
+
 function createService(options: FakeOptions = {}) {
   const repository = createRepository(options);
   const org = createOrg(options);
+  const dict = createDict(options);
   return {
     service: new CompanyService(
       repository as unknown as CompanyRepository,
       createPrisma(),
       org as unknown as OrgService,
+      dict as unknown as DictService,
     ),
     repository,
     org,
+    dict,
   };
 }
 
@@ -842,7 +852,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
     });
 
     it('★ 「待关联」（没挂公司）＋ 查看者不是归属人 → **403**（别人拿到 id 也看不了）', async () => {
-      const { service, org } = createService({
+      const { service, dict } = createService({
         contactDetail: contactDetailRow({ owner_id: LOCKER_ID }),
         employments: [],
       });
@@ -853,8 +863,8 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
 
       expect(error.httpStatus).toBe(403);
       expect(error.constraint).toBe('contact.out_of_scope');
-      // 看不到就**不该再往下取**（字典 / 人名一次都不该问）
-      expect(org.getDictItemLabels).not.toHaveBeenCalled();
+      // 看不到就**不该再往下取**（字典文案一次都不该问）
+      expect(dict.getDictItemLabels).not.toHaveBeenCalled();
     });
 
     it('「待关联」但**归属人是我** → 正常返回（这就是"我的待跟进"）', async () => {

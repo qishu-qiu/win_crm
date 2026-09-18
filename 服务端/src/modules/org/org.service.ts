@@ -31,6 +31,8 @@ import {
   REFRESH_TOKEN_TTL,
   fromClaims,
   getRequestContext,
+  // M6-15 上收 kernel：JSON 列拉直（原先在本域 `org.repository.ts`，B 域要用时跨域引不动）
+  parseStringList,
   runInTransaction,
   toClaims,
   type AuditLogInput,
@@ -44,7 +46,7 @@ import { verifyPassword } from './domain/password';
 import { mergePermissionLevels } from './domain/permission';
 import type { LoginDto } from './dto/login.dto';
 import type { UpdatePreferencesDto } from './dto/update-preferences.dto';
-import { OrgRepository, parseIdList, parseStringList } from './org.repository';
+import { OrgRepository, parseIdList } from './org.repository';
 
 /** 员工鉴权行（结构直接取自仓储的 `select`，**不手抄字段** —— 避免两处漂移） */
 type EmployeeAuthRow = NonNullable<Awaited<ReturnType<OrgRepository['findEmployeeByPhone']>>>;
@@ -510,19 +512,6 @@ export class OrgService {
    */
   getEmployeeDeptIds(employeeId: bigint): Promise<bigint[]> {
     return this.repository.findEmployeeDeptIds(employeeId);
-  }
-
-  /**
-   * 字典项 `{id,label}` 引用（→ 数据架构 A11）—— 供别的域把**已落库的英文码**翻成中文文案。
-   *
-   * ★ 为什么要有这条：全站口径是「**枚举一律英文码落库、文案走字典**」（→ `CODEBUDDY.md` §5），
-   *   所以出参里凡是要中文的地方，都得回来问 A 域 —— `dict_item` 是 A 域的表，
-   *   别的域**不许直查**（架构 §5.2 路之①）。首个调用方＝B 域联系人详情的
-   *   `traits:[{trait_id,trait_code,label}]`。
-   * ★ 只做一件事：**按 id 批量取 label**；查不到的 id 由调用方回落（**不编文案**）。
-   */
-  getDictItemLabels(ids: readonly bigint[]): Promise<{ id: bigint; label: string }[]> {
-    return this.repository.findDictItemLabels(ids);
   }
 
   // ===== 私有：装载 / 装配 / 签发 / 审计 =====

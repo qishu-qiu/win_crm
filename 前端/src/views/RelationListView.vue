@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 import { message, type TablePaginationConfig } from 'ant-design-vue'
 
 import {
@@ -64,6 +65,8 @@ import {
  *   · **交付 / 客服点公海 → 403** 是**正常分支**（§2.2「不进公海」）：显示内联无权限说明，
  *     不是报错崩溃（→ 设计规范 §5.1 空态 / §4.6 错误态）。
  *   · 空态用 `a-empty`；**不预填演示数据**（→ 设计规范 §3.2 第 11 条）。
+ *   · **筛选状态写入 URL query**（→ 设计规范 §4.2「筛选 / 查询栏」：可分享 / 刷新不丢）——
+ *     实现见下方「URL ↔ 筛选 双向同步」一段（原欠账 D-21）。
  *
  * ★ 时间线抽屉**不自己写业务规则**：有效沟通要不要写「一句话结果」、快速标记算不算有效跟进、
  *   同内容重复提交算不算重复 —— 全部由服务端判（页面只把服务端的人话 show 出来）。
@@ -75,6 +78,9 @@ import {
  *   ⚠ **不许把全量拉回来在前端切片**：那是假分页 —— 数据一多就白拉全表，且「共 N 条」
  *     会退化成「本页 N 条」（`list.length` 不是总数，`total` 只有服务端知道）。
  */
+const route = useRoute()
+const router = useRouter()
+
 const tab = ref<RelationTab>('private')
 const rows = ref<RelationVo[]>([])
 const loading = ref(false)
@@ -89,9 +95,93 @@ const total = ref(0)
  * 筛选状态（→ 接口 §5.6）：`view` 单选（视图 4 档）、`urgencies` **多选**（紧迫档 5 档，空＝不筛）。
  * ★ **筛选一律由服务端做**（`GET /relations?view=&urgency=`）—— 页面**不许**本地过滤：
  *   一分页就只能筛当前页（第 2 页的「周重点」会被漏掉），「共 N 条」也会退化成"本页条数"。
+ * ★ 初始值交给 URL 还原（见下方「URL ↔ 筛选 双向同步」）：本页**唯一的筛选真相源是「筛选状态 ＋ URL」这一对**，
+ *   两边必须同步 —— 地址栏写着 `view=cooperated` 而页面筛着「我的全部」，就是"同一件事两处记录"。
  */
-const view = ref('all')
+/** 默认视图 ＝**视图选项表的第一项**（不另写 `'all'` 字面量：选项表一改，这里就静默分叉） */
+const DEFAULT_VIEW: string = RELATION_VIEW_OPTIONS[0].value
+
+const view = ref(DEFAULT_VIEW)
 const urgencies = ref<string[]>([])
+
+// ===== URL ↔ 筛选 双向同步（→ 设计规范 §4.2：筛选状态写入 URL query，可分享 / 刷新不丢 · 原欠账 D-21）=====
+//
+// 判据：**分享出去的链接 / 刷新回来，看到的必须是同一份结果**；地址栏与页面筛选永远同源。
+
+/** URL query 键名 —— **与接口 §5.6 的参数名同字**（`view` / `urgency`），两边对照时不易错位 */
+const VIEW_QUERY_KEY = 'view'
+const URGENCY_QUERY_KEY = 'urgency'
+
+/** 合法值域**取自选项表本身**（不在这里另抄清单 —— 抄的那份迟早与 chip 显示的值分叉） */
+const VIEW_VALUES: readonly string[] = RELATION_VIEW_OPTIONS.map((item) => item.value)
+const URGENCY_VALUES: readonly string[] = URGENCY_OPTIONS.map((item) => item.value)
+
+/**
+ * 把 URL 上的一个键**摊平成候选值**。
+ * · 兼容 `?urgency=weekly,gray`（本页写出的形态）与 `?urgency=weekly&urgency=gray`（手拼 / 别处拼的形态）；
+ * · URL 是**不可信输入**（可手改、可被别人改了分享过来），形状先归一，后面才好比对。
+ */
+function queryValues(raw: LocationQuery[string]): string[] {
+  const list = Array.isArray(raw) ? raw : [raw]
+  return list
+    .filter((item): item is string => typeof item === 'string')
+    .flatMap((item) => item.split(','))
+    .map((item) => item.trim())
+    .filter((item) => item !== '')
+}
+
+/**
+ * 当前筛选的**规范形态**（＝ URL 该写成什么样，也是"是否已归一"的判据）—— 一份逻辑两处用。
+ * · 默认值给空串＝**该键不该出现在 URL 上**：链接才短（`view=all` ＋ 无紧迫档 ⇒ 裸 `/relations`）；
+ * · 多选按**选项表顺序**（例：先点灰度再点周重点，URL 仍是 `weekly,gray`）——
+ *   同一组选择恒等同一个链接，才谈得上"可分享 / 可对比"。
+ */
+function normalizedFilter(): { view: string; urgency: string } {
+  return {
+    view: view.value === DEFAULT_VIEW ? '' : view.value,
+    urgency: URGENCY_VALUES.filter((value) => urgencies.value.includes(value)).join(','),
+  }
+}
+
+/**
+ * 从 URL query 还原筛选。
+ * ★ **只认值域内的值**：认不出的（手改的 `view=overdue`、别处传错的码）一律**丢弃回落默认** ——
+ *   原样转发给服务端只会换来一个 400 错误页，而"链接是别人发来的"不该由用户买单。
+ *   ⚠ 这里收敛的是**URL 形状**（不可信输入），不是业务规则：值与判定口径仍取自**同一份选项表**。
+ */
+function parseFilterFromQuery(query: LocationQuery): { view: string; urgencies: string[] } {
+  const rawUrgencies = queryValues(query[URGENCY_QUERY_KEY])
+  return {
+    view: queryValues(query[VIEW_QUERY_KEY]).find((item) => VIEW_VALUES.includes(item)) ?? DEFAULT_VIEW,
+    urgencies: URGENCY_VALUES.filter((value) => rawUrgencies.includes(value)),
+  }
+}
+
+/** URL 上的筛选是否已是**规范形态**（不是才纠正一次 —— 免得每次进页都平白多一次导航） */
+function queryIsNormalized(): boolean {
+  const expected = normalizedFilter()
+  return (
+    queryValues(route.query[VIEW_QUERY_KEY]).join(',') === expected.view &&
+    queryValues(route.query[URGENCY_QUERY_KEY]).join(',') === expected.urgency
+  )
+}
+
+/**
+ * 筛选 → URL。
+ * ★ 用 `replace` 而非 `push`：改筛选不该让人按"后退"退出一串中间态（后退应回上一页，不是上一次筛选）。
+ * ★ 保留 URL 上**其它键**（将来加了别的参数，别在这里被抹掉）；但默认值那两键要**先删后写**——
+ *   只 `Object.assign` 是删不掉的（`view=all` 会一直赖在地址栏）。
+ * ★ 改 query 不会重建本组件（同路由复用），故**不会**再触发一次 `onMounted` / 取数，不会自激。
+ */
+function syncQuery(): void {
+  const query: LocationQueryRaw = { ...route.query }
+  delete query[VIEW_QUERY_KEY]
+  delete query[URGENCY_QUERY_KEY]
+  const { view: viewValue, urgency } = normalizedFilter()
+  if (viewValue !== '') query[VIEW_QUERY_KEY] = viewValue
+  if (urgency !== '') query[URGENCY_QUERY_KEY] = urgency
+  void router.replace({ query })
+}
 
 /** 每页条数可选值：逐字取设计规范 §4.3「20 / 50 / 100」（AntD 的 `pageSizeOptions` 收字符串） */
 const PAGE_SIZE_OPTIONS = ['20', '50', '100']
@@ -231,6 +321,8 @@ function onFilterChange(): void {
 function selectView(next: string): void {
   if (view.value === next) return
   view.value = next
+  // 先写 URL 再取数：两者都是同步动作，同一次交互里完成，地址栏不会短暂地与页面不一致
+  syncQuery()
   onFilterChange()
 }
 
@@ -239,6 +331,7 @@ function toggleUrgency(code: string): void {
   urgencies.value = urgencies.value.includes(code)
     ? urgencies.value.filter((item) => item !== code)
     : [...urgencies.value, code]
+  syncQuery()
   onFilterChange()
 }
 
@@ -250,6 +343,13 @@ watch(tab, () => {
 })
 
 onMounted(() => {
+  // ★ 进页（刷新 / 深链 / 别人分享来的链接）**先从 URL 还原筛选**，再按它取数（→ 设计规范 §4.2）。
+  //   URL 带脏值（手改的非法档 / 别名形态）时顺手把地址栏归一化：否则就成了
+  //   「地址栏写着 A、页面筛着 B」的第二套真相 —— 本页头注释反复点名的那个坑。
+  const restored = parseFilterFromQuery(route.query)
+  view.value = restored.view
+  urgencies.value = restored.urgencies
+  if (!queryIsNormalized()) syncQuery()
   void load()
 })
 

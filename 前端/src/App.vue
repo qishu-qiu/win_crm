@@ -51,6 +51,11 @@ async function bootstrap(): Promise<void> {
     await router.replace('/login')
     return
   }
+  // ★ `await router.isReady()` **不能省**：挂载瞬间 `router.currentRoute.value` 还是
+  //   初始占位（`START_LOCATION`，`meta.page` 为空），此时校正会**整个落空** ——
+  //   2026-09-18 浏览器走查实测到过：交付账号手输 `/entry`（完整加载）会**停在录入页**。
+  //   页内跳转不走这条路（那时守卫已经能判角色了）。
+  await router.isReady()
   await ensureVisibleRoute()
 }
 

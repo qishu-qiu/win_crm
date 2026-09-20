@@ -9,7 +9,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| `prisma/schema.prisma` | **46 张业务表**，与数据架构 V1.37 一致 |
+| `prisma/schema.prisma` | **47 张业务表**，与数据架构 V1.37 一致（第 47 张＝`idempotency_key`，2026-09-20 `0010`，→ 接口 §2.5） |
 | `prisma/migrations/0001_init/` | baseline（46 表 / 索引 / 外键）＋ 结尾**「手工补充段」**（生成列 / 3 张分区表 / 视图 / CHECK / 46 表中文 COMMENT）。**已 `migrate resolve --applied` 登记为基线** |
 | `prisma/migrations/0002_company_capital_legal_person/` | 增量（详见 §四.2） |
 | `prisma/migrations/0003_username_and_phone_lock/` | 增量（详见 §四.3） |
@@ -58,7 +58,7 @@ npx prisma format   --schema prisma/schema.prisma
 
 ## 三、schema.prisma
 
-- **46 张表**，真相源＝数据架构文档 **V1.37**。
+- **47 张表**，真相源＝数据架构文档 **V1.37**（第 47 张 `idempotency_key` 见 §A15 / migration `0010`）。
 - **教训一（P1012 · 关系未双向声明）**：`SignChecklist.product_line` 曾缺 `ProductLine` 侧对向字段 → 已在 `ProductLine` 补 `sign_checklists SignChecklist[]`。该行属**纯 Prisma 关系声明**，**不影响真库结构**。**规律：Prisma 关系字段是双向的 —— 加表 / 加关系时必须同批补对向字段，否则 `validate` 与 `generate` 直接失败。**
 - **教训二（P1012 · v7 移除 `datasource.url`）**：见 §二。**规律：主版本升级先跑只读的 `migrate status` 验证迁移历史兼容，再动 schema。**
 

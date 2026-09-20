@@ -50,3 +50,6 @@ export * from './audit/audit.module';
 // M5-07：写操作留痕标记（`@Audit('模块.动词')` / `@AuditSkip()`）—— 要写在**域 controller** 上，
 // 故与 `@Public()` / `@DesensitizeExempt()` 同居 kernel（域不许直连 shared，→ §5.4）。
 export * from './audit/audit.decorator';
+// D-06（2026-09-20 拍板）：幂等键存取 —— 只在**横切层**用（`shared/interceptors/idempotency.interceptor.ts`）；
+// 业务域不直接碰它（幂等是横切能力，不是业务规则）
+export * from './idempotency/idempotency.service';

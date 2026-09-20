@@ -26,7 +26,8 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 
-import { ACCESS_TOKEN_TTL, ContextModule, requireJwtSecret } from '../kernel/index';
+import { ACCESS_TOKEN_TTL, ContextModule, IdempotencyService, requireJwtSecret } from '../kernel/index';
+import { IdempotencyInterceptor } from './interceptors/idempotency.interceptor';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AllExceptionsFilter } from './filters/all-exceptions.filter';
 import { ResponseInterceptor } from './interceptors/response.interceptor';
@@ -54,10 +55,19 @@ import { AppValidationPipe } from './pipes/validation.pipe';
     }),
   ],
   providers: [
+    // 幂等键存取（D-06 · 2026-09-20 拍板）：只在 **SharedModule 内**用（幂等是横切能力，业务域不碰它）；
+    // 它依赖 `@Global()` 的 PrismaModule ⇒ 此处直接 provide 即可，不必再开一个模块。
+    IdempotencyService,
     // ① 鉴权：解 JWT → 填上下文；无 token → 401 / 20002（M0-32）
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     // ② 统一响应包：**必须第一个注册**（响应阶段倒序执行，它才能在最外层包裹）
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    // ②-2 幂等（D-06 · 2026-09-20 拍板）——**必须紧跟 ②**：
+    //     请求阶段它早于业务跑（命中即可短路、不白干活）；响应阶段它晚于 ②，
+    //     于是「短路返回的那个对象」仍会被 ② 包成 `{code,message,request_id,data}`。
+    //     ★ 只认「带了 `Idempotency-Key` 的写请求」（不带 → 原样放行，→ 接口 §2.5 拍板①）；
+    //       作用域 ＝ 登录人 × 端点 × key，TTL 24h；同 key 入参变了 → **409 / 20004**。
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     // ③ 数据范围：只把范围**打标到请求上**（M0-36）。★ 判定与注入**不在本拦截器**：
     //     唯一判定＝`kernel/data-scope/data-scope-target.ts`（M5-02），各域 repository 拼 where（M5-03）
     { provide: APP_INTERCEPTOR, useClass: DataScopeInterceptor },

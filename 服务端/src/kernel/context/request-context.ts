@@ -11,7 +11,7 @@
 //       销售 `self` / 交付·客服 `serving` / 部门经理 `dept` / 总经理·管理员 `all`。
 //   · 《销售CRM业务需求文档》§4.2 可见范围表 ＋《销售CRM接口API文档》§2.2
 //     ＋《销售CRM数据架构文档》§十一（三处同口径，§7.2 是它们的实现落点）。
-//   · ID 类型 `bigint`：46 张表主键统一 `BigInt @db.UnsignedBigInt`（schema.prisma）
+//   · ID 类型 `bigint`：47 张表主键统一 `BigInt @db.UnsignedBigInt`（schema.prisma）
 //
 // 分层约束（架构 §5.4）：`kernel/**` 零业务、谁都能用 —— 本文件**不许 import `modules/*`**。
 // =============================================================================

@@ -31,7 +31,7 @@ function makeContext(employeeId = 1001n): RequestContext {
 
 /**
  * 假事务客户端：只实现审计真正用到的那一个方法。
- * `as unknown as TransactionClient` 是**刻意**的 —— 真实 `Prisma.TransactionClient` 带 46 张表的方法，
+ * `as unknown as TransactionClient` 是**刻意**的 —— 真实 `Prisma.TransactionClient` 带 47 张表的方法，
  * 测试不需要；而「真实客户端能不能喂给审计」已由生产代码本身卡住（`audit.service.ts` 里
  * `tx.operationLog.create({ data })` 直接对着真实 Prisma 类型编译）。
  */

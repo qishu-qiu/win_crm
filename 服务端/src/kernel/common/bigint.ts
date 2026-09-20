@@ -2,7 +2,7 @@
 // BigInt ↔ string 序列化（M0-25）—— 防 JSON 精度丢失
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM数据架构文档》：主键统一 `BigInt @db.UnsignedBigInt`（46 张表一致）。
+//   · 《销售CRM数据架构文档》：主键统一 `BigInt @db.UnsignedBigInt`（47 张表一致）。
 //   · **为什么必须转**（这不是洁癖，是两个真会炸的坑）：
 //       ① `JSON.stringify` 遇到 BigInt 直接抛 `TypeError` —— 接口会 500；
 //       ② JS 的 `JSON` 只有 Number（IEEE754 双精度），`2^53` 以上的 id 一旦落进 Number

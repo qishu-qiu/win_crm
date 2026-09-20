@@ -72,7 +72,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, ApiEnvelope<T>
         // ⚠ `undefined` 必须归一成 `null`：JSON.stringify 会**整个丢掉** undefined 的键，
         //    那样响应就只剩三个字段，直接违反 §2.3 的固定四字段（如 handler 返回 void 的接口）。
         // ⚠ 再过一遍 `toJsonSafe`（M1 补漏 · M0-33 只验了字段个数，漏了这一环）：
-        //    主键是 `BigInt @db.UnsignedBigInt`（46 张表一致），而 `JSON.stringify(1n)` **直接抛错**
+        //    主键是 `BigInt @db.UnsignedBigInt`（47 张表一致），而 `JSON.stringify(1n)` **直接抛错**
         //    → 任何返回 id 的接口都会 500。这里**唯一一处收口**，各接口不必逐个手转 id（逐个手转必漏）。
         //    依据＝`kernel/common/bigint.ts` 顶部已写明的设计意图「M0-33 统一响应包对出参过一遍它」。
         data: (data === undefined ? null : toJsonSafe(data)) as T,

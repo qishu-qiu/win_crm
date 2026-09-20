@@ -7,7 +7,7 @@
 //   · 同 §5.3 尾注：「事件只带**最小信息**（谁、什么时候、对哪个对象做了什么）」→ 基类只留
 //     `actorId`（谁）/ `occurredAt`（什么时候）/ `aggregateId`（对哪个对象）/ `payload`（做了什么）；
 //     拿到事件后要更多数据，**回查对方的 service**，不把对方的表结构塞进事件里。
-//   · ID 类型 `bigint`：46 张表主键统一 `BigInt @db.UnsignedBigInt`（schema.prisma）。
+//   · ID 类型 `bigint`：47 张表主键统一 `BigInt @db.UnsignedBigInt`（schema.prisma）。
 //
 // 分层约束（架构 §5.4）：`kernel/**` 零业务 —— 本文件**不许 import `modules/*`**。
 // =============================================================================

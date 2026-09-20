@@ -1,5 +1,5 @@
 // =============================================================================
-// 销售 CRM — Prisma Schema（46 张表）
+// 销售 CRM — Prisma Schema（47 张表）
 // 真相源：《需求规格/销售CRM数据架构文档》§三~§九（表）、§十（索引）、§十五（落库口径）
 // ⚠ 不写文档版本号：绑了必漂移（→《销售CRM接口API文档》§7「代码注释不绑文档版本号」）
 // ORM 定案：Prisma（2026-09-10）；版本钉 7.10.0（2026-09-13 由 6.19.3 升级）；MySQL 8.0+ / InnoDB / utf8mb4
@@ -259,6 +259,22 @@ model OperationLog {
   @@index([target_type, target_id], map: "idx_target")
   @@index([action, occurred_at], map: "idx_action")
   @@map("operation_log")
+}
+
+/// 幂等键（→ 接口 §2.5；2026-09-20 七叔拍板落地 D-06）
+model IdempotencyKey {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  employee_id   BigInt   @db.UnsignedBigInt
+  endpoint      String   @db.VarChar(160)
+  idem_key      String   @db.VarChar(64)
+  request_hash  String   @db.Char(64)
+  status_code   Int
+  response_body Json
+  created_at    DateTime @default(now()) @db.DateTime(0)
+
+  @@unique([employee_id, endpoint, idem_key], map: "uk_idem_scope")
+  @@index([created_at], map: "idx_idem_created")
+  @@map("idempotency_key")
 }
 
 /// A11 字典类型

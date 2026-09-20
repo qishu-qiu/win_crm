@@ -8,7 +8,7 @@
 //   · 《销售CRM接口API文档》§三 接口总览：公海端点 `G /sea/company`、`G /sea/department`、
 //     **`P /sea/company/:id/claim`**、`G /sea/records`、`G /sea/manager-todo`、
 //     `P /sea/manager-decision`、`G/U /sea/rules` —— **本片只做 claim 一条**，
-//     其余属 M7 后续片（列表当前由 `GET /relations?tab=sea` 顶替，→ 施工单 §三「不做」表）。
+//     其余属 M7 后续片（列表当前由 `GET /relations?tab=sea` 顶替 →《欠账登记表》D-33 ④）。
 //   · 同 §2.2：除登录 / 刷新外**一律带** `Authorization: Bearer <access_token>`（本域无 `@Public()`）。
 //   · 同 §2.3：**成功响应 HTTP 状态码一律 200** ⇒ 本 POST 显式 `@HttpCode(200)`；
 //     §2.4：400 / 401 / 403 / 409 / 422 由横切层统一出口，**controller 不自己拼错误响应**。

@@ -951,8 +951,11 @@ export interface components {
             wechat?: string;
             /** @description 邮箱 */
             email?: string;
-            /** @description 性别 */
-            gender?: string;
+            /**
+             * @description 性别（**值域唯一落点 ＝《销售CRM数据架构文档》B2**）：`male` / `female` / `unknown`（★ 2026-09-20 定值域 →《欠账登记表》D-49②）。⚠ `unknown` ＝「明确不便说」，与「从未填过」（不传本字段）**不是一回事**
+             * @enum {string}
+             */
+            gender?: "male" | "female" | "unknown";
             /**
              * @description 生日 `YYYY-MM-DD`
              * @example 1985-06-01

@@ -223,7 +223,8 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 |---|---|
 | name / phone | phone = 当前主号（撞单校验核心）。唯一约束**改走生成列 `phone_active`**：未删行才占号、软删/换号自动释放（见 §10.2-2） |
 | extra_phones JSON | **附加号**：`[{type: mobile/tel/wechat, number, note}]`，可多个；仅作联系参考、**不参与撞单**、无唯一约束（`→需求§7.2`） |
-| wechat/email/gender/birthday | 联系方式 |
+| wechat/email/birthday | 联系方式 |
+| gender | 性别。**值域 ＝ `male` / `female` / `unknown`**（★ 2026-09-20 定值域，→《欠账登记表》D-49②）：`unknown` ＝「**明确不便说**」，与「**从未填过**」（`NULL`）**不是一回事**（同 A2 `theme` 的"从未设置 ≠ 显式选默认"口径）；非法值服务端 **400** |
 | decision_role | decision/influence/execute（决策/影响/执行） |
 | tags JSON | 个人自由标签（爱喝茶/老板亲戚…），与谈判特质分栏并存 |
 | trait_summary JSON | 谈判特质冗余（从 contact_trait 派生展示） |

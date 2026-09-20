@@ -56,6 +56,25 @@ export function contactStatusNameOf(status: string): string {
 }
 
 /**
+ * 性别中文名（→《销售CRM数据架构文档》B2；★ 2026-09-20 定值域 →《欠账登记表》D-49②）。
+ *
+ * ★ `unknown` ＝「**明确不便说**」，与「**从未填过**」（服务端给 `null`）**不是一回事** ——
+ *   前者是**已知的答案**，后者是**没答案**，页面上不能都显示成同一个占位符
+ *   （同 A2 `theme` 的「从未设置 ≠ 显式选默认」口径）。
+ */
+const GENDER_NAMES: Record<string, string> = {
+  male: '男',
+  female: '女',
+  unknown: '不便说明',
+}
+
+/** 性别 → 中文（`null` / 空 ＝ 未填 → `—`；未知码原样回显） */
+export function genderNameOf(gender: string | null | undefined): string {
+  if (gender === null || gender === undefined || gender === '') return '—'
+  return GENDER_NAMES[gender] ?? gender
+}
+
+/**
  * 备用号号型中文名（★ 2026-09-20 值域已收敛 →《欠账登记表》D-49）。
  *
  * **唯一值域 ＝《数据架构文档》B2：`mobile` / `tel` / `wechat`**

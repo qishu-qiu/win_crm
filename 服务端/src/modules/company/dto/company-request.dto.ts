@@ -234,10 +234,15 @@ export class CreateContactDto {
   @Length(1, 120)
   email?: string;
 
-  @ApiPropertyOptional({ description: '性别' })
+  @ApiPropertyOptional({
+    description:
+      '性别（**值域唯一落点 ＝《销售CRM数据架构文档》B2**）：`male` / `female` / `unknown`' +
+      '（★ 2026-09-20 定值域 →《欠账登记表》D-49②）。⚠ `unknown` ＝「明确不便说」，' +
+      '与「从未填过」（不传本字段）**不是一回事**',
+    enum: ['male', 'female', 'unknown'],
+  })
   @IsOptional()
-  @IsString()
-  @Length(1, 8)
+  @IsIn(['male', 'female', 'unknown'], { message: '性别只能是 male / female / unknown' })
   gender?: string;
 
   @ApiPropertyOptional({ description: '生日 `YYYY-MM-DD`', example: '1985-06-01' })

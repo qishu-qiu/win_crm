@@ -23,6 +23,7 @@ import {
   contactStatusNameOf,
   decisionRoleNameOf,
   extraPhoneTypeNameOf,
+  genderNameOf,
   traitLabelOf,
 } from '../contact'
 import { formatDate } from '../format'
@@ -338,7 +339,7 @@ onMounted(() => {
 
           <a-descriptions-item label="微信">{{ detail.wechat ?? '—' }}</a-descriptions-item>
           <a-descriptions-item label="邮箱">{{ detail.email ?? '—' }}</a-descriptions-item>
-          <a-descriptions-item label="性别">{{ detail.gender ?? '—' }}</a-descriptions-item>
+          <a-descriptions-item label="性别">{{ genderNameOf(detail.gender) }}</a-descriptions-item>
           <a-descriptions-item label="生日">{{ formatDate(detail.birthday) }}</a-descriptions-item>
         </a-descriptions>
 

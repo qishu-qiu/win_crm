@@ -143,6 +143,43 @@ export class ContactRefVoDto {
   name!: string;
 }
 
+/**
+ * 公司列表**分页出参**（→ 接口 §2.3 分页形态 / §五 PageResult；**D-08** · 2026-09-20 铺开）。
+ * ★ 键名逐字固定 `list / total / page / page_size`（§2.3 G2）—— **别改成 `pageSize`**（§2.6 出参 snake_case）。
+ * ★ 「列表类一律分页」⇒ `GET /companies` 的 `data` 从**裸数组**改为本对象（原「最近 100 条 ＋ 裸数组」作废）。
+ */
+export class CompanyPageVoDto {
+  @ApiProperty({ type: [CompanyVoDto], description: '当前页数据' })
+  list!: CompanyVoDto[];
+
+  @ApiProperty({ description: '符合筛选条件的全量条数（前端「共 N 条」）', example: 120 })
+  total!: number;
+
+  @ApiProperty({ description: '当前页码（从 1 开始）', example: 1 })
+  page!: number;
+
+  @ApiProperty({ description: '每页条数（默认 20，最大 100，→ §2.7）', example: 20 })
+  page_size!: number;
+}
+
+/**
+ * 联系人列表**分页出参**（同 §2.3；**D-08**）。
+ * ★ `GET /contacts` 与 `GET /companies/:id/contacts` **共用本形状**（两者都是联系人列表）。
+ */
+export class ContactPageVoDto {
+  @ApiProperty({ type: [ContactBriefVoDto], description: '当前页数据（**一律 `phone_masked`**，→ §2.8）' })
+  list!: ContactBriefVoDto[];
+
+  @ApiProperty({ description: '符合筛选条件的全量条数（前端「共 N 条」）', example: 120 })
+  total!: number;
+
+  @ApiProperty({ description: '当前页码（从 1 开始）', example: 1 })
+  page!: number;
+
+  @ApiProperty({ description: '每页条数（默认 20，最大 100，→ §2.7）', example: 20 })
+  page_size!: number;
+}
+
 /** 备用号（→ §5.5 详情 `extra_phones[]`；`note` 可空） */
 export class ContactExtraPhoneVoDto {
   @ApiProperty({

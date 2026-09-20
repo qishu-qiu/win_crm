@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TablePaginationConfig } from 'ant-design-vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 
@@ -48,6 +49,27 @@ const filter = ref<ContactLinkFilter>(DEFAULT_FILTER)
 const rows = ref<ContactBrief[]>([])
 const loading = ref(false)
 const errorText = ref('')
+
+/** 每页条数默认值：**与接口 §2.7 逐字一致**（本页不在前端另立一套默认值） */
+const CONTACT_PAGE_SIZE_DEFAULT = 20
+
+/** 页码 / 每页条数 / 总条数（**D-08** 起分页）：三者**都以后端出参为准**，页面不自己算 */
+const page = ref(1)
+const pageSize = ref(CONTACT_PAGE_SIZE_DEFAULT)
+const total = ref(0)
+
+/** 每页条数可选值：逐字取设计规范 §4.3「20 / 50 / 100」（AntD 的 `pageSizeOptions` 收字符串） */
+const PAGE_SIZE_OPTIONS = ['20', '50', '100']
+
+const paginationConfig = computed(() => ({
+  current: page.value,
+  pageSize: pageSize.value,
+  total: total.value,
+  showSizeChanger: true,
+  pageSizeOptions: PAGE_SIZE_OPTIONS,
+  showQuickJumper: true,
+  showTotal: (count: number) => `共 ${count} 条`,
+}))
 
 const filterLabel = computed(
   () => CONTACT_LINK_FILTERS.find((item) => item.value === filter.value)?.label ?? '全部',
@@ -135,14 +157,29 @@ async function load(): Promise<void> {
   errorText.value = ''
   loading.value = true
   try {
-    rows.value = await listContacts({ onlyUnlinked: filter.value === 'unlinked' })
+    // **D-08**：列表类一律分页（→ §2.3）—— 出参是 `{list,total,page,page_size}`，**不再是裸数组**
+    const result = await listContacts({
+      onlyUnlinked: filter.value === 'unlinked',
+      page: page.value,
+      pageSize: pageSize.value,
+    })
+    rows.value = result.list
+    total.value = result.total
   } catch (error) {
     // 网络错误 / 权限边界都走这里：**内联**说清，并清空列表（不显示上一次的残留）
     rows.value = []
+    total.value = 0
     errorText.value = error instanceof Error ? error.message : '加载失败，请稍后重试'
   } finally {
     loading.value = false
   }
+}
+
+/** 分页器交互（翻页 / 改每页条数）→ 重新取数；页码与条数**都以后端出参回填**的为准 */
+function onPageChange(pager: TablePaginationConfig): void {
+  page.value = pager.current ?? 1
+  pageSize.value = pager.pageSize ?? CONTACT_PAGE_SIZE_DEFAULT
+  void load()
 }
 
 /**
@@ -154,6 +191,9 @@ async function load(): Promise<void> {
 function selectFilter(next: ContactLinkFilter): void {
   if (filter.value === next) return
   filter.value = next
+  // ★ 筛选一变**页码必须回第 1 页**（同关系列表页）：不回会看到**空表** —— 停在第 3 页时一筛，
+  //   结果集可能只剩 1 页，用户会以为"没数据"，实际只是页码越界（这类假空态最费口舌）。
+  page.value = 1
   syncQuery()
   void load()
 }
@@ -193,9 +233,10 @@ onMounted(() => {
       :columns="columns"
       :data-source="rows"
       :loading="loading"
-      :pagination="false"
+      :pagination="paginationConfig"
       row-key="id"
       size="middle"
+      @change="onPageChange"
     >
       <template #bodyCell="{ column, record }">
         <!-- 实体可点（A1）：人名一律可点，落点＝联系人详情页 -->

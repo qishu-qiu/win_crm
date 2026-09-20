@@ -26,6 +26,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Length,
@@ -183,6 +184,40 @@ export class ListContactsQueryDto {
   @IsOptional()
   @IsIn(['true', 'false'], { message: 'only_unlinked 取值只能是 true / false' })
   only_unlinked?: string;
+
+  // ↓ 分页两项（**D-08**）：**只校验「是不是整数」**（类型层，§2.4）；默认 1 / 20 与上限 100 的
+  //   归一化归 **kernel 一处**（→ §2.7）—— 这里**不写** `@Min` / `@Max`，否则同一套夹紧规则会变成两份
+  //   （`page=0` 该报错还是该回第 1 页，两处说法就分叉了）。
+  @ApiPropertyOptional({ description: '页码（默认 1；`< 1` 回第 1 页）', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page 必须是整数' })
+  page?: number;
+
+  @ApiPropertyOptional({ description: '每页条数（默认 20；超 100 按 100 计）', example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page_size 必须是整数' })
+  page_size?: number;
+}
+
+/**
+ * **只含分页两项**的通用查询参数（→ §2.7；**D-08**）—— `GET /companies` 与
+ * `GET /companies/:id/contacts` 共用（这两个端点除分页外**没有别的 query**）。
+ * ⚠ §2.7 的 `order_by` / `keyword` / 时间范围**尚未铺到 B 域**（→《欠账登记表》D-07）。
+ */
+export class PageQueryDto {
+  @ApiPropertyOptional({ description: '页码（默认 1；`< 1` 回第 1 页）', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page 必须是整数' })
+  page?: number;
+
+  @ApiPropertyOptional({ description: '每页条数（默认 20；超 100 按 100 计）', example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page_size 必须是整数' })
+  page_size?: number;
 }
 
 /** 联系人附加号（→ 数据架构 B3 `extra_phones`：**不参与撞单**、无唯一约束） */

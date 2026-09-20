@@ -14,6 +14,11 @@ export type DupCandidate = components['schemas']['DupCandidateVoDto']
 export type SearchDupResult = components['schemas']['SearchDupResultVoDto']
 export type CreateContactInput = components['schemas']['CreateContactDto']
 export type ContactBrief = components['schemas']['ContactBriefVoDto']
+/**
+ * 联系人列表的**分页出参**（→ §2.3 分页形态；**D-08** · 2026-09-20）——
+ * `GET /contacts` 与 `GET /companies/:id/contacts` **共用本形状**（都是联系人列表）。
+ */
+export type ContactPage = components['schemas']['ContactPageVoDto']
 export type CreatedContact = components['schemas']['ContactCreatedVoDto']
 
 /**
@@ -47,8 +52,17 @@ export async function createContact(input: CreateContactInput): Promise<CreatedC
  * 该公司下的联系人（→ §5.4 `GET /companies/:id/contacts`）。
  * ⚠ 出参是 `ContactBrief`：**列表 / 卡片一律 `phone_masked`**（§2.8 明文：这是**出参形态**、不是权限）。
  */
-export async function listCompanyContacts(companyId: string): Promise<ContactBrief[]> {
-  const { data } = await request.get<ContactBrief[]>(`/companies/${companyId}/contacts`)
+export async function listCompanyContacts(
+  companyId: string,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<ContactPage> {
+  const { data } = await request.get<ContactPage>(`/companies/${companyId}/contacts`, {
+    // ⚠ 缺省**不传**这两个参数：默认值（1 / 20）与上限（100）的归一化只在**服务端 kernel 一处**（→ §2.7）
+    params: {
+      ...(options.page === undefined ? {} : { page: options.page }),
+      ...(options.pageSize === undefined ? {} : { page_size: options.pageSize }),
+    },
+  })
   return data
 }
 
@@ -62,10 +76,17 @@ export async function listCompanyContacts(companyId: string): Promise<ContactBri
  *   页面**不为了"看到更多"自己拼参数**（前端再筛一遍＝第二套范围口径）。
  * ★ 出参一律 `phone_masked`（**出参形态、不是权限**）—— 页面**不要再打一次码**。
  */
-export async function listContacts(options: { onlyUnlinked?: boolean } = {}): Promise<ContactBrief[]> {
-  const { data } = await request.get<ContactBrief[]>('/contacts', {
-    // ⚠ 不筛就**整个不带这个参数**（而不是带 `false`）：别把"空值语义"当协议传出去
-    params: options.onlyUnlinked === true ? { only_unlinked: 'true' } : {},
+export async function listContacts(
+  options: { onlyUnlinked?: boolean; page?: number; pageSize?: number } = {},
+): Promise<ContactPage> {
+  const { data } = await request.get<ContactPage>('/contacts', {
+    params: {
+      // ⚠ 不筛就**整个不带这个参数**（而不是带 `false`）：别把"空值语义"当协议传出去
+      ...(options.onlyUnlinked === true ? { only_unlinked: 'true' } : {}),
+      // ⚠ 同理：页码 / 每页条数**缺省就不传** —— 默认值与上限的归一化只在服务端一处（→ §2.7）
+      ...(options.page === undefined ? {} : { page: options.page }),
+      ...(options.pageSize === undefined ? {} : { page_size: options.pageSize }),
+    },
   })
   return data
 }

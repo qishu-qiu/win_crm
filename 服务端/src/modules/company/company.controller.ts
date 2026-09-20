@@ -15,7 +15,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
-import { Audit, AuditSkip } from '../../kernel/index';
+import { Audit, AuditSkip, type PageResult } from '../../kernel/index';
 import {
   COMPANY_AUDIT_ACTIONS,
   CompanyService,
@@ -29,13 +29,15 @@ import {
   CreateCompanyDto,
   CreateContactDto,
   ListContactsQueryDto,
+  PageQueryDto,
   SearchDupDto,
 } from './dto/company-request.dto';
 import {
+  CompanyPageVoDto,
   CompanyVoDto,
-  ContactBriefVoDto,
   ContactCreatedVoDto,
   ContactDetailVoDto,
+  ContactPageVoDto,
   SearchDupResultVoDto,
 } from './dto/company-response.dto';
 
@@ -51,12 +53,14 @@ export class CompanyController {
   @ApiOperation({
     summary: '公司档案列表',
     description:
-      '按 id 倒序（**分页 / 筛选属 M6 列表页**，本批给最近 100 条）。' +
+      '**D-08（2026-09-20）起分页**：入参 `page`（默认 1）/ `page_size`（默认 20、最大 100），' +
+      '出参 ＝ §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；排序恒 `id desc`' +
+      '（§2.7 的 `order_by` / `keyword` 尚未铺到 B 域 →《欠账登记表》D-07）。' +
       '⚠ 接口 §5.4 列表项里的 `relation_count` / `old_customer` 属 C / E 域，跨域不许查表 ⇒ 待 M3/M4 提供',
   })
-  @ApiOkResponse({ type: [CompanyVoDto] })
-  listCompanies(): Promise<CompanyVo[]> {
-    return this.company.listCompanies();
+  @ApiOkResponse({ type: CompanyPageVoDto })
+  listCompanies(@Query() query: PageQueryDto): Promise<PageResult<CompanyVo>> {
+    return this.company.listCompanies({ page: query.page, pageSize: query.page_size });
   }
 
   @Audit(COMPANY_AUDIT_ACTIONS.createCompany, 'company')
@@ -99,13 +103,18 @@ export class CompanyController {
     summary: '联系人列表',
     description:
       '**列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。' +
-      '入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）。' +
+      '入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）；' +
+      '**D-08（2026-09-20）起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参 ＝ §2.3 分页形态。' +
       '可见范围：「待关联」（未挂公司）**只给归属人自己**；已挂公司的人**暂按现状**' +
       '（公司维度收敛待复用的数据范围判定，→《欠账登记表》D-28）',
   })
-  @ApiOkResponse({ type: [ContactBriefVoDto] })
-  listContacts(@Query() query: ListContactsQueryDto): Promise<ContactBriefVo[]> {
-    return this.company.listContacts({ onlyUnlinked: query.only_unlinked === 'true' });
+  @ApiOkResponse({ type: ContactPageVoDto })
+  listContacts(@Query() query: ListContactsQueryDto): Promise<PageResult<ContactBriefVo>> {
+    return this.company.listContacts({
+      onlyUnlinked: query.only_unlinked === 'true',
+      page: query.page,
+      pageSize: query.page_size,
+    });
   }
 
   @Audit(COMPANY_AUDIT_ACTIONS.createContact, 'contact')
@@ -148,10 +157,18 @@ export class CompanyController {
 
   @Get('companies/:id/contacts')
   @ApiBearerAuth('bearer')
-  @ApiOperation({ summary: '公司联系人', description: '含**历史就职 / 已离职标记**（`is_current`，→ B5）' })
+  @ApiOperation({
+    summary: '公司联系人',
+    description:
+      '含**历史就职 / 已离职标记**（`is_current`，→ B5）；**D-08（2026-09-20）起分页**' +
+      '（`page` / `page_size`，出参 ＝ §2.3 分页形态）；排序恒 `is_current desc, id desc`（**在职在前**）',
+  })
   @ApiParam({ name: 'id', description: '公司 id（十进制字符串）' })
-  @ApiOkResponse({ type: [ContactBriefVoDto] })
-  listCompanyContacts(@Param('id') id: string): Promise<ContactBriefVo[]> {
-    return this.company.listCompanyContacts(id);
+  @ApiOkResponse({ type: ContactPageVoDto })
+  listCompanyContacts(
+    @Param('id') id: string,
+    @Query() query: PageQueryDto,
+  ): Promise<PageResult<ContactBriefVo>> {
+    return this.company.listCompanyContacts(id, { page: query.page, pageSize: query.page_size });
   }
 }

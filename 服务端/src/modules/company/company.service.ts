@@ -28,6 +28,8 @@ import {
   AppError,
   ErrorCode,
   bigintToJson,
+  // D-08（2026-09-20）：B 域列表统一分页 —— 归一化（默认 1/20、超 100 夹紧）与 VO 组装**只在 kernel 一处**
+  buildPageResult,
   getRequestContext,
   isBusinessWriteRole,
   jsonToBigint,
@@ -37,6 +39,9 @@ import {
   // JSON 列拉直（M6-15 上收 kernel）：`contact.tags` 要用 —— 原先 A 域仓储里那份**引不动**
   // （跨域直连对方 repository 被 ESLint 硬卡），故两域共用 kernel 这一份
   parseStringList,
+  resolvePagination,
+  type PageResult,
+  type PaginationQuery,
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
 // A 域出口（架构 §5.2 路之①）：员工姓名走 `OrgService`、**字典文案走 `DictService`**
@@ -172,6 +177,10 @@ const CONTACT_ALREADY_LINKED_MESSAGE = '该联系人已挂过公司，不能重�
 export interface ListContactsQuery {
   /** 只看「**未关联公司**」的待跟进联系人（「待关联」视图，→ 需求 §6.1 ③） */
   onlyUnlinked?: boolean;
+  /** 页码（归一化在 kernel：默认 1、`< 1` 回第 1 页，→ §2.7；**D-08**） */
+  page?: number;
+  /** 每页条数（默认 20、超 100 夹紧，→ §2.7；**D-08**） */
+  pageSize?: number;
 }
 
 @Injectable()
@@ -222,9 +231,10 @@ export class CompanyService {
    *   销售能看到全部**公司档案**是业务设计；被范围约束的是**业务关系 / 跟单**（C / D 域）。
    *   ⚠ 下个窗口**不要**在这里「补上」`owner` / `dept` 过滤：那会把公司公海打成私海，越改越错。
    */
-  async listCompanies(): Promise<CompanyVo[]> {
-    const rows = await this.repository.listCompanies();
-    return rows.map(toCompanyVo);
+  async listCompanies(query: PaginationQuery = {}): Promise<PageResult<CompanyVo>> {
+    const pagination = resolvePagination(query);
+    const { rows, total } = await this.repository.listCompanies(pagination);
+    return buildPageResult(rows.map(toCompanyVo), total, pagination);
   }
 
   // ===== 跨域引用出口（架构 §5.2 路之①：同步调对方 exports 的 service）=====
@@ -421,7 +431,7 @@ export class CompanyService {
    *   锁的可见性取决于「我是谁」，**没有身份就不能猜**（猜「没锁」会把「已上锁」这条提示吞掉）。
    * ★ 2026-09-16：入参加 `only_unlinked`（只看未关联公司的待跟进），可见范围见 `repository.listContacts` 注释（→ 需求 §6.1 ⑪）。
    */
-  async listContacts(query: ListContactsQuery = {}): Promise<ContactBriefVo[]> {
+  async listContacts(query: ListContactsQuery = {}): Promise<PageResult<ContactBriefVo>> {
     const context = getRequestContext();
     if (context === undefined) {
       throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
@@ -429,13 +439,21 @@ export class CompanyService {
       });
     }
     const viewerId = context.employeeId;
-    const rows = await this.repository.listContacts({
-      viewerId,
-      onlyUnlinked: query.onlyUnlinked === true,
-      // ★ `all` 档（总经理 / 管理员）看全部；其余按「我的待关联 ＋ 已挂公司的人」（→ 需求 §4.2 / §6.1 ⑪）
-      allScope: context.dataScope.type === 'all',
-    });
-    return rows.map((row) => toContactBrief(row, viewerId, { position: null, is_current: true }));
+    const pagination = resolvePagination({ page: query.page, pageSize: query.pageSize });
+    const { rows, total } = await this.repository.listContacts(
+      {
+        viewerId,
+        onlyUnlinked: query.onlyUnlinked === true,
+        // ★ `all` 档（总经理 / 管理员）看全部；其余按「我的待关联 ＋ 已挂公司的人」（→ 需求 §4.2 / §6.1 ⑪）
+        allScope: context.dataScope.type === 'all',
+      },
+      pagination,
+    );
+    return buildPageResult(
+      rows.map((row) => toContactBrief(row, viewerId, { position: null, is_current: true })),
+      total,
+      pagination,
+    );
   }
 
   // ===== 跨域只读出口（架构 §5.2 路之①）=====
@@ -520,7 +538,10 @@ export class CompanyService {
   // ===== M2-14 公司联系人 =====
 
   /** 该公司下的联系人（**含历史就职 / 已离职标记**，→ B5；`phone_locked` 同 `listContacts`） */
-  async listCompanyContacts(companyId: string): Promise<ContactBriefVo[]> {
+  async listCompanyContacts(
+    companyId: string,
+    query: PaginationQuery = {},
+  ): Promise<PageResult<ContactBriefVo>> {
     const viewerId = this.requireOperatorId();
     const id = jsonToBigint(companyId, 'id');
     const company = await this.repository.findCompanyById(id);
@@ -530,9 +551,14 @@ export class CompanyService {
       });
     }
 
-    const rows = await this.repository.findCompanyContacts(id);
-    return rows.map((row) =>
-      toContactBrief(row.contact, viewerId, { position: row.position, is_current: row.is_current }),
+    const pagination = resolvePagination({ page: query.page, pageSize: query.pageSize });
+    const { rows, total } = await this.repository.findCompanyContacts(id, pagination);
+    return buildPageResult(
+      rows.map((row) =>
+        toContactBrief(row.contact, viewerId, { position: row.position, is_current: row.is_current }),
+      ),
+      total,
+      pagination,
     );
   }
 
@@ -672,8 +698,8 @@ export class CompanyService {
 /** 仓储读出的公司行（结构取自 `COMPANY_SELECT`，不手抄字段） */
 type CompanyRow = Awaited<ReturnType<CompanyRepository['createCompany']>>;
 
-/** 仓储读出的联系人行（结构取自 `CONTACT_SELECT`，不手抄字段） */
-type ContactRow = Awaited<ReturnType<CompanyRepository['listContacts']>>[number];
+/** 仓储读出的联系人行（结构取自 `CONTACT_SELECT`，不手抄字段）—— D-08 起仓储返回 `{rows,total}`，故取 `rows` */
+type ContactRow = Awaited<ReturnType<CompanyRepository['listContacts']>>['rows'][number];
 
 /**
  * 联系人行 → 简卡（两个列表共用一段装配，**别写两遍**：脱敏口径一散开就会「改一处漏两处」）。

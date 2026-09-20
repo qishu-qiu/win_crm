@@ -291,14 +291,26 @@ export class CompanyRepository {
     return rows.map((row) => row.company);
   }
 
-  /** 公司列表（M2 最小列表：按 id 倒序取前 N；**分页 / 筛选属 M6 列表页**，→ 接口 §2.7） */
-  listCompanies(limit = 100) {
-    return this.prisma.company.findMany({
-      where: { deleted_at: null, merged_into: null },
-      select: COMPANY_SELECT,
-      orderBy: { id: 'desc' },
-      take: limit,
-    });
+  /**
+   * 公司列表 —— **分页**（D-08 · 2026-09-20；形态 → 接口 §2.3 / 参数 → §2.7）。
+   *
+   * ★ **一个事务里取「本页行 ＋ 总数」**（`$transaction` 数组形式）：两次独立查询各读各的快照，
+   *   期间有人建档就会出现「`total` 比实际多一条」这种对不上的账。
+   * ★ 排序恒 `id desc`：§2.7 的 `order_by` / `desc` **通用参数尚未铺到各域**（→《欠账登记表》D-07）。
+   */
+  async listCompanies(pagination: { skip: number; take: number }) {
+    const where = { deleted_at: null, merged_into: null };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.company.findMany({
+        where,
+        select: COMPANY_SELECT,
+        orderBy: { id: 'desc' },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.company.count({ where }),
+    ]);
+    return { rows, total };
   }
 
   // ===== M2-04 / M2-13 建档（联系人）=====
@@ -382,44 +394,60 @@ export class CompanyRepository {
    *      （→《欠账登记表》**D-28**）。**过渡期刻意"放松"**：若现在就按关系收紧，
    *      销售会连**自己客户**的联系人都看不到 —— 那比现状更差。
    */
-  listContacts(
+  async listContacts(
     input: { viewerId: bigint; onlyUnlinked: boolean; allScope: boolean },
-    limit = 100,
+    pagination: { skip: number; take: number },
   ) {
-    return this.prisma.contact.findMany({
-      where: {
-        deleted_at: null,
-        merged_into: null,
-        AND: [
-          // 「未关联公司」＝无任何 `company_contact` 记录（派生判定，→ 需求 §6.1 ③）
-          ...(input.onlyUnlinked ? [{ company_contacts: { none: {} } }] : []),
-          ...(input.allScope
-            ? []
-            : [{ OR: [{ owner_id: input.viewerId }, { company_contacts: { some: {} } }] }]),
-        ],
-      },
-      select: CONTACT_SELECT,
-      orderBy: { id: 'desc' },
-      take: limit,
-    });
+    const where = {
+      deleted_at: null,
+      merged_into: null,
+      AND: [
+        // 「未关联公司」＝无任何 `company_contact` 记录（派生判定，→ 需求 §6.1 ③）
+        ...(input.onlyUnlinked ? [{ company_contacts: { none: {} } }] : []),
+        ...(input.allScope
+          ? []
+          : [{ OR: [{ owner_id: input.viewerId }, { company_contacts: { some: {} } }] }]),
+      ],
+    };
+    // ★ 同 `listCompanies`：一个事务取「本页 ＋ 总数」，两个快照会对不上账
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.contact.findMany({
+        where,
+        select: CONTACT_SELECT,
+        orderBy: { id: 'desc' },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.contact.count({ where }),
+    ]);
+    return { rows, total };
   }
 
   // ===== M2-14 公司联系人（含历史就职与已离职标记）=====
 
-  /** 该公司下的联系人 ＋ 就职关系（`is_current` 区分在职 / 历史，→ B5） */
-  async findCompanyContacts(companyId: bigint) {
-    const rows = await this.prisma.companyContact.findMany({
-      where: {
-        company_id: companyId,
-        contact: { deleted_at: null, merged_into: null },
-      },
-      select: {
-        is_current: true,
-        position: true,
-        contact: { select: CONTACT_SELECT },
-      },
-      orderBy: [{ is_current: 'desc' }, { id: 'desc' }],
-    });
-    return rows;
+  /**
+   * 该公司下的联系人 ＋ 就职关系（`is_current` 区分在职 / 历史，→ B5）。**分页**（D-08）。
+   * ★ 排序恒 `is_current desc, id desc`（**在职在前**，→ B5「历史就职在后」）。
+   */
+  async findCompanyContacts(companyId: bigint, pagination: { skip: number; take: number }) {
+    const where = {
+      company_id: companyId,
+      contact: { deleted_at: null, merged_into: null },
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.companyContact.findMany({
+        where,
+        select: {
+          is_current: true,
+          position: true,
+          contact: { select: CONTACT_SELECT },
+        },
+        orderBy: [{ is_current: 'desc' }, { id: 'desc' }],
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.companyContact.count({ where }),
+    ]);
+    return { rows, total };
   }
 }

@@ -135,7 +135,10 @@ const contactsLoading = ref(false)
 async function loadCompanyContacts(companyId: string): Promise<void> {
   contactsLoading.value = true
   try {
-    companyContacts.value = await listCompanyContacts(companyId)
+    // **D-08**：该端点已分页（→ §2.3）⇒ 取 `list`。这里只作**建档前的辅助判断**，第 1 页够用；
+    //   本页**不摆分页器**（要看全就到公司 / 关系详情里看，摆一个半截列表反而误导）。
+    const result = await listCompanyContacts(companyId)
+    companyContacts.value = result.list
   } catch {
     // 打不开就**空着**（这只是辅助判断，不是本步的前置条件）——错误由请求层统一表达
     companyContacts.value = []

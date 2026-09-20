@@ -193,7 +193,8 @@ function createRepository(options: FakeOptions = {}) {
     findCompanyByCreditCode: jest.fn(async () => options.byCreditCode ?? null),
     findCompanyCandidatesByCore: jest.fn(async () => options.candidates ?? []),
     findCompaniesByContactPhone: jest.fn(async () => options.companiesByPhone ?? []),
-    listCompanies: jest.fn(async () => [] as CompanyRowFixture[]),
+    // D-08：仓储列表返回 `{rows,total}`（分页）—— 假件按**真实形状**造，否则用例假绿
+    listCompanies: jest.fn(async () => ({ rows: [] as CompanyRowFixture[], total: 0 })),
     createContact: jest.fn(async (data?: unknown) => {
       void data; // 入参只用于断言（`mock.calls`），这里不参与造值
       return options.createContactError === undefined
@@ -211,11 +212,20 @@ function createRepository(options: FakeOptions = {}) {
     ),
     // 收一个占位入参（函数体里 `void` 一下过 lint）：**不是要用它**，而是让
     // `mock.calls[n][0]` 在类型上存在 —— 用例要断言传下来的可见范围参数（`allScope` / `onlyUnlinked`）
-    listContacts: jest.fn(async (input: Record<string, unknown>) => {
-      void input;
-      return options.contacts ?? [];
+    // 需收**两个**占位入参：`mock.calls[n][1]` 要被断言（分页 `{skip,take}`），类型上必须存在
+    listContacts: jest.fn(
+      async (input: Record<string, unknown>, pagination: Record<string, unknown>) => {
+        void input;
+        void pagination;
+        // D-08：分页形态 `{rows,total}`（假件同真实形状）
+        const rows = options.contacts ?? [];
+        return { rows, total: rows.length };
+      },
+    ),
+    findCompanyContacts: jest.fn(async () => {
+      const rows = options.companyContacts ?? [];
+      return { rows, total: rows.length };
     }),
-    findCompanyContacts: jest.fn(async () => options.companyContacts ?? []),
     // M6-14：关联公司动线的两个前置查询（只给「够判定」的信息：名字 ＋ 就职记录条数）
     findContactRefsByIds: jest.fn(async (ids: readonly bigint[]) =>
       options.contactRefs === undefined
@@ -548,7 +558,8 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         ],
       });
 
-      const briefs = await runWithContext(CONTEXT, () => service.listCompanyContacts('3'));
+      // D-08：service 返回分页对象 ⇒ 取 `list` 断言（其余字段另有分页用例覆盖）
+      const { list: briefs } = await runWithContext(CONTEXT, () => service.listCompanyContacts('3'));
 
       expect(briefs.map((item) => [item.id, item.phone_masked, item.is_current])).toEqual([
         [11n, '138****0000', true],
@@ -560,7 +571,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
     it('联系人列表：打码形态与角色无关（**未上锁时 `phone_locked` ＝ false**，不是「恒 false」）', async () => {
       const { service } = createService({ contacts: [contactRow({ id: 11n })] });
 
-      const briefs = await runWithContext(CONTEXT, () => service.listContacts());
+      const { list: briefs } = await runWithContext(CONTEXT, () => service.listContacts());
 
       expect(briefs).toHaveLength(1);
       expect(briefs[0]?.phone_masked).toBe('138****0000');
@@ -587,6 +598,26 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       });
     });
 
+    it('★ D-08：分页入参 → 仓储拿 `skip/take`、出参是 §2.3 分页对象（键名 `page_size` 而非 `pageSize`）', async () => {
+      const { service, repository } = createService({ contacts: [contactRow({ id: 11n })] });
+
+      // ① 缺省：page 1 / pageSize 20（**归一化只在 kernel 一处**，本层不重复实现）
+      const first = await runWithContext(CONTEXT, () => service.listContacts());
+      expect(repository.listContacts.mock.calls[0]?.[1]).toMatchObject({ skip: 0, take: 20 });
+      expect(Object.keys(first).sort()).toEqual(['list', 'page', 'page_size', 'total']);
+      expect(first.page).toBe(1);
+      expect(first.page_size).toBe(20);
+      expect(first.total).toBe(1);
+
+      // ② 显式第 2 页 / 每页 50 → `skip = (2-1) * 50`；出参页码与每页条数**以后端为准**
+      const second = await runWithContext(CONTEXT, () =>
+        service.listContacts({ page: 2, pageSize: 50 }),
+      );
+      expect(repository.listContacts.mock.calls[1]?.[1]).toMatchObject({ skip: 50, take: 50 });
+      expect(second.page).toBe(2);
+      expect(second.page_size).toBe(50);
+    });
+
     it('★ M5-04：被上锁 ＋ 查看者**不是落锁人** → `phone_locked:true`（列表仍打码，**不因上锁改形态**）', async () => {
       const { service } = createService({
         contacts: [
@@ -595,7 +626,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         ],
       });
 
-      const briefs = await runWithContext(CONTEXT, () => service.listContacts());
+      const { list: briefs } = await runWithContext(CONTEXT, () => service.listContacts());
 
       // ① 别人锁的 → 我看到「已上锁」；② 我自己锁的 → 照常（锁是自我保护，不挡自己，→ §4.3 二）
       expect(briefs.map((item) => [item.id, item.phone_masked, item.phone_locked])).toEqual([
@@ -616,7 +647,8 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         ],
       });
 
-      const briefs = await runWithContext(CONTEXT, () => service.listCompanyContacts('3'));
+      // D-08：service 返回分页对象 ⇒ 取 `list` 断言（其余字段另有分页用例覆盖）
+      const { list: briefs } = await runWithContext(CONTEXT, () => service.listCompanyContacts('3'));
 
       expect(briefs.map((item) => [item.id, item.phone_locked])).toEqual([[11n, true]]);
     });

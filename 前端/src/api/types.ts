@@ -213,7 +213,7 @@ export interface paths {
         };
         /**
          * 公司档案列表
-         * @description 按 id 倒序（**分页 / 筛选属 M6 列表页**，本批给最近 100 条）。⚠ 接口 §5.4 列表项里的 `relation_count` / `old_customer` 属 C / E 域，跨域不许查表 ⇒ 待 M3/M4 提供
+         * @description **D-08（2026-09-20）起分页**：入参 `page`（默认 1）/ `page_size`（默认 20、最大 100），出参 ＝ §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；排序恒 `id desc`（§2.7 的 `order_by` / `keyword` 尚未铺到 B 域 →《欠账登记表》D-07）。⚠ 接口 §5.4 列表项里的 `relation_count` / `old_customer` 属 C / E 域，跨域不许查表 ⇒ 待 M3/M4 提供
          */
         get: operations["CompanyController_listCompanies"];
         put?: never;
@@ -257,7 +257,7 @@ export interface paths {
         };
         /**
          * 联系人列表
-         * @description **列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）。可见范围：「待关联」（未挂公司）**只给归属人自己**；已挂公司的人**暂按现状**（公司维度收敛待复用的数据范围判定，→《欠账登记表》D-28）
+         * @description **列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）；**D-08（2026-09-20）起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参 ＝ §2.3 分页形态。可见范围：「待关联」（未挂公司）**只给归属人自己**；已挂公司的人**暂按现状**（公司维度收敛待复用的数据范围判定，→《欠账登记表》D-28）
          */
         get: operations["CompanyController_listContacts"];
         put?: never;
@@ -301,7 +301,7 @@ export interface paths {
         };
         /**
          * 公司联系人
-         * @description 含**历史就职 / 已离职标记**（`is_current`，→ B5）
+         * @description 含**历史就职 / 已离职标记**（`is_current`，→ B5）；**D-08（2026-09-20）起分页**（`page` / `page_size`，出参 ＝ §2.3 分页形态）；排序恒 `is_current desc, id desc`（**在职在前**）
          */
         get: operations["CompanyController_listCompanyContacts"];
         put?: never;
@@ -812,6 +812,25 @@ export interface components {
             /** @example 2026-09-15T10:00:00+08:00 */
             updated_at: string;
         };
+        CompanyPageVoDto: {
+            /** @description 当前页数据 */
+            list: components["schemas"]["CompanyVoDto"][];
+            /**
+             * @description 符合筛选条件的全量条数（前端「共 N 条」）
+             * @example 120
+             */
+            total: number;
+            /**
+             * @description 当前页码（从 1 开始）
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description 每页条数（默认 20，最大 100，→ §2.7）
+             * @example 20
+             */
+            page_size: number;
+        };
         CreateCompanyDto: {
             /**
              * @description 公司全称（服务端据此生成 `name_core` 供查重）
@@ -918,6 +937,25 @@ export interface components {
             decision_role?: "decision" | "influence" | "execute";
             /** @description 是否当前在职（`company_contact.is_current`；历史就职给 false） */
             is_current: boolean;
+        };
+        ContactPageVoDto: {
+            /** @description 当前页数据（**一律 `phone_masked`**，→ §2.8） */
+            list: components["schemas"]["ContactBriefVoDto"][];
+            /**
+             * @description 符合筛选条件的全量条数（前端「共 N 条」）
+             * @example 120
+             */
+            total: number;
+            /**
+             * @description 当前页码（从 1 开始）
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description 每页条数（默认 20，最大 100，→ §2.7）
+             * @example 20
+             */
+            page_size: number;
         };
         ExtraPhoneDto: {
             /**
@@ -1941,7 +1979,12 @@ export interface operations {
     };
     CompanyController_listCompanies: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 页码（默认 1；`< 1` 回第 1 页） */
+                page?: number;
+                /** @description 每页条数（默认 20；超 100 按 100 计） */
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1953,7 +1996,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompanyVoDto"][];
+                    "application/json": components["schemas"]["CompanyPageVoDto"];
                 };
             };
         };
@@ -2009,6 +2052,10 @@ export interface operations {
             query?: {
                 /** @description 只看「**未关联公司**」的待跟进联系人（＝「待关联」视图，→ 需求 §6.1 ③：判定＝该联系人**无任何 `company_contact` 记录**） */
                 only_unlinked?: "true" | "false";
+                /** @description 页码（默认 1；`< 1` 回第 1 页） */
+                page?: number;
+                /** @description 每页条数（默认 20；超 100 按 100 计） */
+                page_size?: number;
             };
             header?: never;
             path?: never;
@@ -2021,7 +2068,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContactBriefVoDto"][];
+                    "application/json": components["schemas"]["ContactPageVoDto"];
                 };
             };
         };
@@ -2073,7 +2120,12 @@ export interface operations {
     };
     CompanyController_listCompanyContacts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 页码（默认 1；`< 1` 回第 1 页） */
+                page?: number;
+                /** @description 每页条数（默认 20；超 100 按 100 计） */
+                page_size?: number;
+            };
             header?: never;
             path: {
                 /** @description 公司 id（十进制字符串） */
@@ -2088,7 +2140,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContactBriefVoDto"][];
+                    "application/json": components["schemas"]["ContactPageVoDto"];
                 };
             };
         };

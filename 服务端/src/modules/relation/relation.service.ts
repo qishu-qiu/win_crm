@@ -137,6 +137,19 @@ const OWNER_OCCUPIED_MESSAGE = '该业务关系已有归属销售';
  */
 const SEA_UNCLAIMED_MESSAGE = '该公司还在公海（未领取）：要写跟单请先领取到私海';
 
+/** 重新领取 ⇒ **新一轮从阶段 1 开始**（→ 需求 §8.1；`relation_stage_log` 保留上一轮历史） */
+const NEW_ROUND_STAGE = 1;
+
+/** 「领取到私海」定位不到可领的关系（本就没有 / 刚刚被人领走） */
+const SEA_CLAIM_NOT_FOUND_MESSAGE = '该公司在本部门 · 产品线下没有待领取的公海关系，请刷新列表';
+
+/**
+ * 并发抢同一条：被同事先领走了（→ 数据架构 §10.2-3：条件 UPDATE 影响 0 行）。
+ * ⚠ 与「定位不到」（400）**分两句人话**：这条是**竞态**（接口 §2.4 把"抢公海"归 409 族），
+ *   那句是"本来就没有"——两件事对销售的动作不同（这里该刷新重试，那里该换个客户）。
+ */
+const SEA_CLAIM_RACE_MESSAGE = '这条公海客户刚刚被同事领走了，请刷新列表';
+
 /**
  * C 域写动作的审计动作名（→ A10 口径 `模块.动词`；2026-09-15 定）。
  * ★ 与 `ORG_AUDIT_ACTIONS` 同一理由**集中一处导出**：动作名是「谁在何时干了什么」的检索键，
@@ -251,6 +264,148 @@ export class RelationService {
     );
 
     return this.buildVo(row, await this.loadRefs([row]));
+  }
+
+  // ===== M7-01 公海「领取到私海」的跨域出口（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）=====
+
+  /**
+   * 「领取到私海」：把「公司 × 部门 × 产品线」下的**那一条公海关系**认领给当前登录人。
+   *
+   * ★ 为什么这个出口在 **C 域**（而不是 F 域自己改）：认领要动的三张表
+   *   （`business_relation` / `relation_member` / `relation_stage_log`）**全是 C 域的表**，
+   *   跨域不许查表更不许写表（架构 §5.2）⇒ F 域只做编排 ＋ 写自己的 `sea_record`。
+   *
+   * ★ 三件事**一个本域事务**（架构 §5.2 路之③「多表一致性 → 本域 `$transaction`」）：
+   *   ① **原子认领**：条件 UPDATE（`sea_status='company_sea'`），`count === 1` 才算抢到 ——
+   *      否则 **409**（不靠"先查再改"的预检：两人同时点，预检都会过）；
+   *   ② **owner 成员切换**：先撤在位 owner（掉海任务未建，公海里可能残留），再**复活或插入**新 owner
+   *      （`uk_member` 不含 `revoked_at` ⇒ 曾当过该关系 owner 的人领回时只能复活，不能 INSERT）；
+   *   ③ **阶段回到 1** ＋ 留痕：`stage_id` 由 ① 的那条 UPDATE 同批置 1（不拆两条语句，见仓储注释），
+   *      再补一行 `relation_stage_log`（`action='normal'`、无 `reason` —— 不新造 reason 码）记录
+   *      「从上一轮的阶段 X 回到新一轮阶段 1」（→ 需求 §8.1：重新领取后阶段从 1 重新开始）。
+   *
+   * ★ 权限＝**可写角色 ＋ 读范围**（与 D-32 的读门**同一档**，不另开一格）：
+   *   销售＝本部门公海、经理＝管辖部门、总经理＝全部；**管理员（`all` 档但只读）与交付 / 客服一律拒**。
+   * ★ 范围判定用**入参 `dept_id`**（不看定位结果）：否则"定位不到 = 400"与"越界 = 403"两个回包
+   *   可以被拿来**反推别部门有没有这条公海**（同 `checkSeaUnclaimed` 那条「不许用 422 反推存在性」的顾虑）。
+   *
+   * ★ 承诺级联**不在这里**：`commitment` 是 D 域的表，而 **F / D 同层禁依赖**（架构 §3）⇒
+   *   由调用方发 `RelationClaimed` 领域事件、D 域订阅后转 open 承诺 owner（架构 §5.2 路之②）。
+   *
+   * @returns `{relationId, prevStage, prevOwnerId}`：`prevStage` 供留痕/回显，`prevOwnerId`
+   *          ＝ 认领前的在位 owner（公海理应 `null`；残留时用于上层日志）
+   */
+  async claimCompanySeaRelation(input: {
+    companyId: bigint;
+    deptId: bigint;
+    productLineId: bigint;
+  }): Promise<{ relationId: bigint; prevStage: number; prevOwnerId: bigint | null }> {
+    const viewer = requireViewer();
+
+    // ① 角色：只读角色（管理员 / 交付 · 客服）当场拒 —— 与 `addMember` 等写动作同一条人话
+    if (!isRelationWriteRole(viewer.roleCodes)) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '当前角色对业务关系只读', {
+        constraint: 'relation.read_only',
+      });
+    }
+
+    // ② 范围：按**入参部门**判（理由见方法头 ★）
+    const scope = resolveRelationListScope('sea', viewer);
+    if (scope.kind === 'denied') {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权限：交付 / 客服不进公海', {
+        constraint: 'relation.sea.denied',
+      });
+    }
+    if (scope.kind !== 'all' && !scope.deptIds.includes(input.deptId)) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权领取其他部门的公海客户', {
+        constraint: 'relation.out_of_scope',
+      });
+    }
+
+    // ③ 定位目标（公海 ＋ 三元组）；定位不到 ＝ 本来就没有 / 刚刚被人领走
+    const row = await this.repository.findCompanySeaRelation({
+      companyId: input.companyId,
+      deptId: input.deptId,
+      productLineId: input.productLineId,
+    });
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, SEA_CLAIM_NOT_FOUND_MESSAGE, {
+        constraint: 'sea.relation_not_claimed',
+      });
+    }
+
+    const prevOwnerMember = row.members.find(
+      (member) => member.member_type === OWNER_MEMBER_TYPE && member.revoked_at === null,
+    );
+    const now = new Date();
+
+    await this.prisma
+      .$transaction(async (tx) => {
+        const client: RelationTxClient = tx;
+
+        // ① 原子认领（条件 UPDATE ＋ 阶段置 1，同一条语句）
+        const { count } = await this.repository.claimSeaRelation(
+          row.id,
+          { employeeId: viewer.employeeId, stageId: NEW_ROUND_STAGE },
+          client,
+        );
+        if (count !== 1) {
+          // 事务内抛出 ⇒ 整笔回滚（此处此前也没有别的写，回滚是干净的）
+          throw new AppError(ErrorCode.UNIQUE_CONFLICT, 409, SEA_CLAIM_RACE_MESSAGE, {
+            constraint: 'sea.claim_conflict',
+          });
+        }
+
+        // ② owner 成员切换：先撤在位（残留兜底）→ 再复活或插入
+        await this.repository.revokeActiveOwner(row.id, viewer.employeeId, client);
+        const existed = await this.repository.findMember({
+          relation_id: row.id,
+          employee_id: viewer.employeeId,
+          member_type: OWNER_MEMBER_TYPE,
+        });
+        if (existed === null) {
+          await this.repository.createMember(
+            {
+              relation_id: row.id,
+              employee_id: viewer.employeeId,
+              member_type: OWNER_MEMBER_TYPE,
+              added_by: viewer.employeeId,
+            },
+            client,
+          );
+        } else {
+          await this.repository.reviveMember(
+            existed.id,
+            { added_by: viewer.employeeId, added_at: now },
+            client,
+          );
+        }
+
+        // ③ 阶段留痕（仅当上一轮不在阶段 1 时才有"回落"可言 —— 避免写无信息的噪声行）
+        if (row.stage_id !== NEW_ROUND_STAGE) {
+          await this.repository.createStageLog(
+            {
+              relation_id: row.id,
+              from_stage: row.stage_id,
+              to_stage: NEW_ROUND_STAGE,
+              action: 'normal',
+              reason: null,
+              operator_id: viewer.employeeId,
+            },
+            client,
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        // 并发下预检漏过 → `uk_owner` / `uk_member` 等 DB 兜底，映射成人话（→ §7.5）
+        throw mapPrismaError(error) ?? error;
+      });
+
+    return {
+      relationId: row.id,
+      prevStage: row.stage_id,
+      prevOwnerId: prevOwnerMember?.employee_id ?? null,
+    };
   }
 
   // ===== M3-07 / M3-08 列表（私海 / 公海）=====

@@ -200,6 +200,110 @@ export class RelationRepository {
     });
   }
 
+  // ===== M7-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）=====
+
+  /**
+   * 找「公司 × 部门 × 产品线」下的**公海**关系（＝认领目标）。
+   *
+   * ★ 为什么可能不止一行、要**排序取一条**：同三元组的关系掉海后本部门又新建了一条
+   *   （`uk_active_rel` 只在 `private` 时占位，故两条能并存）⇒ 残留多行。按 `updated_at`
+   *   倒序取**最近动过**的一条（掉海 / 改属性都会更新它）。
+   * ⚠ **不查 `sea_record`** 去取"最近掉海"：那是 **F 域的表**，同层禁依赖（架构 §3 / §5.2）。
+   */
+  findCompanySeaRelation(triple: RelationTriple) {
+    return this.prisma.businessRelation.findFirst({
+      where: {
+        company_id: triple.companyId,
+        dept_id: triple.deptId,
+        product_line_id: triple.productLineId,
+        sea_status: COMPANY_SEA_STATUS,
+        merged_into: null,
+        deleted_at: null,
+      },
+      orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
+      select: RELATION_SELECT,
+    });
+  }
+
+  /**
+   * ★ **原子认领**（→ 数据架构 §10.2-3）：条件 UPDATE，调用方按 `count === 1` 判"抢到了"。
+   *
+   * ★ 同一句 UPDATE 顺带把 **`stage_id` 置回 1**（重新领取＝新一轮从阶段 1 开始，→ 需求 §8.1）：
+   *   两件事必须**同一条语句**——拆成两条就会出现"抢到了但阶段没重置"的半截状态，
+   *   而阶段又是并发下的共享状态（另一人抢到后立刻推进阶段时更明显）。
+   */
+  claimSeaRelation(
+    relationId: bigint,
+    data: { employeeId: bigint; stageId: number },
+    tx?: RelationTxClient,
+  ) {
+    const client = tx ?? this.prisma;
+    return client.businessRelation.updateMany({
+      where: {
+        id: relationId,
+        sea_status: COMPANY_SEA_STATUS,
+        deleted_at: null,
+        merged_into: null,
+      },
+      data: {
+        sea_status: PRIVATE_SEA_STATUS,
+        stage_id: data.stageId,
+        updated_by: data.employeeId,
+      },
+    });
+  }
+
+  /** 撤销该关系**在位**的 owner 成员（认领前清位：掉海任务未建，公海里可能残留在位 owner 行） */
+  revokeActiveOwner(relationId: bigint, by: bigint, tx?: RelationTxClient) {
+    const client = tx ?? this.prisma;
+    return client.relationMember.updateMany({
+      where: {
+        relation_id: relationId,
+        member_type: OWNER_MEMBER_TYPE,
+        revoked_at: null,
+      },
+      data: { revoked_at: new Date(), revoked_by: by },
+    });
+  }
+
+  /**
+   * 复活一条**已撤销**的成员行。
+   * ★ `uk_member(relation_id, employee_id, member_type)` **不含 `revoked_at`** ⇒ 同一人同类型
+   *   永远只有一行：曾当过该关系 owner 的人**再领回**时，不能 INSERT（撞唯一键），只能复活。
+   */
+  reviveMember(memberId: bigint, data: { added_by: bigint; added_at: Date }, tx?: RelationTxClient) {
+    const client = tx ?? this.prisma;
+    return client.relationMember.update({
+      where: { id: memberId },
+      data: {
+        revoked_at: null,
+        revoked_by: null,
+        added_at: data.added_at,
+        added_by: data.added_by,
+      },
+    });
+  }
+
+  /**
+   * 阶段推进留痕（→ C3 `relation_stage_log`）。
+   * ★ 本轮**重新领取导致的"回到阶段 1"也走本表**：`action='normal'`（不是 rollback ——
+   *   它不是"阶段往后退"，而是新一轮的正常起点）、`reason` 留 `null`（**不新造 reason 码**）。
+   */
+  createStageLog(
+    data: {
+      relation_id: bigint;
+      from_stage: number | null;
+      to_stage: number;
+      action: string;
+      reason: string | null;
+      operator_id: bigint;
+    },
+    tx?: RelationTxClient,
+  ) {
+    const client = tx ?? this.prisma;
+    return client.relationStageLog.create({ data });
+  }
+
   // ===== M3-07 私海列表（三种范围，方法名即范围）=====
   //
   // ★ **M6-07 起带分页**（→ 接口 §2.7）：五个列表方法都收 `Pagination`、都返回 `{ rows, total }`。

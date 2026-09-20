@@ -129,6 +129,10 @@ interface FakeOptions {
   failCreateOnCall?: { call: number; error: unknown };
   /** 被 @求助者的部门集合（判同部门） */
   mentionedDeptIds?: bigint[];
+  /** M7-01：`findCompanySeaRelation` 返回的公海关系（**不给**＝默认造一条待领公海关系） */
+  seaRow?: RelationFixture | null;
+  /** M7-01：原子认领 `updateMany` 的影响行数（`0` ＝ 并发被抢，→ 409） */
+  claimCount?: number;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -149,6 +153,18 @@ function createService(options: FakeOptions = {}) {
       options.rowMissing === true ? null : (options.row ?? relationFixture()),
     ),
     findMember: jest.fn(async () => options.member ?? null),
+    // M7-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`）
+    // 定位：默认给一条**待领的公海关系**（`members` 空 —— 公海理应没有在位 owner）
+    findCompanySeaRelation: jest.fn(async () =>
+      options.seaRow === undefined
+        ? relationFixture({ sea_status: 'company_sea', members: [] })
+        : options.seaRow,
+    ),
+    // 原子认领：真实实现返回 `updateMany` 的 `{count}`（`0` ＝ 被同事抢走）
+    claimSeaRelation: jest.fn(async () => ({ count: options.claimCount ?? 1 })),
+    revokeActiveOwner: jest.fn(async () => ({ count: 0 })),
+    reviveMember: jest.fn(async () => undefined),
+    createStageLog: jest.fn(async (data: Record<string, unknown>) => data),
     findCompetitorById: jest.fn(async () => options.competitor ?? null),
     // ⚠ 假件必须**照真实形状**给 `{ rows, total }`：给裸数组时 service 解构出 `undefined`，
     //   用例会假红（→ 铁律坑 16「假红先修假件，再怀疑被测代码」）
@@ -714,6 +730,157 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
 
       expect(error.httpStatus).toBe(400);
       expect(error.constraint).toBe('relation.not_found');
+    });
+  });
+
+  // ===========================================================================
+  // M7-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）
+  //
+  // 这一批钉的是 **C 域出口**的三件事：① 原子认领（条件 UPDATE，`count===1` 才算抢到）
+  //   ② owner 成员切换（撤在位 → 复活或插入）③ 阶段回 1 ＋ 留痕。
+  // ⚠ 「open 承诺转新 owner」**不在这里**：`commitment` 属 D 域，而 F / D 同层禁互相依赖
+  //   （架构 §3）⇒ 走领域事件 `RelationClaimed`（片 2 落 F 域端点时同批）。
+  // ===========================================================================
+  describe('claimCompanySeaRelation：公海「领取到私海」（M7-01）', () => {
+    const CLAIM_INPUT = { companyId: COMPANY_ID, deptId: DEPT_ID, productLineId: LINE_ID };
+    /** 一条待领的公海关系（`members` 空 —— 公海理应没有在位 owner） */
+    const SEA_ROW = relationFixture({ sea_status: 'company_sea', members: [] });
+
+    it('成功：条件 UPDATE ＋ 撤在位 owner ＋ 插入 owner 成员，**同一事务**', async () => {
+      const { service, repository, prisma } = createService({ seaRow: SEA_ROW });
+
+      const result = await runWithContext(contextOf(), () =>
+        service.claimCompanySeaRelation(CLAIM_INPUT),
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      // ① 原子认领：`stageId` 与 `sea_status` 一起改（不拆两条语句，→ 仓储注释）
+      expect(repository.claimSeaRelation).toHaveBeenCalledWith(
+        RELATION_ID,
+        { employeeId: ME, stageId: 1 },
+        { tx: true },
+      );
+      // ② owner 成员：先撤在位，再插入（此人此前不是 owner）
+      expect(repository.revokeActiveOwner).toHaveBeenCalledWith(RELATION_ID, ME, { tx: true });
+      expect(repository.createMember).toHaveBeenCalledWith(
+        { relation_id: RELATION_ID, employee_id: ME, member_type: 'owner', added_by: ME },
+        { tx: true },
+      );
+      expect(repository.reviveMember).not.toHaveBeenCalled();
+      // ③ 上一轮已在阶段 1 ⇒ 不写留痕（避免无信息的噪声行）
+      expect(repository.createStageLog).not.toHaveBeenCalled();
+      expect(result).toEqual({ relationId: RELATION_ID, prevStage: 1, prevOwnerId: null });
+    });
+
+    it('**曾当过 owner 的人领回** → 走 `reviveMember`（`uk_member` 不含 `revoked_at`，INSERT 必撞）', async () => {
+      const { service, repository } = createService({
+        seaRow: SEA_ROW,
+        member: { id: 9n, revoked_at: new Date('2026-09-01T00:00:00Z') },
+      });
+
+      await runWithContext(contextOf(), () => service.claimCompanySeaRelation(CLAIM_INPUT));
+
+      expect(repository.reviveMember).toHaveBeenCalledWith(
+        9n,
+        { added_by: ME, added_at: expect.any(Date) },
+        { tx: true },
+      );
+      expect(repository.createMember).not.toHaveBeenCalled();
+    });
+
+    it('上一轮不在阶段 1 → 写一行阶段留痕（`normal` ＋ **无 reason**，不新造 reason 码）', async () => {
+      const { service, repository } = createService({
+        seaRow: relationFixture({ sea_status: 'company_sea', stage_id: 4, members: [] }),
+      });
+
+      const result = await runWithContext(contextOf(), () =>
+        service.claimCompanySeaRelation(CLAIM_INPUT),
+      );
+
+      expect(repository.createStageLog).toHaveBeenCalledWith(
+        {
+          relation_id: RELATION_ID,
+          from_stage: 4,
+          to_stage: 1,
+          action: 'normal',
+          reason: null,
+          operator_id: ME,
+        },
+        { tx: true },
+      );
+      expect(result.prevStage).toBe(4);
+    });
+
+    it('**并发被抢**（条件 UPDATE 影响 0 行）→ 409 `sea.claim_conflict`，且**一步都不往下走**', async () => {
+      const { service, repository } = createService({ seaRow: SEA_ROW, claimCount: 0 });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () => service.claimCompanySeaRelation(CLAIM_INPUT)),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.constraint).toBe('sea.claim_conflict');
+      // 抢不到就不该再动成员 / 阶段（半截状态比失败更糟）
+      expect(repository.revokeActiveOwner).not.toHaveBeenCalled();
+      expect(repository.createMember).not.toHaveBeenCalled();
+      expect(repository.createStageLog).not.toHaveBeenCalled();
+    });
+
+    it('定位不到可领的关系（本就无 / 刚被领走）→ 400 `sea.relation_not_claimed`', async () => {
+      const { service, repository } = createService({ seaRow: null });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () => service.claimCompanySeaRelation(CLAIM_INPUT)),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('sea.relation_not_claimed');
+      expect(repository.claimSeaRelation).not.toHaveBeenCalled();
+    });
+
+    it('**别的部门**的公海 → 403 `relation.out_of_scope`，且**先于定位**判（不许用 400 反推存在性）', async () => {
+      const { service, repository } = createService({ seaRow: SEA_ROW });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf({ deptIds: [9n] }), () =>
+          service.claimCompanySeaRelation(CLAIM_INPUT),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('relation.out_of_scope');
+      // ★ 范围先拦 ⇒ **不查库**：否则「有 400 / 无 400」就能反推别部门有没有这条公海
+      expect(repository.findCompanySeaRelation).not.toHaveBeenCalled();
+    });
+
+    it('只读角色（管理员）→ 403 `relation.read_only`（`all` 档也拦）', async () => {
+      const { service, repository } = createService({ seaRow: SEA_ROW });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf({ type: 'all', roleCodes: ['admin'] }), () =>
+          service.claimCompanySeaRelation(CLAIM_INPUT),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('relation.read_only');
+      expect(repository.claimSeaRelation).not.toHaveBeenCalled();
+    });
+
+    it('经理领**管辖部门**的公海 → 放行（`sea` 页签的 `dept` 档按管辖部门集合）', async () => {
+      const { service, repository } = createService({ seaRow: SEA_ROW });
+
+      await runWithContext(
+        contextOf({
+          type: 'dept',
+          roleCodes: ['dept_manager'],
+          deptIds: [9n],
+          managedDeptIds: [DEPT_ID],
+        }),
+        () => service.claimCompanySeaRelation(CLAIM_INPUT),
+      );
+
+      expect(repository.claimSeaRelation).toHaveBeenCalledTimes(1);
     });
   });
 

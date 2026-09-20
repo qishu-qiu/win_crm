@@ -499,7 +499,9 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 
 > **★ 7 天缓冲落库口径（`→需求§6.3`，2026-09-10 定）**：调整掉海天数时**插入新版本行**（旧行 `status=disabled`，**停用不删**，符合 T5），新行 `effective_from = 提交日 + 7 天`。生效瞬间，所有在途关系的倒计时**从 `effective_from` 重新起算**（＝每个关系至少再给一整轮）。提交变更时由应用层先算出"**本次将影响 X 个客户**"给经理确认。
 
-> **公海粒度（`→需求§6.3`）**：`sea_status` 只有 `private`（**有 owner**）/ `company_sea`（**无 owner**），**掉海只改本字段、`dept_id` 恒定不变**；**部门公海 ＝ `company_sea` 中 `dept_id`=本部门的集合**（映射视图，非独立池）。`stay_days` 两类用途：① 私海掉落倒计时（自动触发）；② **公海停留超期 → 生成经理决策待办**（不自动删除、不自动流转）。
+> **公海粒度（`→需求§6.3`）**：`sea_status` 只有 `private`（**有 owner**）/ `company_sea`（**无 owner**），**掉海只改本字段、`dept_id` 恒定不变**；**部门公海 ＝ `company_sea` 中 `dept_id`=本部门的集合**（映射视图，非独立池）。
+> **★ 2026-09-20 修正（拍板 P-10）**：`stay_days` **只用于「公海停留超期」**（→ 下句②），**不参与私海掉落倒计时**；私海倒计时由需求的**三条掉落触发**决定 —— `follow_freq_days`（跟进频次未达标）/ `deal_cycle_days`（成单周期超时）/ `no_progress_max`（推进停滞），**规则本体与锚点一律见 `→需求§6.3`，本文件不复述**。⚠ 原文写「`stay_days` 两类用途：① 私海掉落倒计时」与需求 §6.3 的字段口径冲突，做 M7-03/04（掉海预警）时当场发现（→《欠账登记表》**D-57**），按"上游优先"改本文件。
+> ② **公海停留超期 → 生成经理决策待办**（不自动删除、不自动流转）。
 
 ### F2 sea_record 入公海历史
 `relation_id + owner_id + from_sea/to_sea` + `reason`(follow_timeout/deal_timeout/stagnant/manual/dept_manager_delete/**dead(判死)/churn(流失)**) + `dropped_at + claimed_by + claimed_at`

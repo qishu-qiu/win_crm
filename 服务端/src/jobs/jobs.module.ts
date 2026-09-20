@@ -10,6 +10,11 @@
 //   特意不做"扫目录自动注册"：装配知识要**一处可见**（同 `app.module.ts` 的既有口径）——
 //   自动扫描会让"这个进程跑了什么"藏进约定里，读代码看不出来。
 //
+// ★ **任务清单 ＝《数据架构》§十二 的清单，多一个都不留**：`heartbeat`（M7-02 的探活探针）
+//   于 **2026-09-20 按拍板 P-09 删除** —— 它**不在** §十二 清单里，当初唯一的理由
+//   （证明「jobs 约定 ＋ `job_run_log` 留痕」这条链路通）已被**掉海预警每小时那一行**取代
+//   （→《欠账登记表》D-55；M7-02 的判据「跑一次后表中有记录」现由掉海预警自证）。
+//
 // ⚠ **不许把本模块挂进 `app.module.ts`**（Web 进程）：Web 可扩到 N 个实例，
 //   定时任务会在每个实例上各跑一遍（架构 §六：Worker 恒 1 实例）。这条**已上 ESLint 硬卡**
 //   （→ `eslint.config.mjs` 的 `appModuleBlock`），不是靠自觉。
@@ -17,7 +22,6 @@
 import { Module } from '@nestjs/common';
 
 import { SeaModule } from '../modules/sea/sea.module';
-import { HeartbeatJob } from './heartbeat.job';
 import { JobRunner } from './job-runner.service';
 import { JobScheduler } from './job-scheduler.service';
 import { SeaWarningJob } from './sea-warning.job';
@@ -30,16 +34,12 @@ import { SCHEDULED_JOBS } from './job.types';
   providers: [
     JobRunner,
     JobScheduler,
-    HeartbeatJob,
     SeaWarningJob,
     {
       // ★ 任务清单**只在这里列一次**：调度器按数组注入，新增任务不必改它的构造函数
       provide: SCHEDULED_JOBS,
-      useFactory: (heartbeat: HeartbeatJob, seaWarning: SeaWarningJob) => [
-        heartbeat,
-        seaWarning,
-      ],
-      inject: [HeartbeatJob, SeaWarningJob],
+      useFactory: (seaWarning: SeaWarningJob) => [seaWarning],
+      inject: [SeaWarningJob],
     },
   ],
   // 本片没有别的模块要调 jobs；导出 runner 供后续（如"手动触发一次"的运维口）复用

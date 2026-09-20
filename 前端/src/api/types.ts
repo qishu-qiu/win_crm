@@ -516,6 +516,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sea/company/{id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 领取公海客户到私海
+         * @description `{dept_id, product_line_id}` 定位「公司 × 部门 × 产品线」下**那一条公海关系**（与 `POST /relations` 同形）。**谁能领**＝可写角色 ＋ 读范围（销售＝本部门公海、经理＝管辖部门、总经理＝全部；**管理员（只读）与交付 / 客服一律 403**）—— 与公海读门同一档，不另开一格权限。**抢到才算**：条件 UPDATE（`sea_status = company_sea`）影响 1 行，并发被同事先领走 → **409**；定位不到（本就无 / 刚刚被领走）→ **400**；`dept_id` / `product_line_id` / 公司不存在 → **400**。**幂等（语义）**：领成功后关系已是私海，重复调用 → 400（**不是 500、不会双写**）。**级联**：阶段回到 1（新一轮，上一轮阶段留痕保留）＋ owner 成员切给领取人 ＋ 该关系所有 **open 承诺 `owner_id` 转新 owner**（承诺随关系走，→ 接口 §5.6 尾）；入公海历史（`sea_record`）回填 `claimed_by` / `claimed_at`（**没有历史行则不造行**，`claimed_at` 回 `null`）。出参＝**关系列表项**（与 §5.6 同一形状）＋ `claimed_at`，前端据此跳 `/relations/:id`
+         */
+        post: operations["SeaController_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1637,6 +1657,70 @@ export interface components {
              */
             snooze_count: number;
         };
+        ClaimSeaRelationDto: {
+            /**
+             * @description 承接部门 id（＝这条公海关系**所属部门**；销售＝本部门、经理＝管辖部门、总经理＝任意）。⚠ 跨部门领公海这件事**不存在**（→ 需求 §6.3）：别部门想要这个客户＝自己激活一条本部门的关系
+             * @example 2
+             */
+            dept_id: string;
+            /**
+             * @description 产品线 id（→ A7）
+             * @example 1
+             */
+            product_line_id: string;
+        };
+        SeaClaimVoDto: {
+            /**
+             * @description 业务关系 id
+             * @example 1
+             */
+            id: string;
+            /** @description 公司档案（档案被逻辑删时取不到引用 → `null`） */
+            company: components["schemas"]["RelationRefDto"] | null;
+            /** @description 承接部门（`dept_id` 恒定不可变，→ C1） */
+            dept: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线（含固定配色键 `color_key`） */
+            product_line: components["schemas"]["ProductLineRefDto"] | null;
+            /**
+             * @description 工作流阶段：1~6 ＋ 7＝已流失
+             * @example 1
+             */
+            stage: number;
+            /**
+             * @description 紧迫档
+             * @enum {string}
+             */
+            urgency: "weekly" | "monthly" | "quarterly" | "long_term" | "gray";
+            /**
+             * @description 开发价值档（非灰度关系**必标**，→ C1）
+             * @enum {string|null}
+             */
+            value_tier: "high" | "medium" | "low" | "pending" | null;
+            /** @description 客户等级（**系统按滚动 12 个月回款自动算、不手填** → E 域未接，本批恒 `null`） */
+            customer_level: string | null;
+            /** @description 主责销售（**公海关系为 `null`**） */
+            owner: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description `private`＝私海（有 owner）/ `company_sea`＝公海（无 owner）
+             * @enum {string}
+             */
+            sea_status: "private" | "company_sea";
+            /** @description 最近一次**有效沟通**时间（快速标记不计入，→ C1） */
+            last_event_at: string | null;
+            /** @description 一句话「上次说好下次干嘛」 */
+            next_action_hint: string | null;
+            /**
+             * @description 竞品态势快照（`null`＝未知）
+             * @enum {string|null}
+             */
+            competition: "none" | "in_use" | "comparing" | null;
+            /** @description 建档时间（ISO） */
+            created_at: string;
+            /** @description 最近更新时间（ISO） */
+            updated_at: string;
+            /** @description 本次领回 `sea_record.claimed_at`（ISO），即**这次从公海领回的时间**；**`null` ＝ 这条关系没有入公海历史**（掉海扫描属 M7 后续片：没有历史就**不造行**，不假装掉过海）—— 与「领取成功」不矛盾 */
+            claimed_at: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -2370,6 +2454,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgendaItemVoDto"][];
+                };
+            };
+        };
+    };
+    SeaController_claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description **公司 id**（十进制字符串）—— 注意不是关系 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimSeaRelationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeaClaimVoDto"];
                 };
             };
         };

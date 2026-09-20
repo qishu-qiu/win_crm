@@ -22,6 +22,7 @@ import { Injectable } from '@nestjs/common';
 
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OPEN_COMMITMENT_STATUS } from './domain/commitment-rules';
 
 /** 交互式事务客户端（同 B / C 域：类型上就没有 `$transaction`，防在事务里再开事务） */
 export type EngineTxClient = Prisma.TransactionClient;
@@ -283,6 +284,25 @@ export class EngineRepository {
   /** 改承诺（兑现 / 取消 / 豁免 / 改期）—— 回整行供出参装配 */
   updateCommitment(id: bigint, data: UpdateCommitmentData) {
     return this.prisma.commitment.update({ where: { id }, data, select: COMMITMENT_SELECT });
+  }
+
+  // ===== M7-01 领取公海 → 承诺跟随关系换人（接口 §5.6 尾）=====
+
+  /**
+   * 把该关系**还没结束**的承诺整体转给新 owner（→ 接口 §5.6 尾：「领取瞬间，该关系所有
+   * open 承诺 `owner_id` 转新 owner」；与转交口径一致 —— 承诺跟随关系走，→ 需求 §8.1）。
+   *
+   * ★ 一条 `updateMany` 即原子：不逐条 `update`（逐条会把「一半转了、一半没转」的窗口露出来，
+   *   而这里没有任何"按条判断"的需要 —— 条件全在 `where` 里）。
+   * ★ 档位用 domain 常量 `OPEN_COMMITMENT_STATUS`（**不在本层写字面量**）：将来口径若变，
+   *   改一处即全体生效（同「一份 where 两处用」的教训）。
+   */
+  reassignOpenCommitments(relationId: bigint, ownerId: bigint, tx?: EngineTxClient) {
+    const client = tx ?? this.prisma;
+    return client.commitment.updateMany({
+      where: { relation_id: relationId, status: OPEN_COMMITMENT_STATUS },
+      data: { owner_id: ownerId },
+    });
   }
 
   // ===== M4-10 今日动线（简版）=====

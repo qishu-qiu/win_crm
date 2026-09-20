@@ -129,6 +129,8 @@ interface FakeOptions {
   createRelationError?: AppError | null;
   /** 关联动线：本次**搬运的孤儿跟单条数**（`updateMany` 的 `count`） */
   linkedEvents?: number;
+  /** M7-01：领取公海时**转归属的 open 承诺条数**（`updateMany` 的 `count`） */
+  reassignedCommitments?: number;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -153,6 +155,8 @@ function createService(options: FakeOptions = {}) {
     listAgendaOfUser: jest.fn(async () => options.agenda ?? []),
     // M6-14：把联系人名下**孤儿跟单**批量挂到新关系（`updateMany` 回 `{count}`）
     rehangOrphanEventsOfContact: jest.fn(async () => ({ count: options.linkedEvents ?? 0 })),
+    // M7-01：领取公海 → 该关系 open 承诺整体转新 owner（`updateMany` 回 `{count}`）
+    reassignOpenCommitments: jest.fn(async () => ({ count: options.reassignedCommitments ?? 0 })),
   };
   const relation = {
     // C 域跨域出口：**权限在这里判**（D 域不重复实现），单测只关心「它抛了 D 域就别往下走」
@@ -1245,6 +1249,84 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
       );
 
       expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===== M7-01 领取公海（F 域发 → D 域落事件 ＋ 转 open 承诺 owner）=====
+
+  describe('recordRelationClaimed（M7-01）', () => {
+    const CLAIMED_AT = new Date('2026-09-20T09:00:00Z');
+    const CLAIMED = createDomainEvent({
+      name: DomainEventName.RelationClaimed,
+      // 领取人 ＝ 新 owner（承诺跟着他走，→ 需求 §8.1）
+      actorId: OTHER,
+      aggregateId: RELATION_ID,
+      payload: { companyId: 3n, deptId: DEPT_ID, productLineId: 1n, prevOwnerId: ME },
+      occurredAt: CLAIMED_AT,
+    });
+
+    it('落一条 `system` 事件（`owner_snapshot` ＝ **新 owner**）＋ **open 承诺全部转新 owner**，同一事务', async () => {
+      const { service, repository, prisma, relation } = createService();
+
+      await service.recordRelationClaimed(CLAIMED);
+
+      const written = repository.createEvent.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(written).toMatchObject({
+        relation_id: RELATION_ID,
+        actor_id: OTHER,
+        owner_snapshot: OTHER,
+        action_type: 'system',
+        source: 'system',
+        // ★ 幂等键**带发生时刻**：同一条关系反复「掉海 → 领回」是常态（→ 需求 §8.1）
+        idempotency_key: `relation_claimed:${RELATION_ID.toString()}:${CLAIMED_AT.getTime()}`,
+      });
+      expect(repository.createEvent).toHaveBeenCalledWith(expect.anything(), { tx: true });
+      // 承诺跟随关系走（接口 §5.6 尾）：一条 `updateMany` 全转，**同一事务**
+      expect(repository.reassignOpenCommitments).toHaveBeenCalledWith(RELATION_ID, OTHER, {
+        tx: true,
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      // 领取是**系统动作**，不是「跟客户沟通过」——不许拿它刷掉海倒计时（→ 需求 §6.3）
+      expect(relation.touchLastEventAt).not.toHaveBeenCalled();
+    });
+
+    it('同一条事件再投一次（至少一次投递）→ 预检命中即返回，**事件与承诺都不再动**', async () => {
+      const { service, repository } = createService({ duplicated: eventRow() });
+
+      await service.recordRelationClaimed(CLAIMED);
+
+      expect(repository.createEvent).not.toHaveBeenCalled();
+      expect(repository.reassignOpenCommitments).not.toHaveBeenCalled();
+    });
+
+    it('**同一关系第二次领取**（时刻不同）→ 幂等键不同 ⇒ 照常落库（钉住「键带时刻」）', async () => {
+      const { service, repository } = createService();
+
+      await service.recordRelationClaimed(
+        createDomainEvent({
+          name: DomainEventName.RelationClaimed,
+          actorId: OTHER,
+          aggregateId: RELATION_ID,
+          payload: {},
+          occurredAt: new Date(CLAIMED_AT.getTime() + 1000),
+        }),
+      );
+
+      const written = repository.createEvent.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(written['idempotency_key']).toBe(
+        `relation_claimed:${RELATION_ID.toString()}:${CLAIMED_AT.getTime() + 1000}`,
+      );
+    });
+
+    it('事件没带 `aggregateId` → **什么都不做**（不猜是哪条关系）', async () => {
+      const { service, repository } = createService();
+
+      await service.recordRelationClaimed(
+        createDomainEvent({ name: DomainEventName.RelationClaimed, actorId: OTHER, payload: {} }),
+      );
+
+      expect(repository.createEvent).not.toHaveBeenCalled();
+      expect(repository.reassignOpenCommitments).not.toHaveBeenCalled();
     });
   });
 });

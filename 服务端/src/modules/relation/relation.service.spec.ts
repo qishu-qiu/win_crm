@@ -769,7 +769,27 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(repository.reviveMember).not.toHaveBeenCalled();
       // ③ 上一轮已在阶段 1 ⇒ 不写留痕（避免无信息的噪声行）
       expect(repository.createStageLog).not.toHaveBeenCalled();
-      expect(result).toEqual({ relationId: RELATION_ID, prevStage: 1, prevOwnerId: null });
+      // 出参＝**写完之后读回**那一趟装配的列表项（`owner` 必须是刚写下的那个人 ——
+      // 拿事务里的返回值装配会得到 `owner: null`，→ 真库踩过的坑）
+      expect(repository.findRelationById).toHaveBeenCalledWith(RELATION_ID);
+      expect(result.prevStage).toBe(1);
+      expect(result.prevOwnerId).toBeNull();
+      expect(result.relation.owner).toEqual(ME_REF);
+      expect(result.relation.sea_status).toBe('private');
+    });
+
+    it('`dept_id` 指向的部门不存在 → 400（跨域取引用取不到），且**不去定位**', async () => {
+      const { service, repository } = createService({ seaRow: SEA_ROW });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf({ type: 'all', roleCodes: ['gm'] }), () =>
+          service.claimCompanySeaRelation({ ...CLAIM_INPUT, deptId: 9n }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('relation.dept_missing');
+      expect(repository.findCompanySeaRelation).not.toHaveBeenCalled();
     });
 
     it('**曾当过 owner 的人领回** → 走 `reviveMember`（`uk_member` 不含 `revoked_at`，INSERT 必撞）', async () => {

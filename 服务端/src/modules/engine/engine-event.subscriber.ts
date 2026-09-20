@@ -3,8 +3,11 @@
 //
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM架构设计说明》§5.3 首批跨域事件清单：
-//       `RelationCreated` ＝ **C 发 → D 落首条 `action_event`（建档）**。
-//       ⚠ 本文件**只订这一个**：别的九条各有归属里程碑，**不提前订阅**（订了没处理就是空跑）。
+//       `RelationCreated` ＝ **C 发 → D 落首条 `action_event`（建档）**；
+//       `RelationClaimed` ＝ **F 发 → D 落事件 ＋ A 通知前 owner**（M7-01 起订阅 ——
+//         D 这半＝落事件 ＋ 转 open 承诺 owner，→ 接口 §5.6 尾；**A 那半（通知前 owner）
+//         等通知设施**，故 A 域尚未订阅，→《欠账登记表》D-42）。
+//       ⚠ 其余八条各有归属里程碑，**不提前订阅**（订了没处理就是空跑）。
 //   · 同 §5.2 跨域路之②：订阅方决定投递方式 —— 本域选**默认 `async`（不等结果）**，
 //     理由：C 域激活关系**没理由等 D 域写快照**（建档事件落库慢一秒，不影响激活成功）。
 //     若改 `sync`，D 域的写库失败会顺着 `publish` 抛回 C 域 —— 那时关系已经提交了，
@@ -28,11 +31,16 @@ import {
   type DomainEvent,
   type Unsubscribe,
 } from '../../kernel/index';
-import { EngineService, type RelationCreatedPayload } from './engine.service';
+import {
+  EngineService,
+  type RelationClaimedPayload,
+  type RelationCreatedPayload,
+} from './engine.service';
 
 @Injectable()
 export class EngineEventSubscriber implements OnModuleInit, OnModuleDestroy {
-  private unsubscribe: Unsubscribe | undefined;
+  /** 本域订的事件（**一个事件一个退订函数**；订阅多了还用单个变量＝漏退订的经典写法） */
+  private readonly unsubscribes: Unsubscribe[] = [];
 
   constructor(
     private readonly events: EventBus,
@@ -40,15 +48,30 @@ export class EngineEventSubscriber implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.unsubscribe = this.events.subscribe<RelationCreatedPayload>(
-      DomainEventName.RelationCreated,
-      (event: DomainEvent<RelationCreatedPayload>) => this.engine.recordRelationCreated(event),
-      { delivery: 'async' },
+    // 建档：C 发 → 本域落首条 `action_event`（架构 §5.3）
+    this.unsubscribes.push(
+      this.events.subscribe<RelationCreatedPayload>(
+        DomainEventName.RelationCreated,
+        (event: DomainEvent<RelationCreatedPayload>) => this.engine.recordRelationCreated(event),
+        { delivery: 'async' },
+      ),
+    );
+
+    // 领取公海：F 发 → 本域落事件 ＋ 转 open 承诺 owner（→ 架构 §5.3；接口 §5.6 尾）
+    //   投递同样选 `async`：F 域**没理由等承诺转完**才回响应 —— 这正是 §5.2 路之②「不等结果」；
+    //   改 `sync` 则承诺转失败会顺着 `publish` 抛回 F 域，而关系**已经被领走并提交了**，
+    //   请求报错＝「成功的事被报成失败」（同建档那条注记）。
+    this.unsubscribes.push(
+      this.events.subscribe<RelationClaimedPayload>(
+        DomainEventName.RelationClaimed,
+        (event: DomainEvent<RelationClaimedPayload>) => this.engine.recordRelationClaimed(event),
+        { delivery: 'async' },
+      ),
     );
   }
 
   onModuleDestroy(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = undefined;
+    for (const unsubscribe of this.unsubscribes) unsubscribe();
+    this.unsubscribes.length = 0;
   }
 }

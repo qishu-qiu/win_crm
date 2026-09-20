@@ -179,6 +179,19 @@ export interface RelationCreatedPayload {
   ownerId?: bigint | null;
 }
 
+/**
+ * `RelationClaimed` 事件的载荷（→ F 域 `SeaService.claimCompanySeaRelation` 发出；
+ * **最小信息**，架构 §5.3 尾注：不塞对方的表结构）。
+ * ★ 新 owner **不在这里**：它就是事件的 `actorId`（领取人＝新 owner），再抄一份＝两个真相源。
+ */
+export interface RelationClaimedPayload {
+  companyId?: bigint;
+  deptId?: bigint;
+  productLineId?: bigint;
+  /** 认领前的在位 owner（公海理应 `null`；残留时用于「通知前 owner」那半，→ 架构 §5.3 A 域列） */
+  prevOwnerId?: bigint | null;
+}
+
 /** 时间线范围（→ §5.7：`GET /relations/:id/events` 默认 `range=1m`） */
 export type EventRange = '1m' | 'all';
 
@@ -216,6 +229,18 @@ const RELATION_CREATED_KEY_PREFIX = 'relation_created';
 
 /** 建档事件在时间线上显示的那句话（**系统事件**，不是销售写的跟单） */
 const RELATION_CREATED_SUMMARY = '建档：激活业务关系';
+
+// ===== M7-01 领取公海（F 域发 → D 域落事件 ＋ 转承诺归属）=====
+
+/**
+ * 领取公海事件的**确定性**幂等键前缀（→ 见 `recordRelationClaimed`：至少一次投递也不会写两条）。
+ * ⚠ 与建档不同：**键里必须带发生时刻** —— 同一条关系会反复「掉海 → 领回」（→ 需求 §8.1），
+ *   只按 `relation_id` 去重会把**第二次领取**误判成「已经落过」而整条丢掉。
+ */
+const RELATION_CLAIMED_KEY_PREFIX = 'relation_claimed';
+
+/** 领取事件在时间线上显示的那句话（**系统事件**，不是销售写的跟单） */
+const RELATION_CLAIMED_SUMMARY = '领取：从公海领取到私海';
 
 @Injectable()
 export class EngineService {
@@ -872,6 +897,70 @@ export class EngineService {
       });
     } catch (error) {
       // 并发下预检漏过 → `uk_idem` 兜底，同样视为「已经落过」
+      if (mapPrismaError(error) === undefined) throw error;
+    }
+  }
+
+  // ===== M7-01 领取公海事件（由 `engine-event.subscriber.ts` 调）=====
+
+  /**
+   * 领取公海要落的两件**本域**事：
+   *   ① 落一条「领取」事件（→ 架构 §5.3：`RelationClaimed` ＝ **F 发 → D 落事件**）；
+   *   ② 把该关系**还没结束**的承诺整体转给新 owner（→ 接口 §5.6 尾）。
+   *
+   * ★ 两件事**同一个本域事务**（→ 架构 §5.2 路之③「多表一致性 → 本域 `$transaction`」）：
+   *   它们是一件事的两面 —— 若事件落了而承诺没转，重投时预检会以「已经落过」直接返回
+   *   （幂等键相同），这批承诺就**永久留在前主人名下**；反过来先落事件再转承诺也有同样的窗口。
+   *   两条 `update` 一起成功或一起回滚，就没有这个窗口。
+   *
+   * ★ **幂等键必须带发生时刻**（→ `RELATION_CLAIMED_KEY_PREFIX` ★）：同一条关系反复
+   *   「掉海 → 领回」是常态（→ 需求 §8.1），只按关系 id 去重会把第二次领取整条丢掉。
+   *
+   * ★ **不回写 `last_event_at`**（与建档同款）：领取是**系统动作**，不是「跟客户沟通过」——
+   *   拿它刷掉海倒计时等于给「点一下保号」开后门（→ 需求 §6.3）。故本方法直接走仓储，
+   *   不复用 `recordEvent` 那套「有效沟通才回写」的编排。
+   *
+   * ★ **不查权限**：事件来自 F 域（关系刚被领走），此时没有「当前登录人」可言 ——
+   *   `actorId` 由事件带来（＝领取人＝新 owner），架构 §5.3 基类字段的用法。
+   */
+  async recordRelationClaimed(event: DomainEvent<RelationClaimedPayload>): Promise<void> {
+    const relationId = event.aggregateId;
+    if (relationId === undefined) return; // 事件没带对象 → 无处可落（宁可漏写，不猜是哪条关系）
+
+    const idempotencyKey = `${RELATION_CLAIMED_KEY_PREFIX}:${relationId.toString()}:${event.occurredAt.getTime()}`;
+    const duplicated = await this.repository.findEventByIdempotencyKey(idempotencyKey);
+    if (duplicated !== null) return;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const client: EngineTxClient = tx;
+        await this.repository.createEvent(
+          {
+            relation_id: relationId,
+            contact_id: null,
+            actor_id: event.actorId,
+            // 领取事件属于**新一轮**：归属快照＝新 owner（前主人轮次的跟单保留旧快照，→ 需求 §8.1）
+            owner_snapshot: event.actorId,
+            action_type: 'system',
+            summary: RELATION_CLAIMED_SUMMARY,
+            outcome: null,
+            competition: null,
+            competitor_id: null,
+            competition_note: null,
+            duration_min: null,
+            source: 'system',
+            visit_log_id: null,
+            appointment_id: null,
+            idempotency_key: idempotencyKey,
+            event_at: event.occurredAt,
+          },
+          client,
+        );
+        // 承诺跟随关系走（与转交口径一致，→ 需求 §8.1）
+        await this.repository.reassignOpenCommitments(relationId, event.actorId, client);
+      });
+    } catch (error) {
+      // 并发下预检漏过 → `uk_idem` 兜底，同样视为「已经落过」（承诺也随之转过，见方法头 ★）
       if (mapPrismaError(error) === undefined) throw error;
     }
   }

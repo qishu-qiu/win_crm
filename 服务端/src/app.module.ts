@@ -22,6 +22,9 @@
 //      激活（撞单 409）、改属性（非灰度必标开发价值）、成员（一关系一 owner）。
 //   ⑧ `EngineModule`  —— 第 4 层业务域（D 域 / 跟单引擎）：**M4 接入** —— 跟单事件（有效沟通
 //      vs 快速标记）、承诺、工作台。⚠ M4-01 只建骨架（**无 controller**，M4-12 才挂接口）。
+//   ⑨ `SeaModule`     —— 第 4 层业务域（F 域 / 公海）：**M7-01 接入** —— 目前只有一条
+//      「领取到私海」（`POST /sea/company/:id/claim`）＋ 订阅 `RelationClaimed` 的 **D 域**那一半。
+//      ⚠ 它与 D 域**同层**（架构 §3）：本模块只 import C 域，**不 import** D / E / G。
 //
 // · `ContextModule` 内部已被 `SharedModule` import（为让横切层自给自足）。此处**再显式列一次**：
 //   Nest 按**模块类**去重，不会产生第二个实例，但能让「本进程装了 kernel」在根模块**一眼可见**
@@ -38,6 +41,7 @@ import { CompanyModule } from './modules/company/company.module';
 import { EngineModule } from './modules/engine/engine.module';
 import { OrgModule } from './modules/org/org.module';
 import { RelationModule } from './modules/relation/relation.module';
+import { SeaModule } from './modules/sea/sea.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SharedModule } from './shared/shared.module';
 
@@ -52,6 +56,7 @@ import { SharedModule } from './shared/shared.module';
     CompanyModule,
     RelationModule,
     EngineModule,
+    SeaModule,
   ],
   controllers: [HealthController],
 })

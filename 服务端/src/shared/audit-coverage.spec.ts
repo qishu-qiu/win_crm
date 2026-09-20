@@ -19,6 +19,7 @@ import { CompanyController } from '../modules/company/company.controller';
 import { EngineController } from '../modules/engine/engine.controller';
 import { OrgController } from '../modules/org/org.controller';
 import { RelationController } from '../modules/relation/relation.controller';
+import { SeaController } from '../modules/sea/sea.controller';
 
 /** 属于「增删改」的 HTTP 方法（与 `AuditLogInterceptor` 同一口径） */
 const WRITE_METHODS: readonly RequestMethod[] = [
@@ -29,7 +30,13 @@ const WRITE_METHODS: readonly RequestMethod[] = [
 ];
 
 /** 已建的全部 controller（新增域时**必须**加进来，否则本自检形同虚设） */
-const CONTROLLERS = [OrgController, CompanyController, RelationController, EngineController];
+const CONTROLLERS = [
+  OrgController,
+  CompanyController,
+  RelationController,
+  EngineController,
+  SeaController,
+];
 
 /**
  * 允许 `@AuditSkip()` 的端点白名单（`METHOD PATH`）——**只放语义是读的写方法**：

@@ -53,6 +53,16 @@ export type ClosableStatus = (typeof CLOSABLE_STATUSES)[number];
 /** 已结束的承诺（不再允许改期 / 再次关闭） */
 const TERMINAL_STATUSES: readonly string[] = ['done', 'cancelled', 'waived'];
 
+/**
+ * 「**还没结束**」的那一档（→ D1 `status` 的 `open`）—— 领取公海 / 转交时「承诺跟随关系换人」
+ * 改的就是这一档（→ 接口 §5.6 尾：「领取瞬间，该关系所有 **open 承诺 `owner_id` 转新 owner**」）。
+ *
+ * ★ `expired` **不在这一档里**：它是**派生态**（`due_at` 过了还没 done，按时间算，不靠写库流转
+ *   —— 见文件头 ★），库里不会有这个值，故没有「漏掉 expired」这回事；
+ *   `done` / `cancelled` / `waived` 已结束，改它的归属＝篡改历史（谁答应的事就是谁答应的）。
+ */
+export const OPEN_COMMITMENT_STATUS = 'open';
+
 /** 一句话承诺内容的上限（→ D1：`content` `VarChar(255)`） */
 export const COMMITMENT_CONTENT_MAX_LENGTH = 255;
 

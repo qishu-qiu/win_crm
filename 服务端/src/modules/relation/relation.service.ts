@@ -292,14 +292,16 @@ export class RelationService {
    * ★ 承诺级联**不在这里**：`commitment` 是 D 域的表，而 **F / D 同层禁依赖**（架构 §3）⇒
    *   由调用方发 `RelationClaimed` 领域事件、D 域订阅后转 open 承诺 owner（架构 §5.2 路之②）。
    *
-   * @returns `{relationId, prevStage, prevOwnerId}`：`prevStage` 供留痕/回显，`prevOwnerId`
-   *          ＝ 认领前的在位 owner（公海理应 `null`；残留时用于上层日志）
+   * @returns `{relation, prevStage, prevOwnerId}`：`relation` ＝ **写完之后读回**的列表项
+   *          （＝接口 §5.6 `RelationVo` 的**唯一形状**，F 域直接拿去当出参，不重抄一遍字段）；
+   *          `prevStage` / `prevOwnerId` ＝ 认领前的阶段与在位 owner（公海理应 `null`），
+   *          供上层组事件载荷。
    */
   async claimCompanySeaRelation(input: {
     companyId: bigint;
     deptId: bigint;
     productLineId: bigint;
-  }): Promise<{ relationId: bigint; prevStage: number; prevOwnerId: bigint | null }> {
+  }): Promise<{ relation: RelationVo; prevStage: number; prevOwnerId: bigint | null }> {
     const viewer = requireViewer();
 
     // ① 角色：只读角色（管理员 / 交付 · 客服）当场拒 —— 与 `addMember` 等写动作同一条人话
@@ -322,7 +324,16 @@ export class RelationService {
       });
     }
 
-    // ③ 定位目标（公海 ＋ 三元组）；定位不到 ＝ 本来就没有 / 刚刚被人领走
+    // ③ 三元组存在性（公司 / 部门 / 产品线）—— 与 `createRelation` 同一道校验、同一句人话：
+    //    id 指错了是**参数错**（400，改参数重试），与「本来就没有这条公海」（也该刷新列表）
+    //    是两件事、两个下一步动作，不许挤进同一句人话里。
+    await this.requireTripleExists({
+      companyId: input.companyId,
+      deptId: input.deptId,
+      productLineId: input.productLineId,
+    });
+
+    // ④ 定位目标（公海 ＋ 三元组）；定位不到 ＝ 本来就没有 / 刚刚被人领走
     const row = await this.repository.findCompanySeaRelation({
       companyId: input.companyId,
       deptId: input.deptId,
@@ -401,8 +412,12 @@ export class RelationService {
         throw mapPrismaError(error) ?? error;
       });
 
+    // ★ 必须**读回一次**再出参（同 `createRelation` 那条注释）：事务里那批写的返回值都发生在
+    //   **owner 成员落库之前**，`members` 是空的 —— 拿它装配引用，出参的 `owner` 就会是 `null`
+    //   （真库实测踩过；单测的假对象也要按这个阶段造）。
+    const fresh = await this.requireRelationRow(row.id);
     return {
-      relationId: row.id,
+      relation: this.buildVo(fresh, await this.loadRefs([fresh])),
       prevStage: row.stage_id,
       prevOwnerId: prevOwnerMember?.employee_id ?? null,
     };

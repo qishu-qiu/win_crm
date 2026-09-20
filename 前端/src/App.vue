@@ -306,17 +306,32 @@ onUnmounted(() => {
           <!--
             右：**头像菜单**（→ 前端文档 §四.1「个人中心 / 外观设置：顶部头像菜单 →
             `/me/appearance`」；2026-09-18 · D-41①）。用 AntD `Dropdown` ＋ `Avatar`
-            （基础件，不自己写弹层与定位）。触发器是原生 `button` —— 键盘可达，
-            不需要再手写 tabindex / 回车键。
+            （基础件，不自己写弹层与定位）。
+
+            ★ `:trigger="['click']"` **不能省**：AntD `Dropdown` 的默认触发器是 **hover**
+              （`ant-design-vue/es/dropdown/dropdown.js` 的 `trigger: 'hover'`）—— 只认悬停
+              就等于「**点击没反应、触屏与键盘打不开**」（键盘回车走的是 click 事件）；
+              这里**不与 hover 混用**（混用会出现"鼠标一扫就弹、点一下又关"）。
+            ⚠ 原本此处写的是「触发器是原生 `button` —— 键盘可达」—— 在 hover 触发下
+              **不成立**，2026-09-20 修正（→ 案例库 坑 34）。
+
+            ★ **`#overlay` 槽里的第一个节点，必须是 `<a-menu>` 本身**：AntD 取
+              `slots.overlay()[0]` 当菜单（`dropdown.js` 的 `renderOverlay()`），而 dev 下
+              Vue **保留模板注释** ⇒ 注释若排在菜单前面，它会被**当成菜单**拿去 clone，
+              弹层里就只剩一个注释节点（`innerHTML` ＝ `<!---->`、**高 0**）——
+              表现是"点了 / 悬停都毫无反应"，而 **lint 与 build 全绿**（生产构建会剥掉注释、
+              反而正常，故只有真跑 dev 页面才暴露）。2026-09-20 实测踩中。
+              ⇒ **本组件内的注释一律写在这一段（槽外）**，不写进任何槽。
+              菜单项 `:selectable="false"` ＝ 下拉项不留选中态（否则下次打开还高亮上次点的）。
+
             ⚠ 铃铛（消息中心）**不在这里**：它的落点页与接口都还没建，不摆假入口（→ D-41 ②）。
           -->
-          <a-dropdown placement="bottomRight">
+          <a-dropdown placement="bottomRight" :trigger="['click']">
             <button type="button" class="shell-user">
               <a-avatar :size="28">{{ avatarText }}</a-avatar>
               <span class="shell-name">{{ currentUser.name }}</span>
             </button>
             <template #overlay>
-              <!-- `:selectable="false"`：下拉里的项不该留选中态（否则下次打开还高亮上次点的） -->
               <a-menu :selectable="false" @click="onUserMenuClick">
                 <a-menu-item v-if="canSeeAppearance" key="/me/appearance">外观设置</a-menu-item>
                 <a-menu-item key="logout">退出登录</a-menu-item>

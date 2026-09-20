@@ -7,6 +7,7 @@
     "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
   },
   "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run prisma:generate && nest build",
     "postinstall": "npm run prisma:generate",
     "start:web": "nest start",

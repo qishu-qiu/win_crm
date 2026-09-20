@@ -12,7 +12,7 @@
 
 | # | 命令 | 通过判据 | 失败处理 |
 | --- | --- | --- | --- |
-| T0-1 | `npx tsc --noEmit` | 0 error | 修到 0；**不许用 `any` 兜底**。⚠ 本工作区的 `npm run build`（先清 `dist`）会被**环境删除守卫**拦（>500 项）⇒ **类型校验就用本行**，需新产物见《欠账登记表》**D-58** |
+| T0-1 | `npx tsc --noEmit` | 0 error | 修到 0；**不许用 `any` 兜底**。⚠ `npm run build` 已可跑（2026-09-20 起 `nest-cli.json` 关掉 `deleteOutDir` —— 本工作区的删除守卫会拦「清 dist」这步）；**要绝对干净的产物**时跑 `npm run clean`（弹一次批量删除确认，人工点） |
 | T0-2 | `npm run lint` | 0 error | 报错即改；**跨域 import 报错＝设计错，改依赖不改 lint** |
 | T0-3 | `npm test -- <本次涉及的 spec>` | 绿 | 先写用例再改逻辑（红→绿） |
 

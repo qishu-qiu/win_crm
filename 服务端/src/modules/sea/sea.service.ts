@@ -1,11 +1,14 @@
 // =============================================================================
-// F 域服务（F-01 公海「领取到私海」）—— **只做编排**
+// F 域服务（F-01 公海「领取到私海」＋ M7-03 掉海预警）—— **只做编排**
 //
 // 分层约束（架构 §5.4）：service **只做编排**（多步 / 跨域取引用 / 发领域事件），
 //   **不写业务规则**（角色 / 范围 / 定位 / 原子性全在 C 域出口与 C 域 `domain/`）、
 //   **不写 SQL**（在 `sea.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
+//   · 《销售CRM数据架构文档》§十二（定时任务）：「掉海预警（私海→公海）｜每小时｜按 sea_rule：
+//     ≤3 天进动线；到期前 24h 推销售；6h 标红+推经理；超期落 sea_record 转公司公海」——
+//     ⚠ 末句"超期落 sea_record"**不在本片**（M7-05：只告警、不真掉）→ `scanSeaWarning`；
 //   · 《销售CRM接口API文档》§4.5：`POST /sea/company/:id/claim`（`:id` ＝ **公司 id**）；
 //     §5.6 尾：**领取瞬间该关系所有 open 承诺 `owner_id` 转新 owner**（承诺随关系走，→ 需求 §8.1）。
 //   · 《销售CRM架构设计说明》§3 层级：F 域与 D 域**同在 L4** ⇒ **同层禁止互相依赖**；
@@ -28,7 +31,7 @@
 //   也不能反过来让 D 域编排领取（那要 D 域去碰 C 域的表）。**唯一合规路径＝领域事件**，
 //   且承诺级联**不需要同步返回**（§5.2 路之② 的教科书用例）。
 // =============================================================================
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import {
   AppError,
@@ -41,8 +44,20 @@ import {
   getRequestContext,
   jsonToBigint,
 } from '../../kernel/index';
-import { RelationService, type RelationVo } from '../relation/relation.service';
+import {
+  RelationService,
+  type SeaWarningCandidate,
+  type RelationVo,
+} from '../relation/relation.service';
 import { SeaRepository } from './sea.repository';
+import {
+  classifySeaWarning,
+  resolveDropDeadline,
+  resolveSeaRuleFor,
+  SEA_WARNING_HIT_TIERS,
+  type SeaWarningTier,
+  type SeaWarningTierCounts,
+} from './domain/sea-warning';
 import type { ClaimSeaRelationDto } from './dto/sea-request.dto';
 
 /**
@@ -64,8 +79,33 @@ export interface SeaClaimVo extends RelationVo {
   claimed_at: string | null;
 }
 
+/** 掉海预警**一次扫描**的结果（M7-03；判据＝日志可见扫描结果与命中数，故这里只回计数） */
+export interface SeaWarningScanResult {
+  /** 候选私海条数（＝本次真正检查过的关系数） */
+  scanned: number;
+  /** 生效中的规则条数（0 ⇒ 本次一条都没判，见方法内 warn） */
+  rules: number;
+  /** 跳过：该关系**解析不到任何规则**（部门 / 产品线没配、且没有全局兜底） */
+  skippedNoRule: number;
+  /** 跳过：规则里**没配跟进天数**（本片只有触发①，见 `domain/sea-warning.ts` 文件头 ★） */
+  skippedNoFreq: number;
+  /** 命中条数（四档之和；不含 `none`） */
+  hits: number;
+  /** 各档条数（**含 `none`**，便于"扫了几条、几条没事"一眼看全） */
+  tiers: SeaWarningTierCounts;
+}
+
+/** 各档计数从 0 起（档位清单以 `SEA_WARNING_HIT_TIERS` ＋ `none` 为准，防漏档） */
+function emptyTierCounts(): SeaWarningTierCounts {
+  const counts = { overdue: 0, alert_manager: 0, notify_owner: 0, agenda: 0, none: 0 };
+  for (const tier of SEA_WARNING_HIT_TIERS) counts[tier] = 0;
+  return counts;
+}
+
 @Injectable()
 export class SeaService {
+  private readonly logger = new Logger(SeaService.name);
+
   constructor(
     private readonly repository: SeaRepository,
     private readonly relation: RelationService,
@@ -121,6 +161,102 @@ export class SeaService {
     );
 
     return { ...relation, claimed_at: latest === null ? null : claimedAt.toISOString() };
+  }
+
+  // ===== M7-03 掉海预警（**只告警、不真掉**；→ 开发计划 M7-03 / M7-05）=====
+
+  /**
+   * 扫一遍**所有有主关系**，按三档阈值算出"该提醒谁"，并把扫描结果与命中数写进日志。
+   *
+   * ⚠⚠ **本方法对业务数据零写**（M7-05 判据逐字：「只告警、不真掉（不写 `sea_record`、不清 owner）」）：
+   *   · 不写 `sea_record`（真掉海才写，属 **M9-F**）；
+   *   · 不动 `business_relation` 任何列（`sea_status` 含在内）；
+   *   · 不撤 owner 成员；
+   *   · **也不写 `daily_agenda`** —— 「≤3 天进动线」里的"进动线"是
+   *     **组装今日动线**那条任务（§十二，每日 05:00）的事，不属本片。
+   *   本方法唯一产生的记录是调用方（`JobRunner`）写的 `job_run_log` —— 那是"任务自身跑得怎么样"，
+   *   不是业务数据（→ A13：两者分工固定，不可互相替代）。
+   *
+   * ★ 三档的**出口动作**本片一律不做：推销售 / 推经理要 `notification`（未建，→ D-42）、
+   *   进动线要 `daily_agenda` 组装任务（未建，→ M9 jobs）。本片只把**扫描结果与命中数**打出来。
+   *
+   * ★ 规则**一条都没有**时：只 warn、不猜、不拿默认天数顶上（那等于由实现定义业务口径）——
+   *   规则配置端点（接口 §4.14.10 `GET/PUT /sea/rules`）属 M9-F。
+   *
+   * @param now 判定基准时刻由调用方传入（本层不读系统时钟：任务时刻要与 `job_run_log.run_at` 同源）
+   */
+  async scanSeaWarning(now: Date): Promise<SeaWarningScanResult> {
+    const tiers = emptyTierCounts();
+    const rules = await this.repository.listActiveSeaRules(now);
+    const candidates: SeaWarningCandidate[] = await this.relation.listSeaWarningCandidates();
+
+    if (rules.length === 0) {
+      this.logger.warn(
+        `掉海预警：sea_rule 没有生效中的规则（规则配置属 M9-F）⇒ 本次一条都不判，候选 ${candidates.length} 条全部跳过`,
+      );
+      return {
+        scanned: candidates.length,
+        rules: 0,
+        skippedNoRule: candidates.length,
+        skippedNoFreq: 0,
+        hits: 0,
+        tiers,
+      };
+    }
+
+    let skippedNoRule = 0;
+    let skippedNoFreq = 0;
+    let hits = 0;
+
+    for (const candidate of candidates) {
+      // ① 规则解析（L4→L1 取第一条，7 天缓冲已由仓储的 `effective_from <= now` 挡过一道）
+      const rule = resolveSeaRuleFor(
+        rules,
+        { deptId: candidate.deptId, productLineId: candidate.productLineId },
+        now,
+      );
+      if (rule === null) {
+        skippedNoRule += 1;
+        continue;
+      }
+
+      // ② 到期时刻（触发①「最近 N 天无有效跟进」；本片只覆盖这一条，见 domain 文件头 ★）
+      const dropAt = resolveDropDeadline({
+        lastEventAt: candidate.lastEventAt,
+        createdAt: candidate.createdAt,
+        followFreqDays: rule.followFreqDays,
+      });
+      if (dropAt === null) {
+        skippedNoFreq += 1;
+        continue;
+      }
+
+      // ③ 分档（阈值判定是纯函数，口径只有一处 → `domain/sea-warning.ts`）
+      const tier: SeaWarningTier = classifySeaWarning({ dropAt, now });
+      tiers[tier] += 1;
+      if (tier === 'none') continue;
+
+      hits += 1;
+      // 逐条明细走 `debug`：正常班次命中数不大，排查时开日志即可看到"哪条、为谁、何时到期"
+      this.logger.debug(
+        `掉海预警命中：关系 ${candidate.id}（部门 ${candidate.deptId} / 产品线 ${candidate.productLineId} / owner ${candidate.ownerId ?? '-'}）到期 ${dropAt.toISOString()} → ${tier}`,
+      );
+    }
+
+    this.logger.log(
+      `掉海预警扫描完成：候选私海 ${candidates.length} 条 / 生效规则 ${rules.length} 条 → 命中 ${hits} 条` +
+        `（已到期 ${tiers.overdue} / ≤6h ${tiers.alert_manager} / ≤24h ${tiers.notify_owner} / ≤3天 ${tiers.agenda}）` +
+        `；跳过：无规则 ${skippedNoRule} / 规则未配跟进天数 ${skippedNoFreq}`,
+    );
+
+    return {
+      scanned: candidates.length,
+      rules: rules.length,
+      skippedNoRule,
+      skippedNoFreq,
+      hits,
+      tiers,
+    };
   }
 }
 

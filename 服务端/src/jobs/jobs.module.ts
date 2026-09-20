@@ -16,21 +16,30 @@
 // =============================================================================
 import { Module } from '@nestjs/common';
 
+import { SeaModule } from '../modules/sea/sea.module';
 import { HeartbeatJob } from './heartbeat.job';
 import { JobRunner } from './job-runner.service';
 import { JobScheduler } from './job-scheduler.service';
+import { SeaWarningJob } from './sea-warning.job';
 import { SCHEDULED_JOBS } from './job.types';
 
 @Module({
+  // 掉海预警（M7-03）要读业务数据 ⇒ 按需装上 **F 域**（架构 §六：Worker 装"用到的域"）。
+  // ★ F 域自己会带进它依赖的 C / B / A 域（Nest 的模块依赖，不是本层操心的事）
+  imports: [SeaModule],
   providers: [
     JobRunner,
     JobScheduler,
     HeartbeatJob,
+    SeaWarningJob,
     {
       // ★ 任务清单**只在这里列一次**：调度器按数组注入，新增任务不必改它的构造函数
       provide: SCHEDULED_JOBS,
-      useFactory: (heartbeat: HeartbeatJob) => [heartbeat],
-      inject: [HeartbeatJob],
+      useFactory: (heartbeat: HeartbeatJob, seaWarning: SeaWarningJob) => [
+        heartbeat,
+        seaWarning,
+      ],
+      inject: [HeartbeatJob, SeaWarningJob],
     },
   ],
   // 本片没有别的模块要调 jobs；导出 runner 供后续（如"手动触发一次"的运维口）复用

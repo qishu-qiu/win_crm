@@ -17,9 +17,14 @@ import {
   type EventBus,
   type RequestContext,
 } from '../../kernel/index';
-import type { RelationService, RelationVo } from '../relation/relation.service';
+import type {
+  RelationService,
+  RelationVo,
+  SeaWarningCandidate,
+} from '../relation/relation.service';
 import type { SeaRepository } from './sea.repository';
 import { SeaService } from './sea.service';
+import type { SeaRuleLike } from './domain/sea-warning';
 
 const ME = 7n;
 const OTHER = 8n;
@@ -57,6 +62,10 @@ interface FakeOptions {
   /** 最近一条入公海历史（**显式 `null`** ＝ 从来没掉过海） */
   latestRecord?: { id: bigint } | null;
   prevOwnerId?: bigint | null;
+  /** 生效中的公海规则（M7-03 扫描用；缺省＝没有规则） */
+  rules?: readonly SeaRuleLike[];
+  /** 预警候选私海（M7-03 扫描用；缺省＝空） */
+  candidates?: readonly SeaWarningCandidate[];
 }
 
 function createService(options: FakeOptions = {}) {
@@ -70,6 +79,10 @@ function createService(options: FakeOptions = {}) {
       Promise<{ id: bigint; claimed_at: Date }>,
       [bigint, { claimedBy: bigint; claimedAt: Date }]
     >(async () => ({ id: RECORD_ID, claimed_at: new Date() })),
+    // M7-03：读规则（**只读**；本域 service 对业务数据零写，→ 文件尾 ⚠ 用例）
+    listActiveSeaRules: jest.fn<Promise<SeaRuleLike[]>, [Date]>(async () =>
+      options.rules === undefined ? [] : [...options.rules],
+    ),
   };
   const relation = {
     claimCompanySeaRelation: jest.fn<
@@ -83,6 +96,10 @@ function createService(options: FakeOptions = {}) {
         prevOwnerId: options.prevOwnerId ?? null,
       };
     }),
+    // M7-03：候选私海（**只读**跨域出口）
+    listSeaWarningCandidates: jest.fn<Promise<SeaWarningCandidate[]>, []>(async () =>
+      options.candidates === undefined ? [] : [...options.candidates],
+    ),
   };
   // 事件总线：单测只关心「发了什么」（落库 / 转承诺是 D 域订阅方的事）
   const events = { publish: jest.fn<Promise<void>, [DomainEvent]>(async () => undefined) };
@@ -196,5 +213,127 @@ describe('SeaService（F-01 公海「领取到私海」）', () => {
     expect(error.httpStatus).toBe(401);
     expect(error.constraint).toBe('sea.no_context');
     expect(relation.claimCompanySeaRelation).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// M7-03 / M7-05 掉海预警扫描
+// =============================================================================
+const NOW = new Date('2026-09-20T12:00:00.000Z');
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+/** now 前 / 后 `ms` 毫秒（用例里只写"相对现在"，免得抄一屏时间戳） */
+function before(ms: number): Date {
+  return new Date(NOW.getTime() - ms);
+}
+
+/** 全局规则：10 天没有效跟进就到期（L1） */
+const GLOBAL_RULE: SeaRuleLike = {
+  level: 1,
+  deptId: null,
+  productLineId: null,
+  followFreqDays: 10,
+  effectiveFrom: new Date('2026-09-01T00:00:00.000Z'),
+};
+
+function candidate(overrides: Partial<SeaWarningCandidate>): SeaWarningCandidate {
+  return {
+    id: 11n,
+    deptId: DEPT_ID,
+    productLineId: LINE_ID,
+    ownerId: ME,
+    lastEventAt: before(1 * DAY),
+    createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警）', () => {
+  it('四档齐全 ＋ 一档不报：到期(超期) / ≤6h / ≤24h / ≤3天 各 1 条，另外 1 条还早（`none`）', async () => {
+    const { service } = createService({
+      rules: [GLOBAL_RULE],
+      candidates: [
+        candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期时刻＝2 天前 → overdue
+        candidate({ id: 2n, lastEventAt: before(10 * DAY - 3 * HOUR) }), // ＋3h → alert_manager
+        candidate({ id: 3n, lastEventAt: before(10 * DAY - 20 * HOUR) }), // ＋20h → notify_owner
+        candidate({ id: 4n, lastEventAt: null, createdAt: before(7 * DAY) }), // 没跟进过：建档＋10 天＝＋3 天 → agenda
+        candidate({ id: 5n, lastEventAt: before(1 * DAY) }), // ＋9 天 → none
+      ],
+    });
+
+    const summary = await service.scanSeaWarning(NOW);
+
+    expect(summary).toMatchObject({
+      scanned: 5,
+      rules: 1,
+      skippedNoRule: 0,
+      skippedNoFreq: 0,
+      hits: 4,
+    });
+    expect(summary.tiers).toEqual({
+      overdue: 1,
+      alert_manager: 1,
+      notify_owner: 1,
+      agenda: 1,
+      none: 1,
+    });
+  });
+
+  it('**一条规则都没有** ⇒ 一条都不判（不拿默认天数顶替），全部计入"跳过：无规则"', async () => {
+    const { service } = createService({
+      rules: [],
+      candidates: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+    });
+
+    const summary = await service.scanSeaWarning(NOW);
+
+    expect(summary.rules).toBe(0);
+    expect(summary.hits).toBe(0);
+    expect(summary.skippedNoRule).toBe(1);
+    expect(summary.tiers).toEqual({ overdue: 0, alert_manager: 0, notify_owner: 0, agenda: 0, none: 0 });
+  });
+
+  it('规则**只有别部门**那一条 ⇒ 该关系"无规则"，不套用别人的天数', async () => {
+    const { service } = createService({
+      rules: [{ ...GLOBAL_RULE, level: 3, deptId: 99n, followFreqDays: 1 }],
+      candidates: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+    });
+
+    const summary = await service.scanSeaWarning(NOW);
+
+    expect(summary.skippedNoRule).toBe(1);
+    expect(summary.hits).toBe(0);
+  });
+
+  it('规则**没配跟进天数** ⇒ 计入"跳过：未配跟进天数"（本片只有触发①，→ domain 文件头 ★）', async () => {
+    const { service } = createService({
+      rules: [{ ...GLOBAL_RULE, followFreqDays: null }],
+      candidates: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+    });
+
+    const summary = await service.scanSeaWarning(NOW);
+
+    expect(summary.skippedNoFreq).toBe(1);
+    expect(summary.hits).toBe(0);
+  });
+
+  it('★ **只告警、不真掉**（M7-05）：整条链**只读** —— 不写 `sea_record`、不动关系、不发事件', async () => {
+    const { service, repository, relation, events } = createService({
+      rules: [GLOBAL_RULE],
+      candidates: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+    });
+
+    await service.scanSeaWarning(NOW);
+
+    // 读：规则 ＋ 候选各一次（候选走 C 域出口，不直连别人的表）
+    expect(repository.listActiveSeaRules).toHaveBeenCalledTimes(1);
+    expect(relation.listSeaWarningCandidates).toHaveBeenCalledTimes(1);
+    // ⛔ 写：一条都不许有 —— 本域仓储只可能写 `sea_record`（`markClaimed`），
+    //    关系本体 / owner 成员是 C 域的表，一旦本层去碰就会调到 C 域出口（下面这条同时钉住）
+    expect(repository.markClaimed).not.toHaveBeenCalled();
+    expect(repository.findLatestRecord).not.toHaveBeenCalled();
+    expect(relation.claimCompanySeaRelation).not.toHaveBeenCalled();
+    expect(events.publish).not.toHaveBeenCalled();
   });
 });

@@ -8,9 +8,11 @@
 //   · 同 §5.2 跨域三条路之①：认领本体要 C 域的表 → 调**它 exports 的 service**
 //     —— 故 `imports` 里只出现 `RelationModule`（**绝不**碰对方的 repository）。
 //
-// ★ 为什么 `exports` 为空：目前没有别的域要问「公海」什么
-//   （D 域那条「将来问多少天没有效沟通」的注记是 M7 后续片的事，用时再加，
-//     **不预先导出没人用的东西**）。
+// ★ 为什么 `exports: [SeaService]`（M7-03 补）：**Worker 的掉海预警任务**要调
+//   `SeaService.scanSeaWarning`（`jobs/` 不是业务域，是"用这个域的人"，→ `jobs.module.ts`）。
+//   ⚠ 导出的是 **service 不是 repository**：调用方只能走本域编排，不能绕过规则直接碰表
+//   （同 C 域 `exports: [RelationService]` 的口径）。
+//   ⓘ 本域**不导出给任何业务域**（F 域仍无人被别域依赖）；这条出口的服务对象是 jobs。
 // =============================================================================
 import { Module } from '@nestjs/common';
 
@@ -23,5 +25,6 @@ import { SeaService } from './sea.service';
   imports: [RelationModule],
   controllers: [SeaController],
   providers: [SeaRepository, SeaService],
+  exports: [SeaService],
 })
 export class SeaModule {}

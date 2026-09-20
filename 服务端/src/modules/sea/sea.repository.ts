@@ -15,6 +15,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import type { SeaRuleLike } from './domain/sea-warning';
 
 @Injectable()
 export class SeaRepository {
@@ -45,5 +46,45 @@ export class SeaRepository {
       data: { claimed_by: data.claimedBy, claimed_at: data.claimedAt },
       select: { id: true, claimed_at: true },
     });
+  }
+
+  // ===== M7-03 掉海预警：读规则（**只读**；本任务对业务数据零写，→ M7-05）=====
+
+  /**
+   * 读**生效中**的公海规则（→ F1 `sea_rule`；走 `idx_level(level, dept_id, product_line_id, status)`）。
+   *
+   * ★ 为什么 `status='active'` ＋ `effective_from <= now` 两个条件都写在 SQL 里：
+   *   前者是"停用不删"的版本管理（F1：改天数＝插新行 ＋ 旧行 `status=disabled`）；
+   *   后者是 **7 天缓冲**（新行 `effective_from = 提交日 + 7 天`）—— **没生效的行不该出现在候选里**，
+   *   否则"哪些规则算数"这件事就漏到了应用层去猜（本域 domain 只做**层级命中**判定，不判生效与否）。
+   *
+   * ★ `orderBy` 取 `level desc, id desc`：同层多行（历史版本 / 手工脏数据）时**新的优先**；
+   *   真正的"取哪一条"仍由 `domain/sea-warning.ts` 的 `resolveSeaRuleFor` 决定（口径只有一处）。
+   *
+   * ★ 只 select 用得到的列：往 domain 纯函数递的一律是"算倒计时那几列"。
+   * ★ 出参在**本层**转成 `SeaRuleLike`（snake_case → 驼峰）：DB 列名是**本层的事**，
+   *   `domain/**` 不该认识 `follow_freq_days` 这种列名（它要能拿假数据单测）。
+   */
+  async listActiveSeaRules(now: Date): Promise<SeaRuleLike[]> {
+    const rows = await this.prisma.seaRule.findMany({
+      where: { status: 'active', effective_from: { lte: now } },
+      select: {
+        id: true,
+        level: true,
+        dept_id: true,
+        product_line_id: true,
+        follow_freq_days: true,
+        effective_from: true,
+      },
+      orderBy: [{ level: 'desc' }, { id: 'desc' }],
+    });
+
+    return rows.map((row) => ({
+      level: row.level,
+      deptId: row.dept_id,
+      productLineId: row.product_line_id,
+      followFreqDays: row.follow_freq_days,
+      effectiveFrom: row.effective_from,
+    }));
   }
 }

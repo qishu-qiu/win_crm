@@ -113,6 +113,22 @@ export interface RelationDetailVo extends RelationVo {
 }
 
 /**
+ * 掉海预警候选（M7-03 的跨域出口；→ 数据架构 §十二）：只给"算倒计时 ＋ 打日志"要的那几列。
+ * ★ 不给公司名 / 部门名：那是给**人看**的展示口径，而本出口的调用方是**定时任务**（写日志用 id 即可）；
+ *   要展示请走 `listRelations`（那边才装配名字 ＋ 范围判定）。
+ */
+export interface SeaWarningCandidate {
+  id: bigint;
+  deptId: bigint;
+  productLineId: bigint;
+  /** 在位 owner（`null` ＝ 成员表里没有在位 owner，理论上不该出现在私海里；跳过即可，不补数据） */
+  ownerId: bigint | null;
+  /** 最近一次**有效沟通**时间（`null` ＝ 从没跟进过） */
+  lastEventAt: Date | null;
+  createdAt: Date;
+}
+
+/**
  * 列表入参（分页 ＋ 筛选）：controller 从 query DTO 翻译过来。
  * ★ 这里收的是**原始视图码 / 紧迫档数组**，各档判定交给 `domain/relation-list-filter.ts`
  *   —— service 只编排、不写规则（架构 §5.4）。
@@ -573,6 +589,31 @@ export class RelationService {
     const names = toNameMap(companies);
 
     return rows.map((row) => ({ id: row.id, name: names.get(row.company_id.toString()) ?? '' }));
+  }
+
+  // ===== M7-03 掉海预警（F 域定时任务）的跨域出口 =====
+
+  /**
+   * 掉海预警扫描的候选私海（→ 数据架构 §十二「掉海预警（私海→公海）｜每小时」）。
+   *
+   * ★ **本方法不做数据范围收敛，也没有当前登录人** —— 它服务的是 **Worker 定时任务**
+   *   （系统身份）：预警要盯住**所有**有主关系（→ 仓储注释 ★）。因此：
+   *   · **只许系统任务调用**，HTTP 出口一律走 `listRelations`（那条有范围判定）；
+   *   · F 域拿到的是**已装配好的最小字段**（不是 C 域的行形状）—— 形状换一次不该让调用方跟着改。
+   * ★ **口径不在本层**：天数解析（L4→L1）＋ 到期时刻 ＋ 三档阈值全在
+   *   `F 域 domain/sea-warning.ts`（掉海规则是 F 域的规则，C 域不掺和）。
+   */
+  async listSeaWarningCandidates(): Promise<SeaWarningCandidate[]> {
+    const rows = await this.repository.listPrivateSeaCandidatesForWarning();
+
+    return rows.map((row) => ({
+      id: row.id,
+      deptId: row.dept_id,
+      productLineId: row.product_line_id,
+      ownerId: row.members[0]?.employee_id ?? null,
+      lastEventAt: row.last_event_at,
+      createdAt: row.created_at,
+    }));
   }
 
   /**

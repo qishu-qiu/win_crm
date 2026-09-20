@@ -304,6 +304,55 @@ export class RelationRepository {
     return client.relationStageLog.create({ data });
   }
 
+  // ===== M7-03 掉海预警的候选读口（**只读**；F 域定时任务用）=====
+
+  /**
+   * 掉海预警扫描的**候选私海**（→ 数据架构 §十二「掉海预警（私海→公海）｜每小时」）。
+   *
+   * ★ 为什么在本域：`business_relation` 是 **C 域的表** ⇒ 跨域只许走本域 exports 的 service
+   *   （架构 §5.2 路之①）；F 域**不许**直连本表（ESLint 硬卡）。本方法只给"算倒计时 ＋ 打日志"
+   *   要的那几列，**不给整行**（同 `findRelationRefsByIds` 的取法）。
+   *
+   * ★ 为什么**不做数据范围收敛**：调用方是 **Worker 的定时任务** —— 没有登录人、没有请求上下文。
+   *   预警要"替系统盯住**所有**有主关系"，按某个范围收敛＝**漏掉别人的客户**（与 §十二 语义相反）。
+   *   ⚠ 故本方法**只许被系统任务调用**；HTTP 出口一律走 `listRelations`（那边有范围判定）。
+   *
+   * ★ 取哪些条件：未删 ＋ 未并 ＋ `sea_status='private'`（C1：私海＝有主人），
+   *   **外加"在位 owner 成员"**（`revoked_at IS NULL`）—— 生产上优先信成员表：掉海任务尚未落地时，
+   *   库里可能出现"`sea_status` 已回公海但 owner 行还没撤"的过渡态，按成员表判"真有没有主人"更准。
+   *
+   * ★ 排序＝**最久没跟进**在前（`last_event_at` 升序，`NULL` 最先 —— 从没跟进过的最危险）。
+   *   ⚠ 本片**不**把"距掉海 ≤3 天"下推进 SQL：**天数按关系逐条解析**（L4→L1，不同部门 / 产品线
+   *     可能取到不同规则），SQL 表达不了 ⇒ 交给 `domain/sea-warning.ts` 逐条判。
+   *     （数据架构 §十二「禁止规则×客户双层遍历」说的是**节奏提醒**那条任务，那里谓词是全局同一个。）
+   *   ⚠ 数据量上来后要收窄，正确方向是"先把**最长天数 - 3 天**下推成 `idx_sea_scan` 上的**超集**、
+   *     再逐条精判" —— 但那要先有测量（→ 反合理化表「先测量再优化」），本片不做。
+   */
+  listPrivateSeaCandidatesForWarning() {
+    return this.prisma.businessRelation.findMany({
+      where: {
+        deleted_at: null,
+        merged_into: null,
+        sea_status: PRIVATE_SEA_STATUS,
+        members: { some: { member_type: OWNER_MEMBER_TYPE, revoked_at: null } },
+      },
+      select: {
+        id: true,
+        dept_id: true,
+        product_line_id: true,
+        last_event_at: true,
+        created_at: true,
+        // 在位 owner（`uk_owner` 保证至多一行在位 ⇒ `take: 1` 不会漏）
+        members: {
+          where: { member_type: OWNER_MEMBER_TYPE, revoked_at: null },
+          select: { employee_id: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ last_event_at: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   // ===== M3-07 私海列表（三种范围，方法名即范围）=====
   //
   // ★ **M6-07 起带分页**（→ 接口 §2.7）：五个列表方法都收 `Pagination`、都返回 `{ rows, total }`。

@@ -71,6 +71,10 @@ export class RelationController {
       pageSize: query.page_size,
       view: query.view,
       urgencies: query.urgency,
+      orderField: query.order_by,
+      // ⚠ `desc` 是**三态**（未给 / true / false）：只在给了的时候传 —— 缺省的"降序"由仓储一处定
+      ...(query.desc === undefined ? {} : { desc: query.desc === 'true' }),
+      keyword: query.keyword,
     });
   }
 

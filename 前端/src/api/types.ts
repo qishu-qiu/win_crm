@@ -2154,6 +2154,12 @@ export interface operations {
                 page?: number;
                 /** @description 每页条数（默认 20；超 100 按 100 计） */
                 page_size?: number;
+                /** @description 排序字段（**白名单**，→ §2.7）：`id`（默认）/ `created_at` 建档时间 / `last_event_at` 最近跟进 / `stage` 阶段。⚠ 白名单之外的取值 → **400**（**不静默回落** —— 回落会让人以为排序生效了） */
+                order_by?: "id" | "created_at" | "last_event_at" | "stage";
+                /** @description 是否降序（默认 `true`，与既有 `id desc` 的观感一致） */
+                desc?: "true" | "false";
+                /** @description 模糊搜**公司名**（→ §2.7）。⚠ 当前实现走 `LIKE %…%`（**`company` 表尚无 ngram 全文索引**，→《欠账登记表》D-07 附注） */
+                keyword?: string;
                 /** @description 视图（→ 前端文档 §5）：`all`＝我的全部（不过滤）/ `following`＝跟进中（阶段 1~5）/`cooperated`＝已合作（阶段 6）/ `churned`＝已流失（阶段 7）。⚠ 前端 §5 另有一档「逾期未跟进」，**本批不提供** —— 它要判「逾期」，而逾期唯一来源是承诺 / 预约（D 域），字段尚未落地（→《欠账登记表》D-10）；**不编一个假的逾期定义** */
                 view?: "all" | "following" | "cooperated" | "churned";
                 /** @description 紧迫档**多选**，逗号分隔（→ 需求 §8.2 五档）：`weekly` 周重点 / `monthly` 月重点 / `quarterly` 季度跟 / `long_term` 长期跟 / `gray` 灰度；不传＝不筛。空串按「没筛」处理 */

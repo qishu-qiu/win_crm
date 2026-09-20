@@ -72,7 +72,11 @@ import {
   type RelationViewer,
   type RelationWriteDenied,
 } from './domain/relation-scope';
-import { RelationRepository, type RelationTxClient } from './relation.repository';
+import {
+  RelationRepository,
+  type RelationListOptions,
+  type RelationTxClient,
+} from './relation.repository';
 import type {
   AddRelationMemberDto,
   CreateRelationDto,
@@ -138,6 +142,12 @@ export interface RelationListQuery extends PaginationQuery {
   view?: string;
   /** 紧迫档多选（→ 需求 §8.2 五档） */
   urgencies?: readonly string[];
+  /** 排序字段（**白名单已在 DTO 校验** → 非法 400；缺省 `id`，→ §2.7；**D-07**） */
+  orderField?: string;
+  /** 降序（缺省 true —— 与既有 `id desc` 一致，**不改变默认观感**；→ §2.7） */
+  desc?: boolean;
+  /** 关键词＝**公司名**模糊搜（→ §2.7；**D-07**） */
+  keyword?: string;
 }
 
 /**
@@ -467,17 +477,25 @@ export class RelationService {
     //   筛选项＝我看到的那批里我想挑哪些（也是 domain 判定）—— 两者在 repository 里
     //   以**同一个复合 where** 落到 SQL，故 `total` 数的是**筛完之后**的总数。
     const filter = buildRelationListFilter(query.view, query.urgencies);
+    // ★ 排序 / 关键词（**D-07**）：白名单校验在 DTO（`@IsIn` → 非法 400），本层只**透传**
+    //   （翻译成 Prisma 排序在 repository —— `Prisma.*` 只许出现在仓储层，架构 §5.4）
+    const options: RelationListOptions = {
+      orderField: query.orderField,
+      desc: query.desc,
+      keyword: query.keyword,
+    };
     const now = new Date();
     const { rows, total } =
       scope.kind === 'all'
-        ? await this.listAll(tab, filter, pagination)
+        ? await this.listAll(tab, filter, pagination, options)
         : scope.kind === 'dept'
-          ? await this.listByDepts(tab, scope.deptIds, filter, pagination)
+          ? await this.listByDepts(tab, scope.deptIds, filter, pagination, options)
           : await this.repository.listPrivateRelationsOfEmployee(
               viewer.employeeId,
               now,
               filter,
               pagination,
+              options,
             );
 
     const refs = await this.loadRefs(rows);
@@ -810,23 +828,29 @@ export class RelationService {
 
   // ===== 私有：取数 / 装配 =====
 
-  /** 私海 / 公海 × `all` 档（分页 ＋ 筛选） */
-  private listAll(tab: RelationListTab, filter: RelationListFilter, pagination: Pagination) {
+  /** 私海 / 公海 × `all` 档（分页 ＋ 筛选 ＋ 排序/关键词，**D-07**） */
+  private listAll(
+    tab: RelationListTab,
+    filter: RelationListFilter,
+    pagination: Pagination,
+    options: RelationListOptions,
+  ) {
     return tab === 'private'
-      ? this.repository.listPrivateRelations(filter, pagination)
-      : this.repository.listSeaRelations(filter, pagination);
+      ? this.repository.listPrivateRelations(filter, pagination, options)
+      : this.repository.listSeaRelations(filter, pagination, options);
   }
 
-  /** 私海 / 公海 × `dept` 档（部门公海＝本部门的关系集合，→ C1；分页 ＋ 筛选） */
+  /** 私海 / 公海 × `dept` 档（部门公海＝本部门的关系集合，→ C1；分页 ＋ 筛选 ＋ 排序/关键词） */
   private listByDepts(
     tab: RelationListTab,
     deptIds: readonly bigint[],
     filter: RelationListFilter,
     pagination: Pagination,
+    options: RelationListOptions,
   ) {
     return tab === 'private'
-      ? this.repository.listPrivateRelationsOfDepts(deptIds, filter, pagination)
-      : this.repository.listSeaRelationsOfDepts(deptIds, filter, pagination);
+      ? this.repository.listPrivateRelationsOfDepts(deptIds, filter, pagination, options)
+      : this.repository.listSeaRelationsOfDepts(deptIds, filter, pagination, options);
   }
 
   /** 解析 url 上的关系 id → 取行；不存在给 **400 参数错误**（与 B 域同款，→ §2.4） */

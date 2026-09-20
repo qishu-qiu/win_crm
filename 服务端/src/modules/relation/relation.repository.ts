@@ -76,6 +76,60 @@ export interface CreateRelationData {
   created_by: bigint;
 }
 
+/**
+ * 列表通用选项（**D-07** · 2026-09-20）：排序 ＋ 关键词（公司名）。
+ * ★ 仓储**收 Prisma 形状、不收字符串** —— 字符串 → Prisma 的翻译与**白名单校验**在 service：
+ *   仓储管"怎么查"，service 管"允许查什么"（白名单是安全边界，不该散在 SQL 组装处）。
+ * ⚠ `keywordWhere` 无关键词时是**空对象**（不是 `undefined`）：与范围 / 筛选拼成**同一个 `where`**
+ *   ⇒ `count` 与 `findMany` 共用一份，`total` 才是"筛完之后"的总数（→ 设计规范 §4.3）。
+ */
+export interface RelationListOptions {
+  /**
+   * 排序字段（**已由 service 按白名单校验**过的入参原值；缺省 `id`）。
+   * ★ 传**字符串**而不是 Prisma 对象：`Prisma.*` 只许出现在 `*.repository.ts`（架构 §5.4）
+   *   —— service 没有"构造 Prisma 形状"的资格，**翻译与兜底都留在本层**。
+   */
+  orderField?: string;
+  /** 降序（缺省 `true` —— 与既有 `id desc` 行为一致，**不改变默认观感**） */
+  desc?: boolean;
+  /** 关键词（公司名；缺省不筛） */
+  keyword?: string;
+}
+
+/**
+ * 排序字段 → Prisma 排序。
+ * ★ **白名单之外的字段一律回落 `id desc`**（service 已经拦过非法值 → 400，这里是最后兜底）；
+ *   除 `id` 外都带 `{ id: 'desc' }` 做**稳定次序**——否则同 `stage` / 同 `last_event_at` 的行的
+ *   先后由存储引擎决定，翻页时会看到"同一行出现两次 / 有些行永远看不到"。
+ */
+function orderByOf(options: RelationListOptions): Prisma.BusinessRelationOrderByWithRelationInput[] {
+  const dir: Prisma.SortOrder = options.desc === false ? 'asc' : 'desc';
+  switch (options.orderField) {
+    case 'created_at':
+      return [{ created_at: dir }, { id: 'desc' }];
+    case 'last_event_at':
+      return [{ last_event_at: dir }, { id: 'desc' }];
+    case 'stage':
+      // 对外参数名是 `stage`（§2.7「字段」），落库列是 `stage_id`（→ 数据架构 C1）
+      return [{ stage_id: dir }, { id: 'desc' }];
+    default:
+      return [{ id: dir }];
+  }
+}
+
+/**
+ * 关键词 → 公司名过滤（**D-07**）。
+ * ⚠ **走 `contains`（`LIKE '%…%'`）＝ 用不上 `idx_full_name`、全表扫**：
+ *   §2.7 写「公司名走 ngram 全文索引（→ 架构 §十）」，而 **`company` 表并没有这个索引**
+ *   （§10.1 只有 `idx_full_name` / `idx_name_core`）⇒ 索引缺口已登记《欠账登记表》。
+ *   当前数据量下无碍；建索引要**新增量 migration**（属待办，不在这里偷偷改结构）。
+ */
+function keywordWhereOf(keyword?: string): Prisma.BusinessRelationWhereInput {
+  const trimmed = keyword?.trim();
+  if (trimmed === undefined || trimmed === '') return {};
+  return { company: { full_name: { contains: trimmed } } };
+}
+
 /** 加成员时写入的列 */
 export interface CreateMemberData {
   relation_id: bigint;
@@ -436,20 +490,23 @@ export class RelationRepository {
    * ★ `total` 必须与 `rows` 用**同一个复合条件**（范围 ∩ 筛选）：否则筛出 3 条却显示「共 20 条」，
    *   翻页还会翻出空页 —— 假数字比没数字更坏（→ 铁律坑 16 同类）。
    */
-  private async pageOf(
+  private   async pageOf(
     scopeWhere: Prisma.BusinessRelationWhereInput,
     filter: RelationListFilter,
     pagination: Pagination,
+    options: RelationListOptions,
   ) {
     const where: Prisma.BusinessRelationWhereInput = {
       ...scopeWhere,
       ...this.filterWhere(filter),
+      // ★ 关键词（公司名，**D-07**）：与范围 / 筛选拼**同一个 `where`** ⇒ `total` 数是筛完后的总数
+      ...keywordWhereOf(options.keyword),
     };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.businessRelation.findMany({
         where,
         select: RELATION_SELECT,
-        orderBy: { id: 'desc' },
+        orderBy: orderByOf(options),
         skip: pagination.skip,
         take: pagination.take,
       }),
@@ -470,8 +527,14 @@ export class RelationRepository {
     now: Date,
     filter: RelationListFilter,
     pagination: Pagination,
+    options: RelationListOptions,
   ) {
-    return this.pageOf(this.privateSeaWhereOfEmployee(employeeId, now), filter, pagination);
+    return this.pageOf(
+      this.privateSeaWhereOfEmployee(employeeId, now),
+      filter,
+      pagination,
+      options,
+    );
   }
 
   /** 私海 · **这些部门的**（`dept` 档：经理＝管辖部门） */
@@ -479,13 +542,18 @@ export class RelationRepository {
     deptIds: readonly bigint[],
     filter: RelationListFilter,
     pagination: Pagination,
+    options: RelationListOptions,
   ) {
-    return this.pageOf(this.privateSeaWhereOfDepts(deptIds), filter, pagination);
+    return this.pageOf(this.privateSeaWhereOfDepts(deptIds), filter, pagination, options);
   }
 
   /** 私海 · **全部**（`all` 档：总经理 / 管理员；管理员只读在 service 层拦） */
-  listPrivateRelations(filter: RelationListFilter, pagination: Pagination) {
-    return this.pageOf(this.privateSeaWhere(), filter, pagination);
+  listPrivateRelations(
+    filter: RelationListFilter,
+    pagination: Pagination,
+    options: RelationListOptions,
+  ) {
+    return this.pageOf(this.privateSeaWhere(), filter, pagination, options);
   }
 
   // ===== M3-08 公海列表（同上三种范围）=====
@@ -495,13 +563,18 @@ export class RelationRepository {
     deptIds: readonly bigint[],
     filter: RelationListFilter,
     pagination: Pagination,
+    options: RelationListOptions,
   ) {
-    return this.pageOf(this.companySeaWhereOfDepts(deptIds), filter, pagination);
+    return this.pageOf(this.companySeaWhereOfDepts(deptIds), filter, pagination, options);
   }
 
   /** 公海 · **全部** */
-  listSeaRelations(filter: RelationListFilter, pagination: Pagination) {
-    return this.pageOf(this.companySeaWhere(), filter, pagination);
+  listSeaRelations(
+    filter: RelationListFilter,
+    pagination: Pagination,
+    options: RelationListOptions,
+  ) {
+    return this.pageOf(this.companySeaWhere(), filter, pagination, options);
   }
 
   // ===== M3-10 改属性 =====

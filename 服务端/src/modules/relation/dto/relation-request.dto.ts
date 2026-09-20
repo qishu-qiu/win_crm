@@ -37,6 +37,18 @@ import { COLLABORATOR_MEMBER_TYPE, OWNER_MEMBER_TYPE } from '../domain/relation-
 /** 页签取值（→ 接口 §4.4：私海 / 公海） */
 export const RELATION_TABS = ['private', 'sea'] as const;
 
+/**
+ * **可排序字段白名单**（→ §2.7 `order_by`；**D-07** · 2026-09-20）。
+ * ★ 为什么非要白名单：`order_by` 直接拼进 SQL ＝ **任意列排序** —— 拿它能探出未授权列的存在与取值
+ *   （排序结果本身就是一个"信息信道"）。只放**业务上真会排**的关系表列：
+ *   `id`（默认，新增在前）/ `created_at` 建档时间 / `last_event_at` 最近跟进 / `stage` 阶段。
+ * ⚠ 对外参数名是 `stage`，落库列是 `stage_id`（翻译在 repository —— `Prisma.*` 只许出现在仓储层，架构 §5.4）。
+ */
+export const RELATION_ORDER_FIELDS = ['id', 'created_at', 'last_event_at', 'stage'] as const;
+
+/** 排序方向取值（→ §2.7 `desc`） */
+export const RELATION_DESC_VALUES = ['true', 'false'] as const;
+
 /** 成员来源（→ C2） */
 export const MEMBER_SOURCES = ['collaborate', 'ask_help'] as const;
 
@@ -96,6 +108,37 @@ export class ListRelationQueryDto {
   @Type(() => Number)
   @IsInt({ message: 'page_size 必须是整数' })
   page_size?: number;
+
+  // ↓ 排序 / 关键词（§2.7 通用约定；**D-07** · 2026-09-20 铺到 C 域）
+  @ApiPropertyOptional({
+    enum: RELATION_ORDER_FIELDS,
+    default: 'id',
+    description:
+      '排序字段（**白名单**，→ §2.7）：`id`（默认）/ `created_at` 建档时间 / `last_event_at` 最近跟进 / `stage` 阶段。' +
+      '⚠ 白名单之外的取值 → **400**（**不静默回落** —— 回落会让人以为排序生效了）',
+  })
+  @IsOptional()
+  @IsIn([...RELATION_ORDER_FIELDS], { message: 'order_by 取值不合法' })
+  order_by?: string;
+
+  @ApiPropertyOptional({
+    enum: RELATION_DESC_VALUES,
+    default: 'true',
+    description: '是否降序（默认 `true`，与既有 `id desc` 的观感一致）',
+  })
+  @IsOptional()
+  @IsIn([...RELATION_DESC_VALUES], { message: 'desc 取值只能是 true / false' })
+  desc?: string;
+
+  @ApiPropertyOptional({
+    description:
+      '模糊搜**公司名**（→ §2.7）。⚠ 当前实现走 `LIKE %…%`（**`company` 表尚无 ngram 全文索引**，→《欠账登记表》D-07 附注）',
+    example: '科技',
+  })
+  @IsOptional()
+  @IsString({ message: 'keyword 必须是字符串' })
+  @Length(1, 50, { message: 'keyword 长度须为 1~50' })
+  keyword?: string;
 
   @ApiPropertyOptional({
     enum: RELATION_VIEWS,

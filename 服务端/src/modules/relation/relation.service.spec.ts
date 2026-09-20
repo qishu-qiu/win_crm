@@ -384,6 +384,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         [MANAGED_DEPT_ID],
         {}, // 没给筛选 → 空条件（**不是**空数组，空数组会变成 `IN ()`）
         expect.objectContaining({ page: 1, pageSize: 20, skip: 0, take: 20 }),
+        // D-07：第 4 个参数＝排序 / 关键词选项（内容由本 describe 末尾的专项用例覆盖）
+        expect.anything(),
       );
       expect(repository.listPrivateRelations).not.toHaveBeenCalled();
     });
@@ -409,6 +411,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         [DEPT_ID, MANAGED_DEPT_ID],
         {},
         expect.objectContaining({ page: 1, pageSize: 20 }),
+        // D-07：第 4 个参数＝排序 / 关键词选项
+        expect.anything(),
       );
       expect(repository.listSeaRelations).not.toHaveBeenCalled();
     });
@@ -454,6 +458,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         expect.any(Date),
         {},
         expect.objectContaining({ page: 2, pageSize: 1, skip: 1, take: 1 }),
+        // D-07：第 5 个参数＝排序 / 关键词选项
+        expect.anything(),
       );
       // ⚠ `total` **不来自本页行数**：它是仓储给的**全量**计数（桩件＝2 行 → total 2，
       //   而本页只回 1 行才是真实分页的样子；此处桩件不受 take 约束，故只钉字段与取值口径）
@@ -482,6 +488,43 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         expect.any(Date),
         {},
         expect.objectContaining({ pageSize: 100, take: 100 }),
+        // D-07：第 5 个参数＝排序 / 关键词选项
+        expect.anything(),
+      );
+    });
+
+    it('★ D-07：排序 / 关键词**原样透传**给仓储（翻译成 Prisma 排序是仓储的事，→ 架构 §5.4）', async () => {
+      const { service, repository } = createService();
+
+      await runWithContext(contextOf({}), () =>
+        service.listRelations('private', {
+          orderField: 'last_event_at',
+          desc: false,
+          keyword: '  科技  ',
+        }),
+      );
+
+      // ⚠ `keyword` **不在这里 trim**：trim 与空值判定都在仓储的 `keywordWhereOf`（一处收口）
+      expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
+        ME,
+        expect.any(Date),
+        {},
+        expect.anything(),
+        { orderField: 'last_event_at', desc: false, keyword: '  科技  ' },
+      );
+    });
+
+    it('★ D-07：三个新参数都不给 → options 各项 `undefined`（**默认值只在仓储一处定**：`id desc` / 不筛关键词）', async () => {
+      const { service, repository } = createService();
+
+      await runWithContext(contextOf({}), () => service.listRelations('private'));
+
+      expect(repository.listPrivateRelationsOfEmployee).toHaveBeenCalledWith(
+        ME,
+        expect.any(Date),
+        {},
+        expect.anything(),
+        { orderField: undefined, desc: undefined, keyword: undefined },
       );
     });
 
@@ -499,6 +542,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         expect.any(Date),
         { stages: [1, 2, 3, 4, 5] },
         expect.any(Object),
+        // D-07：第 5 个参数＝排序 / 关键词选项
+        expect.anything(),
       );
     });
 
@@ -514,6 +559,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         expect.any(Date),
         { urgencies: ['weekly', 'gray'] },
         expect.any(Object),
+        // D-07：第 5 个参数＝排序 / 关键词选项
+        expect.anything(),
       );
     });
 
@@ -529,6 +576,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
         expect.any(Date),
         {},
         expect.any(Object),
+        // D-07：第 5 个参数＝排序 / 关键词选项
+        expect.anything(),
       );
     });
   });

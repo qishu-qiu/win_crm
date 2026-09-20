@@ -991,7 +991,7 @@ export interface components {
         };
         ContactExtraPhoneVoDto: {
             /**
-             * @description 号型：`mobile` / `landline` / `other`
+             * @description 号型（**值域唯一落点 ＝《销售CRM数据架构文档》B2**）：`mobile` / `tel` / `wechat`。⚠ 2026-09-20 拍板收敛（→《欠账登记表》D-49）：本 DTO 原先写的 `landline` / `other` **作废**（旧码只作历史数据兜底，新写入口只用上列三码）
              * @example mobile
              */
             type: string;

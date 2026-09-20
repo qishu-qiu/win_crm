@@ -56,18 +56,19 @@ export function contactStatusNameOf(status: string): string {
 }
 
 /**
- * 备用号号型中文名。
+ * 备用号号型中文名（★ 2026-09-20 值域已收敛 →《欠账登记表》D-49）。
  *
- * ⚠ **两份落点的取值域不一致**（本表两套都认，未知码原样回显）：
- *   ·《数据架构文档》B2：`mobile` / `tel` / `wechat`；
- *   · 出参 DTO（→ 接口 §5.5 `extra_phones[]`，本批实现依据）：`mobile` / `landline` / `other`。
- *   口径未收敛前**不猜新码**，只把两边都认得的码映射出来（缺口已登记 →《欠账登记表》）。
+ * **唯一值域 ＝《数据架构文档》B2：`mobile` / `tel` / `wechat`**
+ * （原出参声明的 `landline` / `other` 已作废，→ 接口 §5.5 同批注明）。
+ * 下表仍保留旧码兜底：库里可能有按旧码录的历史数据，**展示不能开天窗**；
+ * 但**新写入口只用上列三码**（不再产生 `landline` / `other`）。
  */
 const EXTRA_PHONE_TYPE_NAMES: Record<string, string> = {
   mobile: '手机号',
-  landline: '座机',
   tel: '座机',
   wechat: '微信',
+  // ↓ 旧码兜底（历史数据；新写入不再产生）
+  landline: '座机',
   other: '其他',
 }
 

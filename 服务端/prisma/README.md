@@ -184,6 +184,7 @@ npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script >
 - **审计字段**全表统一：`created_by / created_at / updated_by / updated_at`；逻辑删除 `deleted_at`（NULL＝未删）。
   - ⚠ **裸 SQL 插入必须显式给 `updated_at`**：真库里它是 `datetime NOT NULL` **且无默认值** —— Prisma 的 `@updatedAt` **只在 ORM 内生效**，不经 ORM 的写入会给错。
 - **主键** `BigInt @db.UnsignedBigInt @default(autoincrement())`；金额 `Decimal(12,2)`；时间 `DateTime(0)`。
+- ⏱ **时间列一律「UTC 存、出口换算」（★ 2026-09-20 拍板 →《欠账登记表》D-54）**：`DateTime(0)` 落库是**无时区**的 `DATETIME(0)`，Prisma 写入按 **UTC**；⚠ **不经 Prisma 的裸 SQL / mariadb 驱动直读**会按连接时区解释 ⇒ **同一行差 8 小时**（实测：进程日志写本地 12:00:38，SQL 直读 04:00:38）。三条落实：① 排查直读一律 `CONVERT_TZ(col, '+00:00', '+08:00')`（或连接串显式指定时区），**不靠"心里减 8 小时"**；② **HTTP 出参一律 ISO8601 带 `Z`**，本地化（+08:00）在**前端**做，`job_run_log` 之类**不出口**的列不做换算；③ **分区键同此口径** —— `job_run_log` 按 `run_at` 分区（`YEAR(run_at)*100+MONTH(run_at)`），**边界按 UTC**：本地 10-01 00:30 的行落进 `p202609`（＝UTC 9 月），**这是口径、不是错位**。
 - **插入顺序**：`employee_role.role_code` / `permission_matrix.role_code` 是**外键指向 `role.code`** → **角色必须先插**（种子 / 造数据时按此排序）。
 
 ## 八、drift 核对（M0-20）

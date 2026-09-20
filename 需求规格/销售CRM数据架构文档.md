@@ -537,6 +537,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 抢公海认领 | 条件 UPDATE（`WHERE sea_status='company_sea'`），影响 1 行才算抢到，否则 409（见 §10.2-3） |
 | 一关系一 owner | `relation_member.owner_flag` 生成列唯一索引（见 §10.2-1） |
 | 编辑并发 | 主表 `updated_at` 乐观锁版本戳，更新带条件，影响 0 行即 409 |
+| **时间列时区** | **「UTC 存、出口换算」**（2026-09-20 定，落地细节 →`服务端/prisma/README.md §七`）：库中一律 **UTC**；裸 SQL 直读须 `CONVERT_TZ`；**分区键边界按 UTC**（`job_run_log.run_at` 等）—— 排查时"表里的钟比人记得的少 8 小时"**是口径、不是故障** |
 | 预警扫描 | `business_relation(last_event_at, sea_status)`、`contract(service_end, status)`、`workorder(sla_deadline, status)`、`commitment(owner_id, status, due_at)` |
 | 管辖过滤 | 列表查询强制 `dept_id IN (管辖部门集合)`，登录注入缓存 |
 | 事件写放大 | `last_event_at` / `next_action_hint` 由事件写入事务冗余更新 |

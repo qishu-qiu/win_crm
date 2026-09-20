@@ -19,6 +19,14 @@ import {
 import CompanyDupPicker from '../components/CompanyDupPicker.vue'
 import RelationTargetPicker from '../components/RelationTargetPicker.vue'
 import { type CompanyChoice } from '../company'
+import { recordContactEvent, type RecordEventInput } from '../api/engine'
+import {
+  ACTION_TYPE_OPTIONS,
+  EFFECTIVE_OUTCOME_OPTIONS,
+  QUICK_MARK_OUTCOME_OPTIONS,
+  actionTypeNameOf,
+  outcomeNameOf,
+} from '../engine'
 import {
   contactStatusNameOf,
   decisionRoleNameOf,
@@ -65,6 +73,59 @@ const errorText = ref('')
 
 /** 路由参数 `:id`（十进制字符串）—— 本页**只往下传**，不解析成数字（后端主键是 bigint） */
 const contactId = computed(() => String(route.params.id ?? ''))
+
+// ===== 「待关联」阶段记跟单（→ 接口 §5.7 第 4 行；D-45 前端接线）=====
+/**
+ * ⛔ **入口只在 `unlinked`（尚未关联公司）时出现**：已挂公司的联系人调本端点，服务端一律
+ *   **403** 并指引「到业务关系里记」 —— 摆在别处就是点了必报错的**假入口**（设计规范 §3.2 第 11 条）。
+ * ⚠ 本页**不展示"已记的跟单"历史**：联系人层**没有列表端点**（规格只给了"写" → 接口 §5.5 / §5.7），
+ *   所以记完只 toast ＋ 清表单，**不编**「已记 N 条」这种没有数据源的话；
+ *   历史要等**关联公司之后**到业务关系时间线看（那时服务端会把它们挂过去）。
+ * ★ 表单字段与关系页抽屉**同款**（不另造第二种范式）：动作 ＋ 结果 ＋ 一句话结果 ＋ 时长。
+ */
+const eventForm = ref<{
+  action_type: string
+  outcome: string
+  summary: string
+  duration_min: number | null
+}>({ action_type: 'phone', outcome: 'advanced', summary: '', duration_min: null })
+
+const submittingEvent = ref(false)
+
+const actionTypeOptions = ACTION_TYPE_OPTIONS.map((code) => ({
+  value: code,
+  label: actionTypeNameOf(code),
+}))
+
+const outcomeOptions = [
+  { value: '', label: '（不填结果）' },
+  ...EFFECTIVE_OUTCOME_OPTIONS.map((code) => ({ value: code, label: outcomeNameOf(code) })),
+  ...QUICK_MARK_OUTCOME_OPTIONS.map((code) => ({
+    value: code,
+    label: `快速标记·${outcomeNameOf(code)}`,
+  })),
+]
+
+async function submitContactEvent(): Promise<void> {
+  const input: RecordEventInput = { action_type: eventForm.value.action_type }
+  if (eventForm.value.outcome !== '') input.outcome = eventForm.value.outcome
+  if (eventForm.value.summary.trim() !== '') input.summary = eventForm.value.summary.trim()
+  if (eventForm.value.duration_min !== null) input.duration_min = eventForm.value.duration_min
+
+  submittingEvent.value = true
+  try {
+    await recordContactEvent(contactId.value, input)
+    // ★ 只说"挂到新关系上"这个**服务端确实会做**的事（激活时批量回填 `relation_id`），
+    //   不说「已刷新跟进时间」—— 本端点**不回写 `last_event_at`**（→ 需求 §6.3）
+    message.success('已记下这条跟单（关联公司后会挂到新关系的时间线上）')
+    eventForm.value.summary = ''
+    eventForm.value.duration_min = null
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '记跟单失败，请稍后重试')
+  } finally {
+    submittingEvent.value = false
+  }
+}
 
 // ===== 「关联公司并激活业务关系」（→ 需求 §6.1 ③ / §12.1 分支 4）=====
 
@@ -267,6 +328,44 @@ onMounted(() => {
               </a-button>
             </template>
           </a-alert>
+        </div>
+
+        <!-- 「待关联」阶段记跟单（→ 接口 §5.7 第 4 行；D-45）——
+             ⛔ 只在「尚未关联公司」时出现：已挂公司的联系人服务端一律 403（人话指引"到业务关系里记"），
+             摆出来就是点了必报错的假入口（设计规范 §3.2 第 11 条） -->
+        <div v-if="unlinked" class="contact-card">
+          <h3 class="contact-card-title">记一条跟单</h3>
+          <p class="contact-note">
+            这条线索还没挂公司，跟单先记在联系人身上；关联公司后会自动挂到新关系的时间线上。
+            <strong>有效沟通必须写一句话结果</strong>（只说"没打通"这类请用快速标记）。
+          </p>
+
+          <div class="contact-actions">
+            <a-select
+              v-model:value="eventForm.action_type"
+              :options="actionTypeOptions"
+              style="width: 120px"
+            />
+            <a-select
+              v-model:value="eventForm.outcome"
+              :options="outcomeOptions"
+              style="width: 180px"
+            />
+            <a-input
+              v-model:value="eventForm.summary"
+              placeholder="一句话结果（有效沟通必填）"
+              style="min-width: 220px"
+            />
+            <a-input-number
+              v-model:value="eventForm.duration_min"
+              :min="1"
+              placeholder="分钟"
+              style="width: 100px"
+            />
+            <a-button type="primary" :loading="submittingEvent" @click="submitContactEvent">
+              记下
+            </a-button>
+          </div>
         </div>
 
         <!-- 「关联公司」面板：撞库（分支 4）→ 定部门 × 产品线 → 激活 -->

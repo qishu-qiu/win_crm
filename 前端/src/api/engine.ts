@@ -69,6 +69,26 @@ export async function recordEvent(
   return data
 }
 
+/**
+ * 「待关联」阶段记一条跟单（`POST /contacts/:id/events`，→ 接口 §5.7 第 4 行 / 需求 §6.1 模型 B）
+ * —— 联系人详情页（页 15）用（D-45 的前端接线）。
+ *
+ * ★ **只在没挂公司时能记**（服务端判「该联系人的**当前归属人**」，→ 接口 §5.7）：
+ *   别人 → 403 `contact_event.not_mine`；**已挂公司**（`owner_id` 为 `null`）**同为 403**，
+ *   人话一并指引「到业务关系里记」⇒ **页面只在"尚未关联公司"处摆本入口**，
+ *   摆在别处＝点了必报错的**假入口**（设计规范 §3.2 第 11 条，本项目已犯过）。
+ * ★ 语义：这条跟单**只挂在联系人身上**（服务端落库 `relation_id` 与 `owner_snapshot` 均 `null`）、
+ *   **不回写 `last_event_at`**（那列在 C 域，本条根本没有关系）；**关联公司后服务端批量挂到新关系**。
+ * ★ 校验（同关系侧）：**有效沟通必写一句话结果**（缺 → 422）；同内容重复 → 409（幂等键 `relationId=null`）。
+ */
+export async function recordContactEvent(
+  contactId: string,
+  input: RecordEventInput,
+): Promise<ActionEvent> {
+  const { data } = await request.post<ActionEvent>(`/contacts/${contactId}/events`, input)
+  return data
+}
+
 /** 某关系的承诺列表 */
 export async function listCommitments(relationId: string): Promise<Commitment[]> {
   const { data } = await request.get<Commitment[]>(`/relations/${relationId}/commitments`)

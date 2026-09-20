@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
-import { message, type TablePaginationConfig } from 'ant-design-vue'
+import { Modal, message, type TablePaginationConfig } from 'ant-design-vue'
 
 import {
   createCommitment,
@@ -21,6 +21,7 @@ import {
   type RelationTab,
   type RelationVo,
 } from '../api/relation'
+import { claimSeaRelation } from '../api/sea'
 import {
   ACTION_TYPE_OPTIONS,
   COMMITMENT_CTYPE_OPTIONS,
@@ -50,8 +51,10 @@ import { formatDateTime } from '../format'
  * 业务关系列表页（M3-14 起 · 方案 A 最小页）—— **私海 / 公海两个页签**，
  * M4-17 起每行可**点开时间线**（写跟单 / 看承诺）。
  *
- * ★ **公海（无主）＝可读不可写**（2026-09-18 拍板）：抽屉在公海只给「**开发价值**」一个入口，
- *   其余写动作一概不出现；跟单 / 承诺**照旧可读**（→ 前端文档 §5 第 9/10 条 / D-32）。
+ * ★ **公海（无主）＝可读不可写**（2026-09-18 拍板）：抽屉在公海只给**两个**入口 ——
+ *   「**领取到我的私海**」（M7-01 片 2；领取＝把客户接过来，不是"写内容"，→ 接口 §4.5）＋
+ *   「**开发价值**」（唯一可写的属性）；其余写动作一概不出现；跟单 / 承诺**照旧可读**
+ *   （→ 前端文档 §5 第 9/10 条 / 需求 §6.3 动线「看号 → 翻历史 → 打 → 有戏就领取」/ D-32）。
  *
  * 判据逐字（《开发计划-V1》M3-14 / M4-17）：
  *   · M3-14「页面上能看到两条列表，**数据与 curl 一致**」；
@@ -481,6 +484,83 @@ async function saveValueTier(): Promise<void> {
   }
 }
 
+// ===== M7-01 片 2：公海「领取到我的私海」（→ 接口 §4.5 / 需求 §6.3）=====
+
+const claiming = ref(false)
+
+/**
+ * 能不能领 —— 只判**形状**：`dept_id` / `product_line_id` 是定位这条公海关系的入参，
+ * 公司档案被逻辑删（`company === null`）时**请求根本构造不出来**，点了必然 400 ⇒ 不摆这个按钮（假入口）。
+ *
+ * ⚠ **角色 / 权限一概不在前端判**：谁能领（可写角色 ＋ 读范围）是**服务端口径** ——
+ *   前端再判一遍＝第二套权限口径（改了服务端忘了前端就分叉，本项目点名的坑）；
+ *   管理员（只读档）点了会拿到服务端 **403** 的人话，那是对的，不是缺陷。
+ * ⚠ 「是不是公海」取的也是**服务端出的 `sea_status`**（见 `activeIsSea`），
+ *   不自己拿 `owner === null` 再推一遍。
+ */
+const canClaim = computed(() => {
+  const relation = activeRelation.value
+  return (
+    relation !== null &&
+    relation.company !== null &&
+    relation.dept !== null &&
+    relation.product_line !== null
+  )
+})
+
+/**
+ * 领取**不可逆**（领取后不会再放回公海）⇒ 先确认再发（→ 前端文档 §9.3「危险操作二次确认」）。
+ * ★ 确认按钮**不用 danger**：规范里 danger 是给「删除 / 判死」的（→ 设计规范 §二）；
+ *   领取是把客户接过来，不是销毁。
+ */
+function confirmClaim(): void {
+  if (!canClaim.value) return
+  Modal.confirm({
+    title: '领取到我的私海？',
+    content: '领取后这条关系归你：原跟单全部继承，阶段从「初步建联」重新开始；此动作不可撤销。',
+    okText: '确认领取',
+    cancelText: '取消',
+    onOk: () => claimToMyPrivate(),
+  })
+}
+
+/**
+ * 调领取端点 → 成功**跳关系详情页**（领取后才进推进态，动线终点在详情页 ——→ 需求 §6.3 / 施工单片 2）。
+ *
+ * ★ 失败一律「**关抽屉 ＋ 重新拉列表**」：失败本身就说明**列表已经过期**
+ *   （409＝刚被同事领走 / 400＝这条已不在公海 / 403＝越部门或只读角色）——
+ *   继续摆着一行"其实已经领不了"的数据比刷新更糟。失败人话**由请求层统一弹出**，这里不重复堆提示。
+ */
+async function claimToMyPrivate(): Promise<void> {
+  const relation = activeRelation.value
+  if (
+    relation === null ||
+    relation.company === null ||
+    relation.dept === null ||
+    relation.product_line === null
+  ) {
+    return
+  }
+
+  claiming.value = true
+  try {
+    const claimed = await claimSeaRelation(relation.company.id, {
+      dept_id: relation.dept.id,
+      product_line_id: relation.product_line.id,
+    })
+    message.success('已领取到你的私海')
+    drawerOpen.value = false
+    onDrawerClose()
+    await router.push(`/relations/${claimed.id}`)
+  } catch {
+    drawerOpen.value = false
+    onDrawerClose()
+    await load()
+  } finally {
+    claiming.value = false
+  }
+}
+
 async function refreshTimeline(): Promise<void> {
   const relation = activeRelation.value
   if (relation === null) return
@@ -758,8 +838,20 @@ async function submitWaive(commitment: Commitment): Promise<void> {
     >
       <p v-if="timelineError" class="relations-error">{{ timelineError }}</p>
 
-      <!-- ★ 公海（无主）：**只给「开发价值」入口**，其余写动作一概不出现（→ 前端文档 §5 第 9/10 条） -->
+      <!-- ★ 公海（无主）：**只给「领取到私海」＋「开发价值」两个入口**，其余写动作一概不出现
+           （→ 前端文档 §5 第 9/10 条 / 需求 §6.3） -->
       <template v-if="activeIsSea">
+        <h3 class="drawer-section">领取到私海</h3>
+        <div class="drawer-form">
+          <!-- 领取＝把客户接过来（动线终点），故用主按钮；能不能领**由服务端判**（→ 接口 §4.5） -->
+          <a-button type="primary" :loading="claiming" :disabled="!canClaim" @click="confirmClaim">
+            领取到我的私海
+          </a-button>
+          <span class="relations-bulk-hint">
+            领取后这条关系归你：原跟单全部继承，阶段从「初步建联」重新开始。
+          </span>
+        </div>
+
         <h3 class="drawer-section">开发价值</h3>
         <div class="drawer-form">
           <a-select
@@ -773,7 +865,7 @@ async function submitWaive(commitment: Commitment): Promise<void> {
           </a-button>
           <span class="relations-bulk-hint">
             该客户还在公海：开发价值由部门共同维护，这儿谁都能标；
-            写跟单 / 建承诺要先把这条领取到私海。
+            写跟单 / 建承诺要先点上面的「领取到我的私海」。
           </span>
         </div>
       </template>

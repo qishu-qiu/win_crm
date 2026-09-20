@@ -42,6 +42,8 @@ import {
   resolvePagination,
   type PageResult,
   type PaginationQuery,
+  AuditService,
+  type RequestContext,
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
 // A 域出口（架构 §5.2 路之①）：员工姓名走 `OrgService`、**字典文案走 `DictService`**
@@ -65,6 +67,8 @@ export const COMPANY_AUDIT_ACTIONS = {
   createCompany: 'company.create',
   /** 建档联系人 → `POST /contacts` */
   createContact: 'contact.create',
+  /** 管理员查看公司详情 → `GET /companies/:id`（→ D-35：仅 `admin` 角色写 `operation_log`） */
+  view: 'company.view',
 } as const;
 
 /** 公司出参（→ §5.4 列表项；跨域字段 `relation_count` / `old_customer` 待 M3/M4） */
@@ -80,6 +84,23 @@ export interface CompanyVo {
   legal_person: string | null;
   address_maintained: boolean;
   updated_at: string;
+}
+
+/** 公司档案标签分组（→ §5.4 `profile_tags`；B2：identity / policy 多选，decision_chain 单选） */
+export interface CompanyProfileTagGroupVo {
+  identity: { tag_id: bigint; tag_code: string; label: string | null }[];
+  policy: { tag_id: bigint; tag_code: string; label: string | null }[];
+  decision_chain: { tag_id: bigint; label: string | null } | null;
+}
+
+/** 公司详情出参（→ §5.4 详情；D-05） */
+export interface CompanyDetailVo extends CompanyVo {
+  /** 完善度三档（0-100，→ B1 `completeness_1/2/3`） */
+  completeness: { c1: number; c2: number; c3: number };
+  /** 档案标签（身份 / 制度 / 决策链，→ B2） */
+  profile_tags: CompanyProfileTagGroupVo;
+  /** 该公司下的联系人简卡（→ §5.4 `contacts[]`；列表 / 卡片一律 `phone_masked`，拍板 Q2） */
+  contacts: ContactBriefVo[];
 }
 
 /** 查重候选（→ §5.4） */
@@ -192,6 +213,8 @@ export class CompanyService {
     private readonly org: OrgService,
     /** A 域出口·字典（M6-15 起：联系人详情的特质 `label`）—— 与 `org` 分家，见 `DictService` 文件头 */
     private readonly dict: DictService,
+    /** 审计留痕（`@Global()` 单例；管理员读路径的 `company.view` 走 `recordStandalone`，→ D-35） */
+    private readonly audit: AuditService,
   ) {}
 
   // ===== M2-08 建档（公司）=====
@@ -614,6 +637,9 @@ export class CompanyService {
       });
     }
 
+    // 管理员读留痕（拍板 Q4：仅 `admin` 角色写 `operation_log`，best-effort 不冒泡）
+    await this.recordAdminView(context, COMPANY_AUDIT_ACTIONS.view, 'contact', contactId);
+
     // 锁：唯一判定点在 `domain/contact-lock.ts`；未上锁时 `lockerId` 为 `null`（不必白问 A 域）
     const locked = isPhoneLockedForViewer(row, viewerId);
     const lockerId = locked ? row.phone_locked_by : null;
@@ -656,6 +682,76 @@ export class CompanyService {
         is_current: item.is_current,
       })),
     };
+  }
+
+  // ===== D-05 公司详情（→ §5.4 详情；跨域字段待落点）=====
+
+  /**
+   * 公司详情（→ §5.4 详情出参；D-05）。
+   *
+   * ★ **不做数据范围过滤**：公司档案是**全公司共享的资料层**（→ §5.4 / 数据架构 B1），
+   *   与 `listCompanies` 同口径（注释已明写「刻意不做范围过滤」）。
+   *
+   * ★ 口径（拍板 Q1 / Q2）：
+   *   · 基本档案 / `completeness`(c1/c2/c3) / `profile_tags`(B2 本域表) / `contacts[]`(B5 本域表)
+   *     ＝ **本域内部**，不跨域；
+   *   · `contacts[]` 按**卡片**处理（拍板 Q2）→ `phone_masked`（详情给全号只在联系人详情，不在公司卡片）；
+   *   · `relations_summary` / `event_count_30d` 依赖 C 域 `business_relation` —— **B(L2) 禁止依赖 C(L3)**，
+   *     本轮暂不出（登记缺口 → 跨域落点待拍板），**不编假值**（同现有 `relation_count`「待 M3/M4」模式）。
+   *
+   * ★ 管理员读留痕（拍板 Q4）：仅 `admin` 角色写 `operation_log`，best-effort。
+   */
+  async getCompany(id: string): Promise<CompanyDetailVo> {
+    const context = getRequestContext();
+    if (context === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+        constraint: 'company.no_context',
+      });
+    }
+    const companyId = jsonToBigint(id, 'id');
+    const row = await this.repository.findCompanyById(companyId);
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：公司不存在（或已删除 / 已合并）', {
+        constraint: 'company.not_found',
+      });
+    }
+
+    const [tags, contacts] = await Promise.all([
+      this.repository.findCompanyProfileTags(companyId),
+      this.repository.findCompanyContacts(companyId, { skip: 0, take: 1000 }),
+    ]);
+
+    // 字典文案（A 域出口；未打标的 tag_id 给 `null` 不编文案）
+    const labels = await this.dict.getDictItemLabels(tags.map((tag) => tag.tag_id));
+    const labelById = new Map(labels.map((item) => [item.id.toString(), item.label]));
+    const profileTags = buildProfileTags(tags, labelById);
+
+    const viewerId = context.employeeId;
+    // 管理员读留痕（拍板 Q4）
+    await this.recordAdminView(context, COMPANY_AUDIT_ACTIONS.view, 'company', companyId);
+
+    return {
+      ...toCompanyVo(row),
+      completeness: { c1: row.completeness_1, c2: row.completeness_2, c3: row.completeness_3 },
+      profile_tags: profileTags,
+      contacts: contacts.rows.map((cc) =>
+        toContactBrief(cc.contact, viewerId, { position: cc.position, is_current: cc.is_current }),
+      ),
+    };
+  }
+
+  /**
+   * 管理员读留痕（拍板 Q4：仅 `admin` 角色写 `operation_log`；→ 需求 §4.2 ★）。
+   * 走 `recordStandalone`（best-effort，失败只记日志、绝不冒泡，→ `audit.service.ts`）。
+   */
+  private async recordAdminView(
+    context: RequestContext,
+    action: `${string}.${string}`,
+    targetType: string,
+    targetId: bigint,
+  ): Promise<void> {
+    if (!context.roleCodes.includes('admin')) return;
+    await this.audit.recordStandalone({ action, target_type: targetType, target_id: targetId });
   }
 
   /** 当前登录人 id；拿不到 → 401（正常链路上守卫已在前，走到这里还没有上下文＝装配问题） */
@@ -760,6 +856,27 @@ function toCompanyVo(row: CompanyRow): CompanyVo {
     address_maintained: row.address !== null || row.longitude !== null,
     updated_at: row.updated_at.toISOString(),
   };
+}
+
+/** 档案标签按 `group_code` 分三组（→ §5.4 `profile_tags`；B2 三类口径） */
+function buildProfileTags(
+  tags: Awaited<ReturnType<CompanyRepository['findCompanyProfileTags']>>,
+  labelById: Map<string, string | null>,
+): CompanyProfileTagGroupVo {
+  const identity: CompanyProfileTagGroupVo['identity'] = [];
+  const policy: CompanyProfileTagGroupVo['policy'] = [];
+  let decisionChain: CompanyProfileTagGroupVo['decision_chain'] = null;
+  for (const tag of tags) {
+    const label = labelById.get(tag.tag_id.toString()) ?? null;
+    if (tag.group_code === 'company_identity_tag') {
+      identity.push({ tag_id: tag.tag_id, tag_code: tag.tag_code, label });
+    } else if (tag.group_code === 'company_policy_tag') {
+      policy.push({ tag_id: tag.tag_id, tag_code: tag.tag_code, label });
+    } else if (tag.group_code === 'decision_chain') {
+      decisionChain = { tag_id: tag.tag_id, label };
+    }
+  }
+  return { identity, policy, decision_chain: decisionChain };
 }
 
 /**

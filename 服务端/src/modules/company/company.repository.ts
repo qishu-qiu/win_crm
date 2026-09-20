@@ -51,6 +51,10 @@ const COMPANY_SELECT = {
   aliases: true,
   merged_into: true,
   updated_at: true,
+  // 完善度三档（→ B1 `completeness_1/2/3`；D-05 详情出参 `completeness` 要用）
+  completeness_1: true,
+  completeness_2: true,
+  completeness_3: true,
 } as const;
 
 /**
@@ -449,5 +453,22 @@ export class CompanyRepository {
       this.prisma.companyContact.count({ where }),
     ]);
     return { rows, total };
+  }
+
+  /**
+   * 公司档案标签（→ §5.4 `profile_tags`；B2 `company_profile_tag`）。
+   *
+   * ★ 只取 `group_code` / `tag_id` / `tag_code` 三列：`label` 是**字典文案**（`dict_item`，A 域），
+   *   由 service 走 `DictService.getDictItemLabels` 取（跨域不查对方表，→ 架构 §5.2）。
+   * ★ 不做可见性过滤：档案标签**全公司共享、不随部门隔离**（→ 数据架构 B2「全公司共享」）。
+   * ★ 三种 `group_code`（`company_identity_tag` 多选 / `company_policy_tag` 多选 / `decision_chain` 单选）
+   *   由 service 按组装配成 `{identity,policy,decision_chain}`，本处不掺和分组。
+   */
+  async findCompanyProfileTags(companyId: bigint) {
+    return this.prisma.companyProfileTag.findMany({
+      where: { company_id: companyId },
+      select: { group_code: true, tag_id: true, tag_code: true },
+      orderBy: { id: 'asc' },
+    });
   }
 }

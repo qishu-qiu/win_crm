@@ -326,3 +326,48 @@ export class ContactCreatedVoDto {
   @ApiPropertyOptional({ description: '命中历史号时的提示（**提示不拦截**，→ §5.5）' })
   phone_history_hint?: string;
 }
+
+/** 档案标签项（→ B2 `company_profile_tag`；identity / policy 用） */
+export class CompanyProfileTagItemVoDto {
+  @ApiProperty({ type: String, example: '12' })
+  tag_id!: string;
+
+  @ApiProperty({ description: '标签码（英文码，建标时冗余落库）', example: 'state_owned' })
+  tag_code!: string;
+
+  @ApiProperty({ type: String, nullable: true, description: '中文文案（取自字典；停用 / 删除为 `null`，不编文案）' })
+  label!: string | null;
+}
+
+/** 公司档案标签分组（→ §5.4 `profile_tags`；B2 三类口径） */
+export class CompanyProfileTagGroupVoDto {
+  @ApiProperty({ type: [CompanyProfileTagItemVoDto], description: '身份标签（多选）' })
+  identity!: CompanyProfileTagItemVoDto[];
+
+  @ApiProperty({ type: [CompanyProfileTagItemVoDto], description: '制度标签（多选）' })
+  policy!: CompanyProfileTagItemVoDto[];
+
+  @ApiPropertyOptional({
+    type: CompanyProfileTagItemVoDto,
+    nullable: true,
+    description: '决策链（单选）；⚠ 出参只含 `tag_id` / `label`（→ §5.4），`tag_code` 不返回',
+  })
+  decision_chain?: CompanyProfileTagItemVoDto | null;
+}
+
+/**
+ * 公司详情（→ §5.4 详情；D-05）。
+ * ★ 继承 `CompanyVoDto` 的全部基本档案字段，再补 `completeness` / `profile_tags` / `contacts`。
+ * ★ `contacts[]` 按**卡片**出参（一律 `phone_masked`，拍板 Q2）；`relations_summary` / `event_count_30d`
+ *   依赖 C 域 `business_relation`、B(L2) 禁止依赖 C(L3)，本轮暂不出（登记缺口）。
+ */
+export class CompanyDetailVoDto extends CompanyVoDto {
+  @ApiProperty({ description: '完善度三档（0-100，→ B1 `completeness_1/2/3`）' })
+  completeness!: { c1: number; c2: number; c3: number };
+
+  @ApiProperty({ type: CompanyProfileTagGroupVoDto, description: '档案标签（身份 / 制度 / 决策链，→ B2）' })
+  profile_tags!: CompanyProfileTagGroupVoDto;
+
+  @ApiProperty({ type: [ContactBriefVoDto], description: '联系人简卡（列表 / 卡片一律 `phone_masked`，拍板 Q2）' })
+  contacts!: ContactBriefVoDto[];
+}

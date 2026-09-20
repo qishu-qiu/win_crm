@@ -200,6 +200,7 @@ function createService(options: FakeOptions = {}) {
   // 领域事件总线（M4-11）：激活成功后在**事务之外** publish `RelationCreated`
   //  —— 单测只关心「发了什么」，落库是 D 域订阅方的事（→ `engine-event.subscriber.ts`）
   const events = { publish: jest.fn(async () => undefined) };
+  const audit = { recordStandalone: jest.fn(async () => undefined) } as unknown as never;
 
   const service = new RelationService(
     repository as unknown as RelationRepository,
@@ -207,6 +208,7 @@ function createService(options: FakeOptions = {}) {
     company as unknown as CompanyService,
     prisma as unknown as PrismaService,
     events as unknown as EventBus,
+    audit,
   );
 
   return { service, repository, org, company, prisma, events };

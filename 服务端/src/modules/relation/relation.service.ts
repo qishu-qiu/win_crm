@@ -32,6 +32,7 @@ import { Injectable } from '@nestjs/common';
 
 import {
   AppError,
+  AuditService,
   DomainEventName,
   // ⚠ 必须是**值导入**（不能写 `type EventBus`）：Nest 靠 `design:paramtypes` 元数据注入，
   //   类型导入会被编译期擦除 → 元数据退化成 `Function` → 启动即报「依赖解析失败」。
@@ -189,6 +190,8 @@ export const RELATION_AUDIT_ACTIONS = {
   update: 'relation.update',
   /** 加关系成员（owner / 协同 / @求助）→ `POST /relations/:id/members` */
   addMember: 'relation.add_member',
+  /** 管理员查看关系详情 → `GET /relations/:id`（→ D-35：仅 `admin` 角色写 `operation_log`） */
+  view: 'relation.view',
 } as const;
 
 /** @求助默认 7 天（→ C2：`dept_rule.ask_help_days` 可配；**配置化尚未排期**，本批取规格默认值） */
@@ -203,6 +206,8 @@ export class RelationService {
     private readonly prisma: PrismaService,
     /** 领域事件总线（M4-11；`@Global()` 模块提供，故本域 `imports` 不必列出） */
     private readonly events: EventBus,
+    /** 审计留痕（`@Global()` 单例；管理员读路径的 `relation.view` 走 `recordStandalone`，→ D-35） */
+    private readonly audit: AuditService,
   ) {}
 
   // ===== M3-06 激活（关系 ＋ owner 成员，本域事务）=====
@@ -515,6 +520,15 @@ export class RelationService {
 
     const readVerdict = checkRelationRead(memberInputOf(row), viewer, new Date());
     if (!readVerdict.ok) throw verdictError(readVerdict);
+
+    // 管理员读留痕（拍板 Q4：仅 `admin` 角色写 `operation_log`，best-effort 不冒泡）
+    if (viewer.roleCodes.includes('admin')) {
+      await this.audit.recordStandalone({
+        action: RELATION_AUDIT_ACTIONS.view,
+        target_type: 'business_relation',
+        target_id: row.id,
+      });
+    }
 
     const refs = await this.loadRefs([row]);
     return { ...this.buildVo(row, refs), members: buildMemberVos(row, refs) };

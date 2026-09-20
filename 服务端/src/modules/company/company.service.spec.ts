@@ -284,12 +284,14 @@ function createService(options: FakeOptions = {}) {
   const repository = createRepository(options);
   const org = createOrg(options);
   const dict = createDict(options);
+  const audit = { recordStandalone: jest.fn(async () => undefined) } as unknown as never;
   return {
     service: new CompanyService(
       repository as unknown as CompanyRepository,
       createPrisma(),
       org as unknown as OrgService,
       dict as unknown as DictService,
+      audit,
     ),
     repository,
     org,

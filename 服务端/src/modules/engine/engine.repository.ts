@@ -286,7 +286,7 @@ export class EngineRepository {
     return this.prisma.commitment.update({ where: { id }, data, select: COMMITMENT_SELECT });
   }
 
-  // ===== M7-01 领取公海 → 承诺跟随关系换人（接口 §5.6 尾）=====
+  // ===== F-01 领取公海 → 承诺跟随关系换人（接口 §5.6 尾）=====
 
   /**
    * 把该关系**还没结束**的承诺整体转给新 owner（→ 接口 §5.6 尾：「领取瞬间，该关系所有

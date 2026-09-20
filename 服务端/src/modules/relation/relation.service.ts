@@ -266,7 +266,7 @@ export class RelationService {
     return this.buildVo(row, await this.loadRefs([row]));
   }
 
-  // ===== M7-01 公海「领取到私海」的跨域出口（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）=====
+  // ===== F-01 公海「领取到私海」的跨域出口（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）=====
 
   /**
    * 「领取到私海」：把「公司 × 部门 × 产品线」下的**那一条公海关系**认领给当前登录人。

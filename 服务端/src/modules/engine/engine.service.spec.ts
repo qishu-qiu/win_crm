@@ -129,7 +129,7 @@ interface FakeOptions {
   createRelationError?: AppError | null;
   /** 关联动线：本次**搬运的孤儿跟单条数**（`updateMany` 的 `count`） */
   linkedEvents?: number;
-  /** M7-01：领取公海时**转归属的 open 承诺条数**（`updateMany` 的 `count`） */
+  /** F-01：领取公海时**转归属的 open 承诺条数**（`updateMany` 的 `count`） */
   reassignedCommitments?: number;
 }
 
@@ -155,7 +155,7 @@ function createService(options: FakeOptions = {}) {
     listAgendaOfUser: jest.fn(async () => options.agenda ?? []),
     // M6-14：把联系人名下**孤儿跟单**批量挂到新关系（`updateMany` 回 `{count}`）
     rehangOrphanEventsOfContact: jest.fn(async () => ({ count: options.linkedEvents ?? 0 })),
-    // M7-01：领取公海 → 该关系 open 承诺整体转新 owner（`updateMany` 回 `{count}`）
+    // F-01：领取公海 → 该关系 open 承诺整体转新 owner（`updateMany` 回 `{count}`）
     reassignOpenCommitments: jest.fn(async () => ({ count: options.reassignedCommitments ?? 0 })),
   };
   const relation = {
@@ -1252,9 +1252,9 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
     });
   });
 
-  // ===== M7-01 领取公海（F 域发 → D 域落事件 ＋ 转 open 承诺 owner）=====
+  // ===== F-01 领取公海（F 域发 → D 域落事件 ＋ 转 open 承诺 owner）=====
 
-  describe('recordRelationClaimed（M7-01）', () => {
+  describe('recordRelationClaimed（F-01）', () => {
     const CLAIMED_AT = new Date('2026-09-20T09:00:00Z');
     const CLAIMED = createDomainEvent({
       name: DomainEventName.RelationClaimed,

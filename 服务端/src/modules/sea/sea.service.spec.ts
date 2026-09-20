@@ -1,5 +1,5 @@
 // =============================================================================
-// F 域服务用例（M7-01 公海「领取到私海」）—— **假数据，不连库**
+// F 域服务用例（F-01 公海「领取到私海」）—— **假数据，不连库**
 //
 // 本文件钉的是**编排**（顺序 / 谁调谁 / 什么情况下不动库不发事件），不是规则：
 //   权限 / 范围 / 定位 / 原子性全在 C 域出口（那边 8 条用例已钉）—— 这里只假造它的返回与异常。
@@ -118,7 +118,7 @@ async function captureAppError(fn: () => Promise<unknown>): Promise<AppError> {
 const CLAIM_DTO = { dept_id: DEPT_ID.toString(), product_line_id: LINE_ID.toString() };
 const COMPANY_ID_TEXT = COMPANY_ID.toString();
 
-describe('SeaService（M7-01 公海「领取到私海」）', () => {
+describe('SeaService（F-01 公海「领取到私海」）', () => {
   it('成功：调 C 域出口 → 回填最近一条入公海历史 → 发 `RelationClaimed` → 出参＝列表项 ＋ `claimed_at`', async () => {
     const { service, repository, relation, events } = createService({ prevOwnerId: OTHER });
 

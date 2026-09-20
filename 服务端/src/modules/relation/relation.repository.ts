@@ -200,7 +200,7 @@ export class RelationRepository {
     });
   }
 
-  // ===== M7-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）=====
+  // ===== F-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）=====
 
   /**
    * 找「公司 × 部门 × 产品线」下的**公海**关系（＝认领目标）。

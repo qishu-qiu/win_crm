@@ -129,9 +129,9 @@ interface FakeOptions {
   failCreateOnCall?: { call: number; error: unknown };
   /** 被 @求助者的部门集合（判同部门） */
   mentionedDeptIds?: bigint[];
-  /** M7-01：`findCompanySeaRelation` 返回的公海关系（**不给**＝默认造一条待领公海关系） */
+  /** F-01：`findCompanySeaRelation` 返回的公海关系（**不给**＝默认造一条待领公海关系） */
   seaRow?: RelationFixture | null;
-  /** M7-01：原子认领 `updateMany` 的影响行数（`0` ＝ 并发被抢，→ 409） */
+  /** F-01：原子认领 `updateMany` 的影响行数（`0` ＝ 并发被抢，→ 409） */
   claimCount?: number;
 }
 
@@ -153,7 +153,7 @@ function createService(options: FakeOptions = {}) {
       options.rowMissing === true ? null : (options.row ?? relationFixture()),
     ),
     findMember: jest.fn(async () => options.member ?? null),
-    // M7-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`）
+    // F-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`）
     // 定位：默认给一条**待领的公海关系**（`members` 空 —— 公海理应没有在位 owner）
     findCompanySeaRelation: jest.fn(async () =>
       options.seaRow === undefined
@@ -734,14 +734,14 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
   });
 
   // ===========================================================================
-  // M7-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）
+  // F-01 公海「领取到私海」（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）
   //
   // 这一批钉的是 **C 域出口**的三件事：① 原子认领（条件 UPDATE，`count===1` 才算抢到）
   //   ② owner 成员切换（撤在位 → 复活或插入）③ 阶段回 1 ＋ 留痕。
   // ⚠ 「open 承诺转新 owner」**不在这里**：`commitment` 属 D 域，而 F / D 同层禁互相依赖
   //   （架构 §3）⇒ 走领域事件 `RelationClaimed`（片 2 落 F 域端点时同批）。
   // ===========================================================================
-  describe('claimCompanySeaRelation：公海「领取到私海」（M7-01）', () => {
+  describe('claimCompanySeaRelation：公海「领取到私海」（F-01）', () => {
     const CLAIM_INPUT = { companyId: COMPANY_ID, deptId: DEPT_ID, productLineId: LINE_ID };
     /** 一条待领的公海关系（`members` 空 —— 公海理应没有在位 owner） */
     const SEA_ROW = relationFixture({ sea_status: 'company_sea', members: [] });

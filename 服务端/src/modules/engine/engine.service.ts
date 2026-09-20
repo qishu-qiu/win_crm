@@ -230,7 +230,7 @@ const RELATION_CREATED_KEY_PREFIX = 'relation_created';
 /** 建档事件在时间线上显示的那句话（**系统事件**，不是销售写的跟单） */
 const RELATION_CREATED_SUMMARY = '建档：激活业务关系';
 
-// ===== M7-01 领取公海（F 域发 → D 域落事件 ＋ 转承诺归属）=====
+// ===== F-01 领取公海（F 域发 → D 域落事件 ＋ 转承诺归属）=====
 
 /**
  * 领取公海事件的**确定性**幂等键前缀（→ 见 `recordRelationClaimed`：至少一次投递也不会写两条）。
@@ -901,7 +901,7 @@ export class EngineService {
     }
   }
 
-  // ===== M7-01 领取公海事件（由 `engine-event.subscriber.ts` 调）=====
+  // ===== F-01 领取公海事件（由 `engine-event.subscriber.ts` 调）=====
 
   /**
    * 领取公海要落的两件**本域**事：

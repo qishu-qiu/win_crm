@@ -456,6 +456,173 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
     });
   });
 
+  // ===========================================================================
+  // M6-17「待关联」阶段记跟单（→ 接口 §5.7 第 4 行；D-45）
+  //
+  // 为什么这几条在 D 域单测：
+  //   ① 「落库形态」（`relation_id` 空 / `owner_snapshot` 空）是**本域的表**的写法，D 域说了算；
+  //   ② 「只有归属人能记」这一档**复用 B 域出口的判定**，D 域只负责「拒了就别往下走」——
+  //      判定本身在 `company.service.spec.ts` 被钉住（同 quickMark 联系人侧的分工）。
+  // ===========================================================================
+  describe('recordContactEvent：待关联阶段记跟单（M6-17 · D-45）', () => {
+    /** 最小有效入参（**不带 `contact_id`**：联系人由路径给，规格说「req 同关系侧、省 relation_id」） */
+    const CONTACT_DTO = {
+      action_type: 'phone',
+      outcome: 'advanced',
+      summary: '先加的微信，说有公司了再谈',
+    };
+
+    it('落库形态：`relation_id=null` ＋ `owner_snapshot=null`，且走本域事务', async () => {
+      const { service, repository, prisma } = createService();
+
+      await runWithContext(contextOf(), () =>
+        service.recordContactEvent(CONTACT_ID.toString(), CONTACT_DTO),
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const data = repository.createEvent.mock.calls[0]?.[0] as Record<string, unknown>;
+      // ★ 本条就是「无关系」的正当形态（→ D2 的 CHECK：`relation_id` / `contact_id` 至少一非空）
+      expect(data.relation_id).toBeNull();
+      expect(data.contact_id).toBe(CONTACT_ID);
+      // ★ `owner_snapshot` 的语义是「写入那一刻**该关系**的 owner」—— 没有关系 ⇒ 无从取，留 null
+      expect(data.owner_snapshot).toBeNull();
+      expect(data.actor_id).toBe(ME);
+      expect(data.source).toBe('manual');
+      expect(data.idempotency_key).toHaveLength(64);
+    });
+
+    it('**不碰 C 域出口**：不判关系可写、不回写 `last_event_at`（本条没有关系）', async () => {
+      const { service, relation } = createService();
+
+      await runWithContext(contextOf(), () =>
+        service.recordContactEvent(CONTACT_ID.toString(), CONTACT_DTO),
+      );
+
+      expect(relation.requireWritableRelation).not.toHaveBeenCalled();
+      expect(relation.touchLastEventAt).not.toHaveBeenCalled();
+    });
+
+    it('出参：`contact` 有名字、`owner_snapshot=null`（无关系 ⇒ `branch=sub`，没有主线可比）', async () => {
+      const { service } = createService();
+
+      const vo = await runWithContext(contextOf(), () =>
+        service.recordContactEvent(CONTACT_ID.toString(), CONTACT_DTO),
+      );
+
+      expect(vo.contact).toEqual({ id: CONTACT_ID, name: '张总' });
+      expect(vo.owner_snapshot).toBeNull();
+      expect(vo.actor).toEqual({ id: ME, name: '王海涛' });
+      expect(vo.branch).toBe('sub');
+    });
+
+    it('`contact_id` 与路径是**同一个人** → 放行（规格说 req 同关系侧，故允许带）', async () => {
+      const { service, repository } = createService();
+
+      await runWithContext(contextOf(), () =>
+        service.recordContactEvent(CONTACT_ID.toString(), {
+          ...CONTACT_DTO,
+          contact_id: CONTACT_ID.toString(),
+        }),
+      );
+
+      expect(repository.createEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it('`contact_id` 指向**别人** → 400 `event.contact_conflict`，不落库（静默忽略入参更糟）', async () => {
+      const { service, repository } = createService();
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.recordContactEvent(CONTACT_ID.toString(), {
+            ...CONTACT_DTO,
+            contact_id: '999',
+          }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('event.contact_conflict');
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('联系人取不到（已删 / 已合并）→ 400 `event.contact_missing`', async () => {
+      const { service, repository } = createService({ contactOwners: [] });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.recordContactEvent(CONTACT_ID.toString(), CONTACT_DTO),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('event.contact_missing');
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('归属人是**别人** → 403 `contact_event.not_mine`，不落库（同 quickMark 联系人侧同判定）', async () => {
+      const { service, repository } = createService({
+        contactOwners: [{ id: CONTACT_ID, owner_id: OTHER }],
+      });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.recordContactEvent(CONTACT_ID.toString(), CONTACT_DTO),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('contact_event.not_mine');
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('联系人**已挂公司**（`owner_id` 为 null）→ 同样是 403（那一列只有待关联的人有值，→ 需求 §6.1 ⑦）', async () => {
+      const { service, repository } = createService({
+        contactOwners: [{ id: CONTACT_ID, owner_id: null }],
+      });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.recordContactEvent(CONTACT_ID.toString(), CONTACT_DTO),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('contact_event.not_mine');
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('有效沟通没写一句话结果 → 422 `event.summary_required`（与关系侧同一条规则）', async () => {
+      const { service, repository } = createService();
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.recordContactEvent(CONTACT_ID.toString(), {
+            action_type: 'phone',
+            outcome: 'advanced',
+          }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(422);
+      expect(error.constraint).toBe('event.summary_required');
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('同内容重复提交 → 409（幂等键把 `relationId` 记为 null，同键判定照旧生效）', async () => {
+      const { service, repository } = createService({ duplicated: eventRow({ relation_id: null }) });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.recordContactEvent(CONTACT_ID.toString(), CONTACT_DTO),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.constraint).toBe('uk_idem');
+      expect(repository.createEvent).not.toHaveBeenCalled();
+    });
+  });
+
   describe('quickMark：批量快速标记（M6-09）', () => {
     const QUICK_DTO = { relation_ids: ['11', '11', '12'], outcome: 'no_answer' };
 

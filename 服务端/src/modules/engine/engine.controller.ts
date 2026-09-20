@@ -96,6 +96,32 @@ export class EngineController {
     return this.engine.recordEvent(id, body);
   }
 
+  // ===== M6-17 「待关联」阶段记跟单（→ 接口 §5.7 第 4 行；D-45）=====
+
+  @Audit(ENGINE_AUDIT_ACTIONS.contactEventCreate, 'action_event')
+  @Post('contacts/:id/events')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '给「待关联」联系人记一条跟单（无关系）',
+    description:
+      '联系人**还没挂公司**时也能记跟单 —— 落库形态＝只绑联系人（`relation_id` 空）；' +
+      '**关联公司激活关系后，服务端自动把这批跟单批量挂到新关系**（历史不断，→ 接口 §5.6）。' +
+      '`req` 同 `POST /relations/:id/events`（`contact_id` 可省；若给，须与路径是**同一个人**）。' +
+      '★ **只有该联系人的当前归属人**能记（别人 → **403**）—— 「待关联」线索属私人待跟进' +
+      '（→ 需求 §6.1 ⑦⑨，与快速标记的联系人侧同判定）；已关联公司的客户请到业务关系里记。' +
+      '有效沟通仍须写一句话结果（**422**）；同内容重复提交 → **409**；' +
+      '⚠ 本条**不重置**掉海倒计时（待关联线索不进公海，无倒计时可言，→ 需求 §6.1 ⑧）',
+  })
+  @ApiParam({ name: 'id', description: '联系人 id（十进制字符串）' })
+  @ApiOkResponse({ type: ActionEventVoDto })
+  recordContactEvent(
+    @Param('id') id: string,
+    @Body() body: CreateEventDto,
+  ): Promise<ActionEventVo> {
+    return this.engine.recordContactEvent(id, body);
+  }
+
   @Audit(ENGINE_AUDIT_ACTIONS.quickMark, 'action_event')
   @Post('events/quick-mark')
   @HttpCode(200)

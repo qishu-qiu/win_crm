@@ -85,6 +85,12 @@ export const ENGINE_AUDIT_ACTIONS = {
   /** ★ 批量快速标记 → `POST /events/quick-mark`（写动作，由统一切面留痕） */
   quickMark: 'event.quick_mark',
   /**
+   * ★ 「待关联」阶段记跟单 → `POST /contacts/:id/events`（写动作，由统一切面留痕；→ D-45）。
+   * 与 `eventCreate`（关系侧记跟单）分开记名：同一个动作落在**有没有关系**这两条不同路上，
+   * 审计检索时要能一眼分开（同 `contact.activate_relation` 的三段式命名理由）。
+   */
+  contactEventCreate: 'contact.event_create',
+  /**
    * ★ 关联公司并激活业务关系 → `POST /contacts/:id/activate-relation`（写动作，由统一切面留痕）。
    * ⚠ 三段式动作名（`模块.动词` 的动词位不是名词）—— 本动作**写三张表**（就职 / 关系 / 跟单），
    *   故不能拆成「像哪个对象的增删改」；记为 `contact.activate_relation` 与接口 §5.6 的端点名同字。
@@ -178,6 +184,17 @@ export type EventRange = '1m' | 'all';
 
 /** 与 `mapPrismaError` 中 `uk_idem` 那条**逐字一致**（预检与兜底两处共用，改一处即两处生效） */
 const EVENT_DUPLICATED_MESSAGE = '这条跟单刚刚已经记过了';
+
+/**
+ * 给「待关联」线索记跟单时，**只有当前归属人**能记（→ 需求 §6.1 ⑦⑨「这条线索出现在谁的列表里」）。
+ * ★ 与 `quickMark` 的 `contact_ids` 侧**同一档判定**（接口 §5.7 已把那一档写死），
+ *   故这里不新造一格权限，而是把同一句人话同时说清「为什么不行 ＋ 该去哪儿」。
+ */
+const CONTACT_EVENT_NOT_MINE_MESSAGE =
+  '只能在自己的「待关联」线索上记跟单；已关联公司的客户，请到业务关系里记';
+
+/** 待关联事件的联系人**由路径指定**（`req` 里若仍带 `contact_id`，只能是同一个人 —— 否则本条该记给谁含混） */
+const CONTACT_EVENT_CONTACT_CONFLICT_MESSAGE = '参数错误：联系人由路径指定，contact_id 须与之一致或省略';
 
 /** 「近 1 个月」按 30 天算（→ §5.7 `range=1m`） */
 const DEFAULT_RANGE_DAYS = 30;
@@ -316,6 +333,128 @@ export class EngineService {
       relation.ownerId,
       await this.loadRefs([created], [relation.ownerId]),
     );
+  }
+
+  // ===== M6-17 待关联阶段记跟单（→ 接口 §5.7 第 4 行；D-45）=====
+
+  /**
+   * 「待关联」阶段记一条跟单（**无关系**，→ 接口 §5.7「待关联阶段事件（无关系，配合 需求 §6.1 模型 B）」）。
+   *
+   * ★ 与 `recordEvent` 的四处差别（别把两者合成一个方法）：
+   *   ① **没有关系可判**：`relation_id` 置 `null`（规格原文「由服务端置空」）、`owner_snapshot`
+   *      同样无从取 ⇒ 留 `null`（`owner_snapshot` 的语义是「写入那一刻**该关系**的 owner」，→ D2）；
+   *   ② **权限判的是「联系人归属人」**，不是「关系可写」：这条线索还没进任何关系，没有部门 / 产品线
+   *      可判（→ 需求 §6.1 ⑦⑧）。判定与 `quickMark` 的 `contact_ids` 侧**同一档**（接口 §5.7 已写死
+   *      那一档）—— 同族动作同判定，不在 D 域另开一格权限；
+   *   ③ **不回写 `last_event_at`**：那一列在 `business_relation`（C 域的表），本条压根没有关系；
+   *      且「待关联」线索不进公海、没有掉海倒计时（→ 需求 §6.1 ⑧），无处也不必回写；
+   *   ④ **搬家由 B / D 域在激活时完成**：关联公司激活关系后，服务端把该联系人名下
+   *      `relation_id` 为空的事件批量挂到新关系（→ `activateContactRelation` 第 ③ 件事 /
+   *      接口 §5.6）。本条只负责**把孤儿事件写对形状**（`contact_id` 有值、`relation_id` 为空）。
+   *
+   * ★ 幂等键带 `relationId: null`（→ `domain/event-idempotency.ts` 早已把该入参写成可空，
+   *   正是为这一天准备的）：同一联系人 + 同内容 = 同键 ⇒ 手抖连点两次仍只落一条。
+   */
+  async recordContactEvent(contactId: string, dto: CreateEventDto): Promise<ActionEventVo> {
+    const viewer = requireViewer();
+    const contactIdValue = jsonToBigint(contactId, 'id');
+
+    // ① `req` 里若仍带 `contact_id`（规格说「req 同 `POST /relations/:id/events`」），
+    //    只能在**指同一个联系人**时成立 —— 否则本条该记给谁就含混了（静默忽略入参更糟）
+    if (dto.contact_id !== undefined && dto.contact_id !== '') {
+      if (jsonToBigint(dto.contact_id, 'contact_id') !== contactIdValue) {
+        throw new AppError(
+          ErrorCode.PARAM_INVALID,
+          400,
+          CONTACT_EVENT_CONTACT_CONFLICT_MESSAGE,
+          { constraint: 'event.contact_conflict' },
+        );
+      }
+    }
+
+    // ② 联系人存在 ＋ **归属人是不是我**（B 域出口；判定与人话的唯一落点在 B 域，见该出口方法头）
+    //    ⚠ 归属取**当前** `owner_id`（可改：经理分派 / 离职交接，→ 需求 §6.1 ⑨），不是最初建档人
+    const owners = await this.company.getContactOwners([contactIdValue]);
+    if (owners.length === 0) {
+      throw new AppError(
+        ErrorCode.PARAM_INVALID,
+        400,
+        '参数错误：联系人不存在（或已删除 / 已合并）',
+        { constraint: 'event.contact_missing' },
+      );
+    }
+    if (owners[0]?.owner_id !== viewer.employeeId) {
+      // 已挂公司的人 `owner_id` 为 `null`（→ 需求 §6.1 ⑦：那一列只有待关联的人有值）
+      // ⇒ 走这里同样是 403，人话已指引「到业务关系里记」
+      throw new AppError(ErrorCode.FORBIDDEN, 403, CONTACT_EVENT_NOT_MINE_MESSAGE, {
+        constraint: 'contact_event.not_mine',
+      });
+    }
+
+    // ③ 与关系侧同一条规则：**有效沟通必须写一句话结果**（→ 需求 §10.2）
+    const outcome = dto.outcome ?? null;
+    if (isSummaryRequired(outcome) && (dto.summary ?? '').trim() === '') {
+      throw new AppError(
+        ErrorCode.REQUIRED_MISSING,
+        422,
+        '有效沟通必须写一句话结果；未接通请点「快速标记」',
+        { constraint: 'event.summary_required' },
+      );
+    }
+
+    // ④ 幂等键：`relationId` ＝ `null`（待关联阶段的正当形态，→ D2 的 CHECK：两者至少一非空）
+    const idempotencyKey = buildEventIdempotencyKey({
+      relationId: null,
+      contactId: contactIdValue,
+      actorId: viewer.employeeId,
+      actionType: dto.action_type,
+      outcome,
+      summary: dto.summary ?? null,
+      durationMin: dto.duration_min ?? null,
+    });
+
+    const duplicated = await this.repository.findEventByIdempotencyKey(idempotencyKey);
+    if (duplicated !== null) {
+      throw new AppError(ErrorCode.UNIQUE_CONFLICT, 409, EVENT_DUPLICATED_MESSAGE, {
+        constraint: 'uk_idem',
+      });
+    }
+
+    const eventAt = new Date();
+    const created = await this.prisma
+      .$transaction(async (tx) => {
+        const client: EngineTxClient = tx;
+        return this.repository.createEvent(
+          {
+            relation_id: null,
+            contact_id: contactIdValue,
+            actor_id: viewer.employeeId,
+            owner_snapshot: null,
+            action_type: dto.action_type,
+            summary: dto.summary ?? null,
+            outcome,
+            competition: dto.competition ?? null,
+            competitor_id: null,
+            competition_note: dto.competition_note ?? null,
+            duration_min: dto.duration_min ?? null,
+            ...(dto.mentioned_user_ids === undefined
+              ? {}
+              : { mentioned_user_ids: dto.mentioned_user_ids.map((id) => Number(id)) }),
+            source: 'manual',
+            visit_log_id: null,
+            appointment_id: null,
+            idempotency_key: idempotencyKey,
+            event_at: eventAt,
+          },
+          client,
+        );
+      })
+      .catch((error: unknown) => {
+        throw mapPrismaError(error) ?? error;
+      });
+
+    // ⑤ 无关系 ⇒ 没有 `last_event_at` 可回写（见方法头 ★③）
+    return this.buildVo(created, null, await this.loadRefs([created], []));
   }
 
   // ===== M6-09 批量快速标记 =====

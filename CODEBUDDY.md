@@ -83,6 +83,9 @@ L0 kernel → L1 org(A) → L2 company(B) → L3 relation(C) → L4 engine(D)/tr
 # 在 服务端/ 内
 npm run prisma:validate | prisma:format | prisma:status | prisma:deploy
 npm run prisma:generate          # 改 schema.prisma 后必跑
+npx tsc --noEmit                 # 后端类型校验＝「三绿」的 tsc（CONSTRAINTS T0-1）
+# ⚠ `npm run build`（先清 dist）在本工作区会被**环境删除守卫**拦（dist 已 >500 项，2026-09-20 实测）
+#   ⇒ 类型校验一律用上面那行；产新 dist 的事见《欠账登记表》**D-58**
 npm run lint                     # 含模块边界硬卡，提交前必跑
 npm test [-- <文件 | -t 名称>]   # domain/ 层用假数据单测即可，无需真库
 npm run start:web | start:worker # Worker 全局只能 1 个

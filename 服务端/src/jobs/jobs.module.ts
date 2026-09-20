@@ -1,0 +1,39 @@
+// =============================================================================
+// jobs 模块（M7-02）—— **"这个进程到底跑了哪些定时任务"的唯一落点**
+//
+// 口径来源（★ 真相源，勿自造）：
+//   · 《销售CRM架构设计说明》§四 目录树：`src/jobs/` ＝ 定时任务，**只被 Worker 加载**；
+//     §六：Worker 装 `kernel ＋ jobs ＋ 用到的域`。
+//   · 《过程产出/开发计划-V1.md》M7-02：「`jobs/` 约定 + `job_run_log` 写入（每次跑留痕）」。
+//
+// ★ 新增一个任务 ＝ **两处**：写一个 `*.job.ts` ＋ 在下面 `providers` / `useFactory` 各加一行。
+//   特意不做"扫目录自动注册"：装配知识要**一处可见**（同 `app.module.ts` 的既有口径）——
+//   自动扫描会让"这个进程跑了什么"藏进约定里，读代码看不出来。
+//
+// ⚠ **不许把本模块挂进 `app.module.ts`**（Web 进程）：Web 可扩到 N 个实例，
+//   定时任务会在每个实例上各跑一遍（架构 §六：Worker 恒 1 实例）。这条**已上 ESLint 硬卡**
+//   （→ `eslint.config.mjs` 的 `appModuleBlock`），不是靠自觉。
+// =============================================================================
+import { Module } from '@nestjs/common';
+
+import { HeartbeatJob } from './heartbeat.job';
+import { JobRunner } from './job-runner.service';
+import { JobScheduler } from './job-scheduler.service';
+import { SCHEDULED_JOBS } from './job.types';
+
+@Module({
+  providers: [
+    JobRunner,
+    JobScheduler,
+    HeartbeatJob,
+    {
+      // ★ 任务清单**只在这里列一次**：调度器按数组注入，新增任务不必改它的构造函数
+      provide: SCHEDULED_JOBS,
+      useFactory: (heartbeat: HeartbeatJob) => [heartbeat],
+      inject: [HeartbeatJob],
+    },
+  ],
+  // 本片没有别的模块要调 jobs；导出 runner 供后续（如"手动触发一次"的运维口）复用
+  exports: [JobRunner],
+})
+export class JobsModule {}

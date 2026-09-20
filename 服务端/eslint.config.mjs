@@ -116,6 +116,30 @@ const kernelBlock = {
   },
 };
 
+/**
+ * ★ 架构 §六 硬约束「Worker 恒 1 实例」的机械卡点：**`jobs/**` 只许被 Worker 加载**。
+ *   为什么必须卡：Web 进程**可扩到 N 个实例**（架构 §八 扩容表），定时任务一旦挂进
+ *   `app.module.ts`，将来一多开就会**在每个实例各跑一遍**（同一个客户被掉海 3 次）。
+ *   这类事故在日志里看不出来，只能靠"根本挂不上去"来防。
+ */
+const appModuleBlock = {
+  files: ['src/app.module.ts'],
+  rules: {
+    'no-restricted-imports': [
+      'error',
+      {
+        patterns: [
+          {
+            group: ['**/jobs/**', './jobs/**', './jobs'],
+            message:
+              '定时任务只许被 Worker 加载（架构 §六）：`app.module.ts`（Web）不得 import `jobs/**` —— Web 可扩 N 个实例，挂上去＝任务在每个实例各跑一遍。请挂进 `worker.module.ts`。',
+          },
+        ],
+      },
+    ],
+  },
+};
+
 export default tseslint.config(
   {
     // 不参与 lint：构建产物 / 依赖 / Prisma 生成物 / 覆盖率产物
@@ -132,4 +156,5 @@ export default tseslint.config(
   kernelBlock,
   ...domainBlocks,
   ...domainLayerBlocks,
+  appModuleBlock,
 );

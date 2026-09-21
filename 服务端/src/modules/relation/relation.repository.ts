@@ -452,6 +452,34 @@ export class RelationRepository {
     });
   }
 
+  /**
+   * 「部门 × 产品线」维度的**在途私海条数**（M9-F 规则变更预告；→ 需求 §6.3「本次将影响 X 个客户」）。
+   *
+   * ★ 为什么是**聚合数**而不是逐条（与 `listPrivateSeaCandidatesForWarning` 的分工）：
+   *   预告要的是"这条规则会管到多少个客户"，**不需要知道客户是谁** —— 给聚合数就够，
+   *   也就不必把"逐条私海明细"这种敏感形状交到 HTTP 出口手里。
+   * ★ 候选条件与掉海扫描**逐字同源**（未删未并 ＋ `private` ＋ 在位 owner）：
+   *   预告的数与将来真会被重算的数必须是同一批人，否则预告就是骗人的。
+   * ★ 只要三列（两个 key ＋ 计数）—— 不 select 客户名 / 金额 / 电话（出口最小化）。
+   *
+   * @param deptIds `null` ＝ **不收敛**（老板 / 管理员：全公司）；给集合 ＝ 只统计这些部门的
+   *   （部门经理**只该看到自己管辖部门**的影响面）。⚠ 不给默认值：`null` 与 `[]` 语义不同
+   *   （后者＝一个部门都不看），漏传在编译期就红（→ 同 D-28 的姿势）。
+   */
+  countPrivateSeaByDeptLine(deptIds: readonly bigint[] | null) {
+    return this.prisma.businessRelation.groupBy({
+      by: ['dept_id', 'product_line_id'],
+      where: {
+        deleted_at: null,
+        merged_into: null,
+        sea_status: PRIVATE_SEA_STATUS,
+        members: { some: { member_type: OWNER_MEMBER_TYPE, revoked_at: null } },
+        ...(deptIds === null ? {} : { dept_id: { in: [...deptIds] } }),
+      },
+      _count: { _all: true },
+    });
+  }
+
   // ===== M3-07 私海列表（三种范围，方法名即范围）=====
   //
   // ★ **M6-07 起带分页**（→ 接口 §2.7）：五个列表方法都收 `Pagination`、都返回 `{ rows, total }`。

@@ -6,7 +6,9 @@
 //     —— 本模块**可以** import C 域（严格更低的层），但**不许** import D / E / G
 //     （同层 / 更高层），由 ESLint `no-restricted-imports` 硬卡（M0-44 系列）。
 //   · 同 §5.2 跨域三条路之①：认领本体要 C 域的表 → 调**它 exports 的 service**
-//     —— 故 `imports` 里只出现 `RelationModule`（**绝不**碰对方的 repository）。
+//     —— 故 `imports` 里只出现 `RelationModule`（**绝不**碰对方的 repository）；
+//     ★ M9-F 规则配置片再加 `OrgModule`（L1，**可以**依赖）：规则出参要把 `dept_id` /
+//       `product_line_id` 翻成名字（`department` / `product_line` 是 A 域的表，跨域不许查）。
 //
 // ★ 为什么 `exports: [SeaService]`（M7-03 补）：**Worker 的掉海预警任务**要调
 //   `SeaService.scanSeaWarning`（`jobs/` 不是业务域，是"用这个域的人"，→ `jobs.module.ts`）。
@@ -16,13 +18,14 @@
 // =============================================================================
 import { Module } from '@nestjs/common';
 
+import { OrgModule } from '../org/org.module';
 import { RelationModule } from '../relation/relation.module';
 import { SeaController } from './sea.controller';
 import { SeaRepository } from './sea.repository';
 import { SeaService } from './sea.service';
 
 @Module({
-  imports: [RelationModule],
+  imports: [OrgModule, RelationModule],
   controllers: [SeaController],
   providers: [SeaRepository, SeaService],
   exports: [SeaService],

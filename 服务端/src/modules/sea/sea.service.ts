@@ -45,7 +45,9 @@ import {
   ErrorCode,
   getRequestContext,
   jsonToBigint,
+  type RequestContext,
 } from '../../kernel/index';
+import { OrgService } from '../org/org.service';
 import {
   RelationService,
   type SeaWarningCandidate,
@@ -53,15 +55,26 @@ import {
 } from '../relation/relation.service';
 import { SeaRepository } from './sea.repository';
 import {
+  canManageSeaRule,
+  canReadSeaRules,
+  countAffectedCustomers,
+  isScopeConsistent,
+  resolveEffectiveFrom,
+  resolveSeaRuleReadDeptIds,
+  type SeaRuleScope,
+  type SeaRuleViewer,
+} from './domain/sea-rule';
+import {
   classifySeaWarning,
   resolveDropDeadline,
   resolveSeaRuleFor,
   SEA_DROP_REASON,
   SEA_WARNING_HIT_TIERS,
+  type SeaRuleLike,
   type SeaWarningTier,
   type SeaWarningTierCounts,
 } from './domain/sea-warning';
-import type { ClaimSeaRelationDto } from './dto/sea-request.dto';
+import type { ClaimSeaRelationDto, UpdateSeaRuleDto } from './dto/sea-request.dto';
 
 /**
  * F 域写动作的审计动作名（→ A10 口径 `模块.动词`；2026-09-20 定）。
@@ -77,6 +90,14 @@ export const SEA_AUDIT_ACTIONS = {
    *   一次任务写**一条**（批次明细在 `detail`，逐条状态在 `sea_record`）—— 理由见 `recordDropAudit`。
    */
   drop: 'sea.drop',
+  /**
+   * ★ 公海规则配置：**提交某层级规则的新版本**（`PUT /sea/rules`，M9-F 规则配置片）。
+   * ⚠ 预告（`confirmed` 未传 / `false`，**零写库**）也会经同一个端点 ⇒ 配了"只看影响面"
+   *   的那次调用在 `operation_log` 里**也留一条**（切面按 HTTP 方法判定，不看落没落库）——
+   *   这是**有意为之**：配置页的动作本身就属敏感动作（→ 架构 §7.4），宁可多一条也不漏；
+   *   落没落库看那次请求的出参 `applied`。
+   */
+  ruleUpdate: 'sea.rule_update',
 } as const;
 
 /**
@@ -86,6 +107,49 @@ export const SEA_AUDIT_ACTIONS = {
 export interface SeaClaimVo extends RelationVo {
   /** 本次领回时间（ISO）；**`null` ＝ 这条关系没有入公海历史**（不造行、不假装掉过海） */
   claimed_at: string | null;
+}
+
+/**
+ * 一条公海规则的出参（→ 接口 §4.14.10 / §5.16）。
+ * ★ 两个 key 用**实体引用**（`{id,name}`）下发：规则页要显示"哪个部门 / 哪条线"，
+ *   只给 id 前端还得再查一次（引用取不到时给 `null`，**不编名字**——同 C 域的 `refOf` 取法）。
+ */
+export interface SeaRuleVo {
+  id: bigint;
+  level: number;
+  dept: { id: bigint; name: string } | null;
+  product_line: { id: bigint; name: string } | null;
+  follow_freq_days: number | null;
+  deal_cycle_days: number | null;
+  stay_days: number | null;
+  no_progress_max: number | null;
+  effective_from: string;
+  status: string;
+  /** 派生：`effective_from` 还在将来 ⇒ 7 天缓冲期内、**尚未生效** */
+  pending: boolean;
+}
+
+/** `PUT /sea/rules` 出参：预告 ＋（落库时）新版本行 */
+export interface SeaRuleUpdateResultVo {
+  applied: boolean;
+  /** 本次变更将影响的**在途私海客户数**（口径 → `domain/sea-rule.ts` `countAffectedCustomers`） */
+  affected_customers: number;
+  effective_from: string;
+  rule: SeaRuleVo | null;
+}
+
+/** 规则行的读形状（＝ `listActiveRulesForConfig` / `replaceRuleVersion` 的 select，列名出不了本层） */
+interface SeaRuleRow {
+  id: bigint;
+  level: number;
+  dept_id: bigint | null;
+  product_line_id: bigint | null;
+  follow_freq_days: number | null;
+  deal_cycle_days: number | null;
+  stay_days: number | null;
+  no_progress_max: number | null;
+  effective_from: Date;
+  status: string;
 }
 
 /** 掉海扫描**一次**的结果（M7-03 分档 ＋ **M9-F 真掉**；判据＝日志可见扫描结果与命中数，故这里回计数） */
@@ -125,6 +189,11 @@ export class SeaService {
     private readonly events: EventBus,
     /** 审计留痕（`@Global()` 单例）：掉海是**系统动作**，走 `recordStandalone`（→ D-68②） */
     private readonly audit: AuditService,
+    /**
+     * A 域（L1，**可以**依赖）：规则出参要部门 / 产品线的**名字**，而那是 A 域的表
+     * （跨域不许查对方的表 → 架构 §5.2 路之①）。本域只用它的两个只读引用出口。
+     */
+    private readonly org: OrgService,
   ) {}
 
   /**
@@ -176,6 +245,187 @@ export class SeaService {
     );
 
     return { ...relation, claimed_at: latest === null ? null : claimedAt.toISOString() };
+  }
+
+  // ===== 公海规则配置（M9-F；→ 接口 §4.14.10 / §5.16）=====
+
+  /**
+   * 看公海规则（→ 接口 §4.14.10 `GET /sea/rules`）。
+   *
+   * ★ **谁能看**（→ 需求 §6.3 层级 ＋《前端》§四.2 系统设置行）：老板 / 管理员看全部；
+   *   部门经理看「**L1 / L2 全部**（上级兜底：看不到就解释不了"我这个部门到底按几天算"）
+   *   ＋ 自己**管辖部门**的 L3 / L4」；销售与交付 · 客服 **403**（那块配置跟他们无关）。
+   * ★ **含待生效行**：7 天缓冲期内的新版本行也是 `active`（F1：停用的是**旧**行）——
+   *   漏了它，经理看不到自己刚提交的变更，会以为没提交上。出参用 `pending` 区分。
+   * ★ 排序由仓储给（`level desc, id desc`）：高层在前，同层新版本在前。
+   */
+  async listSeaRules(): Promise<SeaRuleVo[]> {
+    const viewer = requireViewer();
+    const ruleViewer = ruleViewerOf(viewer);
+    if (!canReadSeaRules(ruleViewer)) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '只有部门经理 / 总经理 / 管理员能查看公海规则', {
+        constraint: 'sea.rule_read_forbidden',
+      });
+    }
+
+    const rows = await this.repository.listActiveRulesForConfig(
+      resolveSeaRuleReadDeptIds(ruleViewer),
+    );
+    const names = await this.loadRuleRefNames(rows);
+    const now = new Date();
+
+    return rows.map((row) => toRuleVo(row, names, now));
+  }
+
+  /**
+   * 提交某层级公海规则的**新版本**（→ 接口 §4.14.10 `PUT /sea/rules`）。
+   *
+   * 六步（顺序即语义，别调换）：
+   *   ① **层级与 key 搭配**校验（`isScopeConsistent`）—— 搭配错了库不会拦，只会静默失配 ⇒ 400；
+   *   ② **谁能配这一层**（`canManageSeaRule`：老板 / 管理员任意层；部门经理限管辖部门的 L3 / L4）⇒ 403；
+   *   ③ **引用存在性**（部门 / 产品线打错 → 400，而不是撞外键冒 500）；
+   *   ④ **预告**（`countAffectedCustomers`；口径与扫描**共用** `resolveSeaRuleFor`）；
+   *   ⑤ `confirmed !== true` ⇒ **到此为止**（只回预告、**零写库**）；
+   *   ⑥ 落库＝**插新版本行 ＋ 旧行 `status=disabled`**（一个本域事务，→ `replaceRuleVersion`）。
+   *
+   * ★ 预告与落库**必须同一个 `effective_from`**（＝本次提交时刻 + 7 天）：两次算出来的
+   *   判定基准不同，就会出现"预告说 3 个、落库后其实是 5 个"—— 那比不给预告更糟
+   *   （经理是**照着这个数**决定要不要改的）。
+   * ★ 留痕：本端点在 controller 上标 `@Audit(SEA_AUDIT_ACTIONS.ruleUpdate, 'sea_rule')`
+   *   —— 写在**本域**（配置动作的发起人就是登录人），走切面；预告那次也留痕（见常量注释）。
+   */
+  async updateSeaRule(dto: UpdateSeaRuleDto): Promise<SeaRuleUpdateResultVo> {
+    const viewer = requireViewer();
+    const ruleViewer = ruleViewerOf(viewer);
+    const submittedAt = new Date();
+
+    // ① 层级与两个 key 的搭配（→ 数据架构 F1 的层级语义）
+    const scope: SeaRuleScope = {
+      level: dto.level,
+      deptId: dto.dept_id === undefined ? null : jsonToBigint(dto.dept_id, 'dept_id'),
+      productLineId:
+        dto.product_line_id === undefined ? null : jsonToBigint(dto.product_line_id, 'product_line_id'),
+    };
+    if (!isScopeConsistent(scope)) {
+      throw new AppError(
+        ErrorCode.PARAM_INVALID,
+        400,
+        '参数错误：层级与 dept_id / product_line_id 的搭配不合法（1＝两个都不给 / 2＝只给产品线 / 3＝只给部门 / 4＝都给）',
+        { constraint: 'sea.rule_scope_inconsistent' },
+      );
+    }
+
+    // ② 权限（需求 §6.3 的层级归属）
+    if (!canManageSeaRule(ruleViewer, scope)) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '你没有配置这一层公海规则的权限', {
+        constraint: 'sea.rule_write_forbidden',
+      });
+    }
+
+    // ③ 引用存在性（拿不到引用＝不存在；被逻辑删的部门 / 产品线同样视为不存在）
+    const names = await this.requireRuleRefs(scope.deptId, scope.productLineId);
+
+    // ④ 预告（口径与落库同源：同一个 effective_from ＋ 同一个规则解析）
+    const effectiveFrom = resolveEffectiveFrom(submittedAt);
+    const nextRule: SeaRuleLike = {
+      level: scope.level,
+      deptId: scope.deptId,
+      productLineId: scope.productLineId,
+      followFreqDays: dto.follow_freq_days ?? null,
+      effectiveFrom,
+    };
+    const [existingRules, groups] = await Promise.all([
+      // 判定基准取 `effectiveFrom`（不是"现在"）：要算的是**生效那一刻**的管辖面，
+      // 而那 7 天里可能还有别的待生效版本（→ `countAffectedCustomers` 文件头 ★）
+      this.repository.listActiveSeaRules(effectiveFrom),
+      // 计数只在自己的可见部门内（经理看不到别部门的影响面；规则本身也只在那些部门内）
+      this.relation.countPrivateSeaByDeptLine(resolveSeaRuleReadDeptIds(ruleViewer)),
+    ]);
+    const affected = countAffectedCustomers({ existingRules, nextRule, groups, at: effectiveFrom });
+    const effectiveFromIso = effectiveFrom.toISOString();
+
+    // ⑤ 只预告（零写库）
+    if (dto.confirmed !== true) {
+      return {
+        applied: false,
+        affected_customers: affected,
+        effective_from: effectiveFromIso,
+        rule: null,
+      };
+    }
+
+    // ⑥ 落库（本域事务：插新版本行 ＋ 旧行 disabled）
+    const created = await this.repository.replaceRuleVersion({
+      level: scope.level,
+      deptId: scope.deptId,
+      productLineId: scope.productLineId,
+      followFreqDays: dto.follow_freq_days ?? null,
+      dealCycleDays: dto.deal_cycle_days ?? null,
+      stayDays: dto.stay_days ?? null,
+      noProgressMax: dto.no_progress_max ?? null,
+      effectiveFrom,
+      operatorId: viewer.employeeId,
+    });
+
+    this.logger.log(
+      `公海规则变更：L${scope.level}（部门 ${scope.deptId ?? '-'} / 产品线 ${scope.productLineId ?? '-'}）` +
+        `新版本 ${created.id} 将于 ${effectiveFromIso} 生效；预告影响 ${affected} 个客户`,
+    );
+
+    return {
+      applied: true,
+      affected_customers: affected,
+      effective_from: effectiveFromIso,
+      rule: toRuleVo(created, names, submittedAt),
+    };
+  }
+
+  /** 批量取部门 / 产品线名字（**一次列表一次往返**，不按行查） */
+  private async loadRuleRefNames(rows: readonly SeaRuleRow[]): Promise<RuleRefNames> {
+    return this.requireRuleRefs(
+      null,
+      null,
+      uniqueBigints(
+        rows.flatMap((row) => (row.dept_id === null ? [] : [row.dept_id])),
+      ),
+      uniqueBigints(
+        rows.flatMap((row) => (row.product_line_id === null ? [] : [row.product_line_id])),
+      ),
+    );
+  }
+
+  /**
+   * 取规则要用的部门 / 产品线引用（**一个出口两种用法**）：
+   *   · `deptId` / `productLineId` 给了 ⇒ **存在性校验**（拿不到引用 → **400**）；
+   *   · 只给 `deptIds` / `productLineIds` 批 ⇒ 名称映射（出参装配用）。
+   * ★ 合成一个方法是因为两者取的是**同一份**引用（同一趟跨域出口），分开写会出现
+   *   "校验用一次、装配再查一次"的重复往返。
+   */
+  private async requireRuleRefs(
+    deptId: bigint | null,
+    productLineId: bigint | null,
+    extraDeptIds: readonly bigint[] = [],
+    extraProductLineIds: readonly bigint[] = [],
+  ): Promise<RuleRefNames> {
+    const [depts, lines] = await Promise.all([
+      this.org.getDeptRefs(deptId === null ? extraDeptIds : uniqueBigints([deptId, ...extraDeptIds])),
+      this.org.getProductLineRefs(
+        productLineId === null ? extraProductLineIds : uniqueBigints([productLineId, ...extraProductLineIds]),
+      ),
+    ]);
+
+    if (deptId !== null && depts.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：dept_id 指向的部门不存在', {
+        constraint: 'sea.rule_dept_missing',
+      });
+    }
+    if (productLineId !== null && lines.length === 0) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：product_line_id 指向的产品线不存在', {
+        constraint: 'sea.rule_product_line_missing',
+      });
+    }
+
+    return { depts: toNameMap(depts), lines: toNameMap(lines) };
   }
 
   // ===== 掉海扫描（M7-03 分档告警 ＋ **M9-F 起 `overdue` 真掉**）=====
@@ -243,10 +493,13 @@ export class SeaService {
       }
 
       // ② 到期时刻（触发①「最近 N 天无有效跟进」；本片只覆盖这一条，见 domain 文件头 ★）
+      //   ★ `ruleEffectiveFrom` 进来是 M9-F 的活：规则刚生效 ⇒ 锚点抬到生效日，
+      //     在途倒计时**重新起算**（每个客户至少再给一整轮，→ 需求 §6.3 / F1）
       const dropAt = resolveDropDeadline({
         lastEventAt: candidate.lastEventAt,
         createdAt: candidate.createdAt,
         followFreqDays: rule.followFreqDays,
+        ruleEffectiveFrom: rule.effectiveFrom,
       });
       if (dropAt === null) {
         skippedNoFreq += 1;
@@ -379,4 +632,50 @@ function requireViewer() {
     });
   }
   return context;
+}
+
+/** 规则端点的"看规则的人" ＝ 角色 ＋ **管辖部门**（取 `dataScope.deptIds`，见 `SeaRuleViewer` ★） */
+function ruleViewerOf(context: RequestContext): SeaRuleViewer {
+  return { roleCodes: context.roleCodes, managedDeptIds: context.dataScope.deptIds };
+}
+
+/** 跨域引用映射（id 串 → 名字）；两个 key 各一份 */
+interface RuleRefNames {
+  readonly depts: ReadonlyMap<string, string>;
+  readonly lines: ReadonlyMap<string, string>;
+}
+
+function toNameMap(refs: readonly { id: bigint; name: string }[]): Map<string, string> {
+  return new Map(refs.map((ref) => [ref.id.toString(), ref.name]));
+}
+
+function uniqueBigints(ids: readonly bigint[]): bigint[] {
+  return [...new Set(ids)];
+}
+
+/** id → `{id,name}`；**引用取不到给 `null`、不编名字**（同 C 域 `refOf`：已删档案 / 停用产品线取不到） */
+function refOf(
+  map: ReadonlyMap<string, string>,
+  id: bigint | null,
+): { id: bigint; name: string } | null {
+  if (id === null) return null;
+  const name = map.get(id.toString());
+  return name === undefined ? null : { id, name };
+}
+
+/** 规则行 → 出参（`pending` 是**派生**：还没生效的版本行，前端显示"将于 X 生效"） */
+function toRuleVo(row: SeaRuleRow, names: RuleRefNames, now: Date): SeaRuleVo {
+  return {
+    id: row.id,
+    level: row.level,
+    dept: refOf(names.depts, row.dept_id),
+    product_line: refOf(names.lines, row.product_line_id),
+    follow_freq_days: row.follow_freq_days,
+    deal_cycle_days: row.deal_cycle_days,
+    stay_days: row.stay_days,
+    no_progress_max: row.no_progress_max,
+    effective_from: row.effective_from.toISOString(),
+    status: row.status,
+    pending: row.effective_from.getTime() > now.getTime(),
+  };
 }

@@ -124,24 +124,75 @@ describe('resolveSeaRuleFor：L4→L1 命中解析（→ 数据架构 F1）', ()
 
 describe('resolveDropDeadline：到期时刻（触发①「最近 N 天无有效跟进」）', () => {
   const CREATED = new Date('2026-09-01T00:00:00.000Z');
+  /** 老规则（生效日远在过去）：锚点取不到它 ⇒ 与"没有 7 天缓冲"时的行为**逐字一致** */
+  const OLD_RULE = new Date('2026-08-01T00:00:00.000Z');
 
   it('跟进过 ⇒ 从 `last_event_at` 起算 N 天', () => {
     const dropAt = resolveDropDeadline({
       lastEventAt: new Date('2026-09-10T00:00:00.000Z'),
       createdAt: CREATED,
       followFreqDays: 10,
+      ruleEffectiveFrom: OLD_RULE,
     });
     expect(dropAt?.toISOString()).toBe('2026-09-20T00:00:00.000Z');
   });
 
   it('**从没跟进过**（`last_event_at` 为 `null`）⇒ 从建档时刻起算（否则新客户永不预警）', () => {
-    const dropAt = resolveDropDeadline({ lastEventAt: null, createdAt: CREATED, followFreqDays: 10 });
+    const dropAt = resolveDropDeadline({
+      lastEventAt: null,
+      createdAt: CREATED,
+      followFreqDays: 10,
+      ruleEffectiveFrom: OLD_RULE,
+    });
     expect(dropAt?.toISOString()).toBe('2026-09-11T00:00:00.000Z');
   });
 
   it('规则**没配这一项**（`null`）/ 配了非正数 ⇒ `null`（判不了，**不许拿默认天数顶替**）', () => {
-    expect(resolveDropDeadline({ lastEventAt: null, createdAt: CREATED, followFreqDays: null })).toBeNull();
-    expect(resolveDropDeadline({ lastEventAt: null, createdAt: CREATED, followFreqDays: 0 })).toBeNull();
-    expect(resolveDropDeadline({ lastEventAt: null, createdAt: CREATED, followFreqDays: -3 })).toBeNull();
+    const base = { lastEventAt: null, createdAt: CREATED, ruleEffectiveFrom: OLD_RULE };
+    expect(resolveDropDeadline({ ...base, followFreqDays: null })).toBeNull();
+    expect(resolveDropDeadline({ ...base, followFreqDays: 0 })).toBeNull();
+    expect(resolveDropDeadline({ ...base, followFreqDays: -3 })).toBeNull();
+  });
+
+  // ===== M9-F 规则配置片：规则生效 ⇒ 在途倒计时**从生效日重新起算** =====
+  // （需求 §6.3「变更后 7 天才生效；生效时所有在途关系的倒计时从生效日重新起算
+  //   ＝ 每个客户至少再给一整轮」；实现口径见 `sea-rule.ts` 文件头 ★ 段）
+
+  it('★ **规则刚生效** ⇒ 锚点抬到生效日（哪怕最近一次跟进比它晚很久之前也照样重算）', () => {
+    const effectiveFrom = new Date('2026-09-18T00:00:00.000Z'); // 3 天前生效
+    const dropAt = resolveDropDeadline({
+      // 上次有效跟进是 8 月 1 日：按老口径早该掉了（＋30 天 ＝ 8/31），
+      // 但规则 9/18 生效 ⇒ 从 9/18 重新起算 30 天
+      lastEventAt: new Date('2026-08-01T00:00:00.000Z'),
+      createdAt: CREATED,
+      followFreqDays: 30,
+      ruleEffectiveFrom: effectiveFrom,
+    });
+
+    expect(dropAt?.toISOString()).toBe('2026-10-18T00:00:00.000Z');
+  });
+
+  it('★ 生效日**早于**锚点 ⇒ 取锚点（"较晚者"，不会把跟进过的人提前掉海）', () => {
+    const dropAt = resolveDropDeadline({
+      lastEventAt: new Date('2026-09-10T00:00:00.000Z'),
+      createdAt: CREATED,
+      followFreqDays: 10,
+      // 生效日（9/15）晚于锚点（9/10）时才算重算；这里生效日更早 ⇒ 仍按 9/10 起算
+      ruleEffectiveFrom: new Date('2026-09-05T00:00:00.000Z'),
+    });
+
+    expect(dropAt?.toISOString()).toBe('2026-09-20T00:00:00.000Z');
+  });
+
+  it('★ 与生效日**同一毫秒**时按锚点算（边界取"较晚"，两值相等不改变结果）', () => {
+    const same = new Date('2026-09-10T00:00:00.000Z');
+    const dropAt = resolveDropDeadline({
+      lastEventAt: same,
+      createdAt: CREATED,
+      followFreqDays: 5,
+      ruleEffectiveFrom: same,
+    });
+
+    expect(dropAt?.toISOString()).toBe('2026-09-15T00:00:00.000Z');
   });
 });

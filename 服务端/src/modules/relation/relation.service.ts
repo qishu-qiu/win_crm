@@ -785,6 +785,32 @@ export class RelationService {
   }
 
   /**
+   * 「部门 × 产品线」维度的**在途私海条数** —— 供 **F 域公海规则变更预告**（M9-F；需求 §6.3
+   * 「提交变更时系统先提示『本次将影响 X 个客户』」）。
+   *
+   * ★ 与 `listSeaWarningCandidates` 的**分工**（别把两个出口读混）：
+   *   · 那个给**逐条明细**（`lastEventAt` / owner…），服务的是**系统定时任务** ⇒ 只许系统调；
+   *   · 这个给**聚合数**（两个 key ＋ 计数），服务的是**人在提交规则变更前看一眼影响面**
+   *     ⇒ 可供 HTTP 出口调，也**只给到聚合层**（客户是谁不必出门）。
+   * ★ 口径**不在本层**：哪些关系算"在途"、哪些规则命中它们，全在 F 域
+   *   （`domain/sea-rule.ts` 的 `countAffectedCustomers`）；本层只做取数与形状转换。
+   *
+   * @param deptIds `null` ＝ 不收敛（全公司）；给集合 ＝ 只统计这些部门
+   *   —— 经理只该看到**自己管辖部门**的影响面（→ `domain/sea-rule.ts` 的读范围）。
+   */
+  async countPrivateSeaByDeptLine(
+    deptIds: readonly bigint[] | null,
+  ): Promise<{ deptId: bigint; productLineId: bigint; count: number }[]> {
+    const rows = await this.repository.countPrivateSeaByDeptLine(deptIds);
+
+    return rows.map((row) => ({
+      deptId: row.dept_id,
+      productLineId: row.product_line_id,
+      count: row._count._all,
+    }));
+  }
+
+  /**
    * 「到期掉海」的系统出口（→ 需求 §6.3 掉海节奏表末行「到期 → 执行掉落回公司公海，写历史记录」；
    *   数据架构 §十二 掉海预警末句；F1 尾「只 UPDATE `sea_status`，严禁 UPDATE `dept_id`」）。
    *

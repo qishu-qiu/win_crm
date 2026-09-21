@@ -16,6 +16,7 @@ import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { COMPANY_SEA_STATUS, PRIVATE_SEA_STATUS } from '../relation/domain/relation-active-key';
+import { SEA_RULE_LEVEL, SEA_RULE_STATUS } from './domain/sea-rule';
 import type { SeaRuleLike } from './domain/sea-warning';
 
 @Injectable()
@@ -83,7 +84,113 @@ export class SeaRepository {
     });
   }
 
-  // ===== 读掉海规则（M7-03；★ 本域写口只有 `markClaimed` 与 `createSeaRecord`，其余一律只读）=====
+  // ===== M9-F 规则配置（→ 接口 §4.14.10 / §5.16；F1 `sea_rule`）=====
+
+  /**
+   * 读**配置页要看的**规则行（→ 接口 §4.14.10）：`status='active'` 的**全部**行。
+   *
+   * ★ 与 `listActiveSeaRules`（扫描用）的两点差别，别混用：
+   *   ① **不按 `effective_from` 过滤** —— 7 天缓冲期内"还没生效但要给经理看"的新版本行
+   *      也是 `active`（F1：停用的是**旧**行），漏了它经理就看不到自己刚提交的变更；
+   *   ② 出**整行**（四个天数都要展示 / 回填），不是扫描只要的"算倒计时那几列"。
+   *
+   * ★ 可见范围在**本层**才落地（`deptIds` 由 service 按角色算出来，`domain/**` 只管判角色）：
+   *   `null` ＝ 不收敛（老板 / 管理员）；给集合 ＝ **L1 / L2 一律可见**（上级兜底，看不到就解释不了
+   *   "我这个部门到底按几天算"）**＋** 这些部门的 L3 / L4。
+   *   ⚠ `deptIds` 不给默认值：`null`（全看）与 `[]`（一个部门都不可见）是两件事。
+   */
+  listActiveRulesForConfig(deptIds: readonly bigint[] | null) {
+    return this.prisma.seaRule.findMany({
+      where: {
+        status: SEA_RULE_STATUS.active,
+        ...(deptIds === null
+          ? {}
+          : {
+              OR: [
+                { level: { in: [SEA_RULE_LEVEL.global, SEA_RULE_LEVEL.productLine] } },
+                { dept_id: { in: [...deptIds] } },
+              ],
+            }),
+      },
+      select: {
+        id: true,
+        level: true,
+        dept_id: true,
+        product_line_id: true,
+        follow_freq_days: true,
+        deal_cycle_days: true,
+        stay_days: true,
+        no_progress_max: true,
+        effective_from: true,
+        status: true,
+      },
+      orderBy: [{ level: 'desc' }, { id: 'desc' }],
+    });
+  }
+
+  /**
+   * **插新版本行 ＋ 旧行 `status=disabled`**（→ F1「停用不删」；接口 §4.14.10 逐字）。
+   *
+   * ★ 两件事必须**同生共死**（同位置的"唯一 active 行"这条不变量）：只插不停 ⇒ 同位置两行
+   *   `active`，命中解析取到哪条全看排序（＝规则口径随机漂移，最阴的一类 bug）；
+   *   只停不插 ⇒ 那层规则凭空消失、部门掉回上级兜底。故走**本域事务**（§5.2 路之③ 允许本域事务）。
+   * ★ 「同位置」的判据是 **(level, dept_id, product_line_id)** —— 与 `domain/sea-rule.ts`
+   *   的 `isSameRuleSlot` 同一个口径（那边判逻辑、这边落 SQL 条件，两处逐字对应）。
+   * ★ `effective_from` 由调用方算好传进来（＝提交日 + 7 天），**本层不读钟** ——
+   *   与"任务时刻由调用方传入"同一条纪律：时间口径只有一处。
+   */
+  replaceRuleVersion(input: {
+    level: number;
+    deptId: bigint | null;
+    productLineId: bigint | null;
+    followFreqDays: number | null;
+    dealCycleDays: number | null;
+    stayDays: number | null;
+    noProgressMax: number | null;
+    effectiveFrom: Date;
+    operatorId: bigint;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.seaRule.updateMany({
+        where: {
+          level: input.level,
+          dept_id: input.deptId,
+          product_line_id: input.productLineId,
+          status: SEA_RULE_STATUS.active,
+        },
+        data: { status: SEA_RULE_STATUS.disabled, updated_by: input.operatorId },
+      });
+
+      return tx.seaRule.create({
+        data: {
+          level: input.level,
+          dept_id: input.deptId,
+          product_line_id: input.productLineId,
+          follow_freq_days: input.followFreqDays,
+          deal_cycle_days: input.dealCycleDays,
+          stay_days: input.stayDays,
+          no_progress_max: input.noProgressMax,
+          effective_from: input.effectiveFrom,
+          status: SEA_RULE_STATUS.active,
+          created_by: input.operatorId,
+        },
+        select: {
+          id: true,
+          level: true,
+          dept_id: true,
+          product_line_id: true,
+          follow_freq_days: true,
+          deal_cycle_days: true,
+          stay_days: true,
+          no_progress_max: true,
+          effective_from: true,
+          status: true,
+        },
+      });
+    });
+  }
+
+  // ===== 读掉海规则（M7-03；★ 本域写口共三处：`markClaimed` / `createSeaRecord` / `replaceRuleVersion`）=====
 
   /**
    * 读**生效中**的公海规则（→ F1 `sea_rule`；走 `idx_level(level, dept_id, product_line_id, status)`）。

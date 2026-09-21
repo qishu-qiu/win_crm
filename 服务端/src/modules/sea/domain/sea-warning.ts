@@ -27,6 +27,10 @@
 //
 // ★ 为什么"阈值"与"算到期时刻"放同一个文件：它们**必须一起用**（先算到期、再分档），
 //   分两处写就会出现"一边改了天数、另一边还在按老口径分档"的漂移。
+//
+// ★ M9-F（规则配置片）起，`resolveDropDeadline` 多收一个 `ruleEffectiveFrom`（规则的生效时刻）：
+//   「规则变更 → 生效时在途倒计时从生效日重新起算」（需求 §6.3 / F1）落在它身上。
+//   口径与边界（含"哪些关系算重新起算"）→ `sea-rule.ts` 文件头 ★ 段。
 // =============================================================================
 
 /**
@@ -156,14 +160,24 @@ function matchesLevel(
  * 锚点 ＝ `last_event_at`（有效沟通）**否则** `created_at` —— 需求 §6.3「最近 N 天**无有效跟进**」：
  *   从没跟进过的人不是"永不掉海"，而是**从建档那一刻开始倒计时**（否则新客户永远不预警）。
  *
+ * ★ **规则生效 ⇒ 倒计时重新起算**（需求 §6.3「规则变更的 7 天缓冲」/ 数据架构 F1 同句）：
+ *   锚点再与规则的 `effective_from` 取**较晚者** —— 规则刚生效那一刻，受它约束的在途关系
+ *   锚点被抬到生效日 ⇒ 到期时刻＝生效日 + N 天，**每个客户至少再给一整轮**（＝7 天缓冲买到的效果）。
+ *   老规则（`effective_from` 远在过去）取不到更晚 ⇒ 行为与从前**逐字一致**（不改历史语义）。
+ *   ⚠ 「重新起算」的集合是**受该规则约束的关系**（不是字面"全库在途"）——理由见
+ *     `sea-rule.ts` 文件头 ★ 段（那一段同时解释了为什么字面全局重算在本数据模型里无处落）。
+ *
  * @returns 到期时刻；`followFreqDays` 没配（或不是正数）⇒ `null` ＝ **本片判不了这条**，
  *          由调用方计入"跳过"（**不许**用别的天数 / 默认天数顶替 —— 那等于自造口径）
  */
-export function resolveDropDeadline(input: SeaWarningAnchor & { followFreqDays: number | null }): Date | null {
+export function resolveDropDeadline(
+  input: SeaWarningAnchor & { followFreqDays: number | null; ruleEffectiveFrom: Date },
+): Date | null {
   const days = input.followFreqDays;
   if (days === null || days <= 0) return null;
 
-  const anchor = input.lastEventAt ?? input.createdAt;
+  const base = input.lastEventAt ?? input.createdAt;
+  const anchor = base.getTime() >= input.ruleEffectiveFrom.getTime() ? base : input.ruleEffectiveFrom;
   return new Date(anchor.getTime() + days * MS_PER_DAY);
 }
 

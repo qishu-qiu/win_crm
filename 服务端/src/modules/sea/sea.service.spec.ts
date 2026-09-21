@@ -25,6 +25,7 @@ import type {
   RelationVo,
   SeaWarningCandidate,
 } from '../relation/relation.service';
+import type { OrgService } from '../org/org.service';
 import type { SeaRepository } from './sea.repository';
 import { SeaService } from './sea.service';
 import type { SeaRuleLike } from './domain/sea-warning';
@@ -71,6 +72,27 @@ interface FakeOptions {
   candidates?: readonly SeaWarningCandidate[];
   /** C 域**掉海出口**的返回（M9-F；缺省＝掉成；**显式 `null`** ＝ 这条轮不到我掉） */
   dropResult?: { ownerId: bigint } | null;
+  /** 规则配置页要看的 `active` 行（M9-F 规则配置片；缺省＝空） */
+  configRules?: readonly SeaRuleRowFixture[];
+  /** 「部门 × 产品线」在途私海条数（C 域聚合出口；缺省＝空） */
+  seaGroups?: readonly { deptId: bigint; productLineId: bigint; count: number }[];
+  /** 部门 / 产品线的名字引用（跨域装配用；缺省＝照 id 造一个名字） */
+  deptRefs?: readonly { id: bigint; name: string }[];
+  productLineRefs?: readonly { id: bigint; name: string }[];
+}
+
+/** `listActiveRulesForConfig` 行的**真实形状**（列名照仓储的 select） */
+interface SeaRuleRowFixture {
+  id: bigint;
+  level: number;
+  dept_id: bigint | null;
+  product_line_id: bigint | null;
+  follow_freq_days: number | null;
+  deal_cycle_days: number | null;
+  stay_days: number | null;
+  no_progress_max: number | null;
+  effective_from: Date;
+  status: string;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -93,6 +115,38 @@ function createService(options: FakeOptions = {}) {
       Promise<{ id: bigint }>,
       [{ relationId: bigint; ownerId: bigint; reason: string; droppedAt: Date }]
     >(async () => ({ id: RECORD_ID })),
+    // M9-F 规则配置：读 `active` 行（**含待生效**）
+    listActiveRulesForConfig: jest.fn<Promise<SeaRuleRowFixture[]>, [readonly bigint[] | null]>(
+      async () => (options.configRules === undefined ? [] : [...options.configRules]),
+    ),
+    // M9-F 规则配置：插新版本行 ＋ 旧行 disabled（**唯一写口**）
+    replaceRuleVersion: jest.fn<
+      Promise<SeaRuleRowFixture>,
+      [
+        {
+          level: number;
+          deptId: bigint | null;
+          productLineId: bigint | null;
+          followFreqDays: number | null;
+          dealCycleDays: number | null;
+          stayDays: number | null;
+          noProgressMax: number | null;
+          effectiveFrom: Date;
+          operatorId: bigint;
+        },
+      ]
+    >(async (input) => ({
+      id: 99n,
+      level: input.level,
+      dept_id: input.deptId,
+      product_line_id: input.productLineId,
+      follow_freq_days: input.followFreqDays,
+      deal_cycle_days: input.dealCycleDays,
+      stay_days: input.stayDays,
+      no_progress_max: input.noProgressMax,
+      effective_from: input.effectiveFrom,
+      status: 'active',
+    })),
   };
   const relation = {
     claimCompanySeaRelation: jest.fn<
@@ -114,6 +168,11 @@ function createService(options: FakeOptions = {}) {
     dropPrivateSeaRelation: jest.fn<Promise<{ ownerId: bigint } | null>, [bigint]>(async () =>
       options.dropResult === undefined ? { ownerId: ME } : options.dropResult,
     ),
+    // M9-F 规则配置：按部门 × 产品线的在途私海条数（**聚合数，不含客户明细**）
+    countPrivateSeaByDeptLine: jest.fn<
+      Promise<{ deptId: bigint; productLineId: bigint; count: number }[]>,
+      [readonly bigint[] | null]
+    >(async () => (options.seaGroups === undefined ? [] : [...options.seaGroups])),
   };
   // 事件总线：单测只关心「发了什么」（落库 / 转承诺是 D 域订阅方的事）
   const events = { publish: jest.fn<Promise<void>, [DomainEvent]>(async () => undefined) };
@@ -123,15 +182,32 @@ function createService(options: FakeOptions = {}) {
       async () => true,
     ),
   };
+  // A 域（L1）引用出口：规则出参要把部门 / 产品线 id 翻成名字（跨域不许查对方的表）
+  const org = {
+    getDeptRefs: jest.fn<Promise<{ id: bigint; name: string }[]>, [readonly bigint[]]>(async (ids) =>
+      options.deptRefs === undefined
+        ? ids.map((id) => ({ id, name: `部门${id.toString()}` }))
+        : [...options.deptRefs],
+    ),
+    getProductLineRefs: jest.fn<
+      Promise<{ id: bigint; name: string; color_key: string | null }[]>,
+      [readonly bigint[]]
+    >(async (ids) =>
+      options.productLineRefs === undefined
+        ? ids.map((id) => ({ id, name: `产品线${id.toString()}`, color_key: null }))
+        : options.productLineRefs.map((ref) => ({ ...ref, color_key: null })),
+    ),
+  };
 
   const service = new SeaService(
     repository as unknown as SeaRepository,
     relation as unknown as RelationService,
     events as unknown as EventBus,
     audit as unknown as AuditService,
+    org as unknown as OrgService,
   );
 
-  return { service, repository, relation, events, audit };
+  return { service, repository, relation, events, audit, org };
 }
 
 function contextOf(roleCodes: string[] = ['sale']): RequestContext {
@@ -417,5 +493,239 @@ describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警
     expect(audit.recordStandalone).not.toHaveBeenCalled();
     expect(summary.hits).toBe(0);
     expect(summary.dropped).toBe(0);
+  });
+});
+
+// =============================================================================
+// M9-F 规则配置片（→ 接口 §4.14.10 / §5.16）—— 编排：权限 → 校验 → 预告 →（确认才）落库
+// =============================================================================
+const RULE_NOW = new Date('2026-09-21T12:00:00.000Z');
+/** 提交时刻 + 7 天（假时钟钉死，免得用例跟着真实时间漂） */
+const EFFECTIVE_ISO = '2026-09-28T12:00:00.000Z';
+const EFFECTIVE_AT = new Date(EFFECTIVE_ISO);
+
+/** 规则端点的上下文：`gm` / `admin` 走 `all` 档（不收敛）；经理走 `dept` 档（带管辖部门） */
+function ruleContextOf(roleCodes: string[], managedDeptIds: bigint[] = []): RequestContext {
+  const type = roleCodes.includes('gm') || roleCodes.includes('admin') ? 'all' : 'dept';
+  return {
+    employeeId: ME,
+    deptIds: [DEPT_ID],
+    roleCodes,
+    dataScope: { type, deptIds: managedDeptIds },
+  };
+}
+
+function configRule(overrides: Partial<SeaRuleRowFixture>): SeaRuleRowFixture {
+  return {
+    id: 1n,
+    level: 1,
+    dept_id: null,
+    product_line_id: null,
+    follow_freq_days: 30,
+    deal_cycle_days: null,
+    stay_days: 60,
+    no_progress_max: null,
+    effective_from: new Date('2026-09-01T00:00:00.000Z'),
+    status: 'active',
+    ...overrides,
+  };
+}
+
+describe('SeaService 公海规则配置（M9-F）', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(RULE_NOW);
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('`GET` 老板 → **不收敛**（传 `null`），出参带引用名 ＋ `pending` 派生', async () => {
+    const { service, repository } = createService({
+      configRules: [
+        configRule({ id: 1n, level: 1, follow_freq_days: 30 }),
+        configRule({
+          id: 2n,
+          level: 4,
+          dept_id: DEPT_ID,
+          product_line_id: LINE_ID,
+          follow_freq_days: 15,
+          effective_from: EFFECTIVE_AT, // 7 天缓冲期内 ⇒ pending
+        }),
+      ],
+    });
+
+    const list = await runWithContext(ruleContextOf(['gm']), () => service.listSeaRules());
+
+    expect(repository.listActiveRulesForConfig).toHaveBeenCalledWith(null);
+    expect(list[0]).toEqual({
+      id: 1n,
+      level: 1,
+      dept: null,
+      product_line: null,
+      follow_freq_days: 30,
+      deal_cycle_days: null,
+      stay_days: 60,
+      no_progress_max: null,
+      effective_from: '2026-09-01T00:00:00.000Z',
+      status: 'active',
+      pending: false,
+    });
+    // 部门 / 产品线名字走 A 域出口装配（跨域不查对方的表）
+    expect(list[1]?.dept).toEqual({ id: DEPT_ID, name: '部门2' });
+    expect(list[1]?.product_line).toEqual({ id: LINE_ID, name: '产品线1' });
+    expect(list[1]?.pending).toBe(true);
+  });
+
+  it('`GET` 经理 → 只收敛到**自己管辖的部门**（L1 / L2 由仓储那边一并可见）', async () => {
+    const { service, repository } = createService({ configRules: [configRule({ id: 1n })] });
+
+    await runWithContext(ruleContextOf(['dept_manager'], [DEPT_ID]), () => service.listSeaRules());
+
+    expect(repository.listActiveRulesForConfig).toHaveBeenCalledWith([DEPT_ID]);
+  });
+
+  it('`GET` 销售 → **403**，且一次库都没查（不给"看不到但能试"的入口）', async () => {
+    const { service, repository } = createService();
+
+    const error = await runWithContext(ruleContextOf(['sale']), () =>
+      captureAppError(() => service.listSeaRules()),
+    );
+
+    expect(error.httpStatus).toBe(403);
+    expect(error.constraint).toBe('sea.rule_read_forbidden');
+    expect(repository.listActiveRulesForConfig).not.toHaveBeenCalled();
+  });
+
+  it('`GET` 拿不到上下文 → **401**（绝不兜底成"匿名"，那等于把规则配置摊给所有人）', async () => {
+    const { service } = createService();
+
+    const error = await captureAppError(() => service.listSeaRules());
+
+    expect(error.httpStatus).toBe(401);
+    expect(error.constraint).toBe('sea.no_context');
+  });
+
+  it('★ `PUT` 不传 `confirmed` ⇒ **只回预告、零写库**（"先看看影响多大"是这个端点的常态用法）', async () => {
+    const { service, repository, relation } = createService({
+      rules: [GLOBAL_RULE],
+      seaGroups: [
+        { deptId: DEPT_ID, productLineId: LINE_ID, count: 7 }, // → 命中新配置的 L3
+        { deptId: 99n, productLineId: LINE_ID, count: 100 }, // → 别部门，不受这条规则管
+      ],
+    });
+
+    const result = await runWithContext(ruleContextOf(['dept_manager'], [DEPT_ID]), () =>
+      service.updateSeaRule({ level: 3, dept_id: DEPT_ID.toString(), follow_freq_days: 10 }),
+    );
+
+    expect(result).toEqual({
+      applied: false,
+      affected_customers: 7,
+      effective_from: EFFECTIVE_ISO,
+      rule: null,
+    });
+    // 预告与落库用**同一个** `effective_from` 作判定基准（差一个基准就会出现"预告 3、实际 5"）
+    expect(repository.listActiveSeaRules).toHaveBeenCalledWith(EFFECTIVE_AT);
+    // 计数只在自己的可见部门内取（经理看不到别部门的影响面）
+    expect(relation.countPrivateSeaByDeptLine).toHaveBeenCalledWith([DEPT_ID]);
+    expect(repository.replaceRuleVersion).not.toHaveBeenCalled();
+  });
+
+  it('★ `PUT` `confirmed=true` ⇒ 落库：**插新版本行**（逐参数钉死）＋ 出参 `pending=true`', async () => {
+    const { service, repository } = createService({
+      rules: [GLOBAL_RULE],
+      seaGroups: [{ deptId: DEPT_ID, productLineId: LINE_ID, count: 3 }],
+    });
+
+    const result = await runWithContext(ruleContextOf(['gm']), () =>
+      service.updateSeaRule({
+        level: 4,
+        dept_id: DEPT_ID.toString(),
+        product_line_id: LINE_ID.toString(),
+        follow_freq_days: 15,
+        stay_days: 45,
+        confirmed: true,
+      }),
+    );
+
+    expect(repository.replaceRuleVersion).toHaveBeenCalledWith({
+      level: 4,
+      deptId: DEPT_ID,
+      productLineId: LINE_ID,
+      followFreqDays: 15,
+      dealCycleDays: null, // 没给＝该维度不配（整行覆盖，不做"缺省＝沿用"）
+      stayDays: 45,
+      noProgressMax: null,
+      effectiveFrom: EFFECTIVE_AT, // ＝提交时刻 + 7 天
+      operatorId: ME,
+    });
+    expect(result.applied).toBe(true);
+    expect(result.affected_customers).toBe(3);
+    expect(result.rule?.id).toBe(99n);
+    expect(result.rule?.pending).toBe(true);
+    expect(result.rule?.effective_from).toBe(EFFECTIVE_ISO);
+  });
+
+  it('`PUT` **层级与 key 搭配错** ⇒ 400（`level=2` 却没给产品线），且不查引用、不落库', async () => {
+    const { service, repository, org } = createService();
+
+    const error = await runWithContext(ruleContextOf(['gm']), () =>
+      captureAppError(() => service.updateSeaRule({ level: 2, follow_freq_days: 30 })),
+    );
+
+    expect(error.httpStatus).toBe(400);
+    expect(error.constraint).toBe('sea.rule_scope_inconsistent');
+    expect(org.getDeptRefs).not.toHaveBeenCalled();
+    expect(repository.replaceRuleVersion).not.toHaveBeenCalled();
+  });
+
+  it('`PUT` 经理改**别部门**的规则 ⇒ 403（部门级只归该部门经理），且零写', async () => {
+    const { service, repository } = createService();
+
+    const error = await runWithContext(ruleContextOf(['dept_manager'], [DEPT_ID]), () =>
+      captureAppError(() =>
+        service.updateSeaRule({ level: 3, dept_id: '99', follow_freq_days: 30, confirmed: true }),
+      ),
+    );
+
+    expect(error.httpStatus).toBe(403);
+    expect(error.constraint).toBe('sea.rule_write_forbidden');
+    expect(repository.replaceRuleVersion).not.toHaveBeenCalled();
+  });
+
+  it('`PUT` 经理改**全局**（L1）⇒ 403（那一档归老板 / 管理员）', async () => {
+    const { service } = createService();
+
+    const error = await runWithContext(ruleContextOf(['dept_manager'], [DEPT_ID]), () =>
+      captureAppError(() => service.updateSeaRule({ level: 1, follow_freq_days: 30 })),
+    );
+
+    expect(error.httpStatus).toBe(403);
+  });
+
+  it('`PUT` 部门不存在 ⇒ **400**（人话，不是撞外键冒 500）', async () => {
+    const { service, repository } = createService({ deptRefs: [] });
+
+    const error = await runWithContext(ruleContextOf(['gm']), () =>
+      captureAppError(() =>
+        service.updateSeaRule({ level: 3, dept_id: '9', follow_freq_days: 30, confirmed: true }),
+      ),
+    );
+
+    expect(error.httpStatus).toBe(400);
+    expect(error.constraint).toBe('sea.rule_dept_missing');
+    expect(repository.replaceRuleVersion).not.toHaveBeenCalled();
+  });
+
+  it('`PUT` 拿不到上下文 → 401（**不落库、不读库**）', async () => {
+    const { service, repository } = createService();
+
+    const error = await captureAppError(() =>
+      service.updateSeaRule({ level: 1, follow_freq_days: 30, confirmed: true }),
+    );
+
+    expect(error.httpStatus).toBe(401);
+    expect(repository.replaceRuleVersion).not.toHaveBeenCalled();
   });
 });

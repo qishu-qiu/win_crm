@@ -15,7 +15,7 @@
 // =============================================================================
 import { ApiProperty } from '@nestjs/swagger';
 
-import { RelationVoDto } from '../../relation/dto/relation-response.dto';
+import { RelationRefDto, RelationVoDto } from '../../relation/dto/relation-response.dto';
 
 /** 领取成功出参 ＝ 关系列表项 ＋ 本次回填结果（→ 接口 §5.16） */
 export class SeaClaimVoDto extends RelationVoDto {
@@ -28,4 +28,112 @@ export class SeaClaimVoDto extends RelationVoDto {
       '不假装掉过海）—— 与「领取成功」不矛盾',
   })
   claimed_at!: string | null;
+}
+
+/**
+ * 一条公海规则（→ 接口 §4.14.10 / §5.16）。
+ *
+ * ★ 四个天数可以各自为 `null` ＝ **该维度没配**（口径见 F1 / 需求 §6.3）；
+ *   前端展示成"未配置"，**不要回落成默认天数**（回落＝凭空造业务口径）。
+ * ★ `pending` 是**派生字段**（`effective_from > 请求时刻`）＝ "7 天缓冲期内、还没生效" ——
+ *   前端据此显示「将于 X 生效」而不是"当前生效值"，免得经理以为自己刚改的立刻生效了。
+ */
+export class SeaRuleVoDto {
+  @ApiProperty({ description: '规则行 id（`sea_rule.id`；版本行，**停用不删**）', example: '7' })
+  id!: string;
+
+  @ApiProperty({ enum: [1, 2, 3, 4], description: '层级：1 全局 / 2 产品线 / 3 部门 / 4 部门×产品线' })
+  level!: number;
+
+  @ApiProperty({
+    type: RelationRefDto,
+    nullable: true,
+    description: '部门引用（层级 3 / 4 才有；层级 1 / 2 为 `null`）',
+  })
+  dept!: RelationRefDto | null;
+
+  @ApiProperty({
+    type: RelationRefDto,
+    nullable: true,
+    description: '产品线引用（层级 2 / 4 才有；层级 1 / 3 为 `null`）',
+  })
+  product_line!: RelationRefDto | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: '跟进频次天数（触发①；`null` ＝ 未配）',
+    example: 30,
+  })
+  follow_freq_days!: number | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: '成单周期天数（触发②；⚠ 锚点口径未定 ⇒ 只配不生效，→ D-57）',
+    example: 90,
+  })
+  deal_cycle_days!: number | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: '公海停留超期天数（**只用于"公海停留超期→经理决策待办"**，不参与私海倒计时，→ F1 P-10）',
+    example: 60,
+  })
+  stay_days!: number | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: '推进停滞天数（触发③；⚠ 锚点口径未定 ⇒ 只配不生效，→ D-57）',
+    example: 21,
+  })
+  no_progress_max!: number | null;
+
+  @ApiProperty({
+    type: String,
+    description: '生效时刻（ISO；＝**提交日 + 7 天**，→ 需求 §6.3 的 7 天缓冲）',
+    example: '2026-09-28T12:00:00.000Z',
+  })
+  effective_from!: string;
+
+  @ApiProperty({ description: '行状态（`active` / `disabled`；**停用不删**，历史版本仍在表里）', example: 'active' })
+  status!: string;
+
+  @ApiProperty({ description: '是否**还没生效**（`effective_from > 现在` ⇒ 7 天缓冲期内）', example: false })
+  pending!: boolean;
+}
+
+/** `PUT /sea/rules` 出参：预告结果 ＋（落库时）新版本行（→ 接口 §5.16） */
+export class SeaRuleUpdateResultDto {
+  @ApiProperty({
+    description:
+      '**是否已落库**：`false` ＝ 只回了预告（`confirmed` 未传 / `false`，**零写库**）；' +
+      '`true` ＝ 已插新版本行（旧行已置 `disabled`）',
+    example: true,
+  })
+  applied!: boolean;
+
+  @ApiProperty({
+    description:
+      '**本次变更将影响 X 个客户** ＝ 新版本生效后由这条规则约束的**在途私海**客户数' +
+      '（含"新版本配了天数才真会掉海"的那批口径说明 → §5.16）',
+    example: 12,
+  })
+  affected_customers!: number;
+
+  @ApiProperty({
+    type: String,
+    description: '拟生效 / 已定生效时刻（ISO）＝ **提交日 + 7 天**',
+    example: '2026-09-28T12:00:00.000Z',
+  })
+  effective_from!: string;
+
+  @ApiProperty({
+    type: SeaRuleVoDto,
+    nullable: true,
+    description: '落库后的新版本行；**只回预告时为 `null`**',
+  })
+  rule!: SeaRuleVoDto | null;
 }

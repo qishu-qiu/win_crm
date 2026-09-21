@@ -149,7 +149,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | req_id | 请求链路 id（一次操作多行可关联；与系统运行日志的 req_id 打通） |
 | operator_id / operator_name | 操作人（**快照冗余**，防离职/改名后查不到人）；系统动作 `operator_id=0` |
 | dept_id / product_line_id | 操作时所处上下文（供经理按部门查） |
-| action | 统一编码 `模块.动词`。**★ 已实现清单（与代码同源，只增不改 —— 改名＝历史审计断链）**：`account.login.success` / `account.login.fail` / `account.login.rejected`（A 域登录）· `account.preferences.update`（个人偏好，D-37）· `relation.activate` · `relation.update` · `relation.add_member` · `company.create` · `contact.create` · `event.create` · `event.quick_mark` · `commitment.create` · `commitment.update` · `contact.event_create` · `contact.activate_relation` · `sea.claim`（领取公海，F-01）；**查看类** `event.view`（管理员看跟单全文）· **安全类** `authz.denied`（401 / 403 越权尝试）。**待落（随各自接口）**：`sea.phone.view`（公海看号）· `phone.unlock.*` · `approval.approve` · `company.merge` · `tag.update` · 系统配置 / 字典 / 部门规则修改 |
+| action | 统一编码 `模块.动词`。**★ 已实现清单（与代码同源，只增不改 —— 改名＝历史审计断链）**：`account.login.success` / `account.login.fail` / `account.login.rejected`（A 域登录）· `account.preferences.update`（个人偏好，D-37）· `relation.activate` · `relation.update` · `relation.add_member` · `company.create` · `contact.create` · `event.create` · `event.quick_mark` · `commitment.create` · `commitment.update` · `contact.event_create` · `contact.activate_relation` · `sea.claim`（领取公海，F-01）· **`sea.drop`（到期自动掉落，M9-F：**系统动作**`operator_id=0`、**一次任务一条**、批次明细在 `detail`，→ 架构 §7.4 ⑤）**；**查看类** `event.view`（管理员看跟单全文）· **安全类** `authz.denied`（401 / 403 越权尝试）。**待落（随各自接口）**：`sea.phone.view`（公海看号）· `phone.unlock.*` · `approval.approve` · `company.merge` · `tag.update` · 系统配置 / 字典 / 部门规则修改 |
 | target_type / target_id | 操作对象（多态） |
 | before / after JSON | **本次变更前/后快照**（审计核心；新增/删除时一端为 null） |
 | detail JSON | 补充说明（保留原设计） |

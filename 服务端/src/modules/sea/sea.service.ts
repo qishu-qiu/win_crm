@@ -36,10 +36,11 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import {
   AppError,
+  // ⚠ `AuditService` / `EventBus` 必须**值导入**（不能写 `type Xxx`）：Nest 靠 `design:paramtypes`
+  //   元数据注入，类型导入会被编译期擦除 → 元数据退化成 `Function` → 启动即报「依赖解析失败」（→ 铁律坑 31）。
+  AuditService,
   createDomainEvent,
   DomainEventName,
-  // ⚠ `EventBus` 必须**值导入**（不能写 `type EventBus`）：Nest 靠 `design:paramtypes` 元数据注入，
-  //   类型导入会被编译期擦除 → 元数据退化成 `Function` → 启动即报「依赖解析失败」（→ 铁律坑 31）。
   EventBus,
   ErrorCode,
   getRequestContext,
@@ -70,6 +71,12 @@ import type { ClaimSeaRelationDto } from './dto/sea-request.dto';
 export const SEA_AUDIT_ACTIONS = {
   /** 领取公海客户到私海 → `POST /sea/company/:id/claim` */
   claim: 'sea.claim',
+  /**
+   * ★ 到期**自动掉落**回公海（M9-F；→ 数据架构 A10「已实现清单」）。
+   * ⚠ **系统动作、没有 HTTP 端点**：`operator_id` 恒为 `0n`（≠ 任何员工）；
+   *   一次任务写**一条**（批次明细在 `detail`，逐条状态在 `sea_record`）—— 理由见 `recordDropAudit`。
+   */
+  drop: 'sea.drop',
 } as const;
 
 /**
@@ -116,6 +123,8 @@ export class SeaService {
     private readonly repository: SeaRepository,
     private readonly relation: RelationService,
     private readonly events: EventBus,
+    /** 审计留痕（`@Global()` 单例）：掉海是**系统动作**，走 `recordStandalone`（→ D-68②） */
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -218,6 +227,8 @@ export class SeaService {
     let hits = 0;
     let dropped = 0;
     let dropSkipped = 0;
+    /** 本批**真的掉**的关系 id（供审计 `detail` 追溯；→ D-68②） */
+    const droppedIds: bigint[] = [];
 
     for (const candidate of candidates) {
       // ① 规则解析（L4→L1 取第一条，7 天缓冲已由仓储的 `effective_from <= now` 挡过一道）
@@ -256,9 +267,23 @@ export class SeaService {
       // ④ ★ M9-F：**已到期的真的掉**（四档里只有这一档会写业务数据，→ 方法头 ★）
       if (tier === 'overdue') {
         const didDrop = await this.dropRelation(candidate.id, now);
-        if (didDrop) dropped += 1;
-        else dropSkipped += 1; // 并发下刚被领走（或已不在私海）——不是错误，下次扫描再看
+        if (didDrop) {
+          dropped += 1;
+          droppedIds.push(candidate.id);
+        } else {
+          dropSkipped += 1; // 并发下刚被领走（或已不在私海）——不是错误，下次扫描再看
+        }
       }
+    }
+
+    // ⑤ ★ D-68②：本批真的掉了才写**一条**任务级审计（没有业务变更就什么都不写，→ `recordDropAudit`）
+    if (dropped > 0) {
+      await this.recordDropAudit(now, {
+        scanned: candidates.length,
+        dropped,
+        dropSkipped,
+        relationIds: droppedIds,
+      });
     }
 
     this.logger.log(
@@ -304,6 +329,44 @@ export class SeaService {
       droppedAt: now,
     });
     return true;
+  }
+
+  /**
+   * 记**一条**「本批掉海」的审计（D-68②；→ 架构 §7.4 ④ / 数据架构 A10）。
+   *
+   * ★ **为什么是"任务级一条"，不是逐条**：
+   *   · 掉海一次可能改几十上百行，逐条写会把按月分区的 `operation_log` 刷成日志墙；
+   *   · 「哪条关系何时掉海」在 **`sea_record`** 里已逐条可查 —— 审计表与领域史表是
+   *     「**两者都写、语义与权限不同、不合并**」（数据架构 §164）：审计回答"**谁在何时干了什么**"、
+   *     史表回答"**这条业务对象经历了什么**"⇒ 本条审计只承载**批次**语义，具体对象 id 进 `detail`。
+   * ★ 为什么走 `recordStandalone` 而不是 `record`（事务内）：
+   *   掉海的写发生在 **C 域事务**里（关系 ＋ 成员），而审计是 **F 域**的事 ⇒ 放进去就是**跨域大事务**
+   *   （架构 §5.2 路之③ 只允许**本域**事务）；一次任务还可能掉多条、跨多个 C 域事务，合成不了一个。
+   *   ⇒ 按架构 §7.4 ③ 的取舍走 best-effort：**审计写失败只记系统日志、绝不回滚掉海**。
+   * ★ `operator_id = 0n` ＝ **系统动作**（数据架构 A10：系统动作=0）——**必须显式传**：
+   *   `AuditService` 在"没传又无请求上下文"时**抛错**，正是为了不让"忘传"被静默记成系统动作。
+   * ★ `occurred_at` 用任务传入的 `now`：与 `job_run_log.run_at` **同源**，两处对得上账。
+   *
+   * @param now 本次任务的判定基准时刻（同 `scanSeaWarning` 的入参）
+   */
+  private async recordDropAudit(
+    now: Date,
+    batch: { scanned: number; dropped: number; dropSkipped: number; relationIds: readonly bigint[] },
+  ): Promise<void> {
+    await this.audit.recordStandalone({
+      action: SEA_AUDIT_ACTIONS.drop,
+      operator_id: 0n, // ← 系统动作（无登录人）；不传且无上下文时 AuditService 会抛错
+      occurred_at: now,
+      detail: {
+        reason: SEA_DROP_REASON.followTimeout,
+        scanned: batch.scanned,
+        dropped: batch.dropped,
+        drop_skipped: batch.dropSkipped,
+        // ⚠ 全量 id（V1 单次掉落量级＝"若干天内到期的关系数"，通常几十条内）；
+        //    若将来出现单次上千条的场景，再改为"只记计数 ＋ 前 N 条"（届时 `sea_record` 仍逐条可查）
+        relation_ids: batch.relationIds.map((id) => id.toString()),
+      },
+    });
   }
 }
 

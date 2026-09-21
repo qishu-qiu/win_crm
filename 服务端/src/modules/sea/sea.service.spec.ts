@@ -15,6 +15,7 @@ import {
   DomainEventName,
   ErrorCode,
   runWithContext,
+  type AuditService,
   type DomainEvent,
   type EventBus,
   type RequestContext,
@@ -116,14 +117,21 @@ function createService(options: FakeOptions = {}) {
   };
   // 事件总线：单测只关心「发了什么」（落库 / 转承诺是 D 域订阅方的事）
   const events = { publish: jest.fn<Promise<void>, [DomainEvent]>(async () => undefined) };
+  // 审计（D-68②）：掉海是系统动作 → 走 `recordStandalone`；本文件只关心「写了什么」
+  const audit = {
+    recordStandalone: jest.fn<Promise<boolean>, [Parameters<AuditService['recordStandalone']>[0]]>(
+      async () => true,
+    ),
+  };
 
   const service = new SeaService(
     repository as unknown as SeaRepository,
     relation as unknown as RelationService,
     events as unknown as EventBus,
+    audit as unknown as AuditService,
   );
 
-  return { service, repository, relation, events };
+  return { service, repository, relation, events, audit };
 }
 
 function contextOf(roleCodes: string[] = ['sale']): RequestContext {
@@ -332,7 +340,7 @@ describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警
   });
 
   it('★★ M9-F：**只有"已到期"那一档真掉** —— 其余四档（含"还早"）一律零写', async () => {
-    const { service, repository, relation, events } = createService({
+    const { service, repository, relation, events, audit } = createService({
       rules: [GLOBAL_RULE],
       candidates: [
         candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期时刻＝2 天前 → overdue ⇒ **真掉**
@@ -361,14 +369,26 @@ describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警
     // ③ 计分：掉 1 条、未掉成 0 条
     expect(summary.dropped).toBe(1);
     expect(summary.dropSkipped).toBe(0);
-    // ④ ⛔ 其余动作一律不碰：另两条触发 / 通知 / 动线 / 承诺级联都不属本片
+    // ④ ★ 审计（D-68②）：**任务级一条** —— 系统动作（`operator_id=0`）＋ 批次明细进 `detail`
+    expect(audit.recordStandalone).toHaveBeenCalledTimes(1);
+    expect(audit.recordStandalone).toHaveBeenCalledWith({
+      action: 'sea.drop',
+      operator_id: 0n,
+      occurred_at: NOW, // ← 与 `job_run_log.run_at` 同源（同一个 now，不各自读钟）
+      detail: expect.objectContaining({
+        reason: 'follow_timeout',
+        dropped: 1,
+        relation_ids: ['1'],
+      }),
+    });
+    // ⑤ ⛔ 其余动作一律不碰：另两条触发 / 通知 / 动线 / 承诺级联都不属本片
     expect(repository.markClaimed).not.toHaveBeenCalled();
     expect(relation.claimCompanySeaRelation).not.toHaveBeenCalled();
     expect(events.publish).not.toHaveBeenCalled();
   });
 
   it('★ 到期但**没掉成**（C 域出口回 `null`：并发下刚被同事领走）⇒ **不写历史行**、计入 `dropSkipped`', async () => {
-    const { service, repository, relation } = createService({
+    const { service, repository, relation, audit } = createService({
       rules: [GLOBAL_RULE],
       candidates: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
       dropResult: null,
@@ -376,15 +396,16 @@ describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警
 
     const summary = await service.scanSeaWarning(NOW);
 
-    // 关系压根没掉 ⇒ 就不该有"掉海"这条历史（凭空编业务事实＝本项目一号坑）
+    // 关系压根没掉 ⇒ 就不该有"掉海"这条历史（凭空编业务事实＝本项目一号坑），更不该有审计
     expect(relation.dropPrivateSeaRelation).toHaveBeenCalledWith(1n);
     expect(repository.createSeaRecord).not.toHaveBeenCalled();
+    expect(audit.recordStandalone).not.toHaveBeenCalled();
     expect(summary.dropped).toBe(0);
     expect(summary.dropSkipped).toBe(1);
   });
 
-  it('★ 一条都没到期（全在预警档）⇒ **一次都不碰** C 域掉海出口（本片只做"还来得及"的告警）', async () => {
-    const { service, repository, relation } = createService({
+  it('★ 一条都没到期（全在预警档）⇒ **一次都不碰** C 域掉海出口，也**不写审计**（没有增删改就不留痕）', async () => {
+    const { service, repository, relation, audit } = createService({
       rules: [GLOBAL_RULE],
       candidates: [candidate({ id: 1n, lastEventAt: before(1 * DAY) })], // ＋9 天 → none
     });
@@ -393,6 +414,7 @@ describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警
 
     expect(relation.dropPrivateSeaRelation).not.toHaveBeenCalled();
     expect(repository.createSeaRecord).not.toHaveBeenCalled();
+    expect(audit.recordStandalone).not.toHaveBeenCalled();
     expect(summary.hits).toBe(0);
     expect(summary.dropped).toBe(0);
   });

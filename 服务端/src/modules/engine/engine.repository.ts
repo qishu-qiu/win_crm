@@ -23,6 +23,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OPEN_COMMITMENT_STATUS } from './domain/commitment-rules';
+import { SYSTEM_ACTION_TYPE } from './domain/event-effective';
 
 /** 交互式事务客户端（同 B / C 域：类型上就没有 `$transaction`，防在事务里再开事务） */
 export type EngineTxClient = Prisma.TransactionClient;
@@ -192,6 +193,31 @@ export class EngineRepository {
     return this.prisma.actionEvent.findFirst({
       where: { idempotency_key: key },
       select: EVENT_SELECT,
+    });
+  }
+
+  // ===== D-61 桥③ `event_count_30d`：按关系集计数（2026-09-21）=====
+
+  /**
+   * 这些关系下、某时刻之后的**跟单条数**（→ 接口 §5.4 `event_count_30d`）。
+   *
+   * ★ **走 `idx_rel_time(relation_id, event_at)`**（→ D2）：`relation_id IN (…) AND event_at >= ?`
+   *   正好命中该索引的**等值 ＋ 范围**两段，**不新增索引**（→ 数据架构 §十）。
+   * ★ **不计系统事件**（`action_type = SYSTEM_ACTION_TYPE`：建档 / 领取）—— 规格那句是
+   *   「跟单**条数**」，而建档 / 领取是**系统动作**、不是销售写的跟单；算进去会让数字随
+   *   「激活 / 领回」次数虚增（每领回一次就 +1）。判定口径 → `domain/event-effective.ts`。
+   * ★ **为什么按 id 列表过滤、不做 join**：`action_event` 是本域的表，`business_relation`
+   *   是 **C 域**的表 —— 跨域 join 被架构 §5.2 禁止（不许查对方的表）。故「哪些关系可见」
+   *   由 **C 域出口**给出 id 列表，本域只负责「这些关系下有多少条跟单」。
+   * ★ 关系列表为空时**调用方不会进来**（service 直接给 0）：`IN ()` 是语法错，也是没必要的往返。
+   */
+  countEventsOfRelationsSince(relationIds: readonly bigint[], since: Date) {
+    return this.prisma.actionEvent.count({
+      where: {
+        relation_id: { in: [...relationIds] },
+        event_at: { gte: since },
+        action_type: { not: SYSTEM_ACTION_TYPE },
+      },
     });
   }
 

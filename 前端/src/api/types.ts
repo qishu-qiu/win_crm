@@ -393,7 +393,7 @@ export interface paths {
         };
         /**
          * 公司详情（桥③ 聚合层）
-         * @description 基本档案 ＋ 完善度 ＋ 档案标签 ＋ 联系人简卡 ＋ **业务线列表**（`relations_summary`，D-61 桥③ 拼装）。★ 落点：原 B 域 `GET /companies/:id` 于 2026-09-21 迁至本聚合层（B 禁止依赖 C，故跨域拼装发生在更高层）。★ `relations_summary` 本期**仅含业务线**（dept / product_line）；`sign_date`/`amount`（E 域合同）与`event_count_30d`（D 域跟单计数）待对应域就绪后补，**不编假值**。**公司档案是全公司共享资料层，本端点不做数据范围过滤**。
+         * @description 基本档案 ＋ 完善度 ＋ 档案标签 ＋ 联系人简卡 ＋ **业务线列表**（`relations_summary`）＋ **近 30 天跟单计数**（`event_count_30d`）—— 后两者由 D-61 桥③ 聚合层拼装。★ 落点：原 B 域 `GET /companies/:id` 于 2026-09-21 迁至本聚合层（B 禁止依赖 C、C 禁止依赖 D/E，跨域拼装只能发生在更高编排层）。★ `event_count_30d`：**近 30 个自然日**该公司各关系下的跟单条数合计（**派生、不落列**）；**只计当前查看者可见的关系**（＝私海那四档范围），**不计系统事件**（建档 / 领取）。⚠ 故同一家公司，不同的人看到的这个数字**可以不同**（各自的可见范围不同）—— 这是口径，不是 bug。★ `relations_summary` 本期**仅含业务线**（dept / product_line）；`sign_date`/`amount`（E 域合同）待补，**不编假值**。★ **公司档案本身是全公司共享资料层，不做数据范围过滤。**
          */
         get: operations["CompanyAggregateController_getCompany"];
         put?: never;
@@ -1366,6 +1366,23 @@ export interface components {
             /** @description 协同有效期（ISO 日期；`null` / 缺省＝长期，仅正式协同） */
             valid_until?: string;
         };
+        CompletenessVoDto: {
+            /**
+             * @description 一档完善度（0-100）
+             * @example 80
+             */
+            c1: number;
+            /**
+             * @description 二档完善度（0-100）
+             * @example 60
+             */
+            c2: number;
+            /**
+             * @description 三档完善度（0-100）
+             * @example 40
+             */
+            c3: number;
+        };
         CompanyProfileTagItemVoDto: {
             /** @example 12 */
             tag_id: string;
@@ -1435,13 +1452,18 @@ export interface components {
             /** @example 2026-09-15T10:00:00+08:00 */
             updated_at: string;
             /** @description 完善度三档（0-100，→ B1 `completeness_1/2/3`） */
-            completeness: Record<string, never>;
+            completeness: components["schemas"]["CompletenessVoDto"];
             /** @description 档案标签（身份 / 制度 / 决策链，→ B2） */
             profile_tags: components["schemas"]["CompanyProfileTagGroupVoDto"];
             /** @description 联系人简卡（列表 / 卡片一律 `phone_masked`，拍板 Q2） */
             contacts: components["schemas"]["ContactBriefVoDto"][];
-            /** @description 业务线列表（→ §5.4 `relations_summary` 本期子集，D-61 桥③ 聚合层拼装）。仅含 `dept` / `product_line`；`sign_date` / `amount`（E 域合同）与 `event_count_30d`（D 域跟单）待补，不编假值 */
+            /** @description 业务线列表（→ §5.4 `relations_summary` 本期子集，D-61 桥③ 聚合层拼装）。仅含 `dept` / `product_line`；`sign_date` / `amount`（E 域合同）待补，不编假值 */
             relations_summary: components["schemas"]["RelationsSummaryItemVoDto"][];
+            /**
+             * @description **近 30 个自然日**该公司各关系下的跟单条数合计（→ §5.4；**派生、不落列**，D-61 桥③ 聚合层拼装）。★ **只计当前查看者可见的关系**（私海四档范围）＋ **不计系统事件**（建档 / 领取，`action_type=system`）⇒ 同一家公司，不同的人看到的数字可以不同（各自的可见范围不同）。
+             * @example 5
+             */
+            event_count_30d: number;
         };
         EngineRefDto: {
             /**

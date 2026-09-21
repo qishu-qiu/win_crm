@@ -36,6 +36,16 @@ export const ACTION_TYPES = [
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
+/**
+ * **系统事件**那一码（→ D2 `action_type` 值域里的最后一个）。
+ *
+ * ★ 为什么单列一个常量：这个码出现在**三处**（建档事件 / 领取事件 / 「跟单条数」把它排除掉），
+ *   字面量散着写就是「同一事实三处落点」—— 改一处漏一处。
+ * ★ 语义：**系统动作**（激活建档 / 领取公海），**不是销售写的跟单**（→ 本域 service 注释）。
+ *   故「跟单条数」（→ 接口 §5.4 `event_count_30d`）**不计**它。
+ */
+export const SYSTEM_ACTION_TYPE = 'system';
+
 /** 有效沟通的三种结果（→ D2） */
 export const EFFECTIVE_OUTCOMES = ['advanced', 'stalled', 'await_reply'] as const;
 

@@ -665,6 +665,44 @@ export class RelationService {
     return result;
   }
 
+  /**
+   * 某公司下**当前查看者可见**的关系 id（→ D-61 桥③ `event_count_30d` 的可见性收敛出口）。
+   *
+   * ★ 调用方＝**D 域** `EngineService.countCompanyEvents30d`（再往上由聚合层拼进公司详情）：
+   *   「公司 × 跟单计数」里「哪些关系算数」是**本域**的可见性规则，D 域不许自己拼（→ 架构 §5.2 路之①）。
+   * ★ 档位判定复用**私海列表那一套**（`resolveRelationListScope('private', viewer)`，→ 本文件
+   *   `listRelations` 同源）：公司详情页里「我能看见的跟单」必须与**列表里能点开的关系**一致 ——
+   *   另写一套判断，迟早出现「列表里有它、计数里没它」。
+   *   · `all`  → 该公司下全部私海（总经理 / 管理员）
+   *   · `dept` → 管辖部门（经理）
+   *   · `mine` → 我参与（销售 / 交付 · 客服；⚠ 交付 · 客服的正解是「服务期内」，E 域未建前按
+   *              「我参与」收敛，**比规格窄、不越权** →《欠账登记表》D-01）
+   * ★ **不并公海**：跟单只能写在私海（→ D-32②），公海关系名下不会有跟单（理由同仓储那头 ★）。
+   * ★ 出参只给 **id**：调用方要的就是「拿这批 id 去数跟单」，不给整行（同 `getRelationRefs` 的取法）。
+   */
+  async listVisibleRelationIdsOfCompany(companyId: bigint): Promise<bigint[]> {
+    const viewer = requireViewer();
+    const scope = resolveRelationListScope('private', viewer);
+    // ⚠ 私海页签不会给 `denied`（那个分支只属公海，→ `resolveRelationListScope`）；
+    //   这里显式兜底成空集而**不是**落进 `mine` 分支 —— 万一将来语义变了，
+    //   「看不见」宁可少数、不可多算（计数多算＝把别人的跟单算到我看的数字里）。
+    if (scope.kind === 'denied') return [];
+
+    const now = new Date();
+    const rows =
+      scope.kind === 'all'
+        ? await this.repository.listVisibleRelationIdsOfCompany(companyId)
+        : scope.kind === 'dept'
+          ? await this.repository.listVisibleRelationIdsOfCompanyOfDepts(companyId, scope.deptIds)
+          : await this.repository.listVisibleRelationIdsOfCompanyOfEmployee(
+              companyId,
+              viewer.employeeId,
+              now,
+            );
+
+    return rows.map((row) => row.id);
+  }
+
   // ===== M7-03 掉海预警（F 域定时任务）的跨域出口 =====
 
   /**

@@ -390,16 +390,34 @@ export class RelationsSummaryItemVoDto {
 }
 
 /**
+ * 完善度三档（→ §5.4 详情 `completeness:{c1,c2,c3}`；B1 `completeness_1/2/3`）。
+ *
+ * ★ 为什么单列成一个 DTO 类（而不是写成内联字面量类型）：Swagger 认不出内联对象字面量，
+ *   `gen:types` 会把它退化成 `Record<string, never>` —— 前端拿到的类型等于「空对象」，
+ *   用不了（→《AI执行清单》#17「grep `Record<string, never>` 应为 0」）。
+ */
+export class CompletenessVoDto {
+  @ApiProperty({ description: '一档完善度（0-100）', example: 80 })
+  c1!: number;
+
+  @ApiProperty({ description: '二档完善度（0-100）', example: 60 })
+  c2!: number;
+
+  @ApiProperty({ description: '三档完善度（0-100）', example: 40 })
+  c3!: number;
+}
+
+/**
  * 公司详情（→ §5.4 详情；D-05 / D-61 桥③）。
  * ★ 继承 `CompanyVoDto` 的全部基本档案字段，再补 `completeness` / `profile_tags` / `contacts`。
  * ★ `contacts[]` 按**卡片**出参（一律 `phone_masked`，拍板 Q2）。
- * ★ `relations_summary`（业务线列表）由 **D-61 桥③ 聚合层**拼装：本期**仅含业务线**
- *   （dept / product_line），`sign_date` / `amount`（E 域合同）待 E 域 module 就绪后补、
- *   `event_count_30d`（D 域跟单计数）待 engine 补按 company 聚合出口后补——均**不编假值**（→ D-61 后续）。
+ * ★ `relations_summary`（业务线列表）与 `event_count_30d`（近 30 天跟单计数）由 **D-61 桥③ 聚合层**
+ *   拼装：前者本期**仅含业务线**（dept / product_line），`sign_date` / `amount`（E 域合同）
+ *   待 E 域 module 就绪后补；后者已出（D 域出口 ＋ C 域可见性收敛）—— 缺的那部分一律**不编假值**（→ D-61 后续）。
  */
 export class CompanyDetailVoDto extends CompanyVoDto {
-  @ApiProperty({ description: '完善度三档（0-100，→ B1 `completeness_1/2/3`）' })
-  completeness!: { c1: number; c2: number; c3: number };
+  @ApiProperty({ type: CompletenessVoDto, description: '完善度三档（0-100，→ B1 `completeness_1/2/3`）' })
+  completeness!: CompletenessVoDto;
 
   @ApiProperty({ type: CompanyProfileTagGroupVoDto, description: '档案标签（身份 / 制度 / 决策链，→ B2）' })
   profile_tags!: CompanyProfileTagGroupVoDto;
@@ -411,7 +429,16 @@ export class CompanyDetailVoDto extends CompanyVoDto {
     type: [RelationsSummaryItemVoDto],
     description:
       '业务线列表（→ §5.4 `relations_summary` 本期子集，D-61 桥③ 聚合层拼装）。' +
-      '仅含 `dept` / `product_line`；`sign_date` / `amount`（E 域合同）与 `event_count_30d`（D 域跟单）待补，不编假值',
+      '仅含 `dept` / `product_line`；`sign_date` / `amount`（E 域合同）待补，不编假值',
   })
   relations_summary!: RelationsSummaryItemVoDto[];
+
+  @ApiProperty({
+    description:
+      '**近 30 个自然日**该公司各关系下的跟单条数合计（→ §5.4；**派生、不落列**，D-61 桥③ 聚合层拼装）。' +
+      '★ **只计当前查看者可见的关系**（私海四档范围）＋ **不计系统事件**（建档 / 领取，`action_type=system`）' +
+      '⇒ 同一家公司，不同的人看到的数字可以不同（各自的可见范围不同）。',
+    example: 5,
+  })
+  event_count_30d!: number;
 }

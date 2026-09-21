@@ -133,6 +133,8 @@ interface FakeOptions {
   seaRow?: RelationFixture | null;
   /** F-01：原子认领 `updateMany` 的影响行数（`0` ＝ 并发被抢，→ 409） */
   claimCount?: number;
+  /** D-61 桥③：该公司下**可见**的关系 id（三个范围方法都回它；不给＝没有可见关系） */
+  visibleRelationIds?: bigint[];
 }
 
 function createService(options: FakeOptions = {}) {
@@ -173,6 +175,16 @@ function createService(options: FakeOptions = {}) {
     listPrivateRelations: jest.fn(async () => pageOf(options.rows ?? [])),
     listSeaRelationsOfDepts: jest.fn(async () => pageOf(options.rows ?? [])),
     listSeaRelations: jest.fn(async () => pageOf(options.rows ?? [])),
+    // D-61 桥③：某公司下**可见**的关系 id（只回 id，故形状是 `[{id}]`，不是 `{rows,total}`）
+    listVisibleRelationIdsOfCompany: jest.fn(async () =>
+      (options.visibleRelationIds ?? []).map((id) => ({ id })),
+    ),
+    listVisibleRelationIdsOfCompanyOfDepts: jest.fn(async () =>
+      (options.visibleRelationIds ?? []).map((id) => ({ id })),
+    ),
+    listVisibleRelationIdsOfCompanyOfEmployee: jest.fn(async () =>
+      (options.visibleRelationIds ?? []).map((id) => ({ id })),
+    ),
     updateRelation: jest.fn(async () => options.row ?? relationFixture()),
   };
   const org = {
@@ -963,6 +975,74 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
 
       expect(error.httpStatus).toBe(401);
       expect(error.constraint).toBe('relation.no_context');
+    });
+  });
+
+  // ==========================================================================
+  // D-61 桥③：某公司下**可见**的关系 id（→ 接口 §5.4 `event_count_30d` 的可见性收敛出口）
+  //   判据：档位复用**私海列表**那一套 —— 同一公司，四档各走自己那条查询，互不串。
+  // ==========================================================================
+  describe('listVisibleRelationIdsOfCompany：可见性收敛（D-61 桥③）', () => {
+    it('销售（`self`）→ 走「我参与」那条，并回出 id 列表', async () => {
+      const { service, repository } = createService({ visibleRelationIds: [11n, 12n] });
+
+      const ids = await runWithContext(contextOf(), () =>
+        service.listVisibleRelationIdsOfCompany(COMPANY_ID),
+      );
+
+      expect(ids).toEqual([11n, 12n]);
+      expect(repository.listVisibleRelationIdsOfCompanyOfEmployee).toHaveBeenCalledWith(
+        COMPANY_ID,
+        ME,
+        expect.any(Date),
+      );
+      expect(repository.listVisibleRelationIdsOfCompanyOfDepts).not.toHaveBeenCalled();
+      expect(repository.listVisibleRelationIdsOfCompany).not.toHaveBeenCalled();
+    });
+
+    it('经理（`dept`）→ 只查**管辖部门**（不是我所属部门）', async () => {
+      const { service, repository } = createService({ visibleRelationIds: [11n] });
+
+      await runWithContext(
+        contextOf({ type: 'dept', roleCodes: ['dept_manager'], managedDeptIds: [MANAGED_DEPT_ID] }),
+        () => service.listVisibleRelationIdsOfCompany(COMPANY_ID),
+      );
+
+      expect(repository.listVisibleRelationIdsOfCompanyOfDepts).toHaveBeenCalledWith(COMPANY_ID, [
+        MANAGED_DEPT_ID,
+      ]);
+      expect(repository.listVisibleRelationIdsOfCompanyOfEmployee).not.toHaveBeenCalled();
+    });
+
+    it('总经理 / 管理员（`all`）→ 该公司下全部私海（不过滤）', async () => {
+      const { service, repository } = createService({ visibleRelationIds: [11n] });
+
+      await runWithContext(
+        contextOf({ type: 'all', roleCodes: ['gm'] }),
+        () => service.listVisibleRelationIdsOfCompany(COMPANY_ID),
+      );
+
+      expect(repository.listVisibleRelationIdsOfCompany).toHaveBeenCalledWith(COMPANY_ID);
+      expect(repository.listVisibleRelationIdsOfCompanyOfDepts).not.toHaveBeenCalled();
+    });
+
+    it('★ 一条都看不见 → 回**空数组**（不是 `null`、也不放行）', async () => {
+      const { service } = createService({ visibleRelationIds: [] });
+
+      await expect(
+        runWithContext(contextOf(), () => service.listVisibleRelationIdsOfCompany(COMPANY_ID)),
+      ).resolves.toEqual([]);
+    });
+
+    it('上下文缺失 → 401（同列表口径：**绝不兜底成「不过滤」**）', async () => {
+      const { service, repository } = createService({ visibleRelationIds: [11n] });
+
+      const error = await captureAppError(() =>
+        service.listVisibleRelationIdsOfCompany(COMPANY_ID),
+      );
+
+      expect(error.httpStatus).toBe(401);
+      expect(repository.listVisibleRelationIdsOfCompany).not.toHaveBeenCalled();
     });
   });
 });

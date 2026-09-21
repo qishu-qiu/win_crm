@@ -66,7 +66,8 @@ import {
   type QuickMarkDto,
   type UpdateCommitmentDto,
 } from './dto/engine-request.dto';
-import { isSummaryRequired } from './domain/event-effective';
+import { resolveEventCountSince } from './domain/event-count-window';
+import { isSummaryRequired, SYSTEM_ACTION_TYPE } from './domain/event-effective';
 import { buildEventIdempotencyKey } from './domain/event-idempotency';
 import { decideLastEventUpdate } from './domain/last-event';
 import { EngineRepository, type EngineTxClient } from './engine.repository';
@@ -882,7 +883,7 @@ export class EngineService {
         contact_id: null,
         actor_id: event.actorId,
         owner_snapshot: event.payload.ownerId ?? null,
-        action_type: 'system',
+        action_type: SYSTEM_ACTION_TYPE,
         summary: RELATION_CREATED_SUMMARY,
         outcome: null,
         competition: null,
@@ -941,7 +942,7 @@ export class EngineService {
             actor_id: event.actorId,
             // 领取事件属于**新一轮**：归属快照＝新 owner（前主人轮次的跟单保留旧快照，→ 需求 §8.1）
             owner_snapshot: event.actorId,
-            action_type: 'system',
+            action_type: SYSTEM_ACTION_TYPE,
             summary: RELATION_CLAIMED_SUMMARY,
             outcome: null,
             competition: null,
@@ -963,6 +964,34 @@ export class EngineService {
       // 并发下预检漏过 → `uk_idem` 兜底，同样视为「已经落过」（承诺也随之转过，见方法头 ★）
       if (mapPrismaError(error) === undefined) throw error;
     }
+  }
+
+  // ===== D-61 桥③：公司维度计数（供聚合层 `GET /companies/:id` 用）=====
+
+  /**
+   * 某公司**近 30 个自然日**的跟单条数（→ 接口 §5.4 `event_count_30d`；由聚合层
+   * `CompanyAggregateService` 调用，**不经 HTTP 单独出口**）。
+   *
+   * 两件事，各归各家（**别在这一层重写可见性**）：
+   *   ① **哪些关系算数** → 问 **C 域出口** `listVisibleRelationIdsOfCompany`（「我能看见这条关系吗」
+   *      是 C 域的规则：私海四档 ＋ 本部门公海，→ 架构 §5.2 路之①；本域**不许**查
+   *      `business_relation`，也不许自己拼 `dept_id` / 成员条件）；
+   *   ② **有多少条跟单** → 本域仓储按这批 id 数 `action_event`（窗口 ＋ 排除系统事件的口径
+   *      在 `domain/event-count-window.ts` ＋ `countEventsOfRelationsSince`）。
+   *
+   * ★ **一条关系都看不见 ⇒ 0**（不是报错、也不是「无此公司」）：本出口是**计数**，语义就是数字；
+   *   公司存不存在由聚合层那一路（B 域档案）负责判 —— 两条路各答各的问题。
+   * ★ 为什么把 C 域出口调在**这里**而不是聚合层分两步调：调用方（聚合层）要的是「这个公司跟了
+   *   多少次」这一个结果；把「可见关系 → 计数」留在本域，聚合层只多一行拼装（→ D-61 的长期价值）。
+   * ★ 查看留痕**不在这里**：本出口是 `GET /companies/:id` 的一部分，管理员读留痕由 B 域
+   *   `CompanyService.getCompany` 那一趟负责（→ D-35 拍板 Q4「列表出口不收」），此处重复写
+   *   会让一次查看落两条 `operation_log`。
+   */
+  async countCompanyEvents30d(companyId: bigint): Promise<number> {
+    const relationIds = await this.relation.listVisibleRelationIdsOfCompany(companyId);
+    if (relationIds.length === 0) return 0;
+
+    return this.repository.countEventsOfRelationsSince(relationIds, resolveEventCountSince(new Date()));
   }
 
   // ===== 私有：取引用 / 装配 =====

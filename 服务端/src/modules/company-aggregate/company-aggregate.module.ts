@@ -10,20 +10,24 @@
 //     以后补 `event_count_30d`（D 域）/ `sign_date`/`amount`（E 域）时，只在**本层**加 import ＋
 //     拼装，业务域零改动 —— 桥③ 的长期价值（→ 案例库坑 39 / 通例）。
 //
-// ★ 本期范围（按七叔拍板 A）：先搭桥 ＋ 迁端点 ＋ 出 **C 域能真实给的** `relations_summary`
-//   业务线部分（dept / product_line）；`sign_date`/`amount`（E 域合同，未建 module）与
-//   `event_count_30d`（D 域跟单计数，engine 尚无按 company 聚合出口）**暂不出、不编假值**，
-//   待对应域就绪后在本层补（→ D-61 后续）。
+// ★ 范围沿革：
+//   · 本期（2026-09-21 桥落成）：搭桥 ＋ 迁端点 ＋ 出 **C 域能真实给的** `relations_summary`
+//     业务线部分（dept / product_line）。
+//   · **2026-09-21 续**：补 `event_count_30d` —— 本层加 import `EngineModule`(D)，D 域出口
+//     `countCompanyEvents30d` 再往下调 C 域可见性出口；**B / C / D 三个业务域一行未改**。
+//     ✅ 这正是桥③ 的长期价值兑现（加跨域字段只动装配层）。
+//   · 仍欠：`sign_date` / `amount`（E 域合同，module 未建）⇒ 暂不出、不编假值（→ D-61 后续）。
 // =============================================================================
 import { Module } from '@nestjs/common';
 
 import { CompanyModule } from '../company/company.module';
+import { EngineModule } from '../engine/engine.module';
 import { RelationModule } from '../relation/relation.module';
 import { CompanyAggregateController } from './company-aggregate.controller';
 import { CompanyAggregateService } from './company-aggregate.service';
 
 @Module({
-  imports: [CompanyModule, RelationModule],
+  imports: [CompanyModule, RelationModule, EngineModule],
   controllers: [CompanyAggregateController],
   providers: [CompanyAggregateService],
 })

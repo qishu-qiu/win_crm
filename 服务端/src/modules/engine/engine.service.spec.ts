@@ -131,6 +131,10 @@ interface FakeOptions {
   linkedEvents?: number;
   /** F-01：领取公海时**转归属的 open 承诺条数**（`updateMany` 的 `count`） */
   reassignedCommitments?: number;
+  /** D-61 桥③：C 域出口回的「该公司下我可见的关系 id」（默认一条 `RELATION_ID`） */
+  visibleRelationIds?: bigint[];
+  /** D-61 桥③：`countEventsOfRelationsSince` 的回值（默认 0） */
+  eventCount?: number;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -157,6 +161,8 @@ function createService(options: FakeOptions = {}) {
     rehangOrphanEventsOfContact: jest.fn(async () => ({ count: options.linkedEvents ?? 0 })),
     // F-01：领取公海 → 该关系 open 承诺整体转新 owner（`updateMany` 回 `{count}`）
     reassignOpenCommitments: jest.fn(async () => ({ count: options.reassignedCommitments ?? 0 })),
+    // D-61 桥③：按关系集数「近 30 天跟单条数」（计数窗 / 排除系统事件都在仓储那头的 `where` 里）
+    countEventsOfRelationsSince: jest.fn(async () => options.eventCount ?? 0),
   };
   const relation = {
     // C 域跨域出口：**权限在这里判**（D 域不重复实现），单测只关心「它抛了 D 域就别往下走」
@@ -175,6 +181,10 @@ function createService(options: FakeOptions = {}) {
       (options.relationRefs ?? [{ id: RELATION_ID, name: COMPANY_NAME }]).filter((ref) =>
         ids.includes(ref.id),
       ),
+    ),
+    // D-61 桥③：C 域出口「这家公司下**我能看见**的关系 id」（可见性规则在 C 域，D 域不重写）
+    listVisibleRelationIdsOfCompany: jest.fn(
+      async () => options.visibleRelationIds ?? [RELATION_ID],
     ),
     // M6-14：C 域出口「激活业务关系」（自带范围 / 存在性 / 活跃唯一键校验 ＋ 发建档事件）
     createRelation: jest.fn(async () => {
@@ -1369,5 +1379,67 @@ describe('EngineService（M5-07 管理员查看留痕）', () => {
     );
 
     expect(list).toHaveLength(1);
+  });
+});
+
+// =============================================================================
+// D-61 桥③：公司维度跟单计数（→ 接口 §5.4 `event_count_30d`）
+//   分工：**哪些关系算数**问 C 域出口；**有多少条跟单**＋**计数窗**归本域。
+// =============================================================================
+describe('EngineService.countCompanyEvents30d（D-61 桥③）', () => {
+  const COMPANY_ID = 3n;
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('可见关系 → 按「近 30 个自然日」的起点去数跟单，回值原样透传', async () => {
+    const { service, repository } = createService({
+      visibleRelationIds: [RELATION_ID, 12n],
+      eventCount: 4,
+    });
+
+    await expect(service.countCompanyEvents30d(COMPANY_ID)).resolves.toBe(4);
+
+    expect(repository.countEventsOfRelationsSince).toHaveBeenCalledTimes(1);
+    const call = repository.countEventsOfRelationsSince.mock.calls[0] as unknown as [bigint[], Date];
+    expect(call[0]).toEqual([RELATION_ID, 12n]);
+  });
+
+  it('★ 起点＝**今天(UTC) 00:00 − 29 天**（含今天共 30 个自然日；口径 → `domain/event-count-window.ts`）', async () => {
+    const { service, repository } = createService();
+    const before = Date.now();
+
+    await service.countCompanyEvents30d(COMPANY_ID);
+
+    const call = repository.countEventsOfRelationsSince.mock.calls[0] as unknown as [bigint[], Date];
+    const since = call[1];
+    // 日界落在 UTC 零点（不看时分秒）
+    expect(since.getUTCHours()).toBe(0);
+    expect(since.getUTCMinutes()).toBe(0);
+    // 距今 29~30 天之间：**含今天**（写 `days` 就会 ≥30 —— 那条会红）
+    const daysAgo = (before - since.getTime()) / DAY;
+    expect(daysAgo).toBeGreaterThanOrEqual(29);
+    expect(daysAgo).toBeLessThan(30);
+  });
+
+  it('★ 一条关系都看不见 → 回 **0** 且**不去数库**（不报错、也不白跑一次空 `IN ()`）', async () => {
+    const { service, repository } = createService({ visibleRelationIds: [], eventCount: 99 });
+
+    await expect(service.countCompanyEvents30d(COMPANY_ID)).resolves.toBe(0);
+    expect(repository.countEventsOfRelationsSince).not.toHaveBeenCalled();
+  });
+
+  it('可见性**只问 C 域出口**（本域不查 `business_relation`、也不自己拼部门条件）', async () => {
+    const { service, relation } = createService();
+
+    await service.countCompanyEvents30d(COMPANY_ID);
+
+    expect(relation.listVisibleRelationIdsOfCompany).toHaveBeenCalledWith(COMPANY_ID);
+  });
+
+  it('**不写查看留痕**：管理员读留痕由 B 域档案那一趟负责（一次查看不该落两条 `operation_log`）', async () => {
+    const { service, audit } = createService();
+
+    await service.countCompanyEvents30d(COMPANY_ID);
+
+    expect(audit.recordStandalone).not.toHaveBeenCalled();
   });
 });

@@ -625,6 +625,44 @@ export class RelationRepository {
     });
   }
 
+  // ===== D-61 桥③ `event_count_30d`：某公司下**可见**的关系 id（2026-09-21）=====
+  //
+  // ★ 为什么在本域：`business_relation` 是 C 域的表，而「哪些关系我能看」的规则
+  //   （私海四档 → `domain/relation-scope.ts`）也只有本域有 —— 别的域要这批 id 只能问本域出口
+  //   （架构 §5.2 路之①），不许自己拼 `dept_id` / 成员条件（那正是「同一规则第二个落点」）。
+  // ★ **三个方法按范围具名**（文件头 ★ 的取法：范围与方法一一对应，不在 service 拼 `where`）：
+  //   `…OfCompany` ＝ `all` 档；`…OfCompanyOfDepts` ＝ 经理（管辖部门）；`…OfCompanyOfEmployee` ＝ 销售 / 交付 · 客服（我参与）。
+  // ★ **复用私海列表那三个 `*Where`**（`privateSeaWhere*`）：可见性条件**只有一份**，
+  //   本组只是「同一份条件再收一个 `company_id` ＋ 只取 id」。
+  //   ⚠ **只并私海、不并公海**：跟单只能写在私海（→ D-32②「公海可读不可写」），
+  //     公海关系名下不会有跟单 —— 并进来只会多一次往返、不改结果。
+  // ★ 三档**分别具名**的原因同 `listPrivateRelations*`：跨域出口的形状要能被调用方一眼看懂，
+  //   收一个 `where` 片段就等于把 Prisma 知识漏给 service（架构 §5.4）。
+
+  /** 某公司下全部私海关系 id（`all` 档：总经理 / 管理员） */
+  listVisibleRelationIdsOfCompany(companyId: bigint) {
+    return this.prisma.businessRelation.findMany({
+      where: { ...this.privateSeaWhere(), company_id: companyId },
+      select: { id: true },
+    });
+  }
+
+  /** 某公司下**这些部门的**私海关系 id（`dept` 档：经理＝管辖部门） */
+  listVisibleRelationIdsOfCompanyOfDepts(companyId: bigint, deptIds: readonly bigint[]) {
+    return this.prisma.businessRelation.findMany({
+      where: { ...this.privateSeaWhereOfDepts(deptIds), company_id: companyId },
+      select: { id: true },
+    });
+  }
+
+  /** 某公司下**我参与的**私海关系 id（`mine` 档：销售 / 交付 · 客服；`now` 判协同有效期） */
+  listVisibleRelationIdsOfCompanyOfEmployee(companyId: bigint, employeeId: bigint, now: Date) {
+    return this.prisma.businessRelation.findMany({
+      where: { ...this.privateSeaWhereOfEmployee(employeeId, now), company_id: companyId },
+      select: { id: true },
+    });
+  }
+
   /**
    * 按公司取「业务线」候选（→ D-61 桥③ 聚合层 `relations_summary` 的业务线部分）。
    *

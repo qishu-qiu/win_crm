@@ -1236,7 +1236,8 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
         actor_id: ME,
         owner_snapshot: OWNER,
         action_type: 'system',
-        source: 'system',
+        // D-65（2026-09-21 拍板）：来源码改用 D2 值域内的 `auto`（原 `'system'` 越出值域）
+        source: 'auto',
         idempotency_key: `relation_created:${RELATION_ID.toString()}`,
       });
       // ★ 建档是**系统动作**，不是「跟客户沟通过」——不许拿它刷掉海倒计时（→ 需求 §6.3）
@@ -1286,7 +1287,8 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
         actor_id: OTHER,
         owner_snapshot: OTHER,
         action_type: 'system',
-        source: 'system',
+        // D-65：同上（来源码用 `auto`）
+        source: 'auto',
         // ★ 幂等键**带发生时刻**：同一条关系反复「掉海 → 领回」是常态（→ 需求 §8.1）
         idempotency_key: `relation_claimed:${RELATION_ID.toString()}:${CLAIMED_AT.getTime()}`,
       });

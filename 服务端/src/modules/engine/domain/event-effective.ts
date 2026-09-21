@@ -46,6 +46,16 @@ export type ActionType = (typeof ACTION_TYPES)[number];
  */
 export const SYSTEM_ACTION_TYPE = 'system';
 
+/**
+ * **系统自动生成**的事件来源（→ D2 `action_event.source` 值域 `manual / auto / import`）。
+ *
+ * ★ 建档 / 领取两条系统事件写这个码 —— 原来写的是 `'system'`，**那个值不在 D2 的值域里**
+ *   （→《欠账登记表》D-65，2026-09-21 拍板改码）。
+ * ★ 为什么不干脆把 `system` 补进 D2 值域：值域里 `auto` 与 `system` 在这里**同义**
+ *   （都指"系统自动产生、不是人手写"）—— 让两个同义码并存，正是"同一事实两个落点"的病根。
+ */
+export const AUTO_EVENT_SOURCE = 'auto';
+
 /** 有效沟通的三种结果（→ D2） */
 export const EFFECTIVE_OUTCOMES = ['advanced', 'stalled', 'await_reply'] as const;
 

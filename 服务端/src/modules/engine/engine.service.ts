@@ -67,7 +67,7 @@ import {
   type UpdateCommitmentDto,
 } from './dto/engine-request.dto';
 import { resolveEventCountSince } from './domain/event-count-window';
-import { isSummaryRequired, SYSTEM_ACTION_TYPE } from './domain/event-effective';
+import { AUTO_EVENT_SOURCE, isSummaryRequired, SYSTEM_ACTION_TYPE } from './domain/event-effective';
 import { buildEventIdempotencyKey } from './domain/event-idempotency';
 import { decideLastEventUpdate } from './domain/last-event';
 import { EngineRepository, type EngineTxClient } from './engine.repository';
@@ -890,7 +890,7 @@ export class EngineService {
         competitor_id: null,
         competition_note: null,
         duration_min: null,
-        source: 'system',
+        source: AUTO_EVENT_SOURCE,
         visit_log_id: null,
         appointment_id: null,
         idempotency_key: idempotencyKey,
@@ -949,7 +949,7 @@ export class EngineService {
             competitor_id: null,
             competition_note: null,
             duration_min: null,
-            source: 'system',
+            source: AUTO_EVENT_SOURCE,
             visit_log_id: null,
             appointment_id: null,
             idempotency_key: idempotencyKey,

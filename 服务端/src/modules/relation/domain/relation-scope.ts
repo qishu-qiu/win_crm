@@ -106,6 +106,53 @@ export function resolveRelationListScope(
 }
 
 /**
+ * 「**我可见的公司**」的范围（→ 需求 §6.1 ⑪：联系人列表 ＝ **自己的待关联线索** ＋
+ * **自己关系下公司**的联系人；「**不得出现全公司裸奔**」）。
+ *
+ * ★ 为什么口径落在本域：判「我对这家公司有没有关系 / 有没有可读的公海条目」需要 `business_relation`，
+ *   而那是 C 域的表 ⇒ 别的域只能问本域出口（架构 §5.2 路之①）。B 域（`company`）更不许反向 import 本域
+ *   （L2 → L3 层级禁止，→ D-28）：**装配发生在聚合层**。
+ *
+ * - `all`   —— 不过滤（总经理 / 管理员，→ 需求 §4.2）⇒ **调用方据此「不套过滤」**
+ * - `depts` —— **管辖部门**的关系所对应的公司（经理）
+ * - `mine`  —— 我参与的私海 ∪（销售）**本部门公海**；`publicDeptIds` 为空 ＝ 不进公海（交付 / 客服）
+ * - `denied`—— 不该出现（类型完整性；调用方按「什么都看不见」处理）
+ */
+export type VisibleCompanyScope =
+  | { kind: 'all' }
+  | { kind: 'depts'; deptIds: readonly bigint[] }
+  | { kind: 'mine'; employeeId: bigint; publicDeptIds: readonly bigint[] }
+  | { kind: 'denied' };
+
+/** 需要**枚举出 id 集合**的那几档（`all` 档由调用方短路成「不收敛」，不进枚举 —— 见 `listVisibleCompanyIds`） */
+export type EnumerableCompanyScope = Exclude<VisibleCompanyScope, { kind: 'all' }>;
+
+/**
+ * 解析「我可见的公司」范围（→ `VisibleCompanyScope`）。
+ *
+ * ★ **不新写一套档位判定**：直接由**两个页签各自的列表范围**并起来 ——
+ *   `private` 那一份 ＋ `sea` 那一份。理由：**联系人可见性必须与「关系列表里能点开的那批」一致**，
+ *   否则会出现「列表里看得到这家客户、它的联系人却看不到」的自相矛盾（同 `checkRelationRead` 文件头 ★ 的坑）。
+ * ★ 两个页签的语义差异（交付 / 客服不进公海）**天然落在** `resolveRelationListScope('sea')` 的 `denied` 上，
+ *   本函数不再重复判一次「谁进公海」。
+ */
+export function resolveVisibleCompanyScope(viewer: RelationViewer): VisibleCompanyScope {
+  const privateScope = resolveRelationListScope('private', viewer);
+  if (privateScope.kind === 'all') return { kind: 'all' };
+  if (privateScope.kind === 'denied') return { kind: 'denied' };
+  if (privateScope.kind === 'dept') return { kind: 'depts', deptIds: privateScope.deptIds };
+
+  // `mine`：私海＝我参与；公海＝**本部门**那一份（销售）—— 交付 / 客服在 `sea` 页签拿 `denied`，
+  // 故这里天然是空数组（不必再写一句「交付不进公海」）。
+  const seaScope = resolveRelationListScope('sea', viewer);
+  return {
+    kind: 'mine',
+    employeeId: viewer.employeeId,
+    publicDeptIds: seaScope.kind === 'dept' ? seaScope.deptIds : [],
+  };
+}
+
+/**
  * **可写**角色（→ M3 的写入口：激活 / 改属性 / 加成员）。
  *
  * ⚠ 规格**没有**一张「谁能写业务关系」的表，本判定由三处**已定口径**合成，属**本项目技术口径**：

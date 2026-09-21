@@ -16,6 +16,7 @@ import {
   checkSeaValueTierWrite,
   isRelationWriteRole,
   resolveRelationListScope,
+  resolveVisibleCompanyScope,
   seaStatusOfTab,
   type RelationViewer,
 } from './relation-scope';
@@ -119,6 +120,48 @@ describe('relation-scope（M3-07 / M3-08 的范围收敛）', () => {
         kind: 'dept',
         deptIds: [],
       });
+    });
+  });
+
+  // ==========================================================================
+  // D-28（2026-09-21）：联系人列表/详情收敛用的「**我可见的公司**」范围
+  //   判据：**两个页签并集** —— 私海那一份 ＋ 公海那一份；差异（交付不进公海）天然落在 `sea` 上。
+  // ==========================================================================
+  describe('resolveVisibleCompanyScope：我可见的公司（D-28）', () => {
+    it('销售（self）→ `mine`：我参与 ＋ **本部门公海**（部门公海＝本部门关系集合，→ C1）', () => {
+      expect(resolveVisibleCompanyScope(viewer('self', { deptIds: [2n, 9n] }))).toEqual({
+        kind: 'mine',
+        employeeId: 7n,
+        publicDeptIds: [2n, 9n],
+      });
+    });
+
+    it('销售**没有任何所属部门** → `mine` 且 `publicDeptIds` 为空（**空集合 ≠ 不过滤**）', () => {
+      expect(resolveVisibleCompanyScope(viewer('self', { deptIds: [] }))).toEqual({
+        kind: 'mine',
+        employeeId: 7n,
+        publicDeptIds: [],
+      });
+    });
+
+    it('经理（dept）→ `depts`：**管辖部门**（不是"我所属部门"）', () => {
+      expect(
+        resolveVisibleCompanyScope(
+          viewer('dept', { managedDeptIds: [3n, 4n], deptIds: [1n], roleCodes: ['dept_manager'] }),
+        ),
+      ).toEqual({ kind: 'depts', deptIds: [3n, 4n] });
+    });
+
+    it('总经理 / 管理员（all）→ `all`：**不收敛**（→ 需求 §4.2；调用方据此不套过滤）', () => {
+      expect(resolveVisibleCompanyScope(viewer('all', { roleCodes: ['gm'] }))).toEqual({
+        kind: 'all',
+      });
+    });
+
+    it('★ 交付 / 客服（serving）→ `mine` 且 `publicDeptIds` **为空**（§2.2「不进公海」）', () => {
+      expect(
+        resolveVisibleCompanyScope(viewer('serving', { roleCodes: ['delivery'], deptIds: [2n] })),
+      ).toEqual({ kind: 'mine', employeeId: 7n, publicDeptIds: [] });
     });
   });
 

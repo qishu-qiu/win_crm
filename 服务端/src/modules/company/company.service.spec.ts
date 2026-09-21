@@ -573,38 +573,49 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
     it('联系人列表：打码形态与角色无关（**未上锁时 `phone_locked` ＝ false**，不是「恒 false」）', async () => {
       const { service } = createService({ contacts: [contactRow({ id: 11n })] });
 
-      const { list: briefs } = await runWithContext(CONTEXT, () => service.listContacts());
+      const { list: briefs } = await runWithContext(CONTEXT, () => service.listContacts({}, null));
 
       expect(briefs).toHaveLength(1);
       expect(briefs[0]?.phone_masked).toBe('138****0000');
       expect(briefs[0]?.phone_locked).toBe(false);
     });
 
-    it('可见范围：`self` 档套「归属人 / 已挂公司」过滤；`all` 档（总经理 / 管理员）**看全部**（→ 需求 §4.2 / §6.1 ⑪）', async () => {
+    it('★ D-28：可见公司集合**由调用方给定并原样透传**（B 域不自己判档 —— 判定在 C 域一处）', async () => {
       const { service, repository } = createService({ contacts: [] });
 
-      await runWithContext(CONTEXT, () => service.listContacts());
+      await runWithContext(CONTEXT, () => service.listContacts({}, [3n, 5n]));
 
       expect(repository.listContacts.mock.calls[0]?.[0]).toMatchObject({
         viewerId: OPERATOR_ID,
         onlyUnlinked: false,
-        allScope: false,
+        visibleCompanyIds: [3n, 5n],
       });
+    });
 
-      const allContext: RequestContext = { ...CONTEXT, dataScope: { type: 'all', deptIds: [] } };
-      await runWithContext(allContext, () => service.listContacts({ onlyUnlinked: true }));
+    it('★ D-28：`null` ＝ **不收敛**（`all` 档：总经理 / 管理员，→ 需求 §4.2）', async () => {
+      const { service, repository } = createService({ contacts: [] });
 
-      expect(repository.listContacts.mock.calls[1]?.[0]).toMatchObject({
+      await runWithContext(CONTEXT, () => service.listContacts({ onlyUnlinked: true }, null));
+
+      expect(repository.listContacts.mock.calls[0]?.[0]).toMatchObject({
         onlyUnlinked: true,
-        allScope: true,
+        visibleCompanyIds: null,
       });
+    });
+
+    it('★ D-28：集合拿到**空数组**也照传（＝只剩自己的待关联线索），**不许**把它当"没给"', async () => {
+      const { service, repository } = createService({ contacts: [] });
+
+      await runWithContext(CONTEXT, () => service.listContacts({}, []));
+
+      expect(repository.listContacts.mock.calls[0]?.[0]).toMatchObject({ visibleCompanyIds: [] });
     });
 
     it('★ D-08：分页入参 → 仓储拿 `skip/take`、出参是 §2.3 分页对象（键名 `page_size` 而非 `pageSize`）', async () => {
       const { service, repository } = createService({ contacts: [contactRow({ id: 11n })] });
 
       // ① 缺省：page 1 / pageSize 20（**归一化只在 kernel 一处**，本层不重复实现）
-      const first = await runWithContext(CONTEXT, () => service.listContacts());
+      const first = await runWithContext(CONTEXT, () => service.listContacts({}, null));
       expect(repository.listContacts.mock.calls[0]?.[1]).toMatchObject({ skip: 0, take: 20 });
       expect(Object.keys(first).sort()).toEqual(['list', 'page', 'page_size', 'total']);
       expect(first.page).toBe(1);
@@ -613,7 +624,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
 
       // ② 显式第 2 页 / 每页 50 → `skip = (2-1) * 50`；出参页码与每页条数**以后端为准**
       const second = await runWithContext(CONTEXT, () =>
-        service.listContacts({ page: 2, pageSize: 50 }),
+        service.listContacts({ page: 2, pageSize: 50 }, null),
       );
       expect(repository.listContacts.mock.calls[1]?.[1]).toMatchObject({ skip: 50, take: 50 });
       expect(second.page).toBe(2);
@@ -628,7 +639,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         ],
       });
 
-      const { list: briefs } = await runWithContext(CONTEXT, () => service.listContacts());
+      const { list: briefs } = await runWithContext(CONTEXT, () => service.listContacts({}, null));
 
       // ① 别人锁的 → 我看到「已上锁」；② 我自己锁的 → 照常（锁是自我保护，不挡自己，→ §4.3 二）
       expect(briefs.map((item) => [item.id, item.phone_masked, item.phone_locked])).toEqual([
@@ -658,7 +669,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
     it('没有请求上下文 → 401：锁的可见性取决于「我是谁」，**没有身份就不猜**（不静默按「未锁」渲染）', async () => {
       const { service } = createService({ contacts: [contactRow({ id: 11n })] });
 
-      const error = await captureAppError(() => service.listContacts());
+      const error = await captureAppError(() => service.listContacts({}, null));
 
       expect(error.httpStatus).toBe(401);
       expect(error.code).toBe(ErrorCode.UNAUTHENTICATED);
@@ -835,7 +846,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         dictLabels: [{ id: 12n, label: '价格敏感' }],
       });
 
-      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11', null));
 
       expect(detail.phone).toBe('13800000000');
       expect(detail.phone_locked).toBe(false);
@@ -863,7 +874,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         employeeRefs: [{ id: LOCKER_ID, name: '李强' }],
       });
 
-      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11', null));
 
       expect('phone' in detail).toBe(false);
       expect('extra_phones' in detail).toBe(false);
@@ -879,7 +890,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         }),
       });
 
-      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11', null));
 
       expect(detail.phone).toBe('13800000000');
       expect(detail.phone_locked).toBe(false);
@@ -892,7 +903,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       });
 
       const error = await runWithContext(CONTEXT, () =>
-        captureAppError(() => service.getContact('11')),
+        captureAppError(() => service.getContact('11', [3n])),
       );
 
       expect(error.httpStatus).toBe(403);
@@ -901,12 +912,50 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       expect(dict.getDictItemLabels).not.toHaveBeenCalled();
     });
 
-    it('「待关联」但**归属人是我** → 正常返回（这就是"我的待跟进"）', async () => {
+    it('「待关联」但**归属人是我** → 正常返回（这就是"我的待跟进"；**空集合也拦不住我**）', async () => {
       const { service } = createService({ employments: [] });
 
-      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11', []));
 
       expect(detail.id).toBe(11n);
+    });
+
+    // ===== D-28（2026-09-21）：已挂公司的人按「我可见的公司」收敛 =====
+
+    it('★ D-28：已挂公司但**公司不在我的可见集合里** → **403**（与列表同宽，不许"详情能打开"）', async () => {
+      const { service, dict } = createService({ employments: EMPLOYMENTS });
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.getContact('11', [9n])),
+      );
+
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('contact.out_of_scope');
+      // 看不见就**不该再往下取**（字典文案一次都不该问）
+      expect(dict.getDictItemLabels).not.toHaveBeenCalled();
+    });
+
+    it('★ D-28：已挂公司且**公司在可见集合里** → 放行（`some`：就职历史里有一段够就行）', async () => {
+      const { service } = createService({ employments: EMPLOYMENTS });
+
+      // `EMPLOYMENTS` 里有 3n（在职）与 5n（历史）两家 ⇒ 只给历史那家也应放行
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11', [5n]));
+
+      expect(detail.id).toBe(11n);
+    });
+
+    it('★ D-28：已挂公司的人**不看 `owner_id`**（→ 需求 §6.1 ⑦：已挂公司走关系的 owner）', async () => {
+      const { service } = createService({
+        contactDetail: contactDetailRow({ owner_id: OPERATOR_ID }),
+        employments: EMPLOYMENTS,
+      });
+
+      // 就算这一列写的还是我，公司不在可见集合里 ⇒ 一样 403（别给"录入人"留后门）
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.getContact('11', [9n])),
+      );
+
+      expect(error.httpStatus).toBe(403);
     });
 
     it('`all` 档（总经理 / 管理员）→ 别人的「待关联」也看得到（与列表同一口径）', async () => {
@@ -916,7 +965,8 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       });
 
       const detail = await runWithContext({ ...CONTEXT, dataScope: { type: 'all', deptIds: [] } }, () =>
-        service.getContact('11'),
+        // `null` ＝ **不收敛**（`all` 档由聚合层这么传，→ 需求 §4.2）
+        service.getContact('11', null),
       );
 
       expect(detail.id).toBe(11n);
@@ -928,7 +978,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
         dictLabels: [],
       });
 
-      const detail = await runWithContext(CONTEXT, () => service.getContact('11'));
+      const detail = await runWithContext(CONTEXT, () => service.getContact('11', null));
 
       expect(detail.traits).toEqual([{ trait_id: 99n, trait_code: 'unknown', label: null }]);
     });
@@ -937,7 +987,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       const { service } = createService({ contactDetail: null });
 
       const error = await runWithContext(CONTEXT, () =>
-        captureAppError(() => service.getContact('999')),
+        captureAppError(() => service.getContact('999', null)),
       );
 
       expect(error.httpStatus).toBe(400);
@@ -947,7 +997,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
     it('没有请求上下文 → 401（可见性取决于「我是谁」，没有身份就不能猜）', async () => {
       const { service } = createService();
 
-      const error = await captureAppError(() => service.getContact('11'));
+      const error = await captureAppError(() => service.getContact('11', null));
 
       expect(error.httpStatus).toBe(401);
     });

@@ -69,6 +69,7 @@ import {
   checkSeaValueTierWrite,
   isRelationWriteRole,
   resolveRelationListScope,
+  resolveVisibleCompanyScope,
   type RelationListTab,
   type RelationViewer,
   type RelationWriteDenied,
@@ -701,6 +702,28 @@ export class RelationService {
             );
 
     return rows.map((row) => row.id);
+  }
+
+  /**
+   * 「**我可见的公司**」的 company_id 集合（→ 需求 §6.1 ⑪ 联系人列表收敛；D-28）。
+   *
+   * @returns **`null` ＝ 不收敛**（`all` 档：总经理 / 管理员，→ 需求 §4.2）；否则是 id 集合
+   *          （可能为空数组 ＝ 该公司都没得看）
+   *
+   * ★ 调用方＝**聚合层**（`CompanyAggregateService.listContacts` / `getContact`）：它算出集合后
+   *   把它当**入参**喂给 B 域列表 —— B 域（L2）**不许**反向依赖本域（L3），装配只能发生在更高层
+   *   （架构 §3，→ D-28）。
+   * ★ 为什么 `all` 档返回 `null` 而不是「把所有 id 查出来」：那不是省事，是**故意不把全库公司 id
+   *   塞进一个巨型 `IN (...)`**（公司数一涨就慢）；`null` 的语义＝「调用方不套过滤」。
+   * ★ 范围判定复用 `resolveVisibleCompanyScope`（domain，两个页签并集），本层只做选路与取数。
+   */
+  async listVisibleCompanyIds(): Promise<readonly bigint[] | null> {
+    const viewer = requireViewer();
+    const scope = resolveVisibleCompanyScope(viewer);
+    if (scope.kind === 'all') return null;
+
+    const rows = await this.repository.listVisibleCompanyIds(scope, new Date());
+    return rows.map((row) => row.company_id);
   }
 
   // ===== M7-03 掉海预警（F 域定时任务）的跨域出口 =====

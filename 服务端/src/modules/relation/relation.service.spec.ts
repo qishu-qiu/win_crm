@@ -135,6 +135,8 @@ interface FakeOptions {
   claimCount?: number;
   /** D-61 桥③：该公司下**可见**的关系 id（三个范围方法都回它；不给＝没有可见关系） */
   visibleRelationIds?: bigint[];
+  /** D-28：我可见的**公司** id（`listVisibleCompanyIds` 的回值；不给＝没有可见公司） */
+  visibleCompanyIds?: bigint[];
 }
 
 function createService(options: FakeOptions = {}) {
@@ -184,6 +186,10 @@ function createService(options: FakeOptions = {}) {
     ),
     listVisibleRelationIdsOfCompanyOfEmployee: jest.fn(async () =>
       (options.visibleRelationIds ?? []).map((id) => ({ id })),
+    ),
+    // D-28：我可见的**公司**集合（只回 company_id 一列，形状 `[{company_id}]`）
+    listVisibleCompanyIds: jest.fn(async () =>
+      (options.visibleCompanyIds ?? []).map((company_id) => ({ company_id })),
     ),
     updateRelation: jest.fn(async () => options.row ?? relationFixture()),
   };
@@ -1043,6 +1049,66 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
 
       expect(error.httpStatus).toBe(401);
       expect(repository.listVisibleRelationIdsOfCompany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // D-28（2026-09-21）：联系人收敛用的「我可见的公司」集合
+  //   ★ 两个要点：`all` 档回 `null` 且**不查库**；空集合**不许**兜成 `null`（那是"不收敛"）。
+  // ==========================================================================
+  describe('listVisibleCompanyIds：我可见的公司集合（D-28）', () => {
+    it('★ `all` 档（总经理 / 管理员）→ 回 **`null`（不收敛）** 且**不查库**（不把全库公司 id 拉进 `IN`）', async () => {
+      const { service, repository } = createService({ visibleCompanyIds: [3n] });
+
+      const ids = await runWithContext(contextOf({ type: 'all', roleCodes: ['gm'] }), () =>
+        service.listVisibleCompanyIds(),
+      );
+
+      expect(ids).toBeNull();
+      expect(repository.listVisibleCompanyIds).not.toHaveBeenCalled();
+    });
+
+    it('销售（`self`）→ `mine` 档（我参与 ＋ **本部门公海**），回 id 数组', async () => {
+      const { service, repository } = createService({ visibleCompanyIds: [3n, 5n] });
+
+      const ids = await runWithContext(contextOf(), () => service.listVisibleCompanyIds());
+
+      expect(ids).toEqual([3n, 5n]);
+      expect(repository.listVisibleCompanyIds).toHaveBeenCalledWith(
+        { kind: 'mine', employeeId: ME, publicDeptIds: [DEPT_ID] },
+        expect.any(Date),
+      );
+    });
+
+    it('经理（`dept`）→ `depts` 档（**管辖部门**，不是"我所属部门"）', async () => {
+      const { service, repository } = createService({ visibleCompanyIds: [3n] });
+
+      await runWithContext(
+        contextOf({ type: 'dept', roleCodes: ['dept_manager'], managedDeptIds: [MANAGED_DEPT_ID] }),
+        () => service.listVisibleCompanyIds(),
+      );
+
+      expect(repository.listVisibleCompanyIds).toHaveBeenCalledWith(
+        { kind: 'depts', deptIds: [MANAGED_DEPT_ID] },
+        expect.any(Date),
+      );
+    });
+
+    it('★ 一条都没有 → 回**空数组**（＝只剩自己的待关联线索），**不许**兜成 `null`（那是"不收敛"）', async () => {
+      const { service } = createService({ visibleCompanyIds: [] });
+
+      await expect(
+        runWithContext(contextOf(), () => service.listVisibleCompanyIds()),
+      ).resolves.toEqual([]);
+    });
+
+    it('上下文缺失 → 401（同列表口径：**绝不兜底成「不收敛」**）', async () => {
+      const { service, repository } = createService({ visibleCompanyIds: [3n] });
+
+      const error = await captureAppError(() => service.listVisibleCompanyIds());
+
+      expect(error.httpStatus).toBe(401);
+      expect(repository.listVisibleCompanyIds).not.toHaveBeenCalled();
     });
   });
 });

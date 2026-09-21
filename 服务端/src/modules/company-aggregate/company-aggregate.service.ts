@@ -6,8 +6,14 @@
 // =============================================================================
 import { Injectable } from '@nestjs/common';
 
-import { jsonToBigint } from '../../kernel/index';
-import { CompanyService, type CompanyDetailVo } from '../company/company.service';
+import { jsonToBigint, type PageResult } from '../../kernel/index';
+import {
+  CompanyService,
+  type CompanyDetailVo,
+  type ContactBriefVo,
+  type ContactDetailVo,
+  type ListContactsQuery,
+} from '../company/company.service';
 import { EngineService } from '../engine/engine.service';
 import { RelationService } from '../relation/relation.service';
 
@@ -50,5 +56,33 @@ export class CompanyAggregateService {
       this.engine.countCompanyEvents30d(companyId),
     ]);
     return { ...detail, relations_summary: relations, event_count_30d: eventCount };
+  }
+
+  // ===== 联系人列表 / 详情（D-28：收敛条件由本层算，B 域只收结论）=====
+
+  /**
+   * 联系人列表（→ §5.5 `GET /contacts`）。
+   *
+   * ★ **本层做的那一件事**：问 C 域「我可见的公司」集合，再把它当**入参**交给 B 域列表 ——
+   *   B(L2) 不许依赖 C(L3)，跨域**装配**只能发生在更高编排层（→ D-28 / 桥③）。
+   * ★ 可见性口径（→ 需求 §6.1 ⑪）＝ **自己的待关联线索**（B 域自己判归属）＋ **自己关系下公司的联系人**
+   *   （本层给的集合）；`null` ＝ 不收敛（`all` 档）。
+   * ★ **一次请求两次往返**（集合 ＋ 列表）：集合那条是 `distinct` 窄查询，先取它才谈得上过滤，
+   *   无法并行 —— 别为了"看起来并行"把它塞进 `Promise.all`（那是假并行）。
+   */
+  async listContacts(query: ListContactsQuery): Promise<PageResult<ContactBriefVo>> {
+    const visibleCompanyIds = await this.relation.listVisibleCompanyIds();
+    return this.company.listContacts(query, visibleCompanyIds);
+  }
+
+  /**
+   * 联系人详情（→ §5.5 `GET /contacts/:id`）。
+   *
+   * ★ 与列表**同一套可见性**（同一份集合、同一个判定入口在 B 域 service）：否则会出现
+   *   「列表里点得开、详情说无权」或反过来的自相矛盾（→ D-32① 的教训）。
+   */
+  async getContact(id: string): Promise<ContactDetailVo> {
+    const visibleCompanyIds = await this.relation.listVisibleCompanyIds();
+    return this.company.getContact(id, visibleCompanyIds);
   }
 }

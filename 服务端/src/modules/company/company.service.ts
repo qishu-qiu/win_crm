@@ -453,8 +453,20 @@ export class CompanyService {
    * ⚠ 本接口因此**必须先有身份**：拿不到上下文 → 401（`requireOperatorId`）——
    *   锁的可见性取决于「我是谁」，**没有身份就不能猜**（猜「没锁」会把「已上锁」这条提示吞掉）。
    * ★ 2026-09-16：入参加 `only_unlinked`（只看未关联公司的待跟进），可见范围见 `repository.listContacts` 注释（→ 需求 §6.1 ⑪）。
+   * ★ 2026-09-21（D-28 桥③）：可见性**改成由调用方给定**（`visibleCompanyIds` 第二个必填参数）——
+   *   「已挂公司」那半边要按「**自己关系下公司**」收敛（→ 需求 §6.1 ⑪），而那个集合只有 C 域算得出；
+   *   B(L2) 不许依赖 C(L3)，故由**聚合层**（`GET /contacts` 的新落点）算好当**入参**喂进来。
    */
-  async listContacts(query: ListContactsQuery = {}): Promise<PageResult<ContactBriefVo>> {
+  async listContacts(
+    query: ListContactsQuery,
+    /**
+     * 「已挂公司」那半边的可见公司集合（→ 需求 §6.1 ⑪ / D-28）。
+     * ★ **必填、不给默认值**：这个参数决定"收起还是裸奔"，漏传一次就是全公司裸奔 ——
+     *   宁可在编译期红，也不给"忘了传＝回到旧行为"的路。
+     * `null` ＝ **不收敛**（`all` 档，总经理 / 管理员，→ 需求 §4.2）。
+     */
+    visibleCompanyIds: readonly bigint[] | null,
+  ): Promise<PageResult<ContactBriefVo>> {
     const context = getRequestContext();
     if (context === undefined) {
       throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
@@ -467,8 +479,9 @@ export class CompanyService {
       {
         viewerId,
         onlyUnlinked: query.onlyUnlinked === true,
-        // ★ `all` 档（总经理 / 管理员）看全部；其余按「我的待关联 ＋ 已挂公司的人」（→ 需求 §4.2 / §6.1 ⑪）
-        allScope: context.dataScope.type === 'all',
+        // ★ 可见性**由调用方（聚合层）按 C 域出口给定**：B 域不许反向 import C 域（架构 §3），
+        //   故这里只透传 —— 「谁算 `all` 档」那一条判定仍只有一处（C 域 `resolveVisibleCompanyScope`）。
+        visibleCompanyIds,
       },
       pagination,
     );
@@ -595,9 +608,8 @@ export class CompanyService {
    *   ① `all` 档（总经理 / 管理员）→ 看全部（不套过滤）；
    *   ② 「待关联」（没挂公司）→ **只给归属人自己**（→ 需求 §6.1 ⑪）：线索属私人待跟进，
    *      别人拿到 id 也看不了 → **403**；
-   *   ③ 已挂公司的人 → **暂按现状**（只要有就职记录就可见）。严格口径是"我关系下公司的联系人"，
-   *      判定要复用 C 域的数据范围，而 `company`(L2) → `relation`(L3) 属**反向依赖**（架构 §3 禁止），
-   *      故落地方式待定（→《欠账登记表》**D-28**；本处刻意与列表同宽，不自己收紧）。
+   *   ③ 已挂公司的人 → **必须有一条就职记录落在「我可见的公司」里**（→ 需求 §6.1 ⑪ / D-28；
+   *      与 `listContacts` **同宽、同源**：集合都由聚合层按 C 域出口喂进来，本层不自己算）。
    *
    * ★ **脱敏**（→ §2.8：详情给全号，是**出参形态、不是权限**）：唯一例外＝该联系人**被上锁**
    *   且查看者**不是落锁人** ⇒ `phone` 与 `extra_phones` **两个键都不给**（锁跟人：主号与备用号
@@ -607,7 +619,11 @@ export class CompanyService {
    * ⚠ 规格详情里的 `unlocked_until`（申请解锁通过后 24h 内可见）依赖 G 域审批，**本批不返**
    *   （也不返 `null` 占位 —— 那会让人以为"字段在、只是没解锁"）→《欠账登记表》D-04。
    */
-  async getContact(id: string): Promise<ContactDetailVo> {
+  async getContact(
+    id: string,
+    /** 同 `listContacts`：可见公司集合（`null` ＝ 不收敛）；**必填**，理由见该方法头 */
+    visibleCompanyIds: readonly bigint[] | null,
+  ): Promise<ContactDetailVo> {
     const context = getRequestContext();
     if (context === undefined) {
       throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
@@ -629,10 +645,18 @@ export class CompanyService {
       this.repository.findContactTraits(contactId),
     ]);
 
-    // 可见性（见方法头 ★②）：`all` 档看全部；「待关联」只有归属人能看；已挂公司的暂按现状
-    const allScope = context.dataScope.type === 'all';
-    if (!allScope && employments.length === 0 && row.owner_id !== viewerId) {
-      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权查看：未挂公司的待跟进线索只对归属人可见', {
+    // 可见性（见方法头 ★②③）——**与列表同一套两半判定**，两处不许各写一遍：
+    //   ① 「待关联」（**没有任何就职记录**）⇒ 只有归属人能看（归属人＝建档录入人）；
+    //   ② 已挂公司 ⇒ 必须有一条就职记录落在「我可见的公司」里（`null` ＝ 不收敛 ⇒ 放行）。
+    // ⚠ ② 里**不看 `owner_id`**（→ 需求 §6.1 ⑦「已挂公司的人走关系的 owner，不看这一列」），
+    //   与仓储那条 `OR` 分支逐字同口径；判定用**公司 id** 比，不引第二个口径。
+    const visible =
+      visibleCompanyIds === null ||
+      (employments.length === 0
+        ? row.owner_id === viewerId
+        : employments.some((item) => visibleCompanyIds.includes(item.company.id)));
+    if (!visible) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权查看：该联系人不在你的可见范围内', {
         constraint: 'contact.out_of_scope',
       });
     }

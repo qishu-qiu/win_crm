@@ -256,36 +256,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 联系人列表
-         * @description **列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）；**D-08（2026-09-20）起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参 ＝ §2.3 分页形态。可见范围：「待关联」（未挂公司）**只给归属人自己**；已挂公司的人**暂按现状**（公司维度收敛待复用的数据范围判定，→《欠账登记表》D-28）
+         * 联系人列表（桥③ 聚合层）
+         * @description **列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）；`page`（默认 1）/ `page_size`（默认 20、最大 100），出参 ＝ §2.3 分页形态。★ **可见范围（→ 需求 §6.1 ⑪）**：**自己的待关联线索**（归属人＝建档录入人）＋ **自己关系下公司的联系人**（＝我可见关系所对应的公司）；`all` 档（总经理 / 管理员，→ 需求 §4.2）不套过滤。⚠ **不再有"全公司裸奔"**。★ 落点：本端点 2026-09-21 由 B 域 `company.controller` 迁至本聚合层 —— 「我可见的公司」只有 C 域算得出，而 B(L2) 不许依赖 C(L3)，跨域装配只能发生在更高编排层（→《欠账登记表》**D-28** / D-61 桥③）。
          */
-        get: operations["CompanyController_listContacts"];
+        get: operations["CompanyAggregateController_listContacts"];
         put?: never;
         /**
          * 建档联系人
          * @description 主号先归一（去空格 / `+86` / `-`）再入库；**重复手机号 → 409**（软删后同号可再建）；命中历史号只提示 `phone_history_hint`、**不拦截**
          */
         post: operations["CompanyController_createContact"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contacts/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 联系人详情
-         * @description **详情出参一律给全号 `phone`**（→ §2.8：这是**出参形态、不是权限**）；唯一例外＝该联系人**被上锁**且查看者**不是落锁人** —— 此时 `phone` 与 `extra_phones`**两个键都不出现**（锁跟人：主号与备用号一并隐藏），改给 `phone_locked` ＋ `phone_locked_by`。含**就职 / 跳槽历史**（在职在前）与**谈判特质**（`label` 取自字典）。可见性：「待关联」（没挂公司）**只给归属人自己**（→ 需求 §6.1 ⑪，别人拿 id 也 403）；已挂公司的人暂按现状（公司维度收敛待补，→《欠账登记表》D-28）。⚠ 规格里的 `unlocked_until`（解锁后 24h 内可见）依赖审批域，本批**不返回**（→ D-04）
-         */
-        get: operations["CompanyController_getContact"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -396,6 +376,26 @@ export interface paths {
          * @description 基本档案 ＋ 完善度 ＋ 档案标签 ＋ 联系人简卡 ＋ **业务线列表**（`relations_summary`）＋ **近 30 天跟单计数**（`event_count_30d`）—— 后两者由 D-61 桥③ 聚合层拼装。★ 落点：原 B 域 `GET /companies/:id` 于 2026-09-21 迁至本聚合层（B 禁止依赖 C、C 禁止依赖 D/E，跨域拼装只能发生在更高编排层）。★ `event_count_30d`：**近 30 个自然日**该公司各关系下的跟单条数合计（**派生、不落列**）；**只计当前查看者可见的关系**（＝私海那四档范围），**不计系统事件**（建档 / 领取）。⚠ 故同一家公司，不同的人看到的这个数字**可以不同**（各自的可见范围不同）—— 这是口径，不是 bug。★ `relations_summary` 本期**仅含业务线**（dept / product_line）；`sign_date`/`amount`（E 域合同）待补，**不编假值**。★ **公司档案本身是全公司共享资料层，不做数据范围过滤。**
          */
         get: operations["CompanyAggregateController_getCompany"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contacts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 联系人详情（桥③ 聚合层）
+         * @description **详情出参一律给全号 `phone`**（→ §2.8：这是**出参形态、不是权限**）；唯一例外＝被上锁且查看者不是落锁人（`phone` 与 `extra_phones` 两个键都不出现）。含**就职 / 跳槽历史**（在职在前）与**谈判特质**。★ **可见性**与列表**同一套**（→ 需求 §6.1 ⑪）：待关联线索只给归属人；已挂公司的人须有一条就职记录落在「我可见的公司」里 —— 否则 **403**（不许出现"列表看不到、详情能打开"或反过来）。⚠ `unlocked_until`（解锁后 24h 内可见）依赖审批域，本批**不返回**（→ D-04）。
+         */
+        get: operations["CompanyAggregateController_getContact"];
         put?: never;
         post?: never;
         delete?: never;
@@ -936,47 +936,6 @@ export interface components {
              */
             suggest: "use_exists" | "create_new";
         };
-        ContactBriefVoDto: {
-            /** @example 1 */
-            id: string;
-            /** @example 张伟 */
-            name: string;
-            /** @description 职位（来自 `company_contact.position`） */
-            position?: string | null;
-            /**
-             * @description 打码手机号（列表 / 卡片出参形态，**不是权限**，→ §2.8）
-             * @example 138****0000
-             */
-            phone_masked: string;
-            /** @description 手机号是否**对当前查看者**处于上锁态（＝锁开着、且查看者不是落锁人，→ 需求 §4.3 二）。⚠ 列表**本就一律 `phone_masked`**：本字段是「已上锁 ＋ 申请解锁」的提示，不是权限开关 */
-            phone_locked: boolean;
-            /**
-             * @description 决策角色
-             * @enum {string}
-             */
-            decision_role?: "decision" | "influence" | "execute";
-            /** @description 是否当前在职（`company_contact.is_current`；历史就职给 false） */
-            is_current: boolean;
-        };
-        ContactPageVoDto: {
-            /** @description 当前页数据（**一律 `phone_masked`**，→ §2.8） */
-            list: components["schemas"]["ContactBriefVoDto"][];
-            /**
-             * @description 符合筛选条件的全量条数（前端「共 N 条」）
-             * @example 120
-             */
-            total: number;
-            /**
-             * @description 当前页码（从 1 开始）
-             * @example 1
-             */
-            page: number;
-            /**
-             * @description 每页条数（默认 20，最大 100，→ §2.7）
-             * @example 20
-             */
-            page_size: number;
-        };
         ExtraPhoneDto: {
             /**
              * @description 类型
@@ -1044,101 +1003,46 @@ export interface components {
             /** @description 命中历史号时的提示（**提示不拦截**，→ §5.5） */
             phone_history_hint?: string;
         };
-        ContactRefVoDto: {
-            /** @example 7 */
-            id: string;
-            /** @example 王海涛 */
-            name: string;
-        };
-        ContactExtraPhoneVoDto: {
-            /**
-             * @description 号型（**值域唯一落点 ＝《销售CRM数据架构文档》B2**）：`mobile` / `tel` / `wechat`。⚠ 2026-09-20 拍板收敛（→《欠账登记表》D-49）：本 DTO 原先写的 `landline` / `other` **作废**（旧码只作历史数据兜底，新写入口只用上列三码）
-             * @example mobile
-             */
-            type: string;
-            /** @description 号码（与主号同待遇：**被上锁时整个 `extra_phones` 都不返回**） */
-            number: string;
-            /** @description 备注（如「他助理」） */
-            note?: string | null;
-        };
-        ContactTraitVoDto: {
-            /**
-             * @description 字典项 id（→ A11）
-             * @example 12
-             */
-            trait_id: string;
-            /**
-             * @description 特质码（英文码，落库时冗余存了一份）
-             * @example price_sensitive
-             */
-            trait_code: string;
-            /**
-             * @description 中文文案（取自字典 `dict_item`；字典项被停用 / 删除时为 `null`，**不编文案**）
-             * @example 价格敏感
-             */
-            label: string | null;
-        };
-        ContactEmploymentVoDto: {
-            /** @example 3 */
-            company_id: string;
-            /**
-             * @description 公司全称（就职记录指向的公司）
-             * @example 合肥测试建材有限公司
-             */
-            company_name: string;
-            /** @description 职位 */
-            position: string | null;
-            /** @description 入职时间（可空） */
-            joined_at: string | null;
-            /** @description 离职时间（在职为 `null`） */
-            left_at: string | null;
-            /** @description 是否当前在职（`true` 的排在最前） */
-            is_current: boolean;
-        };
-        ContactDetailVoDto: {
+        ContactBriefVoDto: {
             /** @example 1 */
             id: string;
             /** @example 张伟 */
             name: string;
+            /** @description 职位（来自 `company_contact.position`） */
+            position?: string | null;
             /**
-             * @description 主号**全号**（→ §2.8：详情给全号，与角色无关）。**被上锁且查看者不是落锁人时该键不存在**
-             * @example 13800000000
+             * @description 打码手机号（列表 / 卡片出参形态，**不是权限**，→ §2.8）
+             * @example 138****0000
              */
-            phone?: string;
-            /** @description 手机号是否**对当前查看者**处于上锁态（＝锁开着且查看者不是落锁人，→ 需求 §4.3 二）。⚠ 这是**状态**：为 `true` 时本出参不含 `phone` / `extra_phones` */
+            phone_masked: string;
+            /** @description 手机号是否**对当前查看者**处于上锁态（＝锁开着、且查看者不是落锁人，→ 需求 §4.3 二）。⚠ 列表**本就一律 `phone_masked`**：本字段是「已上锁 ＋ 申请解锁」的提示，不是权限开关 */
             phone_locked: boolean;
-            /** @description 落锁人（未上锁时为 `null`，→ 需求 §4.3 二「被上锁时显示 by XX」） */
-            phone_locked_by: components["schemas"]["ContactRefVoDto"] | null;
-            /** @description 备用号（**被上锁且查看者不是落锁人时该键不存在** —— 锁跟人，主号备用号一并隐藏） */
-            extra_phones?: components["schemas"]["ContactExtraPhoneVoDto"][];
-            /** @description 微信 */
-            wechat: string | null;
-            /** @description 邮箱 */
-            email: string | null;
-            /** @description 性别 */
-            gender: string | null;
-            /**
-             * @description 生日（`YYYY-MM-DD`）
-             * @example 1985-03-12
-             */
-            birthday: string | null;
             /**
              * @description 决策角色
-             * @enum {string|null}
-             */
-            decision_role: "decision" | "influence" | "execute" | null;
-            /** @description 个人自由标签（与谈判特质分栏并存，→ B3） */
-            tags: string[];
-            /** @description 谈判特质（上限＝`dept_rule.contact_trait_max`，→ B4） */
-            traits: components["schemas"]["ContactTraitVoDto"][];
-            /**
-             * @description 状态
-             * @example active
              * @enum {string}
              */
-            status: "active" | "left" | "freelance";
-            /** @description 就职 / 跳槽历史（**在职的在前**；含历史 → B5） */
-            employments: components["schemas"]["ContactEmploymentVoDto"][];
+            decision_role?: "decision" | "influence" | "execute";
+            /** @description 是否当前在职（`company_contact.is_current`；历史就职给 false） */
+            is_current: boolean;
+        };
+        ContactPageVoDto: {
+            /** @description 当前页数据（**一律 `phone_masked`**，→ §2.8） */
+            list: components["schemas"]["ContactBriefVoDto"][];
+            /**
+             * @description 符合筛选条件的全量条数（前端「共 N 条」）
+             * @example 120
+             */
+            total: number;
+            /**
+             * @description 当前页码（从 1 开始）
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description 每页条数（默认 20，最大 100，→ §2.7）
+             * @example 20
+             */
+            page_size: number;
         };
         RelationRefDto: {
             /**
@@ -1464,6 +1368,102 @@ export interface components {
              * @example 5
              */
             event_count_30d: number;
+        };
+        ContactRefVoDto: {
+            /** @example 7 */
+            id: string;
+            /** @example 王海涛 */
+            name: string;
+        };
+        ContactExtraPhoneVoDto: {
+            /**
+             * @description 号型（**值域唯一落点 ＝《销售CRM数据架构文档》B2**）：`mobile` / `tel` / `wechat`。⚠ 2026-09-20 拍板收敛（→《欠账登记表》D-49）：本 DTO 原先写的 `landline` / `other` **作废**（旧码只作历史数据兜底，新写入口只用上列三码）
+             * @example mobile
+             */
+            type: string;
+            /** @description 号码（与主号同待遇：**被上锁时整个 `extra_phones` 都不返回**） */
+            number: string;
+            /** @description 备注（如「他助理」） */
+            note?: string | null;
+        };
+        ContactTraitVoDto: {
+            /**
+             * @description 字典项 id（→ A11）
+             * @example 12
+             */
+            trait_id: string;
+            /**
+             * @description 特质码（英文码，落库时冗余存了一份）
+             * @example price_sensitive
+             */
+            trait_code: string;
+            /**
+             * @description 中文文案（取自字典 `dict_item`；字典项被停用 / 删除时为 `null`，**不编文案**）
+             * @example 价格敏感
+             */
+            label: string | null;
+        };
+        ContactEmploymentVoDto: {
+            /** @example 3 */
+            company_id: string;
+            /**
+             * @description 公司全称（就职记录指向的公司）
+             * @example 合肥测试建材有限公司
+             */
+            company_name: string;
+            /** @description 职位 */
+            position: string | null;
+            /** @description 入职时间（可空） */
+            joined_at: string | null;
+            /** @description 离职时间（在职为 `null`） */
+            left_at: string | null;
+            /** @description 是否当前在职（`true` 的排在最前） */
+            is_current: boolean;
+        };
+        ContactDetailVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @example 张伟 */
+            name: string;
+            /**
+             * @description 主号**全号**（→ §2.8：详情给全号，与角色无关）。**被上锁且查看者不是落锁人时该键不存在**
+             * @example 13800000000
+             */
+            phone?: string;
+            /** @description 手机号是否**对当前查看者**处于上锁态（＝锁开着且查看者不是落锁人，→ 需求 §4.3 二）。⚠ 这是**状态**：为 `true` 时本出参不含 `phone` / `extra_phones` */
+            phone_locked: boolean;
+            /** @description 落锁人（未上锁时为 `null`，→ 需求 §4.3 二「被上锁时显示 by XX」） */
+            phone_locked_by: components["schemas"]["ContactRefVoDto"] | null;
+            /** @description 备用号（**被上锁且查看者不是落锁人时该键不存在** —— 锁跟人，主号备用号一并隐藏） */
+            extra_phones?: components["schemas"]["ContactExtraPhoneVoDto"][];
+            /** @description 微信 */
+            wechat: string | null;
+            /** @description 邮箱 */
+            email: string | null;
+            /** @description 性别 */
+            gender: string | null;
+            /**
+             * @description 生日（`YYYY-MM-DD`）
+             * @example 1985-03-12
+             */
+            birthday: string | null;
+            /**
+             * @description 决策角色
+             * @enum {string|null}
+             */
+            decision_role: "decision" | "influence" | "execute" | null;
+            /** @description 个人自由标签（与谈判特质分栏并存，→ B3） */
+            tags: string[];
+            /** @description 谈判特质（上限＝`dept_rule.contact_trait_max`，→ B4） */
+            traits: components["schemas"]["ContactTraitVoDto"][];
+            /**
+             * @description 状态
+             * @example active
+             * @enum {string}
+             */
+            status: "active" | "left" | "freelance";
+            /** @description 就职 / 跳槽历史（**在职的在前**；含历史 → B5） */
+            employments: components["schemas"]["ContactEmploymentVoDto"][];
         };
         EngineRefDto: {
             /**
@@ -2166,7 +2166,7 @@ export interface operations {
             };
         };
     };
-    CompanyController_listContacts: {
+    CompanyAggregateController_listContacts: {
         parameters: {
             query?: {
                 /** @description 只看「**未关联公司**」的待跟进联系人（＝「待关联」视图，→ 需求 §6.1 ③：判定＝该联系人**无任何 `company_contact` 记录**） */
@@ -2211,28 +2211,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactCreatedVoDto"];
-                };
-            };
-        };
-    };
-    CompanyController_getContact: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description 联系人 id（十进制字符串） */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContactDetailVoDto"];
                 };
             };
         };
@@ -2437,6 +2415,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyDetailVoDto"];
+                };
+            };
+        };
+    };
+    CompanyAggregateController_getContact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 联系人 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactDetailVoDto"];
                 };
             };
         };

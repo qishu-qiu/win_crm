@@ -31,6 +31,7 @@ import {
 } from './domain/relation-active-key';
 import { type RelationListFilter } from './domain/relation-list-filter';
 import { COLLABORATOR_MEMBER_TYPE, OWNER_MEMBER_TYPE } from './domain/relation-owner';
+import { type EnumerableCompanyScope } from './domain/relation-scope';
 
 /** 交互式事务客户端（同 M2：直接取 Prisma 的 `TransactionClient`，类型上就没有 `$transaction`） */
 export type RelationTxClient = Prisma.TransactionClient;
@@ -660,6 +661,46 @@ export class RelationRepository {
     return this.prisma.businessRelation.findMany({
       where: { ...this.privateSeaWhereOfEmployee(employeeId, now), company_id: companyId },
       select: { id: true },
+    });
+  }
+
+  /**
+   * 「**我可见的公司**」的 company_id 去重集合（→ 需求 §6.1 ⑪；D-28）。
+   *
+   * ★ 范围是**两个页签的并集**（私海 ＋ 公海），由 `resolveVisibleCompanyScope` 判完再传进来
+   *   （本层只按档位翻译成条件，不重写范围规则 —— 文件头 ★ 的取法）。
+   * ★ **排除被并分支**（`merged_into IS NULL`）：已并入 survivor 的关系不再代表一家"在跟"的公司；
+   *   与列表 / 详情同口径（→ C1）。
+   * ★ `distinct` 下推到库里（不是取回来再去重）：一家公司可能有多条关系（多部门 × 多产品线），
+   *   联系人那条路要的是**集合**，重复 id 只会白占内存。
+   * ⚠ `all` 档**不进本方法**（由 service 短路成「不收敛」）：总经理 / 管理员不必、也不该把全库公司 id
+   *   变成一个巨型 `IN (...)`。
+   */
+  async listVisibleCompanyIds(
+    scope: EnumerableCompanyScope,
+    now: Date,
+  ): Promise<{ company_id: bigint }[]> {
+    if (scope.kind === 'denied') return [];
+
+    const where: Prisma.BusinessRelationWhereInput =
+      scope.kind === 'depts'
+        ? // 经理：**管辖部门的全部关系**（私海 ＋ 该部门公海）—— ③ 不按 `sea_status` 再筛：
+          //   部门公海＝本部门关系集合（→ C1），经理两档都看得见，这里写一个 `sea_status` 反倒会漏一半。
+          { deleted_at: null, merged_into: null, dept_id: { in: [...scope.deptIds] } }
+        : // 销售 / 交付 · 客服：我参与的私海 ∪ 本部门公海（交付 / 客服的 `publicDeptIds` 为空）
+          {
+            OR: [
+              this.privateSeaWhereOfEmployee(scope.employeeId, now),
+              ...(scope.publicDeptIds.length === 0
+                ? []
+                : [this.companySeaWhereOfDepts(scope.publicDeptIds)]),
+            ],
+          };
+
+    return this.prisma.businessRelation.findMany({
+      where,
+      select: { company_id: true },
+      distinct: ['company_id'],
     });
   }
 

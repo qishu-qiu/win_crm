@@ -21,14 +21,12 @@ import {
   CompanyService,
   type CompanyVo,
   type ContactBriefVo,
-  type ContactDetailVo,
   type CreatedContactVo,
   type SearchDupResult,
 } from './company.service';
 import {
   CreateCompanyDto,
   CreateContactDto,
-  ListContactsQueryDto,
   PageQueryDto,
   SearchDupDto,
 } from './dto/company-request.dto';
@@ -36,7 +34,6 @@ import {
   CompanyPageVoDto,
   CompanyVoDto,
   ContactCreatedVoDto,
-  ContactDetailVoDto,
   ContactPageVoDto,
   SearchDupResultVoDto,
 } from './dto/company-response.dto';
@@ -95,27 +92,12 @@ export class CompanyController {
     return this.company.searchDup(body);
   }
 
-  // ===== M2-13 联系人列表 / 建档 =====
-
-  @Get('contacts')
-  @ApiBearerAuth('bearer')
-  @ApiOperation({
-    summary: '联系人列表',
-    description:
-      '**列表出参一律 `phone_masked`**（→ §2.8，出参形态而非权限）。' +
-      '入参 `only_unlinked` ＝只看「**未关联公司**」的待跟进（→ 需求 §6.1 ③）；' +
-      '**D-08（2026-09-20）起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参 ＝ §2.3 分页形态。' +
-      '可见范围：「待关联」（未挂公司）**只给归属人自己**；已挂公司的人**暂按现状**' +
-      '（公司维度收敛待复用的数据范围判定，→《欠账登记表》D-28）',
-  })
-  @ApiOkResponse({ type: ContactPageVoDto })
-  listContacts(@Query() query: ListContactsQueryDto): Promise<PageResult<ContactBriefVo>> {
-    return this.company.listContacts({
-      onlyUnlinked: query.only_unlinked === 'true',
-      page: query.page,
-      pageSize: query.page_size,
-    });
-  }
+  // ===== M2-13 联系人建档 =====
+  //
+  // ⚠ `GET /contacts`（列表）与 `GET /contacts/:id`（详情）**自 2026-09-21 起不在本域注册**：
+  //   它们的可见性要「我可见的公司」集合，而那是 C 域算得出来的东西（B(L2) 不许依赖 C(L3)），
+  //   故两条读路由迁到**聚合层** `company-aggregate`（→《欠账登记表》D-28 / D-61 桥③）。
+  //   本域保留：它们读的**实现**（`CompanyService.listContacts` / `getContact`，收「可见公司集合」入参）。
 
   @Audit(COMPANY_AUDIT_ACTIONS.createContact, 'contact')
   @Post('contacts')
@@ -133,25 +115,7 @@ export class CompanyController {
   }
 
   // ===== M6-15 联系人详情（欠账 D-03）=====
-
-  @Get('contacts/:id')
-  @ApiBearerAuth('bearer')
-  @ApiOperation({
-    summary: '联系人详情',
-    description:
-      '**详情出参一律给全号 `phone`**（→ §2.8：这是**出参形态、不是权限**）；' +
-      '唯一例外＝该联系人**被上锁**且查看者**不是落锁人** —— 此时 `phone` 与 `extra_phones`' +
-      '**两个键都不出现**（锁跟人：主号与备用号一并隐藏），改给 `phone_locked` ＋ `phone_locked_by`。' +
-      '含**就职 / 跳槽历史**（在职在前）与**谈判特质**（`label` 取自字典）。' +
-      '可见性：「待关联」（没挂公司）**只给归属人自己**（→ 需求 §6.1 ⑪，别人拿 id 也 403）；' +
-      '已挂公司的人暂按现状（公司维度收敛待补，→《欠账登记表》D-28）。' +
-      '⚠ 规格里的 `unlocked_until`（解锁后 24h 内可见）依赖审批域，本批**不返回**（→ D-04）',
-  })
-  @ApiParam({ name: 'id', description: '联系人 id（十进制字符串）' })
-  @ApiOkResponse({ type: ContactDetailVoDto })
-  getContact(@Param('id') id: string): Promise<ContactDetailVo> {
-    return this.company.getContact(id);
-  }
+  //    ⚠ 路由已迁聚合层，见本文件上一条说明（实现仍在 `CompanyService.getContact`）。
 
   // ===== M2-14 公司联系人 =====
 

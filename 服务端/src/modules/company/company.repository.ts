@@ -388,18 +388,27 @@ export class CompanyRepository {
   /**
    * 联系人列表（M2 最小列表；分页待补，→《欠账登记表》D-08）。
    *
-   * ★ 可见范围（2026-09-16 起，→ 需求 §6.1 ⑪）**分三档**：
+   * ★ 可见范围（→ 需求 §6.1 ⑪）**分两档**：
    *   ① **`all` 档**（总经理 / 管理员，→ 需求 §4.2 数据范围）→ **看全部**（不套过滤）；
-   *   ② **待关联**（没挂公司的人）→ 只给**归属人自己**（`owner_id = 我`）：
-   *      线索属私人待跟进，此前"任何登录人都能看最近 100 条"＝全公司裸奔（含号码）；
-   *   ③ **已挂公司的人** → **暂维持原样**（只要有就职记录就可见）。
-   *      ⚠ ③ 的严格口径是"我关系下公司的联系人"，但**判定要复用 C 域的数据范围** ——
-   *      而 `company`(L2) → `relation`(L3) 是**反向依赖**（架构 §3 层级禁止），故落地方式待定
-   *      （→《欠账登记表》**D-28**）。**过渡期刻意"放松"**：若现在就按关系收紧，
-   *      销售会连**自己客户**的联系人都看不到 —— 那比现状更差。
+   *   ② 其余 → **自己的待关联线索**（`owner_id = 我`）＋ **自己关系下公司的联系人**
+   *      （就职于 `visibleCompanyIds` 里那些公司）。两半的判定都来自**聚合层喂进来的入参** ——
+   *      本域**不许**反向 import C 域（L2 → L3，架构 §3），故收敛条件只能以**入参**形式进来（→ D-28）。
+   * ★ 2026-09-16 的过渡态（「已挂公司的人只要有就职记录就可见」）**已按 ⑪ 收紧（2026-09-21）**：
+   *   当时不敢收，是因为判定要复用 C 域范围而 B 域够不到（反向依赖）；桥③ 落地后该阻塞消失。
    */
   async listContacts(
-    input: { viewerId: bigint; onlyUnlinked: boolean; allScope: boolean },
+    input: {
+      viewerId: bigint;
+      onlyUnlinked: boolean;
+      /**
+       * 「已挂公司」那半边的收敛（→ 需求 §6.1 ⑪ / D-28；由**聚合层**按 C 域出口喂进来）：
+       * `null` ＝ **不收敛**（`all` 档）；数组 ＝ 只有就职于**这些公司**的人才可见
+       * （空数组 ⇒ 只剩「自己的待关联线索」）。
+       * ★ 用 `null` 而不是「省略参数」表达不收敛：**默认必须是收敛** —— 
+       *   漏传参数＝静默回到"全公司裸奔"，那正是本行要修的坑。
+       */
+      visibleCompanyIds: readonly bigint[] | null;
+    },
     pagination: { skip: number; take: number },
   ) {
     const where = {
@@ -408,9 +417,26 @@ export class CompanyRepository {
       AND: [
         // 「未关联公司」＝无任何 `company_contact` 记录（派生判定，→ 需求 §6.1 ③）
         ...(input.onlyUnlinked ? [{ company_contacts: { none: {} } }] : []),
-        ...(input.allScope
+        ...(input.visibleCompanyIds === null
           ? []
-          : [{ OR: [{ owner_id: input.viewerId }, { company_contacts: { some: {} } }] }]),
+          : [
+              {
+                OR: [
+                  // ① 我的「待关联」线索：**没有任何就职记录** ＋ 归属人 ＝ 我
+                  //    （归属人＝建档录入人，→ 需求 §6.1 ⑦⑪；⑪ 的第一项就是「自己的**待关联**线索」）
+                  { company_contacts: { none: {} }, owner_id: input.viewerId },
+                  // ② 「自己关系下公司」的联系人：就职记录里**有任意一条**落在我可见的公司里
+                  //    （`some`：跳槽历史里只要有一段是可见公司，这个人就可见 —— 历史不断，→ B5）
+                  // ⚠ ② 里**不看 `owner_id`**（→ 需求 §6.1 ⑦「已挂公司的人走关系的 owner，
+                  //   不看这一列」）—— 别图省事让"录入人"在客户转走后还留着一条后门。
+                  {
+                    company_contacts: {
+                      some: { company_id: { in: [...input.visibleCompanyIds] } },
+                    },
+                  },
+                ],
+              },
+            ]),
       ],
     };
     // ★ 同 `listCompanies`：一个事务取「本页 ＋ 总数」，两个快照会对不上账

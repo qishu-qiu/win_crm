@@ -384,6 +384,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 公司详情（桥③ 聚合层）
+         * @description 基本档案 ＋ 完善度 ＋ 档案标签 ＋ 联系人简卡 ＋ **业务线列表**（`relations_summary`，D-61 桥③ 拼装）。★ 落点：原 B 域 `GET /companies/:id` 于 2026-09-21 迁至本聚合层（B 禁止依赖 C，故跨域拼装发生在更高层）。★ `relations_summary` 本期**仅含业务线**（dept / product_line）；`sign_date`/`amount`（E 域合同）与`event_count_30d`（D 域跟单计数）待对应域就绪后补，**不编假值**。**公司档案是全公司共享资料层，本端点不做数据范围过滤**。
+         */
+        get: operations["CompanyAggregateController_getCompany"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/relations/{id}/events": {
         parameters: {
             query?: never;
@@ -1346,6 +1366,83 @@ export interface components {
             /** @description 协同有效期（ISO 日期；`null` / 缺省＝长期，仅正式协同） */
             valid_until?: string;
         };
+        CompanyProfileTagItemVoDto: {
+            /** @example 12 */
+            tag_id: string;
+            /**
+             * @description 标签码（英文码，建标时冗余落库）
+             * @example state_owned
+             */
+            tag_code: string;
+            /** @description 中文文案（取自字典；停用 / 删除为 `null`，不编文案） */
+            label: string | null;
+        };
+        CompanyProfileTagGroupVoDto: {
+            /** @description 身份标签（多选） */
+            identity: components["schemas"]["CompanyProfileTagItemVoDto"][];
+            /** @description 制度标签（多选） */
+            policy: components["schemas"]["CompanyProfileTagItemVoDto"][];
+            /** @description 决策链（单选）；⚠ 出参只含 `tag_id` / `label`（→ §5.4），`tag_code` 不返回 */
+            decision_chain?: components["schemas"]["CompanyProfileTagItemVoDto"] | null;
+        };
+        DeptRefVoDto: {
+            /** @example 2 */
+            id: string;
+            /** @description 部门名称 */
+            name: string;
+        };
+        ProductLineRefVoDto: {
+            /** @example 3 */
+            id: string;
+            /** @description 业务线名称 */
+            name: string;
+            /** @description 固定配色键（§13.3 七线配色）；未配置为 `null`，不编默认色 */
+            color_key: string | null;
+        };
+        RelationsSummaryItemVoDto: {
+            /** @description 部门（A 域引用） */
+            dept: components["schemas"]["DeptRefVoDto"];
+            /** @description 业务线（A 域引用，含固定配色键） */
+            product_line: components["schemas"]["ProductLineRefVoDto"];
+        };
+        CompanyDetailVoDto: {
+            /** @example 1 */
+            id: string;
+            /** @example 安徽鑫中网信息技术有限公司 */
+            full_name: string;
+            /**
+             * @description 标准化核心词（服务端生成，供两段式查重第一段）
+             * @example 鑫中网
+             */
+            name_core: string | null;
+            /** @description 城市 */
+            city?: string | null;
+            /** @description 行业一级 */
+            industry_l1?: string | null;
+            /** @description 规模 */
+            scale?: string | null;
+            /** @description 统一社会信用代码（**列表给全量**；查重候选才用 `credit_code_masked`） */
+            credit_code?: string | null;
+            /**
+             * @description 注册资本（单位＝元；前端按「万元」展示）
+             * @example 5000000
+             */
+            registered_capital?: string | null;
+            /** @description 法定代表人 */
+            legal_person?: string | null;
+            /** @description 地址是否维护（`address` 或坐标为空 → false）；派生展示，不落表 */
+            address_maintained: boolean;
+            /** @example 2026-09-15T10:00:00+08:00 */
+            updated_at: string;
+            /** @description 完善度三档（0-100，→ B1 `completeness_1/2/3`） */
+            completeness: Record<string, never>;
+            /** @description 档案标签（身份 / 制度 / 决策链，→ B2） */
+            profile_tags: components["schemas"]["CompanyProfileTagGroupVoDto"];
+            /** @description 联系人简卡（列表 / 卡片一律 `phone_masked`，拍板 Q2） */
+            contacts: components["schemas"]["ContactBriefVoDto"][];
+            /** @description 业务线列表（→ §5.4 `relations_summary` 本期子集，D-61 桥③ 聚合层拼装）。仅含 `dept` / `product_line`；`sign_date` / `amount`（E 域合同）与 `event_count_30d`（D 域跟单）待补，不编假值 */
+            relations_summary: components["schemas"]["RelationsSummaryItemVoDto"][];
+        };
         EngineRefDto: {
             /**
              * @description id（十进制字符串）
@@ -2296,6 +2393,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RelationMemberVoDto"][];
+                };
+            };
+        };
+    };
+    CompanyAggregateController_getCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 公司 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyDetailVoDto"];
                 };
             };
         };

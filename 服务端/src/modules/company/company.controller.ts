@@ -19,7 +19,6 @@ import { Audit, AuditSkip, type PageResult } from '../../kernel/index';
 import {
   COMPANY_AUDIT_ACTIONS,
   CompanyService,
-  type CompanyDetailVo,
   type CompanyVo,
   type ContactBriefVo,
   type ContactDetailVo,
@@ -34,7 +33,6 @@ import {
   SearchDupDto,
 } from './dto/company-request.dto';
 import {
-  CompanyDetailVoDto,
   CompanyPageVoDto,
   CompanyVoDto,
   ContactCreatedVoDto,
@@ -174,22 +172,4 @@ export class CompanyController {
     return this.company.listCompanyContacts(id, { page: query.page, pageSize: query.page_size });
   }
 
-  // ===== D-05 公司详情（欠账 D-05）=====
-
-  @Get('companies/:id')
-  @ApiBearerAuth('bearer')
-  @ApiOperation({
-    summary: '公司详情',
-    description:
-      '基本档案 ＋ 完善度 ＋ 档案标签（`profile_tags`，identity / policy / decision_chain）＋ 联系人简卡。' +
-      '**公司档案是全公司共享资料层**（→ §5.4）：本端点**不做数据范围过滤**。' +
-      '★ `contacts[]` 按**卡片**处理 → `phone_masked`（详情全号只在联系人详情，拍板 Q2）。' +
-      '⚠ `relations_summary` / `event_count_30d` 依赖 C 域 `business_relation`，B(L2) 禁止依赖 C(L3)，' +
-      '本轮暂不出（登记缺口 → 跨域落点待拍板），**不编假值**（同现有 `relation_count`「待 M3/M4」模式）。',
-  })
-  @ApiParam({ name: 'id', description: '公司 id（十进制字符串）' })
-  @ApiOkResponse({ type: CompanyDetailVoDto })
-  getCompany(@Param('id') id: string): Promise<CompanyDetailVo> {
-    return this.company.getCompany(id);
-  }
 }

@@ -624,4 +624,19 @@ export class RelationRepository {
       select: { id: true, name: true },
     });
   }
+
+  /**
+   * 按公司取「业务线」候选（→ D-61 桥③ 聚合层 `relations_summary` 的业务线部分）。
+   *
+   * ★ 只取 `dept_id` / `product_line_id` 两列（去重交给 service）：跨域出口只给拼装要的那点信息；
+   *   **不含** `sign_date` / `amount`（那在 E 域 `contract`，本期 E 域未建 module ⇒ 聚合层待补，不编假值）。
+   *   未删 ＋ 未并（`merged_into IS NULL`，与列表 / 详情同口径，跳过被并分支）。
+   * ★ 不收敛数据范围：公司详情是全公司共享资料层（→ §5.4），业务线列表同样全公司可见（→ §13.2）。
+   */
+  findRelationsByCompany(companyId: bigint) {
+    return this.prisma.businessRelation.findMany({
+      where: { company_id: companyId, deleted_at: null, merged_into: null },
+      select: { dept_id: true, product_line_id: true },
+    });
+  }
 }

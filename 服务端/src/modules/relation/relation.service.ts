@@ -623,6 +623,48 @@ export class RelationService {
     return rows.map((row) => ({ id: row.id, name: names.get(row.company_id.toString()) ?? '' }));
   }
 
+  /**
+   * 按公司取「业务线列表」（→ D-61 桥③ 聚合层 `relations_summary` 的业务线部分）。
+   *
+   * ★ 跨域拼装：dept / product_line 名字走 org 出口（A 域），C 域不许查 `department` / `product_line` 表。
+   * ★ 返回**去重**后的业务线（同一 部门×产品线 只列一次）；引用取不到（已删）的条目跳过、不编名字。
+   * ★ 不收敛数据范围：公司详情是全公司共享资料层，业务线列表同样全公司可见（→ §13.2）。
+   * ⚠ **不含** `sign_date` / `amount`：那在 E 域 `contract`（本期未建 module）⇒ 聚合层待补、不编假值。
+   */
+  async getRelationsByCompany(
+    companyId: bigint,
+  ): Promise<{ dept: { id: bigint; name: string }; product_line: { id: bigint; name: string; color_key: string | null } }[]> {
+    const rows = await this.repository.findRelationsByCompany(companyId);
+    if (rows.length === 0) return [];
+
+    const deptIds = uniqueBigints(rows.map((row) => row.dept_id));
+    const productLineIds = uniqueBigints(rows.map((row) => row.product_line_id));
+    const [depts, productLines] = await Promise.all([
+      this.org.getDeptRefs(deptIds),
+      this.org.getProductLineRefs(productLineIds),
+    ]);
+    const deptName = toNameMap(depts);
+    const productLineMap = new Map(
+      productLines.map((line) => [line.id.toString(), { name: line.name, colorKey: line.color_key }]),
+    );
+
+    const seen = new Set<string>();
+    const result: { dept: { id: bigint; name: string }; product_line: { id: bigint; name: string; color_key: string | null } }[] = [];
+    for (const row of rows) {
+      const key = `${row.dept_id.toString()}:${row.product_line_id.toString()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const deptNameValue = deptName.get(row.dept_id.toString());
+      const line = productLineMap.get(row.product_line_id.toString());
+      if (deptNameValue === undefined || line === undefined) continue;
+      result.push({
+        dept: { id: row.dept_id, name: deptNameValue },
+        product_line: { id: row.product_line_id, name: line.name, color_key: line.colorKey },
+      });
+    }
+    return result;
+  }
+
   // ===== M7-03 掉海预警（F 域定时任务）的跨域出口 =====
 
   /**

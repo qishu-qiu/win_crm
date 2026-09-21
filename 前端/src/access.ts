@@ -105,7 +105,13 @@ function accessOfUnknownRole(page: PageKey): PageAccess {
   return page === 'workbench' ? 'full' : 'hidden'
 }
 
-/** 取某角色对某页面的档位（✅ / 🔒 / ➖） */
+/**
+ * ⚠ **技术债·待返工（→ 欠账 D-34）**：本函数按**单 role** 查矩阵；一人持多角色时
+ *   「页面可见性如何合成」**规格未定义**（`GET /account/me` 只回单 role，与前端矩阵不同源）。
+ *   当前种子账号无多角色组合故不暴露；真实出现「销售＋交付」等组合时行为未定义，
+ *   会暴露 bug，待 M9 补正式合成规则（取更宽档 / 合并可见页）。
+ * 取某角色对某页面的档位（✅ / 🔒 / ➖）
+ */
 export function pageAccessOf(role: string, page: PageKey): PageAccess {
   if (!BUILTIN_ROLES.includes(role)) return accessOfUnknownRole(page)
   return ACCESS[page][role as RoleCode]

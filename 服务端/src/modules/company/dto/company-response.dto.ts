@@ -355,11 +355,47 @@ export class CompanyProfileTagGroupVoDto {
   decision_chain?: CompanyProfileTagItemVoDto | null;
 }
 
+/** 部门引用 `{id,name}`（→ A 域 `department`） */
+export class DeptRefVoDto {
+  @ApiProperty({ type: String, example: '2' })
+  id!: string;
+
+  @ApiProperty({ description: '部门名称' })
+  name!: string;
+}
+
+/** 业务线引用 `{id,name,color_key}`（→ A 域 `product_line`；`color_key` 见 §13.3 七线配色） */
+export class ProductLineRefVoDto {
+  @ApiProperty({ type: String, example: '3' })
+  id!: string;
+
+  @ApiProperty({ description: '业务线名称' })
+  name!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '固定配色键（§13.3 七线配色）；未配置为 `null`，不编默认色',
+  })
+  color_key!: string | null;
+}
+
+/** 业务线列表项（→ §5.4 `relations_summary` 本期子集；dept / product_line 由 C 域拼装） */
+export class RelationsSummaryItemVoDto {
+  @ApiProperty({ type: DeptRefVoDto, description: '部门（A 域引用）' })
+  dept!: DeptRefVoDto;
+
+  @ApiProperty({ type: ProductLineRefVoDto, description: '业务线（A 域引用，含固定配色键）' })
+  product_line!: ProductLineRefVoDto;
+}
+
 /**
- * 公司详情（→ §5.4 详情；D-05）。
+ * 公司详情（→ §5.4 详情；D-05 / D-61 桥③）。
  * ★ 继承 `CompanyVoDto` 的全部基本档案字段，再补 `completeness` / `profile_tags` / `contacts`。
- * ★ `contacts[]` 按**卡片**出参（一律 `phone_masked`，拍板 Q2）；`relations_summary` / `event_count_30d`
- *   依赖 C 域 `business_relation`、B(L2) 禁止依赖 C(L3)，本轮暂不出（登记缺口）。
+ * ★ `contacts[]` 按**卡片**出参（一律 `phone_masked`，拍板 Q2）。
+ * ★ `relations_summary`（业务线列表）由 **D-61 桥③ 聚合层**拼装：本期**仅含业务线**
+ *   （dept / product_line），`sign_date` / `amount`（E 域合同）待 E 域 module 就绪后补、
+ *   `event_count_30d`（D 域跟单计数）待 engine 补按 company 聚合出口后补——均**不编假值**（→ D-61 后续）。
  */
 export class CompanyDetailVoDto extends CompanyVoDto {
   @ApiProperty({ description: '完善度三档（0-100，→ B1 `completeness_1/2/3`）' })
@@ -370,4 +406,12 @@ export class CompanyDetailVoDto extends CompanyVoDto {
 
   @ApiProperty({ type: [ContactBriefVoDto], description: '联系人简卡（列表 / 卡片一律 `phone_masked`，拍板 Q2）' })
   contacts!: ContactBriefVoDto[];
+
+  @ApiProperty({
+    type: [RelationsSummaryItemVoDto],
+    description:
+      '业务线列表（→ §5.4 `relations_summary` 本期子集，D-61 桥③ 聚合层拼装）。' +
+      '仅含 `dept` / `product_line`；`sign_date` / `amount`（E 域合同）与 `event_count_30d`（D 域跟单）待补，不编假值',
+  })
+  relations_summary!: RelationsSummaryItemVoDto[];
 }

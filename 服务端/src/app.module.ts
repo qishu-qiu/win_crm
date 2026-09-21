@@ -37,6 +37,7 @@ import { Module } from '@nestjs/common';
 
 import { HealthController } from './health/health.controller';
 import { AuditModule, ContextModule, EventBusModule } from './kernel/index';
+import { CompanyAggregateModule } from './modules/company-aggregate/company-aggregate.module';
 import { CompanyModule } from './modules/company/company.module';
 import { EngineModule } from './modules/engine/engine.module';
 import { OrgModule } from './modules/org/org.module';
@@ -55,6 +56,7 @@ import { SharedModule } from './shared/shared.module';
     OrgModule,
     CompanyModule,
     RelationModule,
+    CompanyAggregateModule,
     EngineModule,
     SeaModule,
   ],

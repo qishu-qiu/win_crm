@@ -1,5 +1,5 @@
 // =============================================================================
-// F 域服务（F-01 公海「领取到私海」＋ M7-03 掉海预警）—— **只做编排**
+// F 域服务（F-01 公海「领取到私海」＋ M7-03 掉海预警 ＋ **M9-F 真掉海**）—— **只做编排**
 //
 // 分层约束（架构 §5.4）：service **只做编排**（多步 / 跨域取引用 / 发领域事件），
 //   **不写业务规则**（角色 / 范围 / 定位 / 原子性全在 C 域出口与 C 域 `domain/`）、
@@ -8,7 +8,8 @@
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM数据架构文档》§十二（定时任务）：「掉海预警（私海→公海）｜每小时｜按 sea_rule：
 //     ≤3 天进动线；到期前 24h 推销售；6h 标红+推经理；超期落 sea_record 转公司公海」——
-//     ⚠ 末句"超期落 sea_record"**不在本片**（M7-05：只告警、不真掉）→ `scanSeaWarning`；
+//     ★ 末句"超期落 sea_record"＝ **M9-F 真掉海**（`scanSeaWarning` 的 `overdue` 档 → `dropRelation`）；
+//       M7-05 当时刻意只告警、不真掉，那一层的判据由 M9-F 接棒（写法沿革见 `scanSeaWarning` 方法头）；
 //   · 《销售CRM接口API文档》§4.5：`POST /sea/company/:id/claim`（`:id` ＝ **公司 id**）；
 //     §5.6 尾：**领取瞬间该关系所有 open 承诺 `owner_id` 转新 owner**（承诺随关系走，→ 需求 §8.1）。
 //   · 《销售CRM架构设计说明》§3 层级：F 域与 D 域**同在 L4** ⇒ **同层禁止互相依赖**；
@@ -54,6 +55,7 @@ import {
   classifySeaWarning,
   resolveDropDeadline,
   resolveSeaRuleFor,
+  SEA_DROP_REASON,
   SEA_WARNING_HIT_TIERS,
   type SeaWarningTier,
   type SeaWarningTierCounts,
@@ -79,7 +81,7 @@ export interface SeaClaimVo extends RelationVo {
   claimed_at: string | null;
 }
 
-/** 掉海预警**一次扫描**的结果（M7-03；判据＝日志可见扫描结果与命中数，故这里只回计数） */
+/** 掉海扫描**一次**的结果（M7-03 分档 ＋ **M9-F 真掉**；判据＝日志可见扫描结果与命中数，故这里回计数） */
 export interface SeaWarningScanResult {
   /** 候选私海条数（＝本次真正检查过的关系数） */
   scanned: number;
@@ -91,6 +93,10 @@ export interface SeaWarningScanResult {
   skippedNoFreq: number;
   /** 命中条数（四档之和；不含 `none`） */
   hits: number;
+  /** ★ M9-F：本次**真的掉**了几条（关系回公海 ＋ 撤 owner ＋ 写 `sea_record`） */
+  dropped: number;
+  /** ★ M9-F：到期了但**没掉成**（C 域出口说"轮不到我掉"：并发下刚被领走 / 已不在私海）—— 下次扫描再看 */
+  dropSkipped: number;
   /** 各档条数（**含 `none`**，便于"扫了几条、几条没事"一眼看全） */
   tiers: SeaWarningTierCounts;
 }
@@ -163,25 +169,26 @@ export class SeaService {
     return { ...relation, claimed_at: latest === null ? null : claimedAt.toISOString() };
   }
 
-  // ===== M7-03 掉海预警（**只告警、不真掉**；→ 开发计划 M7-03 / M7-05）=====
+  // ===== 掉海扫描（M7-03 分档告警 ＋ **M9-F 起 `overdue` 真掉**）=====
 
   /**
-   * 扫一遍**所有有主关系**，按三档阈值算出"该提醒谁"，并把扫描结果与命中数写进日志。
+   * 扫一遍**所有有主关系**：按三档阈值算出"该提醒谁"，**并把已到期（`overdue`）的真的掉回公海**。
    *
-   * ⚠⚠ **本方法对业务数据零写**（M7-05 判据逐字：「只告警、不真掉（不写 `sea_record`、不清 owner）」）：
-   *   · 不写 `sea_record`（真掉海才写，属 **M9-F**）；
-   *   · 不动 `business_relation` 任何列（`sea_status` 含在内）；
-   *   · 不撤 owner 成员；
-   *   · **也不写 `daily_agenda`** —— 「≤3 天进动线」里的"进动线"是
-   *     **组装今日动线**那条任务（§十二，每日 05:00）的事，不属本片。
-   *   本方法唯一产生的记录是调用方（`JobRunner`）写的 `job_run_log` —— 那是"任务自身跑得怎么样"，
-   *   不是业务数据（→ A13：两者分工固定，不可互相替代）。
+   * ⚠⚠ **写法沿革（别把两片读混）**：
+   *   · **M7-03 / M7-05 当时刻意"只告警、不真掉"** —— 那一层的判据逐字是「不写 `sea_record`、
+   *     不清 owner」（先把"谁快到期了"扫出来，真掉海那半留到规则与出口齐备再做）；
+   *   · **★ M9-F（2026-09-21）接棒**：`overdue` 档**真的掉**（→ `dropRelation`），依据 ＝
+   *     需求 §6.3 掉海节奏表末行「**到期 → 执行掉落回公司公海，写历史记录（sea_record）**」。
+   *   三档**告警出口动作**（推销售 / 标红推经理）**仍未接**：要 `notification`（未建，→ D-42）；
+   *   「≤3 天进动线」要 **组装今日动线**那条任务（§十二，每日 05:00，未建，→ M9 jobs）
+   *   —— 故本方法**不写 `daily_agenda`**（进动线不是它的事，硬写＝替那条任务下结论）。
    *
-   * ★ 三档的**出口动作**本片一律不做：推销售 / 推经理要 `notification`（未建，→ D-42）、
-   *   进动线要 `daily_agenda` 组装任务（未建，→ M9 jobs）。本片只把**扫描结果与命中数**打出来。
+   * ★ 本方法**唯一会写业务数据的路径**是 `overdue` 档那一条 `dropRelation`（关系回公海 ＋ 撤 owner
+   *   ＋ 写 `sea_record`）；`none` / `agenda` / `notify_owner` / `alert_manager` **四档一律零写**
+   *   —— 它们只是"还来得及"，不该产生任何业务事实。
    *
    * ★ 规则**一条都没有**时：只 warn、不猜、不拿默认天数顶上（那等于由实现定义业务口径）——
-   *   规则配置端点（接口 §4.14.10 `GET/PUT /sea/rules`）属 M9-F。
+   *   规则配置端点（接口 §4.14.10 `GET/PUT /sea/rules`）属 **M9-F 的另一片**，尚未建。
    *
    * @param now 判定基准时刻由调用方传入（本层不读系统时钟：任务时刻要与 `job_run_log.run_at` 同源）
    */
@@ -200,6 +207,8 @@ export class SeaService {
         skippedNoRule: candidates.length,
         skippedNoFreq: 0,
         hits: 0,
+        dropped: 0,
+        dropSkipped: 0,
         tiers,
       };
     }
@@ -207,6 +216,8 @@ export class SeaService {
     let skippedNoRule = 0;
     let skippedNoFreq = 0;
     let hits = 0;
+    let dropped = 0;
+    let dropSkipped = 0;
 
     for (const candidate of candidates) {
       // ① 规则解析（L4→L1 取第一条，7 天缓冲已由仓储的 `effective_from <= now` 挡过一道）
@@ -241,11 +252,19 @@ export class SeaService {
       this.logger.debug(
         `掉海预警命中：关系 ${candidate.id}（部门 ${candidate.deptId} / 产品线 ${candidate.productLineId} / owner ${candidate.ownerId ?? '-'}）到期 ${dropAt.toISOString()} → ${tier}`,
       );
+
+      // ④ ★ M9-F：**已到期的真的掉**（四档里只有这一档会写业务数据，→ 方法头 ★）
+      if (tier === 'overdue') {
+        const didDrop = await this.dropRelation(candidate.id, now);
+        if (didDrop) dropped += 1;
+        else dropSkipped += 1; // 并发下刚被领走（或已不在私海）——不是错误，下次扫描再看
+      }
     }
 
     this.logger.log(
-      `掉海预警扫描完成：候选私海 ${candidates.length} 条 / 生效规则 ${rules.length} 条 → 命中 ${hits} 条` +
+      `掉海扫描完成：候选私海 ${candidates.length} 条 / 生效规则 ${rules.length} 条 → 命中 ${hits} 条` +
         `（已到期 ${tiers.overdue} / ≤6h ${tiers.alert_manager} / ≤24h ${tiers.notify_owner} / ≤3天 ${tiers.agenda}）` +
+        `；★ 真掉 ${dropped} 条（未掉成 ${dropSkipped} 条）` +
         `；跳过：无规则 ${skippedNoRule} / 规则未配跟进天数 ${skippedNoFreq}`,
     );
 
@@ -255,8 +274,36 @@ export class SeaService {
       skippedNoRule,
       skippedNoFreq,
       hits,
+      dropped,
+      dropSkipped,
       tiers,
     };
+  }
+
+  /**
+   * 真掉一条（M9-F）：**C 域出口改关系 ＋ 撤 owner** → **本域写 `sea_record`**。
+   *
+   * ★ 顺序与「跨域不开大事务」（架构 §5.2）：C 域那半**自己一个事务**（关系 ＋ 成员必须同生共死），
+   *   本域这半排在它**之后** —— 与「领取」三步同一姿势（那边也是 C 域事务在前、F 域回填在后）。
+   * ★ **顺序不可颠倒**：先写 `sea_record` 再掉关系 ⇒ 掉失败时库里就多一条"没掉过海却掉过海"的
+   *   历史（凭空编业务事实，本项目一号坑）；反过来（掉了但历史没写成）最差只是**少一条记录**，
+   *   关系状态本身是对的 —— 两害相权取其轻。
+   * ★ 掉海**天然幂等可重跑**：掉成之后关系已 `company_sea`，下次扫描的候选（只取 `private`）
+   *   不再含它 ⇒ 不会重复掉、不会重复写历史。
+   *
+   * @returns `true` ＝ 掉了（历史行也已写）；`false` ＝ **没掉**（C 域出口说"这条轮不到我掉"）
+   */
+  private async dropRelation(relationId: bigint, now: Date): Promise<boolean> {
+    const result = await this.relation.dropPrivateSeaRelation(relationId);
+    if (result === null) return false;
+
+    await this.repository.createSeaRecord({
+      relationId,
+      ownerId: result.ownerId,
+      reason: SEA_DROP_REASON.followTimeout,
+      droppedAt: now,
+    });
+    return true;
   }
 }
 

@@ -5,8 +5,10 @@
 //   权限 / 范围 / 定位 / 原子性全在 C 域出口（那边 8 条用例已钉）—— 这里只假造它的返回与异常。
 //
 // ★ 假件必须照**真实形状**给（→ 铁律坑 16「假红先修假件」）：
-//   · C 域出口的返回＝ `{relation, prevStage, prevOwnerId}`（`relation` 是**读回的关系列表项**）；
-//   · 仓储 `findLatestRecord` 可能回 `null`（＝从来没掉过海），这条路径**必须**有用例。
+//   · C 域领取出口的返回＝ `{relation, prevStage, prevOwnerId}`（`relation` 是**读回的列表项**）；
+//   · 仓储 `findLatestRecord` 可能回 `null`（＝从来没掉过海），这条路径**必须**有用例；
+//   · C 域**掉海出口**（M9-F）返回 `{ownerId} | null` —— **`null` ＝ 这条轮不到我掉**
+//     （并发下刚被领走），那条分支**必须**有用例（否则会写出"没掉也记历史"的错）。
 // =============================================================================
 import {
   AppError,
@@ -57,7 +59,7 @@ function relationVo(overrides: Partial<RelationVo> = {}): RelationVo {
 }
 
 interface FakeOptions {
-  /** C 域出口抛这个错（越权 / 被同事抢走 / 定位不到…） */
+  /** C 域领取出口抛这个错（越权 / 被同事抢走 / 定位不到…） */
   claimError?: unknown;
   /** 最近一条入公海历史（**显式 `null`** ＝ 从来没掉过海） */
   latestRecord?: { id: bigint } | null;
@@ -66,6 +68,8 @@ interface FakeOptions {
   rules?: readonly SeaRuleLike[];
   /** 预警候选私海（M7-03 扫描用；缺省＝空） */
   candidates?: readonly SeaWarningCandidate[];
+  /** C 域**掉海出口**的返回（M9-F；缺省＝掉成；**显式 `null`** ＝ 这条轮不到我掉） */
+  dropResult?: { ownerId: bigint } | null;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -79,10 +83,15 @@ function createService(options: FakeOptions = {}) {
       Promise<{ id: bigint; claimed_at: Date }>,
       [bigint, { claimedBy: bigint; claimedAt: Date }]
     >(async () => ({ id: RECORD_ID, claimed_at: new Date() })),
-    // M7-03：读规则（**只读**；本域 service 对业务数据零写，→ 文件尾 ⚠ 用例）
+    // M7-03：读规则（**只读**）
     listActiveSeaRules: jest.fn<Promise<SeaRuleLike[]>, [Date]>(async () =>
       options.rules === undefined ? [] : [...options.rules],
     ),
+    // M9-F 真掉海：写本域历史（→ F2 `sea_record`）
+    createSeaRecord: jest.fn<
+      Promise<{ id: bigint }>,
+      [{ relationId: bigint; ownerId: bigint; reason: string; droppedAt: Date }]
+    >(async () => ({ id: RECORD_ID })),
   };
   const relation = {
     claimCompanySeaRelation: jest.fn<
@@ -99,6 +108,10 @@ function createService(options: FakeOptions = {}) {
     // M7-03：候选私海（**只读**跨域出口）
     listSeaWarningCandidates: jest.fn<Promise<SeaWarningCandidate[]>, []>(async () =>
       options.candidates === undefined ? [] : [...options.candidates],
+    ),
+    // M9-F 真掉海：C 域掉海出口（缺省＝掉成；显式 `null` ＝ 这条轮不到我掉）
+    dropPrivateSeaRelation: jest.fn<Promise<{ ownerId: bigint } | null>, [bigint]>(async () =>
+      options.dropResult === undefined ? { ownerId: ME } : options.dropResult,
     ),
   };
   // 事件总线：单测只关心「发了什么」（落库 / 转承诺是 D 域订阅方的事）
@@ -318,22 +331,69 @@ describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警
     expect(summary.hits).toBe(0);
   });
 
-  it('★ **只告警、不真掉**（M7-05）：整条链**只读** —— 不写 `sea_record`、不动关系、不发事件', async () => {
+  it('★★ M9-F：**只有"已到期"那一档真掉** —— 其余四档（含"还早"）一律零写', async () => {
     const { service, repository, relation, events } = createService({
       rules: [GLOBAL_RULE],
-      candidates: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+      candidates: [
+        candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期时刻＝2 天前 → overdue ⇒ **真掉**
+        candidate({ id: 2n, lastEventAt: before(10 * DAY - 3 * HOUR) }), // ＋3h → alert_manager
+        candidate({ id: 3n, lastEventAt: before(10 * DAY - 20 * HOUR) }), // ＋20h → notify_owner
+        candidate({ id: 4n, lastEventAt: before(9 * DAY) }), // ＋1 天 → agenda
+        candidate({ id: 5n, lastEventAt: before(1 * DAY) }), // ＋9 天 → none
+      ],
     });
 
-    await service.scanSeaWarning(NOW);
+    const summary = await service.scanSeaWarning(NOW);
 
-    // 读：规则 ＋ 候选各一次（候选走 C 域出口，不直连别人的表）
+    // ① 读：规则 ＋ 候选各一次（候选走 C 域出口，不直连别人的表）
     expect(repository.listActiveSeaRules).toHaveBeenCalledTimes(1);
     expect(relation.listSeaWarningCandidates).toHaveBeenCalledTimes(1);
-    // ⛔ 写：一条都不许有 —— 本域仓储只可能写 `sea_record`（`markClaimed`），
-    //    关系本体 / owner 成员是 C 域的表，一旦本层去碰就会调到 C 域出口（下面这条同时钉住）
+    // ② 写：**只有到期那条** —— 一次掉海出口 ＋ 一条历史行，逐参数钉死
+    expect(relation.dropPrivateSeaRelation).toHaveBeenCalledTimes(1);
+    expect(relation.dropPrivateSeaRelation).toHaveBeenCalledWith(1n);
+    expect(repository.createSeaRecord).toHaveBeenCalledTimes(1);
+    expect(repository.createSeaRecord).toHaveBeenCalledWith({
+      relationId: 1n,
+      ownerId: ME,
+      reason: 'follow_timeout', // ← F2 值域内的码（不是自己编的）
+      droppedAt: NOW, // ← 用任务传进来的那一刻，不各自读钟
+    });
+    // ③ 计分：掉 1 条、未掉成 0 条
+    expect(summary.dropped).toBe(1);
+    expect(summary.dropSkipped).toBe(0);
+    // ④ ⛔ 其余动作一律不碰：另两条触发 / 通知 / 动线 / 承诺级联都不属本片
     expect(repository.markClaimed).not.toHaveBeenCalled();
-    expect(repository.findLatestRecord).not.toHaveBeenCalled();
     expect(relation.claimCompanySeaRelation).not.toHaveBeenCalled();
     expect(events.publish).not.toHaveBeenCalled();
+  });
+
+  it('★ 到期但**没掉成**（C 域出口回 `null`：并发下刚被同事领走）⇒ **不写历史行**、计入 `dropSkipped`', async () => {
+    const { service, repository, relation } = createService({
+      rules: [GLOBAL_RULE],
+      candidates: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+      dropResult: null,
+    });
+
+    const summary = await service.scanSeaWarning(NOW);
+
+    // 关系压根没掉 ⇒ 就不该有"掉海"这条历史（凭空编业务事实＝本项目一号坑）
+    expect(relation.dropPrivateSeaRelation).toHaveBeenCalledWith(1n);
+    expect(repository.createSeaRecord).not.toHaveBeenCalled();
+    expect(summary.dropped).toBe(0);
+    expect(summary.dropSkipped).toBe(1);
+  });
+
+  it('★ 一条都没到期（全在预警档）⇒ **一次都不碰** C 域掉海出口（本片只做"还来得及"的告警）', async () => {
+    const { service, repository, relation } = createService({
+      rules: [GLOBAL_RULE],
+      candidates: [candidate({ id: 1n, lastEventAt: before(1 * DAY) })], // ＋9 天 → none
+    });
+
+    const summary = await service.scanSeaWarning(NOW);
+
+    expect(relation.dropPrivateSeaRelation).not.toHaveBeenCalled();
+    expect(repository.createSeaRecord).not.toHaveBeenCalled();
+    expect(summary.hits).toBe(0);
+    expect(summary.dropped).toBe(0);
   });
 });

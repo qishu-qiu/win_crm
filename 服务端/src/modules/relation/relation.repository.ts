@@ -308,8 +308,10 @@ export class RelationRepository {
     });
   }
 
-  /** 撤销该关系**在位**的 owner 成员（认领前清位：掉海任务未建，公海里可能残留在位 owner 行） */
-  revokeActiveOwner(relationId: bigint, by: bigint, tx?: RelationTxClient) {
+  // ===== M9-F 真掉海（→ 需求 §6.3 掉海节奏表末行；数据架构 F1 尾 / §十二）=====
+
+  /** 撤销该关系**在位**的 owner 成员（认领前清位 / 掉海时撤位） */
+  revokeActiveOwner(relationId: bigint, by: bigint | null, tx?: RelationTxClient) {
     const client = tx ?? this.prisma;
     return client.relationMember.updateMany({
       where: {
@@ -318,6 +320,45 @@ export class RelationRepository {
         revoked_at: null,
       },
       data: { revoked_at: new Date(), revoked_by: by },
+    });
+  }
+
+  /**
+   * 取该关系**在位**的 owner 成员（→ C2 `owner_flag` 生成列：一关系至多一条在位 owner）。
+   *
+   * ★ 掉海出口必须先取它：`sea_record.owner_id` 是「**本次掉海时该关系的归属人**」快照
+   *   （F2 逐字）—— 撤完成员就没得写了，所以取值要排在撤销**之前**。
+   * ★ 返回 `null` ＝ 成员表里没有在位 owner（不该出现在私海里；调用方**跳过**，不补数据）。
+   */
+  findActiveOwnerMember(relationId: bigint, tx?: RelationTxClient) {
+    const client = tx ?? this.prisma;
+    return client.relationMember.findFirst({
+      where: { relation_id: relationId, member_type: OWNER_MEMBER_TYPE, revoked_at: null },
+      select: { employee_id: true },
+    });
+  }
+
+  /**
+   * 掉海：把一条**私海**关系打回公海（→ `uk_active_rel` 的另一半：让位给"重新领取 / 别部门激活"）。
+   *
+   * ★ **只改 `sea_status` 一个业务列**（数据架构 F1 尾逐字：「掉海定时任务**只 UPDATE
+   *   `sea_status`，严禁 UPDATE `dept_id`**」）—— 部门恒定不变；**阶段也不动**
+   *   （掉海＝只掉一步，与"判死 / 流失"那种人工终态**不是一回事**，→ 需求 §8.1）。
+   * ★ **条件 UPDATE**：`count === 1` 才算掉成；`0` ＝ 并发下刚被别人领走（or 已不是我方私海）
+   *   ⇒ 调用方**跳过**：没有"掉"这件事，就不该留掉海痕迹。
+   * ★ **不写 `updated_by`**：掉海是**系统任务**动的，没有"登录人"；硬填一个员工 id
+   *   会把系统动作读成人工动作（→ 架构 §7.4 审计分工）。
+   */
+  dropSeaRelation(relationId: bigint, tx?: RelationTxClient) {
+    const client = tx ?? this.prisma;
+    return client.businessRelation.updateMany({
+      where: {
+        id: relationId,
+        sea_status: PRIVATE_SEA_STATUS,
+        deleted_at: null,
+        merged_into: null,
+      },
+      data: { sea_status: COMPANY_SEA_STATUS },
     });
   }
 

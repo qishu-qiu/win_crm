@@ -15,6 +15,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { COMPANY_SEA_STATUS, PRIVATE_SEA_STATUS } from '../relation/domain/relation-active-key';
 import type { SeaRuleLike } from './domain/sea-warning';
 
 @Injectable()
@@ -48,7 +49,41 @@ export class SeaRepository {
     });
   }
 
-  // ===== M7-03 掉海预警：读规则（**只读**；本任务对业务数据零写，→ M7-05）=====
+  // ===== M9-F 真掉海：写本域历史（→ F2 `sea_record`）=====
+
+  /**
+   * 写一行**入公海历史** —— "掉海"这件事在 **F 域**的唯一业务记录（→ F2）。
+   *
+   * ★ 为什么这行归 F 域：`sea_record` 是本域的表（同 `markClaimed`）；
+   *   关系本体 / owner 成员是 **C 域**的表，由 C 域出口自己改（架构 §5.2 跨域三条路）。
+   * ★ `from_sea` / `to_sea` 取的是 `sea_status` 的值域 —— 常量**复用 C 域 domain**
+   *   （`relation-active-key.ts`）：那是 `sea_status` 语义的唯一落点；在 F 域再抄一遍字符串，
+   *   早晚会漂成两套（→ 本项目一号坑「同一事实两个落点」）。
+   * ★ `owner_id` ＝ **本次掉海时该关系的归属人快照**（F2 逐字；支撑历史轮次 / 前主人归组）
+   *   —— 由调用方从 C 域掉海出口拿（那边是**事务内**取的在位 owner），**不是本层猜的**。
+   * ★ `claimed_by` / `claimed_at` **留空**：这是"掉进公海"，还没人领回；
+   *   将来领取时由 `markClaimed` 回填（→ F-01）。
+   */
+  createSeaRecord(data: {
+    relationId: bigint;
+    ownerId: bigint;
+    reason: string;
+    droppedAt: Date;
+  }) {
+    return this.prisma.seaRecord.create({
+      data: {
+        relation_id: data.relationId,
+        owner_id: data.ownerId,
+        from_sea: PRIVATE_SEA_STATUS,
+        to_sea: COMPANY_SEA_STATUS,
+        reason: data.reason,
+        dropped_at: data.droppedAt,
+      },
+      select: { id: true },
+    });
+  }
+
+  // ===== 读掉海规则（M7-03；★ 本域写口只有 `markClaimed` 与 `createSeaRecord`，其余一律只读）=====
 
   /**
    * 读**生效中**的公海规则（→ F1 `sea_rule`；走 `idx_level(level, dept_id, product_line_id, status)`）。

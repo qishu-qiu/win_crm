@@ -137,6 +137,10 @@ interface FakeOptions {
   visibleRelationIds?: bigint[];
   /** D-28：我可见的**公司** id（`listVisibleCompanyIds` 的回值；不给＝没有可见公司） */
   visibleCompanyIds?: bigint[];
+  /** M9-F 掉海：在位 owner 成员（缺省＝有一条；**显式 `null`** ＝ 没有在位 owner） */
+  activeOwner?: { employee_id: bigint } | null;
+  /** M9-F 掉海：条件 UPDATE 的影响行数（`0` ＝ 并发下刚被领走） */
+  dropCount?: number;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -167,6 +171,12 @@ function createService(options: FakeOptions = {}) {
     // 原子认领：真实实现返回 `updateMany` 的 `{count}`（`0` ＝ 被同事抢走）
     claimSeaRelation: jest.fn(async () => ({ count: options.claimCount ?? 1 })),
     revokeActiveOwner: jest.fn(async () => ({ count: 0 })),
+    // M9-F 真掉海：取在位 owner（缺省＝有一条；显式 `null` ＝ 没有在位 owner）
+    findActiveOwnerMember: jest.fn(async () =>
+      options.activeOwner === undefined ? { employee_id: ME } : options.activeOwner,
+    ),
+    // M9-F 真掉海：条件 UPDATE（真实实现返回 `updateMany` 的 `{count}`；`0` ＝ 并发下刚被领走）
+    dropSeaRelation: jest.fn(async () => ({ count: options.dropCount ?? 1 })),
     reviveMember: jest.fn(async () => undefined),
     createStageLog: jest.fn(async (data: Record<string, unknown>) => data),
     findCompetitorById: jest.fn(async () => options.competitor ?? null),
@@ -970,6 +980,57 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       );
 
       expect(repository.claimSeaRelation).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ===========================================================================
+  // M9-F 真掉海（→ 需求 §6.3 掉海节奏表末行「到期 → 执行掉落回公司公海，写历史记录」；
+  //   数据架构 §十二 末句 / F1 尾「只 UPDATE `sea_status`，严禁 UPDATE `dept_id`」）。
+  //   ★ 它就是「领取到私海」**反向的同一件事**：那边公海→私海＋切 owner，这边私海→公海＋撤 owner。
+  //   ★ 与领取最大的不同：**调用方是 Worker 定时任务** ⇒ 本出口*不*要请求上下文（下面有专例钉住）。
+  // ===========================================================================
+  describe('dropPrivateSeaRelation：到期掉海（M9-F）', () => {
+    it('成功：**同一事务**里「条件 UPDATE 私海→公海 ＋ 撤在位 owner」，并回**掉海前**的 owner', async () => {
+      const { service, repository, prisma } = createService();
+
+      const result = await service.dropPrivateSeaRelation(RELATION_ID);
+
+      // ① 一个本域事务（跨域不开大事务；关系 ＋ 成员必须同生共死，→ 架构 §5.2 路之③）
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      // ② 条件 UPDATE：`count===1` 才算掉成（→ 数据架构 §10.2-3 与"抢公海"同一姿势）
+      expect(repository.dropSeaRelation).toHaveBeenCalledWith(RELATION_ID, { tx: true });
+      // ③ 撤在位 owner —— `by = null` ＝ **系统动作**（没有"谁"，硬填一个人比空着更失真）
+      expect(repository.revokeActiveOwner).toHaveBeenCalledWith(RELATION_ID, null, { tx: true });
+      // ④ 回**掉海前**的 owner：F 域要拿它写 `sea_record.owner_id` 快照（F2 逐字）
+      expect(result).toEqual({ ownerId: ME });
+    });
+
+    it('**没有在位 owner** ⇒ 当场回 `null` 且**一行都不动**（凭空造个 owner 去写历史＝一号坑）', async () => {
+      const { service, repository } = createService({ activeOwner: null });
+
+      const result = await service.dropPrivateSeaRelation(RELATION_ID);
+
+      expect(result).toBeNull();
+      expect(repository.dropSeaRelation).not.toHaveBeenCalled();
+      expect(repository.revokeActiveOwner).not.toHaveBeenCalled();
+    });
+
+    it('**条件 UPDATE 影响 0 行**（并发：刚被同事领走）⇒ 回 `null`，**不撤 owner**（半截状态比失败更糟）', async () => {
+      const { service, repository } = createService({ dropCount: 0 });
+
+      const result = await service.dropPrivateSeaRelation(RELATION_ID);
+
+      expect(result).toBeNull();
+      expect(repository.revokeActiveOwner).not.toHaveBeenCalled();
+    });
+
+    it('★ **不需要请求上下文**（调用方是 Worker 定时任务）：没有登录会话也照掉', async () => {
+      const { service } = createService();
+
+      // ⚠ 刻意**不**包 `runWithContext` —— 系统任务没有登录人（同 `listSeaWarningCandidates` 的约定）
+      const result = await service.dropPrivateSeaRelation(RELATION_ID);
+
+      expect(result).toEqual({ ownerId: ME });
     });
   });
 

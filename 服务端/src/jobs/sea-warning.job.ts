@@ -17,8 +17,9 @@
 // ★ `runOnStart = true`：`job.types.ts` 里点名的用例 —— Worker 一起来就先扫一遍，
 //   免得"刚重启完的两小时内没人被提醒"。
 //
-// ⚠ 本任务**不写任何业务数据**（唯一落库动作是 `JobRunner` 写的 `job_run_log`）——
-//   详细口径见 `SeaService.scanSeaWarning` 方法头 ⚠⚠ 段。
+// ★ **本任务的写动作（M9-F 起）**：`overdue` 档**真的掉海**（关系回公海 ＋ 撤 owner ＋ 写
+//   `sea_record`）—— 写动作全在 F 域 service（`scanSeaWarning` → `dropRelation`）里，
+//   本层只"调一次 ＋ 记日志"，**不自己碰库**。写法沿革见 `SeaService.scanSeaWarning` 方法头 ⚠⚠。
 // =============================================================================
 import { Injectable, Logger } from '@nestjs/common';
 
@@ -40,21 +41,22 @@ export class SeaWarningJob implements ScheduledJob {
   constructor(private readonly sea: SeaService) {}
 
   /**
-   * 干活 ＝ 交给 F 域扫一遍（规则解析 / 分档 / 日志都在那边，本层不写业务判断）。
+   * 干活 ＝ 交给 F 域扫一遍（规则解析 / 分档 / **真掉** / 日志都在那边，本层不写业务判断）。
    *
-   * @returns `rowsAffected` ＝ **命中条数**。⚠ 这是**有意**的：本任务**零写**（M7-05），
-   *          "改了几行"恒为 0、留在表里等于什么都看不出来；而 M7-03 的判据就是"命中数"，
-   *          故把命中数落在 `rows_affected` 上，让人**只看 `job_run_log` 也能复盘每一轮扫出几条**。
-   *          检查过的候选条数（`scanned`）留在进程日志的扫描汇总行里。
+   * @returns `rowsAffected` ＝ **真掉的条数**（`summary.dropped`）。
+   *          ★ 为什么不是"命中数"：M7-03/05 那两片**零写**，故把命中数落在 `rows_affected` 上
+   *          （免得"改了几行"恒为 0、留在表里什么都看不出来）；**M9-F 起本任务真的写库了**
+   *          ⇒ 这一列回到它的本义「**改了几行**」。命中数不会丢：它就在下面那行日志里（含四档拆解）。
+   *          检查过的候选条数（`scanned`）同样留在日志的汇总行。
    */
   async run(): Promise<JobRunResult> {
     const now = new Date();
     const summary = await this.sea.scanSeaWarning(now);
 
     this.logger.log(
-      `掉海预警：扫描 ${summary.scanned} 条（生效规则 ${summary.rules} 条）→ 命中 ${summary.hits} 条`,
+      `掉海：扫描 ${summary.scanned} 条（生效规则 ${summary.rules} 条）→ 命中 ${summary.hits} 条 → 真掉 ${summary.dropped} 条`,
     );
 
-    return { rowsAffected: summary.hits, watermark: now.toISOString() };
+    return { rowsAffected: summary.dropped, watermark: now.toISOString() };
   }
 }

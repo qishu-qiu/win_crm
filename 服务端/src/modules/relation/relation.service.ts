@@ -752,6 +752,51 @@ export class RelationService {
   }
 
   /**
+   * 「到期掉海」的系统出口（→ 需求 §6.3 掉海节奏表末行「到期 → 执行掉落回公司公海，写历史记录」；
+   *   数据架构 §十二 掉海预警末句；F1 尾「只 UPDATE `sea_status`，严禁 UPDATE `dept_id`」）。
+   *
+   * ★ **为什么这个出口在 C 域**：掉落要动的两张表（`business_relation` / `relation_member`）
+   *   都是 C 域的表 —— 它就是 `claimCompanySeaRelation`（领取）**反向的同一件事**：
+   *   那边"公海 → 私海 ＋ 切 owner"，这边"私海 → 公海 ＋ 撤 owner"。跨域不许碰别人的表
+   *   （架构 §5.2）⇒ **F 域只编排 ＋ 写自己的 `sea_record`**。
+   *
+   * ★ **为什么不调 `requireViewer`**（与 `listSeaWarningCandidates` 同一约定）：
+   *   调用方是 **Worker 定时任务**（系统身份）—— 没有登录人、没有请求上下文；
+   *   "谁有权限掉海"这个问题不成立（掉海是**系统按规则执行**，不是某个人的操作）。
+   *   ⚠ 故本方法**只许系统任务调用**，HTTP 出口一律不许接（那边走 `listRelations` 之类）。
+   *
+   * ★ **一个本域事务**（架构 §5.2 路之③：多表一致性只在本域开事务）：
+   *   ① 取**在位 owner**（`sea_record.owner_id` 要的是"掉海那一刻的归属人"快照 ⇒ 必须在撤之前取）；
+   *   ② **条件 UPDATE** `sea_status: private → company_sea`，`count === 1` 才算掉成
+   *      （→ 数据架构 §10.2-3 与"抢公海"同一姿势：不靠"先查再改"）；
+   *   ③ **撤销在位 owner 成员**（撤销＝置 `revoked_at`、**不物理删**，→ §10.2-1）。
+   *   ★ 三件事必须**同生共死**：只改 `sea_status` 不撤 owner，库里就留下
+   *     "公海却还有主人"的过渡态（`listPrivateSeaCandidatesForWarning` 头注专门防过这个）。
+   *
+   * @returns 掉成功 ⇒ `{ownerId}`（供 F 域写 `sea_record`）；
+   *          `null` ＝ **本次没掉**（没有在位 owner / 条件 UPDATE 未命中 —— 并发下刚被领走）
+   *          ⇒ 调用方**跳过**：没有"掉"这件事，就不该留掉海痕迹、更不该写历史行。
+   */
+  async dropPrivateSeaRelation(relationId: bigint): Promise<{ ownerId: bigint } | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const client: RelationTxClient = tx;
+
+      // ① 在位 owner（掉海快照要写它；撤完就没得写了）
+      const owner = await this.repository.findActiveOwnerMember(relationId, client);
+      if (owner === null) return null;
+
+      // ② 条件 UPDATE：影响 1 行才算掉成
+      const { count } = await this.repository.dropSeaRelation(relationId, client);
+      if (count !== 1) return null;
+
+      // ③ 撤销在位 owner；`by = null` ＝ 系统动作（没有"谁"，→ 仓储注释 ★）
+      await this.repository.revokeActiveOwner(relationId, null, client);
+
+      return { ownerId: owner.employee_id };
+    });
+  }
+
+  /**
    * 改关系属性（→ §5.6 `PUT /relations/:id`）。
    *
    * ★ 「非灰度必标开发价值」判的是**合并后的最终态**（`urgency` / `value_tier` 各自取改完的样子）：

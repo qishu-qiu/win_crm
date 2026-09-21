@@ -166,3 +166,16 @@ export function resolveDropDeadline(input: SeaWarningAnchor & { followFreqDays: 
   const anchor = input.lastEventAt ?? input.createdAt;
   return new Date(anchor.getTime() + days * MS_PER_DAY);
 }
+
+/**
+ * 掉海原因码（→ 数据架构 **F2** `sea_record.reason` 值域；**只增不改**）。
+ *
+ * ★ 为什么写成常量、不散字符串：`reason` 是「客户**为什么**回到公海」的检索键 ——
+ *   歪一个字母（或与 F2 漂成两套）那类历史就再也查不出来（→ 同各域 `*_AUDIT_ACTIONS` 的姿势）。
+ * ★ **本片只产生 `followTimeout` 一个码**：另两条触发（成单周期超时 / 推进停滞）的锚点
+ *   规格没写（→ 本文件头 ★、《欠账登记表》**D-57**），**不猜不替**。
+ */
+export const SEA_DROP_REASON = {
+  /** 跟进频次未达标（触发①「最近 N 天无有效跟进」，锚点 ＝ `last_event_at`） */
+  followTimeout: 'follow_timeout',
+} as const;

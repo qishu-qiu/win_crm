@@ -408,6 +408,12 @@ export class CompanyRepository {
        *   漏传参数＝静默回到"全公司裸奔"，那正是本行要修的坑。
        */
       visibleCompanyIds: readonly bigint[] | null;
+      /**
+       * 「**待关联**」那半边的可见归属人集合（→ 需求 §6.1 ⑪；D-67）：
+       * 「我 ∪（经理）**管辖部门内**员工」。**空数组 ⇒ 谁都不可见**（不是"不限制"）。
+       * ⚠ 只在 `visibleCompanyIds !== null`（＝收敛那条路）时被用到 —— `all` 档整条过滤都不套。
+       */
+      leadOwnerIds: readonly bigint[];
     },
     pagination: { skip: number; take: number },
   ) {
@@ -422,9 +428,15 @@ export class CompanyRepository {
           : [
               {
                 OR: [
-                  // ① 我的「待关联」线索：**没有任何就职记录** ＋ 归属人 ＝ 我
-                  //    （归属人＝建档录入人，→ 需求 §6.1 ⑦⑪；⑪ 的第一项就是「自己的**待关联**线索」）
-                  { company_contacts: { none: {} }, owner_id: input.viewerId },
+                  // ① 「待关联」线索：**没有任何就职记录** ＋ 归属人落在「我可看的归属人」里
+                  //    （归属人＝建档录入人，→ 需求 §6.1 ⑦⑪）：
+                  //    销售＝只有我；**经理＝我 ∪ 管辖部门内员工**（→ D-67，
+                  //    依据 §6.1 ⑨「经理分派」——要分派就得先看得见；⚠ 只有**管辖部门**，
+                  //    不含"同部门"，销售不许看同事录的线索）
+                  {
+                    company_contacts: { none: {} },
+                    owner_id: { in: [...input.leadOwnerIds] },
+                  },
                   // ② 「自己关系下公司」的联系人：就职记录里**有任意一条**落在我可见的公司里
                   //    （`some`：跳槽历史里只要有一段是可见公司，这个人就可见 —— 历史不断，→ B5）
                   // ⚠ ② 里**不看 `owner_id`**（→ 需求 §6.1 ⑦「已挂公司的人走关系的 owner，

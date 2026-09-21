@@ -40,7 +40,7 @@ import {
 } from '../../kernel/index';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveDataScope, resolvePrimaryRole } from './domain/data-scope';
-import { isEmployeeVisible, visibleEmployeeDeptIds } from './domain/employee-visibility';
+import { isEmployeeVisible, managedDeptIdsOf, visibleEmployeeDeptIds } from './domain/employee-visibility';
 import { classifyLoginAccount } from './domain/login-account';
 import { verifyPassword } from './domain/password';
 import { mergePermissionLevels } from './domain/permission';
@@ -215,6 +215,46 @@ export class OrgService {
     });
 
     return { ...tokens, user: await this.toUserVo(facts) };
+  }
+
+  /**
+   * 「**管辖部门内**的员工 id」集合（→ B 域判「经理能看管辖部门内的**待关联**线索」，D-67）。
+   *
+   * @returns **`null` ＝ 不限制**（`all` 档：总经理 / 管理员，调用方据此**不套过滤**）；
+   *          数组 ＝ 管辖部门内的员工 id（**非经理档回空数组** ⇒ 调用方只剩"自己"那一份）。
+   *
+   * ★ 为什么由 A 域给：判「这个员工属不属于我管辖的部门」要读 `employee`（够不着的域不许查，
+   *   架构 §5.2 路之①），且**兼部门**在 JSON 列里、必须由本域解析（`parseIdList`）—— 别处重写一遍必漏。
+   * ★ 口径**故意比 `listEmployees` 窄**（→ `domain/employee-visibility.ts` 的 `managedDeptIdsOf` ★）：
+   *   通讯录允许销售看**同部门**，但**线索归属**不行 —— 否则销售能看到同部门同事录入的
+   *   待关联线索（含手机号），那是越权。
+   * ★ 一次「查全量员工 ＋ 内存过滤」（与 `listEmployees` 同款取法）：员工表规模按公司算，
+   *   **不做 `JSON_CONTAINS` 反查**（数据架构 §十七 A 明令禁止在 JSON 列做反向全表扫描）。
+   *   ⚠ 非经理档**直接短路**（`allowed.length === 0`）—— 不让销售 / 交付白跑一次员工查询。
+   */
+  async listEmployeeIdsOfManagedDepts(): Promise<readonly bigint[] | null> {
+    const context = getRequestContext();
+    if (context === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '未登录或登录已过期', {
+        constraint: 'org.employees.no_context',
+      });
+    }
+
+    // `all` 档：不过滤（返回 `null` 而不是"全量 id 列表" —— 同 C 域 `listVisibleCompanyIds` 的取法）
+    if (context.dataScope.type === 'all') return null;
+
+    const allowedDeptIds = managedDeptIdsOf(context.dataScope);
+    if (allowedDeptIds.length === 0) return [];
+
+    const employees = await this.repository.listEmployees();
+    return employees
+      .filter((employee) =>
+        isEmployeeVisible(allowedDeptIds, [
+          employee.primary_dept_id,
+          ...parseIdList(employee.extra_dept_ids),
+        ]),
+      )
+      .map((employee) => employee.id);
   }
 
   // ===== M1-12 刷新 =====

@@ -49,6 +49,23 @@ export function visibleEmployeeDeptIds(
 }
 
 /**
+ * 「**只管管辖部门**」的部门集合（→ D-67：经理能看**管辖部门内**同事的「待关联」线索）。
+ *
+ * ★ 与 `visibleEmployeeDeptIds` 的**关键差别**（别合并这两个函数）：
+ *   · `visibleEmployeeDeptIds` 是**通讯录可见性**口径：销售／交付看**同部门**（→ 接口 §4.2）；
+ *   · 本函数是**线索归属**口径：只有经理拿得到集合，**销售／交付一律空数组** ——
+ *     否则销售就能看到**同部门同事**录入的待关联线索（含手机号），那是**越权**，不是"同部门可见"。
+ *
+ * @returns 管辖部门（`dept` 档）；`all` 档与 `self` / `serving` 档**都回空数组**
+ *          —— ⚠ `all` 档（总经理 / 管理员）的空数组**不代表"看不见"**：调用方在 `all` 档走的是
+ *          「**完全不限制**」那条路（由本文件同族的 `null` 语义表达，见 `OrgService.listEmployeeIdsOfManagedDepts`）。
+ */
+export function managedDeptIdsOf(scope: DataScope): readonly bigint[] {
+  const target = resolveDataScopeTarget(scope);
+  return target.mode === 'depts' ? [...target.deptIds] : [];
+}
+
+/**
  * 单个员工是否落在允许范围内（`allowed === null` ＝ 不过滤，一律可见）。
  *
  * `employeeDeptIds` 应传**主部门 ＋ 兼部门**：兼部门员工也是「本部门的人」，

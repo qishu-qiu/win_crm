@@ -946,3 +946,82 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
     expect(audit.records[0]?.input.req_id).toBeUndefined();
   });
 });
+
+// =============================================================================
+// D-67（2026-09-21）：「**管辖部门内**员工 id」出口
+//   B 域拿它判「经理能看**管辖部门内**同事录入的待关联线索」。
+//   判据：① 只认**管辖部门**（销售 / 交付回空 ⇒ 同部门同事的线索**不给**，那是越权）；
+//         ② `all` 档回 `null`（不限制）**且不查库**；③ 非经理档**短路**（不白跑一次员工查询）。
+// =============================================================================
+describe('OrgService.listEmployeeIdsOfManagedDepts（D-67）', () => {
+  /** 员工行（字段与 `EMPLOYEE_LIST_SELECT` 对齐的最小集） */
+  function employeeRow(id: bigint, primaryDeptId: bigint, extraDeptIds: unknown = null) {
+    return {
+      id,
+      work_no: `A00${id}`,
+      name: `员工${id}`,
+      phone: PHONE,
+      username: null,
+      primary_dept_id: primaryDeptId,
+      extra_dept_ids: extraDeptIds,
+      product_line_ids: null,
+      direct_manager_id: null,
+      status: 'active',
+    };
+  }
+
+  const MANAGER_CONTEXT: RequestContext = {
+    employeeId: 7n,
+    deptIds: [1n, 3n],
+    roleCodes: ['sale', 'dept_manager'],
+    dataScope: { type: 'dept', deptIds: [3n] },
+  };
+  const SALE_CONTEXT: RequestContext = {
+    employeeId: 7n,
+    deptIds: [1n],
+    roleCodes: ['sale'],
+    dataScope: { type: 'self', deptIds: [] },
+  };
+
+  it('★ `all` 档 → `null`（不限制）且**一次库都不查**', async () => {
+    const { service, repository } = createService({ employeeRows: [employeeRow(7n, 1n)] });
+
+    await expect(
+      runWithContext(ALL_SCOPE_CONTEXT, () => service.listEmployeeIdsOfManagedDepts()),
+    ).resolves.toBeNull();
+    expect(repository.listEmployees).not.toHaveBeenCalled();
+  });
+
+  it('经理 → 管辖部门内员工 id（**主部门或兼部门**命中即算，兼部门不许漏）', async () => {
+    const { service } = createService({
+      employeeRows: [
+        employeeRow(7n, 3n), // 主部门＝管辖部门
+        employeeRow(8n, 1n, [3]), // 兼部门＝管辖部门
+        employeeRow(9n, 1n), // 两个都不是 ⇒ 不给
+      ],
+    });
+
+    await expect(
+      runWithContext(MANAGER_CONTEXT, () => service.listEmployeeIdsOfManagedDepts()),
+    ).resolves.toEqual([7n, 8n]);
+  });
+
+  it('★ 销售（`self`）→ **空数组**且**不查库**：同部门同事的线索不给（越权）', async () => {
+    const { service, repository } = createService({ employeeRows: [employeeRow(7n, 1n)] });
+
+    await expect(
+      runWithContext(SALE_CONTEXT, () => service.listEmployeeIdsOfManagedDepts()),
+    ).resolves.toEqual([]);
+    expect(repository.listEmployees).not.toHaveBeenCalled();
+  });
+
+  it('拿不到上下文 → 401（同 `listEmployees`：**绝不兜底成全量**）', async () => {
+    const { service, repository } = createService({ employeeRows: [] });
+
+    const error = await captureAppError(() => service.listEmployeeIdsOfManagedDepts());
+
+    expect(error.httpStatus).toBe(401);
+    expect(error.constraint).toBe('org.employees.no_context');
+    expect(repository.listEmployees).not.toHaveBeenCalled();
+  });
+});

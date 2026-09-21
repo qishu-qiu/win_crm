@@ -474,6 +474,7 @@ export class CompanyService {
       });
     }
     const viewerId = context.employeeId;
+    const leadOwnerIds = await this.visibleLeadOwnerIds(viewerId);
     const pagination = resolvePagination({ page: query.page, pageSize: query.pageSize });
     const { rows, total } = await this.repository.listContacts(
       {
@@ -482,6 +483,7 @@ export class CompanyService {
         // ★ 可见性**由调用方（聚合层）按 C 域出口给定**：B 域不许反向 import C 域（架构 §3），
         //   故这里只透传 —— 「谁算 `all` 档」那一条判定仍只有一处（C 域 `resolveVisibleCompanyScope`）。
         visibleCompanyIds,
+        leadOwnerIds,
       },
       pagination,
     );
@@ -490,6 +492,22 @@ export class CompanyService {
       total,
       pagination,
     );
+  }
+
+  /**
+   * 「**待关联**」那半边的可见归属人集合（→ 需求 §6.1 ⑪；D-67）。
+   *
+   * 销售 ＝ 只有我；**经理 ＝ 我 ∪ 管辖部门内员工**（依据 §6.1 ⑨「经理分派」：要分派就得先看得见）；
+   * `all` 档 ＝ `[]`（但那时**整条过滤都不套**，见 `repository.listContacts`）。
+   *
+   * ★ 集合**问 A 域**（`listEmployeeIdsOfManagedDepts`）：员工的部门归属在 A 域，**兼部门**还在 JSON 列里
+   *   —— B 域不许自己查 `employee`、更不许自己解那份 JSON（重写一遍必漏；架构 §5.2 路之①）。
+   * ★ 为什么"线索"比"通讯录"窄：通讯录允许销售看**同部门**（→ 接口 §4.2），
+   *   但**同部门同事录入的线索**（含手机号）不给 —— 那是越权（→ A 域 `managedDeptIdsOf` 的 ★）。
+   */
+  private async visibleLeadOwnerIds(viewerId: bigint): Promise<readonly bigint[]> {
+    const managed = await this.org.listEmployeeIdsOfManagedDepts();
+    return managed === null ? [] : [...new Set([viewerId, ...managed])];
   }
 
   // ===== 跨域只读出口（架构 §5.2 路之①）=====
@@ -606,8 +624,9 @@ export class CompanyService {
    * ★ **可见性**（与 `listContacts` **同一套判定**，两处不许各写一遍 —— 分叉就会
    *   「列表里看得到、点进去 403」或反过来）：
    *   ① `all` 档（总经理 / 管理员）→ 看全部（不套过滤）；
-   *   ② 「待关联」（没挂公司）→ **只给归属人自己**（→ 需求 §6.1 ⑪）：线索属私人待跟进，
-   *      别人拿到 id 也看不了 → **403**；
+   *   ② 「待关联」（没挂公司）→ 归属人得在「**我可看的归属人**」里（→ 需求 §6.1 ⑪；D-67）：
+   *      销售＝只有自己（线索属私人待跟进，别人拿到 id 也看不了 → **403**）；
+   *      **经理＝我 ∪ 管辖部门内员工**（依据 §6.1 ⑨「经理分派」）；
    *   ③ 已挂公司的人 → **必须有一条就职记录落在「我可见的公司」里**（→ 需求 §6.1 ⑪ / D-28；
    *      与 `listContacts` **同宽、同源**：集合都由聚合层按 C 域出口喂进来，本层不自己算）。
    *
@@ -640,20 +659,22 @@ export class CompanyService {
       });
     }
 
-    const [employments, traits] = await Promise.all([
+    const [employments, traits, leadOwnerIds] = await Promise.all([
       this.repository.findContactEmployments(contactId),
       this.repository.findContactTraits(contactId),
+      this.visibleLeadOwnerIds(viewerId),
     ]);
 
     // 可见性（见方法头 ★②③）——**与列表同一套两半判定**，两处不许各写一遍：
-    //   ① 「待关联」（**没有任何就职记录**）⇒ 只有归属人能看（归属人＝建档录入人）；
+    //   ① 「待关联」（**没有任何就职记录**）⇒ 归属人得在「我可看的归属人」里
+    //      （销售＝我；经理＝我 ∪ 管辖部门内员工，→ D-67）；
     //   ② 已挂公司 ⇒ 必须有一条就职记录落在「我可见的公司」里（`null` ＝ 不收敛 ⇒ 放行）。
     // ⚠ ② 里**不看 `owner_id`**（→ 需求 §6.1 ⑦「已挂公司的人走关系的 owner，不看这一列」），
     //   与仓储那条 `OR` 分支逐字同口径；判定用**公司 id** 比，不引第二个口径。
     const visible =
       visibleCompanyIds === null ||
       (employments.length === 0
-        ? row.owner_id === viewerId
+        ? row.owner_id !== null && leadOwnerIds.includes(row.owner_id)
         : employments.some((item) => visibleCompanyIds.includes(item.company.id)));
     if (!visible) {
       throw new AppError(ErrorCode.FORBIDDEN, 403, '无权查看：该联系人不在你的可见范围内', {

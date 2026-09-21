@@ -6,7 +6,7 @@
 //   少给一个部门 = 兼部门同事凭空消失。两种错都不会抛异常，只能靠断言钉住。
 // =============================================================================
 import { type DataScope } from '../../../kernel/context/request-context';
-import { isEmployeeVisible, visibleEmployeeDeptIds } from './employee-visibility';
+import { isEmployeeVisible, managedDeptIdsOf, visibleEmployeeDeptIds } from './employee-visibility';
 
 const MY_DEPTS = [1n, 2n];
 
@@ -61,6 +61,29 @@ describe('员工列表可见范围（domain/employee-visibility · G7）', () =>
 
     it('员工没有任何部门归属 → 不可见（编不出归属就不给看）', () => {
       expect(isEmployeeVisible([1n], [])).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // D-67（2026-09-21）：`managedDeptIdsOf` —— 「**只管管辖部门**」那一档
+  //   ★ 与 `visibleEmployeeDeptIds` 的关键差别就在这里：**销售拿到的是空集合**
+  //     （通讯录允许看同部门，但同部门同事录入的**线索**不给 —— 那是越权）。
+  // ==========================================================================
+  describe('managedDeptIdsOf —— 只认管辖部门（D-67：线索归属口径）', () => {
+    it('`dept`（经理）→ **管辖部门**', () => {
+      expect(managedDeptIdsOf(scope('dept', [3n, 4n]))).toEqual([3n, 4n]);
+    });
+
+    it('★ `self`（销售）→ **空数组**（≠ `visibleEmployeeDeptIds` 的"同部门"）', () => {
+      expect(managedDeptIdsOf(scope('self'))).toEqual([]);
+    });
+
+    it('★ `serving`（交付 / 客服）→ **空数组**', () => {
+      expect(managedDeptIdsOf(scope('serving'))).toEqual([]);
+    });
+
+    it('`all`（总经理 / 管理员）→ **空数组**（⚠ 它的"不过滤"由调用方用 `null` 表达，不靠这个空集）', () => {
+      expect(managedDeptIdsOf(scope('all'))).toEqual([]);
     });
   });
 });

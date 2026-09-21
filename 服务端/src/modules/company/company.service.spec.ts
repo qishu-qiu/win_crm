@@ -180,6 +180,8 @@ interface FakeOptions {
   dictLabels?: { id: bigint; label: string }[];
   /** M6-15：A 域员工出口返回的人（落锁人姓名用） */
   employeeRefs?: { id: bigint; name: string }[];
+  /** D-67：A 域出口回的「**管辖部门内**员工 id」（`null` ＝ 不限制 / all 档；不给＝空 ⇒ 只有自己） */
+  managedEmployeeIds?: readonly bigint[] | null;
 }
 
 function createRepository(options: FakeOptions = {}) {
@@ -260,7 +262,7 @@ function createPrisma() {
   return client as unknown as PrismaService;
 }
 
-/** A 域替身·组织与权限（M6-15 起 B 域要用它取落锁人姓名） */
+/** A 域替身·组织与权限（M6-15 起 B 域要用它取落锁人姓名；D-67 起还要它给「管辖部门内员工 id」） */
 function createOrg(options: FakeOptions = {}) {
   return {
     getEmployeeRefs: jest.fn(async (ids: readonly bigint[]) =>
@@ -268,6 +270,8 @@ function createOrg(options: FakeOptions = {}) {
         ids.includes(item.id),
       ),
     ),
+    // D-67：`null` ＝ 不限制（all 档）；数组 ＝ 管辖部门内员工（不给＝默认空 ⇒ 只有自己）
+    listEmployeeIdsOfManagedDepts: jest.fn(async () => options.managedEmployeeIds ?? []),
   };
 }
 
@@ -609,6 +613,28 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       await runWithContext(CONTEXT, () => service.listContacts({}, []));
 
       expect(repository.listContacts.mock.calls[0]?.[0]).toMatchObject({ visibleCompanyIds: [] });
+    });
+
+    // ===== D-67（2026-09-21）：经理能看「管辖部门内」同事录入的待关联线索 =====
+
+    it('★ D-67：经理 → 「可看归属人」＝ **我 ∪ 管辖部门内员工**（集合来自 A 域出口）', async () => {
+      const { service, repository } = createService({ managedEmployeeIds: [9n, 42n] });
+
+      await runWithContext(CONTEXT, () => service.listContacts({}, [3n]));
+
+      expect(repository.listContacts.mock.calls[0]?.[0]).toMatchObject({
+        leadOwnerIds: [OPERATOR_ID, 9n, 42n],
+      });
+    });
+
+    it('★ D-67：销售（A 域回空数组）→ 只有**我一个** —— 同部门同事的线索不给（越权）', async () => {
+      const { service, repository } = createService({ managedEmployeeIds: [] });
+
+      await runWithContext(CONTEXT, () => service.listContacts({}, [3n]));
+
+      expect(repository.listContacts.mock.calls[0]?.[0]).toMatchObject({
+        leadOwnerIds: [OPERATOR_ID],
+      });
     });
 
     it('★ D-08：分页入参 → 仓储拿 `skip/take`、出参是 §2.3 分页对象（键名 `page_size` 而非 `pageSize`）', async () => {
@@ -956,6 +982,28 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       );
 
       expect(error.httpStatus).toBe(403);
+    });
+
+    it('★ D-67：**经理**能看管辖部门内同事录的待关联线索；**销售**看同一条 → 403', async () => {
+      // 线索归属＝同事 9n，且没有任何就职记录（＝待关联）
+      const fixture: FakeOptions = {
+        contactDetail: contactDetailRow({ owner_id: 9n }),
+        employments: [],
+      };
+
+      const asManager = createService({ ...fixture, managedEmployeeIds: [9n] });
+      const detail = await runWithContext(CONTEXT, () =>
+        asManager.service.getContact('11', [3n]),
+      );
+      expect(detail.id).toBe(11n);
+
+      // 销售：A 域出口回空数组 ⇒ 可看归属人只有自己 ⇒ 同事的线索 403
+      const asSale = createService(fixture);
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => asSale.service.getContact('11', [3n])),
+      );
+      expect(error.httpStatus).toBe(403);
+      expect(error.constraint).toBe('contact.out_of_scope');
     });
 
     it('`all` 档（总经理 / 管理员）→ 别人的「待关联」也看得到（与列表同一口径）', async () => {

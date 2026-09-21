@@ -6,9 +6,12 @@
 //   **不写 SQL**（在 `sea.repository.ts`）。
 //
 // 口径来源（★ 真相源，勿自造）：
-//   · 《销售CRM数据架构文档》§十二（定时任务）：「掉海预警（私海→公海）｜每小时｜按 sea_rule：
-//     ≤3 天进动线；到期前 24h 推销售；6h 标红+推经理；超期落 sea_record 转公司公海」——
-//     ★ 末句"超期落 sea_record"＝ **M9-F 真掉海**（`scanSeaWarning` 的 `overdue` 档 → `dropRelation`）；
+//   · 《销售CRM数据架构文档》§十二（定时任务）：「掉海预警（私海→公海）｜**每日**｜按 sea_rule，
+//     **一律按自然日判定**：≤3 天进动线；**到期前 1 天**推销售；**到期当天**标红+推经理；
+//     **到期日已过** ⇒ 落 sea_record 转公司公海」——
+//     ★ **2026-09-21 口径变更**：原「每小时 / 24h / 6h」作废（→《废止口径登记表》**#41**；
+//       七叔：「最小单位是天，系统是助手不是催命系统」）；
+//     ★ 末句"落 sea_record"＝ **M9-F 真掉海**（`scanSeaWarning` 的 `overdue` 档 → `dropRelation`）；
 //       M7-05 当时刻意只告警、不真掉，那一层的判据由 M9-F 接棒（写法沿革见 `scanSeaWarning` 方法头）；
 //   · 《销售CRM接口API文档》§4.5：`POST /sea/company/:id/claim`（`:id` ＝ **公司 id**）；
 //     §5.6 尾：**领取瞬间该关系所有 open 承诺 `owner_id` 转新 owner**（承诺随关系走，→ 需求 §8.1）。
@@ -431,13 +434,17 @@ export class SeaService {
   // ===== 掉海扫描（M7-03 分档告警 ＋ **M9-F 起 `overdue` 真掉**）=====
 
   /**
-   * 扫一遍**所有有主关系**：按三档阈值算出"该提醒谁"，**并把已到期（`overdue`）的真的掉回公海**。
+   * 扫一遍**所有有主关系**：按三档阈值算出"该提醒谁"，**并把到期日已过（`overdue`）的真的掉回公海**。
+   *
+   * ★ **判定一律按自然日**（Asia/Shanghai，见 `domain/sea-warning.ts`）—— 口径是「**最小单位是天**」：
+   *   `overdue` ＝ **到期日已过**（到期**当天仍归销售一整天**，次日才掉）；
+   *   另三档＝到期当天 / 到期前 1 天 / ≤3 天。⚠ 原「24h / 6h」已作废（→《废止口径登记表》**#41**）。
    *
    * ⚠⚠ **写法沿革（别把两片读混）**：
    *   · **M7-03 / M7-05 当时刻意"只告警、不真掉"** —— 那一层的判据逐字是「不写 `sea_record`、
    *     不清 owner」（先把"谁快到期了"扫出来，真掉海那半留到规则与出口齐备再做）；
    *   · **★ M9-F（2026-09-21）接棒**：`overdue` 档**真的掉**（→ `dropRelation`），依据 ＝
-   *     需求 §6.3 掉海节奏表末行「**到期 → 执行掉落回公司公海，写历史记录（sea_record）**」。
+   *     需求 §6.3 掉海节奏表末行「**到期日已过（次日）→ 执行掉落回公司公海，写历史记录（sea_record）**」。
    *   三档**告警出口动作**（推销售 / 标红推经理）**仍未接**：要 `notification`（未建，→ D-42）；
    *   「≤3 天进动线」要 **组装今日动线**那条任务（§十二，每日 05:00，未建，→ M9 jobs）
    *   —— 故本方法**不写 `daily_agenda`**（进动线不是它的事，硬写＝替那条任务下结论）。
@@ -446,8 +453,9 @@ export class SeaService {
    *   ＋ 写 `sea_record`）；`none` / `agenda` / `notify_owner` / `alert_manager` **四档一律零写**
    *   —— 它们只是"还来得及"，不该产生任何业务事实。
    *
-   * ★ 规则**一条都没有**时：只 warn、不猜、不拿默认天数顶上（那等于由实现定义业务口径）——
-   *   规则配置端点（接口 §4.14.10 `GET/PUT /sea/rules`）属 **M9-F 的另一片**，尚未建。
+   * ★ 规则**一条都没有**时：只 warn、不猜、不拿默认天数顶上（那等于由实现定义业务口径）。
+   *   规则配置端点已建（`GET/PUT /sea/rules` → 接口 §4.14.10 / §5.16，M9-F 规则配置片）——
+   *   **空表 ＝ 本任务一条都不判**，故"上线前先有人配一条规则"是必要动作。
    *
    * @param now 判定基准时刻由调用方传入（本层不读系统时钟：任务时刻要与 `job_run_log.run_at` 同源）
    */
@@ -458,7 +466,7 @@ export class SeaService {
 
     if (rules.length === 0) {
       this.logger.warn(
-        `掉海预警：sea_rule 没有生效中的规则（规则配置属 M9-F）⇒ 本次一条都不判，候选 ${candidates.length} 条全部跳过`,
+        `掉海预警：sea_rule 没有生效中的规则（配置入口＝GET/PUT /sea/rules，→ 接口 §4.14.10）⇒ 本次一条都不判，候选 ${candidates.length} 条全部跳过`,
       );
       return {
         scanned: candidates.length,
@@ -541,7 +549,7 @@ export class SeaService {
 
     this.logger.log(
       `掉海扫描完成：候选私海 ${candidates.length} 条 / 生效规则 ${rules.length} 条 → 命中 ${hits} 条` +
-        `（已到期 ${tiers.overdue} / ≤6h ${tiers.alert_manager} / ≤24h ${tiers.notify_owner} / ≤3天 ${tiers.agenda}）` +
+        `（到期日已过 ${tiers.overdue} / 到期当天 ${tiers.alert_manager} / 到期前1天 ${tiers.notify_owner} / ≤3天 ${tiers.agenda}）` +
         `；★ 真掉 ${dropped} 条（未掉成 ${dropSkipped} 条）` +
         `；跳过：无规则 ${skippedNoRule} / 规则未配跟进天数 ${skippedNoFreq}`,
     );

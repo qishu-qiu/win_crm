@@ -3,15 +3,17 @@
 //
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM业务需求文档》§6.3「预警节奏（三级，硬约束，永远置顶，仅作用于 私海→公海 这一步）」：
-//       倒计时 ≤3 天 → 进入今日动线；到期前 24 小时 → 推送销售；到期前 6 小时 → 标红 + 推送部门经理；
-//       到期 → 执行掉落回公司公海，写 `sea_record`。
-//     ⚠ **末行不在本片**：M7 只告警、不真掉（《开发计划-V1》M7-05「只告警、不真掉」）
-//       ⇒ `overdue` 在**本文件里**只是"又急又高的一档告警"，本文件**不产生任何写动作**、
-//       也**不判"该不该掉"**（真掉 ＋ `sea_record` ＋ reason 码归 M9-F）。
+//       倒计时 ≤3 天 → 进入今日动线；**到期前 1 天** → 推送销售；**到期当天** → 标红 + 推送部门经理；
+//       **到期日已过** → 执行掉落回公司公海，写 `sea_record`。
+//     ★ **2026-09-21 口径变更（七叔：「最小单元是天，系统是助手不是催命系统」）**：
+//       三档与掉落**一律按自然日判定**，原「到期前 24 小时 / 6 小时」两档**作废**
+//       （→《废止口径登记表》**#41** / 数据架构 §十二）。**本文件不再有任何"小时"阈值。**
+//     ⚠ **末行（掉落）不在本文件的写路径里**：本文件**不产生任何写动作**、也**不判"该不该掉"**
+//       —— 真掉 ＋ `sea_record` ＋ reason 码在 `sea.service.ts` 的 `dropRelation`（M9-F）。
 //   · 《销售CRM数据架构文档》F1（`sea_rule` L1-L4）：`level`(1=全局 2=产品线 3=部门 4=部门×产品线)
 //       ＋ `follow_freq_days` / `deal_cycle_days` / `stay_days` / `no_progress_max`
 //       ＋ `effective_from`（改天数走 **7 天缓冲**）＋ `status`；**命中解析 L4→L1 取第一条**。
-//   · 同 §十二（定时任务清单）「掉海预警（私海→公海）｜每小时｜按 sea_rule」；
+//   · 同 §十二（定时任务清单）「掉海预警（私海→公海）｜**每日**｜按 sea_rule」；
 //     同 §十二「节奏提醒」段的实现口径：**「距掉海」谓词走 `idx_sea_scan(last_event_at, sea_status)`**。
 //
 // ★ **本片只覆盖「跟进频次」这一条触发**（决定倒计时锚点的那一步，唯一有规格依据的取法）：
@@ -34,22 +36,24 @@
 // =============================================================================
 
 /**
- * 三档阈值（《需求》§6.3 预警节奏表**逐条对应**）。
- * ★ 单位混用（天 / 小时）是**照抄规格的语气**，不在代码里"统一成小时"——换算写在一处：
- *   见 `hoursOf`，免得读代码的人以为阈值被改过。
+ * 三档阈值（《需求》§6.3 预警节奏表**逐条对应**；**单位一律「天」**）。
+ *
+ * ★ 2026-09-21 起**不再有小时阈值**：口径＝「**最小单位是天，系统是助手不是催命系统**」
+ *   （→《废止口径登记表》#41）。三者都是**"距到期日还有几天"**（自然日）：
+ *   `0` ＝ 到期当天、`1` ＝ 到期前一天、`3` ＝ 还剩三天。
  */
 export const SEA_WARNING_THRESHOLDS = {
-  /** 倒计时 ≤3 天 → 进入今日动线 */
+  /** 距到期 ≤3 天 → 进入今日动线 */
   agendaDays: 3,
-  /** 到期前 24 小时 → 推送销售 */
-  notifyOwnerHours: 24,
-  /** 到期前 6 小时 → 标红 + 推送部门经理 */
-  alertManagerHours: 6,
+  /** 距到期 1 天（＝到期前一天）→ 推送销售 */
+  notifyOwnerDays: 1,
+  /** 距到期 0 天（＝**到期当天**）→ 标红 + 推送部门经理 */
+  alertManagerDays: 0,
 } as const;
 
 /**
- * 预警档（**由急到缓**排列；`none` ＝ 还没进任何一档）。
- * ★ `overdue` ＝ 已到/已过到期时刻 —— 本片**只告警**（真掉属 M9-F，见文件头 ⚠）。
+ * 预警档（**由急到缓**排列；`none` ＝ 还没进任何一档）。**按自然日判定**（见文件头 ★）。
+ * ★ `overdue` ＝ **到期日已过**（次日就该掉落 —— 掉落由 M9-F 的 service 执行，见文件头 ⚠）。
  */
 export type SeaWarningTier = 'overdue' | 'alert_manager' | 'notify_owner' | 'agenda' | 'none';
 
@@ -79,34 +83,48 @@ export interface SeaWarningAnchor {
   createdAt: Date;
 }
 
-const MS_PER_HOUR = 60 * 60 * 1000;
-const MS_PER_DAY = 24 * MS_PER_HOUR;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** 阈值 → 毫秒（天/小时的换算是**本文件唯一一处**，别处只许用毫秒） */
-function hoursOf(hours: number): number {
-  return hours * MS_PER_HOUR;
-}
+/**
+ * **自然日的唯一落点**：`Asia/Shanghai`（固定 **+08:00**、无夏令时 —— 中国大陆自 1991 年起不用夏令时，
+ * 故"加 8 小时再整除一天"就是准确的北京时间日界）。
+ *
+ * ★ 为什么需要它（而不是直接比毫秒）：口径是「**最小单位是天**」（需求 §6.3 / 废止口径 #41）——
+ *   "到期当天"指的是**日历上的那一天**：客户 09-20 14:00 到期，09-20 23:59 仍算"到期当天"，
+ *   而 09-21 00:01 就是"到期日已过"（该掉）。用毫秒差算会把这两者揉在一起。
+ * ★ 为什么按北京时间而不是 UTC：判定要落在**人上班的那个日历日**上（数据架构 §十二 同注）——
+ *   按 UTC 日界的话，北京时间 08:00 前都还属于"UTC 的前一天"，与"今天到期"的直觉不符
+ *   （D-54 的"UTC 存、出口换算"是**存储**口径，两者不冲突）。
+ */
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 
-function daysOf(days: number): number {
-  return days * MS_PER_DAY;
+/** 某个时刻所在的自然日序号（Asia/Shanghai）；序号差即"相差几天" */
+function shanghaiDayIndex(at: Date): number {
+  return Math.floor((at.getTime() + SHANGHAI_OFFSET_MS) / MS_PER_DAY);
 }
 
 /**
  * 三档阈值判定（M7-04 的**核心纯函数**）。
  *
- * 边界取法：规格写的是「**≤3 天**」「到期前 **24 小时**」「到期前 **6 小时**」⇒ **闭区间**
- *   （正好 3 天整 / 正好 24h / 正好 6h **算命中**）—— 少判一分钟就会漏掉一个客户，
+ * 判定方式＝**两个时刻各落在哪个自然日**（Asia/Shanghai），取日差 —— 不看还有几小时几分：
+ * ```
+ * 日差 < 0   → overdue        到期日已过（次日掉落）
+ * 日差 = 0   → alert_manager  到期当天：标红 + 推部门经理
+ * 日差 = 1   → notify_owner   到期前 1 天：推销售
+ * 日差 ≤ 3   → agenda         进今日动线
+ * 其余       → none
+ * ```
+ * ★ 边界是**闭区间**（正好 3 天、正好 1 天、正好当天都**算命中**）：少判一天就会漏掉一个客户，
  *   而多提示一次只是多一条提醒，代价不对等。
- *
- * 档位从急到缓逐级降：`overdue` → `alert_manager` → `notify_owner` → `agenda` → `none`。
+ * ★ 档位从急到缓逐级降：`overdue` → `alert_manager` → `notify_owner` → `agenda` → `none`。
  */
 export function classifySeaWarning(input: { dropAt: Date; now: Date }): SeaWarningTier {
-  const remainingMs = input.dropAt.getTime() - input.now.getTime();
+  const daysLeft = shanghaiDayIndex(input.dropAt) - shanghaiDayIndex(input.now);
 
-  if (remainingMs <= 0) return 'overdue';
-  if (remainingMs <= hoursOf(SEA_WARNING_THRESHOLDS.alertManagerHours)) return 'alert_manager';
-  if (remainingMs <= hoursOf(SEA_WARNING_THRESHOLDS.notifyOwnerHours)) return 'notify_owner';
-  if (remainingMs <= daysOf(SEA_WARNING_THRESHOLDS.agendaDays)) return 'agenda';
+  if (daysLeft < SEA_WARNING_THRESHOLDS.alertManagerDays) return 'overdue';
+  if (daysLeft === SEA_WARNING_THRESHOLDS.alertManagerDays) return 'alert_manager';
+  if (daysLeft === SEA_WARNING_THRESHOLDS.notifyOwnerDays) return 'notify_owner';
+  if (daysLeft <= SEA_WARNING_THRESHOLDS.agendaDays) return 'agenda';
   return 'none';
 }
 
@@ -166,6 +184,10 @@ function matchesLevel(
  *   老规则（`effective_from` 远在过去）取不到更晚 ⇒ 行为与从前**逐字一致**（不改历史语义）。
  *   ⚠ 「重新起算」的集合是**受该规则约束的关系**（不是字面"全库在途"）——理由见
  *     `sea-rule.ts` 文件头 ★ 段（那一段同时解释了为什么字面全局重算在本数据模型里无处落）。
+ *
+ * ★ **返回值是"精确时刻"，但消费方按「自然日」判档**（`classifySeaWarning`）：到期**日**
+ *   ＝ 该时刻所在的自然日（Asia/Shanghai）。加整天不会跨日界（无夏令时）⇒
+ *   `日(锚点 + N×24h)` ≡ `日(锚点) + N 天`，两者口径一致，不存在"差一小时换一天"的缝。
  *
  * @returns 到期时刻；`followFreqDays` 没配（或不是正数）⇒ `null` ＝ **本片判不了这条**，
  *          由调用方计入"跳过"（**不许**用别的天数 / 默认天数顶替 —— 那等于自造口径）

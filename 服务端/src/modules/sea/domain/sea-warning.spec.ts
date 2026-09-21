@@ -23,39 +23,79 @@ function after(ms: number): Date {
   return new Date(NOW.getTime() + ms);
 }
 
-describe('classifySeaWarning：三档阈值判定（→ 需求 §6.3 预警节奏表）', () => {
-  it('**已到期 / 已超期** → `overdue`（各 1 例：刚好到期、早了一毫秒）', () => {
-    expect(classifySeaWarning({ dropAt: NOW, now: NOW })).toBe('overdue');
-    expect(classifySeaWarning({ dropAt: new Date(NOW.getTime() - 1), now: NOW })).toBe('overdue');
-    // 已经过了一大截同样只报"到期"，不另造档位
-    expect(classifySeaWarning({ dropAt: after(-5 * DAY), now: NOW })).toBe('overdue');
+/**
+ * 上海某日某时的**对应 UTC 时刻**（−8h，无夏令时）—— 把"哪一天"写成能读的样子。
+ * `shanghaiDay(0)` ＝ 上海 `2026-09-20 00:00`；档位判定按**自然日**（→ 需求 §6.3 / 废止口径 #41）。
+ */
+function shanghaiDay(dayOffset: number, hour = 0, minute = 0): Date {
+  const base = Date.UTC(2026, 8, 20, 0, 0, 0) - 8 * HOUR;
+  return new Date(base + dayOffset * DAY + hour * HOUR + minute * 60 * 1000);
+}
+
+describe('classifySeaWarning：三档阈值判定（→ 需求 §6.3 预警节奏表 · **按自然日**）', () => {
+  it('**到期日已过** → `overdue`（各 2 例：昨天 23:59、足足一个月前）', () => {
+    expect(
+      classifySeaWarning({ dropAt: shanghaiDay(-1, 23, 59), now: shanghaiDay(0, 0, 0) }),
+    ).toBe('overdue');
+    expect(classifySeaWarning({ dropAt: shanghaiDay(-30), now: shanghaiDay(0, 12) })).toBe('overdue');
   });
 
-  it('**到期前 6 小时**（标红 + 推部门经理）→ `alert_manager`', () => {
-    expect(classifySeaWarning({ dropAt: after(6 * HOUR), now: NOW })).toBe('alert_manager');
-    expect(classifySeaWarning({ dropAt: after(6 * HOUR - 1), now: NOW })).toBe('alert_manager');
-    expect(classifySeaWarning({ dropAt: after(1), now: NOW })).toBe('alert_manager');
+  it('**到期当天**（标红 + 推部门经理）→ `alert_manager`（当天两端各 1 例）', () => {
+    // 今天 00:01 看"今天 23:59 到期" —— 还是当天
+    expect(
+      classifySeaWarning({ dropAt: shanghaiDay(0, 23, 59), now: shanghaiDay(0, 0, 1) }),
+    ).toBe('alert_manager');
+    // 今天 23:59 看"今天 00:00 到期" —— 仍是当天（**没跨零点就不算过**）
+    expect(classifySeaWarning({ dropAt: shanghaiDay(0, 0, 0), now: shanghaiDay(0, 23, 59) })).toBe(
+      'alert_manager',
+    );
   });
 
-  it('**6 小时之后、24 小时以内**（推销售）→ `notify_owner`', () => {
-    expect(classifySeaWarning({ dropAt: after(6 * HOUR + 1), now: NOW })).toBe('notify_owner');
-    expect(classifySeaWarning({ dropAt: after(20 * HOUR), now: NOW })).toBe('notify_owner');
-    expect(classifySeaWarning({ dropAt: after(24 * HOUR), now: NOW })).toBe('notify_owner');
+  it('**到期前 1 天**（推销售）→ `notify_owner`（当天的两个极端时刻各 1 例）', () => {
+    expect(classifySeaWarning({ dropAt: shanghaiDay(1, 0, 1), now: shanghaiDay(0, 0, 1) })).toBe(
+      'notify_owner',
+    );
+    expect(
+      classifySeaWarning({ dropAt: shanghaiDay(1, 23, 59), now: shanghaiDay(0, 23, 59) }),
+    ).toBe('notify_owner');
   });
 
-  it('**24 小时之后、3 天以内**（进今日动线）→ `agenda`', () => {
-    expect(classifySeaWarning({ dropAt: after(24 * HOUR + 1), now: NOW })).toBe('agenda');
-    expect(classifySeaWarning({ dropAt: after(2 * DAY), now: NOW })).toBe('agenda');
-    expect(classifySeaWarning({ dropAt: after(3 * DAY), now: NOW })).toBe('agenda');
+  it('**2~3 天**（进今日动线）→ `agenda`（含"正好 3 天"这条闭区间边界）', () => {
+    expect(classifySeaWarning({ dropAt: shanghaiDay(2), now: shanghaiDay(0, 12) })).toBe('agenda');
+    expect(classifySeaWarning({ dropAt: shanghaiDay(3, 0, 0), now: shanghaiDay(0, 12) })).toBe(
+      'agenda',
+    );
   });
 
-  it('**3 天之外** → `none`（还没进任何一档，不报）', () => {
-    expect(classifySeaWarning({ dropAt: after(3 * DAY + 1), now: NOW })).toBe('none');
-    expect(classifySeaWarning({ dropAt: after(30 * DAY), now: NOW })).toBe('none');
+  it('**4 天及以后** → `none`（还没进任何一档，不报）', () => {
+    expect(classifySeaWarning({ dropAt: shanghaiDay(4), now: shanghaiDay(0, 12) })).toBe('none');
+    expect(classifySeaWarning({ dropAt: shanghaiDay(30), now: shanghaiDay(0, 12) })).toBe('none');
   });
 
-  it('阈值取自**唯一落点** `SEA_WARNING_THRESHOLDS`（与需求 §6.3 三个数逐条对应）', () => {
-    expect(SEA_WARNING_THRESHOLDS).toEqual({ agendaDays: 3, notifyOwnerHours: 24, alertManagerHours: 6 });
+  it('★ **判据是"哪一天"，不是"还剩几小时"**：同一天内的早晚两个时刻，档位完全相同', () => {
+    const dropAtSameDay = shanghaiDay(0, 9, 0); // 今天 09:00 到期
+    // 早上 8 点看（还剩 1 小时）与晚上 22 点看（早过了 9 点）—— **同一天 ⇒ 同一档**
+    expect(classifySeaWarning({ dropAt: dropAtSameDay, now: shanghaiDay(0, 8, 0) })).toBe(
+      'alert_manager',
+    );
+    expect(classifySeaWarning({ dropAt: dropAtSameDay, now: shanghaiDay(0, 22, 0) })).toBe(
+      'alert_manager',
+    );
+  });
+
+  it('★ **跨零点即新的一天**（同一分钟内的一秒之差，档位就变）', () => {
+    // 上海 09-20 23:59 → 到期日 09-21 ⇒ 还有 1 天
+    expect(
+      classifySeaWarning({ dropAt: shanghaiDay(1, 0, 0), now: shanghaiDay(0, 23, 59) }),
+    ).toBe('notify_owner');
+    // 一分钟后（09-21 00:00）再看 ⇒ 到期日 09-20 已成"昨天" ⇒ 该掉了
+    expect(
+      classifySeaWarning({ dropAt: shanghaiDay(0, 23, 59), now: shanghaiDay(1, 0, 0) }),
+    ).toBe('overdue');
+  });
+
+  it('阈值取自**唯一落点** `SEA_WARNING_THRESHOLDS`（**单位一律"天"**，与需求 §6.3 逐条对应）', () => {
+    expect(SEA_WARNING_THRESHOLDS).toEqual({ agendaDays: 3, notifyOwnerDays: 1, alertManagerDays: 0 });
   });
 });
 

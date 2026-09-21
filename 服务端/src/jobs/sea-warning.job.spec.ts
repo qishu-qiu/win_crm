@@ -2,7 +2,8 @@
 // 掉海预警任务用例（M7-03 / **M9-F**）—— **假件，不连库**
 //
 // 钉两件事（都是**判据级**的，不是形式）：
-//   ① 任务形状与《数据架构》§十二 对齐：名字同字、**每小时**、启动即跑一次；
+//   ① 任务形状与《数据架构》§十二 对齐：名字同字、**每日一次**、启动即跑一次；
+//      （★ 2026-09-21 口径变更：原「每小时」作废 —— 最小单位是天，→《废止口径登记表》#41）
 //   ② 本任务的触面**恒定只有一个**：调一次 F 域扫描 ＋ 回一个计数 —— 写库（掉海）全在
 //      F 域 service 里，本层**不自己碰库**（假件只给 `scanSeaWarning` 一个口；
 //      哪天有人往这条链上塞第二个调用，用例会因为"没有这个方法"当场炸）。
@@ -32,14 +33,14 @@ function createJob(summary: SeaWarningScanResult = SUMMARY) {
   return { job: new SeaWarningJob(sea as unknown as SeaService), sea };
 }
 
-describe('SeaWarningJob：任务形状（→ 数据架构 §十二「掉海预警（私海→公海）｜每小时」）', () => {
+describe('SeaWarningJob：任务形状（→ 数据架构 §十二「掉海预警（私海→公海）｜每日」）', () => {
   it('任务名与清单**同字**（`job_run_log.job_name` 是检索键，歪一个字就查不到历史）', () => {
     expect(createJob().job.name).toBe('掉海预警（私海→公海）');
   });
 
-  it('每小时一次，且**启动即跑一次**', () => {
+  it('**每日一次**（24h；原「每小时」已作废 → 废止口径 #41），且**启动即跑一次**', () => {
     const { job } = createJob();
-    expect(job.intervalMs).toBe(60 * 60 * 1000);
+    expect(job.intervalMs).toBe(24 * 60 * 60 * 1000);
     expect(job.runOnStart).toBe(true);
   });
 });

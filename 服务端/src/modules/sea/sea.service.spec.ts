@@ -347,15 +347,16 @@ function candidate(overrides: Partial<SeaWarningCandidate>): SeaWarningCandidate
 }
 
 describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警）', () => {
-  it('四档齐全 ＋ 一档不报：到期(超期) / ≤6h / ≤24h / ≤3天 各 1 条，另外 1 条还早（`none`）', async () => {
+  it('四档齐全 ＋ 一档不报：到期日已过 / 到期当天 / 到期前 1 天 / ≤3天 各 1 条，另外 1 条还早（`none`）', async () => {
     const { service } = createService({
       rules: [GLOBAL_RULE],
       candidates: [
-        candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期时刻＝2 天前 → overdue
-        candidate({ id: 2n, lastEventAt: before(10 * DAY - 3 * HOUR) }), // ＋3h → alert_manager
-        candidate({ id: 3n, lastEventAt: before(10 * DAY - 20 * HOUR) }), // ＋20h → notify_owner
-        candidate({ id: 4n, lastEventAt: null, createdAt: before(7 * DAY) }), // 没跟进过：建档＋10 天＝＋3 天 → agenda
-        candidate({ id: 5n, lastEventAt: before(1 * DAY) }), // ＋9 天 → none
+        // 规则＝10 天；`NOW` ＝ 上海 09-20 20:00 ⇒ 到期日 = 最后一次有效沟通那天 + 10 天
+        candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期日 09-18（**已过**）→ overdue
+        candidate({ id: 2n, lastEventAt: before(10 * DAY - 3 * HOUR) }), // 到期日 09-20（**当天**）→ alert_manager
+        candidate({ id: 3n, lastEventAt: before(10 * DAY - 20 * HOUR) }), // 到期日 09-21（**前 1 天**）→ notify_owner
+        candidate({ id: 4n, lastEventAt: null, createdAt: before(7 * DAY) }), // 没跟进过：建档＋10 天＝09-23（＋3 天）→ agenda
+        candidate({ id: 5n, lastEventAt: before(1 * DAY) }), // 到期日 09-29（＋9 天）→ none
       ],
     });
 
@@ -415,15 +416,15 @@ describe('SeaService.scanSeaWarning（M7-03：扫一遍 ＋ 分档 ＋ 只告警
     expect(summary.hits).toBe(0);
   });
 
-  it('★★ M9-F：**只有"已到期"那一档真掉** —— 其余四档（含"还早"）一律零写', async () => {
+  it('★★ M9-F：**只有「到期日已过」那一档真掉** —— 其余四档（含"还早"）一律零写', async () => {
     const { service, repository, relation, events, audit } = createService({
       rules: [GLOBAL_RULE],
       candidates: [
-        candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期时刻＝2 天前 → overdue ⇒ **真掉**
-        candidate({ id: 2n, lastEventAt: before(10 * DAY - 3 * HOUR) }), // ＋3h → alert_manager
-        candidate({ id: 3n, lastEventAt: before(10 * DAY - 20 * HOUR) }), // ＋20h → notify_owner
-        candidate({ id: 4n, lastEventAt: before(9 * DAY) }), // ＋1 天 → agenda
-        candidate({ id: 5n, lastEventAt: before(1 * DAY) }), // ＋9 天 → none
+        candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期日 09-18（**已过**）⇒ **真掉**
+        candidate({ id: 2n, lastEventAt: before(10 * DAY - 3 * HOUR) }), // 到期日 09-20（当天）→ alert_manager
+        candidate({ id: 3n, lastEventAt: before(10 * DAY - 20 * HOUR) }), // 到期日 09-21（前 1 天）→ notify_owner
+        candidate({ id: 4n, lastEventAt: before(9 * DAY) }), // 到期日 09-21（前 1 天）→ notify_owner
+        candidate({ id: 5n, lastEventAt: before(1 * DAY) }), // 到期日 09-29（＋9 天）→ none
       ],
     });
 

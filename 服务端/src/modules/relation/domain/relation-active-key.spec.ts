@@ -6,13 +6,7 @@
 //   `CONCAT_WS('-', company_id, dept_id, product_line_id)` **逐字同格式**
 //   —— 不一致时预检会「查不到」，整条链路静默退化成「靠 409 兜底」。
 // =============================================================================
-import {
-  COMPANY_SEA_STATUS,
-  PRIVATE_SEA_STATUS,
-  buildActiveKey,
-  isSameTriple,
-  occupiesActiveSlot,
-} from './relation-active-key';
+import { buildActiveKey, isSameTriple, occupiesActiveSlot } from './relation-active-key';
 
 describe('relation-active-key（M3-04）', () => {
   describe('buildActiveKey：同键归一、异键区分', () => {
@@ -43,25 +37,28 @@ describe('relation-active-key（M3-04）', () => {
     });
   });
 
-  describe('occupiesActiveSlot：只有「私海且未并」占活跃位（→ C1）', () => {
-    it('私海 ＋ 未合并 → 占位（能建）', () => {
-      expect(occupiesActiveSlot(PRIVATE_SEA_STATUS, null)).toBe(true);
-    });
-
-    it('已掉公海 → 不占位（可被重新领取 / 别部门激活）', () => {
-      expect(occupiesActiveSlot(COMPANY_SEA_STATUS, null)).toBe(false);
+  describe('occupiesActiveSlot：**未删未并**即占位（→ C1；★ 2026-09-21 起**公海也占位** · D-53）', () => {
+    it('★ 未删未并 → 占位 —— **不论公私海**（同三元组至多一条关系，本口径的核心）', () => {
+      // ⚠ 旧口径下「公海」是**不占位**的；改了它才堵得住 D-53：否则同一三元组会并存
+      //    「公海行 ＋ 私海行」，公海那条一被领就撞私海行占住的位 ⇒ 必 409（→ 需求 §6.3）
+      // ⚠ 函数签名里**没有 `seaStatus`** 正是这层意思：占位与否与公私海无关
+      expect(occupiesActiveSlot({ mergedInto: null, deletedAt: null })).toBe(true);
     });
 
     it('被并分支（`merged_into IS NOT NULL`）→ 不占位（让位给 survivor）', () => {
-      expect(occupiesActiveSlot(PRIVATE_SEA_STATUS, 99n)).toBe(false);
+      expect(occupiesActiveSlot({ mergedInto: 99n, deletedAt: null })).toBe(false);
     });
 
-    it('公海 ＋ 已并 → 同样不占位（两个条件任一不满足即释放）', () => {
-      expect(occupiesActiveSlot(COMPANY_SEA_STATUS, 99n)).toBe(false);
+    it('逻辑删除（`deleted_at` 非空）→ 不占位（＝不再作为跟进目标 ⇒ 该三元组可再激活）', () => {
+      expect(occupiesActiveSlot({ mergedInto: null, deletedAt: new Date('2026-09-21T00:00:00Z') })).toBe(
+        false,
+      );
     });
 
-    it('未知 sea_status → 不占位（**最小权限**：不认识的状态不当成「私海占位」）', () => {
-      expect(occupiesActiveSlot('weird', null)).toBe(false);
+    it('两个条件都不满足 → 不占位（任一满足即释放）', () => {
+      expect(occupiesActiveSlot({ mergedInto: 99n, deletedAt: new Date('2026-09-21T00:00:00Z') })).toBe(
+        false,
+      );
     });
   });
 

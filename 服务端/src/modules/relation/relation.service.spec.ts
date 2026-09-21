@@ -352,7 +352,7 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(repository.createRelation).not.toHaveBeenCalled();
     });
 
-    it('预检命中同键 → **409 / 20401**，人话与 `mapPrismaError` 的 `uk_active_rel` **逐字一致**', async () => {
+    it('预检命中同键（占位行是**私海**）→ **409 / 20401**，人话＝「已有归属」那句', async () => {
       const { service, repository } = createService({ active: relationFixture() });
 
       const error = await captureAppError(() =>
@@ -363,6 +363,25 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(error.code).toBe(ErrorCode.RELATION_DUPLICATED);
       expect(error.constraint).toBe('uk_active_rel');
       expect(error.message).toBe(mapPrismaError(p2002('uk_active_rel'))?.message);
+      expect(repository.createRelation).not.toHaveBeenCalled();
+    });
+
+    it('★ 预检命中的是**公海行** → 人话改成「请直接领取」（**分档** · D-53），不是「已有归属」', async () => {
+      const { service, repository } = createService({
+        active: relationFixture({ sea_status: 'company_sea', members: [] }),
+      });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () => service.createRelation(CREATE_DTO)),
+      );
+
+      expect(error.httpStatus).toBe(409);
+      expect(error.code).toBe(ErrorCode.RELATION_DUPLICATED);
+      expect(error.constraint).toBe('uk_active_rel');
+      // ★ 分两句的**理由**：两句指向的下一步动作不同（转交/协同 vs 领取）——
+      //   挤成一句的话，销售会去点「转交」，而正确动作是去公海把这条**领回来**（→ 需求 §6.3）
+      expect(error.message).toContain('领取');
+      expect(error.message).not.toBe(mapPrismaError(p2002('uk_active_rel'))?.message);
       expect(repository.createRelation).not.toHaveBeenCalled();
     });
 
@@ -384,7 +403,8 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       const error = rejected.reason as AppError;
       expect(error.httpStatus).toBe(409);
       expect(error.code).toBe(ErrorCode.RELATION_DUPLICATED);
-      // ★ 并发路径与预检路径**同一句人话**（改文案只改 mapper，两条一起变）
+      // ★ 并发路径与预检路径**同一句人话** —— 两条都走 service 的 `activeSlotConflict`（同源分档）；
+      //   本假件的 `findActiveRelation` 回 `null`（重查不到占位行）⇒ 退回 mapper 那句兜底
       expect(error.message).toBe(mapPrismaError(p2002('uk_active_rel'))?.message);
     });
   });

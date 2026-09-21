@@ -304,7 +304,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | last_event_at | **最近一次「有效沟通」事件时间**（**快速标记不计入**，见 D2）——INDEX 供预警扫描与掉海倒计时（`→需求§6.3`） |
 | next_action_hint | 可空：一句话"上次说好下次干嘛"（从最近承诺/事件冗余） |
 | merged_into | **关系级合并墓碑**：自引用 FK（`business_relation.id`，可空）。非 NULL = 本关系已并入该 survivor 关系、置**非活跃分支**（不占 `uk_active_rel` 活跃位）；其跟单/承诺等子表仍挂本关系节点，展示层作为分支（见 `→需求§7.3` ⑦ 树呈现）。公司合并时，与 A 同部门同产品线撞 `uk_active_rel` 的关系走此路径 |
-| 唯一索引 | `uk_active_rel`：同 公司+部门+产品线 仅一条活跃私海关系（生成列 `active_key = IF(sea_status='private' AND merged_into IS NULL, 三元组, NULL)` 实现；**被并分支 `merged_into IS NOT NULL` 不占活跃位**） |
+| 唯一索引 | `uk_active_rel`：同 公司+部门+产品线 仅一条**未删未并**的关系（生成列 `active_key = IF(deleted_at IS NULL AND merged_into IS NULL, 三元组, NULL)` 实现 —— **★ 2026-09-21 起：公海也占位**（掉公海**不释放**；"重新开始一轮"走**领取同一条**，→ 需求 §6.3 /《欠账登记表》D-53）；**被并分支** `merged_into IS NOT NULL` 与**逻辑删除** `deleted_at` 均不占位） |
 
 > **T1 落点**：本表不再新增任何判断列。判断一律走：承诺（行动）、cadence_rule（节奏）、事件流统计（健康度）。
 
@@ -660,7 +660,7 @@ file_asset（文件资产：合同附件/回款凭证，多态 biz_type + biz_id
 | 2 | **活跃手机号唯一**（软删/换号后号码释放） | `contact` 加生成列 `phone_active = IF(deleted_at IS NULL, phone, NULL)`（STORED），`UNIQUE uk_phone_active(phone_active)`。未删行占号、软删行变 NULL 放行；换号=改 phone 自动释放旧号。`company.credit_code`、`employee.work_no` **同理** |
 | 3 | **抢公海原子认领** | 认领 = 条件 UPDATE：`UPDATE business_relation SET sea_status='private', owner_id=? WHERE id=? AND sea_status='company_sea'`（同一事务写 relation_member owner + sea_record）。**影响行数=1 才算抢到**；=0 → 409「已被领走」 |
 | 4 | 撞单（已有） | `contact.phone`（→ 改为 `phone_active` 生成列唯一）+ `company.credit_code`；公司名相似度应用层；**撞码合并流程（信用代码撞重→墓碑合并）见 `→需求§7.3`**：B 打 `merged_into`→A、B.`credit_code` 置 NULL（UNIQUE 可空放行）、子表随 `relation_id`/`company_id` 重定向零改动 |
-| 5 | 激活竞态（已有） | `business_relation.active_key` 生成列唯一索引——后到者撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409 返回归属人 |
+| 5 | 激活竞态（已有） | `business_relation.active_key` 生成列唯一索引——后到者撞唯一索引（MySQL 1062 → **Prisma 暴露为 P2002**）→ 409 返回归属人。**★ 2026-09-21 修正（migration `0012`）：生成列条件由「`sea_status='private'` 且未并」改为「**未删未并**」—— 公海行**也占位**，同一三元组只允许一条关系**（不论公私海）**。「同三元组已有公海行时再激活」＝ **409**，人话**分档**引导"去领取"（已有私海 → 走转交 / 协同；→ 需求 §6.3 /《欠账登记表》D-53）。缓存量重复行在 `0012` 里**先清理**（保留 `private` 优先、同状态取 `updated_at` / `id` 最新；其余置 `deleted_at`） |
 
 > **注意**：生成列唯一索引上线前须**先清理存量重复**（否则 `ADD UNIQUE` 直接失败）。
 

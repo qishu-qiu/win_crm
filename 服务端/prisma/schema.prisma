@@ -552,7 +552,7 @@ model BusinessRelation {
   last_event_at    DateTime? @db.DateTime(0) // ★ 仅有效沟通更新；快速标记不计
   next_action_hint String?   @db.VarChar(255)
   merged_into      BigInt?   @db.UnsignedBigInt // 关系级合并墓碑（自引用，置非活跃分支）
-  active_key       String?   @ignore @db.VarChar(128) // ★ 生成列：private 且未并 → 三元组，否则 NULL（UK 手写 migration）
+  active_key       String?   @ignore @db.VarChar(128) // ★ 生成列：**未删未并** → 三元组，否则 NULL（★ 公海也占位 · migration 0012；UK 手写 migration）
   created_by       BigInt?   @db.UnsignedBigInt
   created_at       DateTime  @default(now()) @db.DateTime(0)
   updated_by       BigInt?   @db.UnsignedBigInt

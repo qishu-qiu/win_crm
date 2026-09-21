@@ -11,8 +11,8 @@
 //   · 逻辑删除一律 `deleted_at IS NULL`（数据架构 §二 总则）；`merged_into IS NOT NULL`
 //     是**被并分支**（→ C1：跟单仍挂原节点、展示层当分支）⇒ **列表与详情都要跳过它**，
 //     否则「已并入 survivor 的那条关系」会一直在私海里占一行（而它已不占活跃位）。
-//   · **活跃唯一位**由生成列 `active_key`（`private` 且未并 → 三元组）＋ `uk_active_rel` 保证
-//     （→ C1 / `migrations/0001_init` ③）—— 见下方 `findActiveRelation` 的 ★ 说明。
+//   · **活跃唯一位**由生成列 `active_key`（**未删未并** → 三元组；★ 2026-09-21 起**公海也占位**，
+//     口径变更 · D-53 / → C1 / `migrations/0012`）＋ `uk_active_rel` 保证 —— 见下方 `findActiveRelation` 的 ★ 说明。
 //
 // ★ 为什么仓储方法**按「范围」逐个具名**（而不是收一个 `where` 片段）：
 //   §7.2 明令「**禁止**在 repository 手写 `where owner_id = ...`」——那句话的意思是
@@ -221,13 +221,17 @@ export class RelationRepository {
   }
 
   /**
-   * 活跃唯一键**预检**：同 公司 × 部门 × 产品线 是否已有**活跃**（私海且未并）的关系。
+   * 活跃唯一键**预检**：同 公司 × 部门 × 产品线 是否已有**占位**的关系。
    *
    * ★ 为什么不用 `active_key` 直接查：该列在 Prisma schema 里是 `@ignore`（生成列**不可写**），
    *   查它就得退回 `$queryRaw`。而 `active_key` 的表达式本身就是
-   *   「`sea_status='private' AND merged_into IS NULL` ? 三元组 : NULL」——
+   *   「`deleted_at IS NULL AND merged_into IS NULL` ? 三元组 : NULL」——
    *   用等价的普通条件表达，语义**完全一致**且能被 Prisma 类型系统保护；
    *   真并发下漏过预检的那一条，由 DB 的 `uk_active_rel` 兜底（→ 本域 service 两条都要）。
+   *
+   * ★ **命中行可能是公海**（★ 2026-09-21 起公海也占位，→ 需求 §6.3 / D-53）——
+   *   故调用方**必须看 `sea_status` 分档**给人话：私海 → "已有归属，走转交 / 协同"；
+   *   公海 → "已在公海，请直接领取"（两条路径都靠这一处查询，见 service 的 `activeSlotConflict`）。
    */
   findActiveRelation(triple: RelationTriple) {
     return this.prisma.businessRelation.findFirst({
@@ -235,7 +239,6 @@ export class RelationRepository {
         company_id: triple.companyId,
         dept_id: triple.deptId,
         product_line_id: triple.productLineId,
-        sea_status: PRIVATE_SEA_STATUS,
         merged_into: null,
         deleted_at: null,
       },

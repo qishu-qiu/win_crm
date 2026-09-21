@@ -177,7 +177,7 @@
 - `PUT /contacts/:id/traits`：超过 `contact_trait_max` → **422 / 20402**；未配部门走默认3（`→需求§9` `→架构B4`）。
 
 ### 4.4 业务关系 relation（[核心]）
-- `POST /relations`（激活）：`{company_id, dept_id, product_line_id}` → 唯一约束 **`uk_active_rel(active_key)`**（生成列 ＝ 三元组 ＋ `sea_status='private'` ＋ `merged_into IS NULL`，`→数据架构§10.1` / `§十五.5`）撞则 **409 / 20401**（引导转交/协同）。
+- `POST /relations`（激活）：`{company_id, dept_id, product_line_id}` → 唯一约束 **`uk_active_rel(active_key)`**（生成列 ＝ 三元组 ＋ **`deleted_at IS NULL` ＋ `merged_into IS NULL`** —— **★ 2026-09-21 起：公海也占位**，同三元组**至多一条关系**，`→数据架构§10.2-5` / `→需求§6.3`）撞则 **409 / 20401**，**人话分两档**：同三元组已有**私海** → 「已有归属，请走转交或协同」；已有**公海**行 → 「该客户在本部门·产品线已在公海，请**直接领取**」。
 - `POST /contacts/:id/activate-relation`（**V1.23 新增**，2026-09-16 拍板）：「**关联公司并激活业务关系**」—— 把一条「待关联」联系人登记到公司 ＋ 激活一条业务关系 ＋ 把该联系人名下**未挂关系**的跟单批量挂到新关系（三件事一个动作，形状与错误约定见 **§5.6**）。
 - `GET /relations`：**列表类一律分页**（→ §2.3 / §2.7）—— 入参 `tab` ＋ `page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ **`{list,total,page,page_size}`**（**不是裸数组**）。**排序 / 搜索（V1.33 · D-07）**：`order_by`（**白名单**：`id` 默认 / `created_at` / `last_event_at` / `stage`；**白名单外 → 400**）＋ `desc`（缺省 `true`）＋ `keyword`（**按公司名**模糊搜；索引前提见 §2.7 补记）。**筛选（V1.21）**：`view`（视图：`all` 我的全部 / `following` 跟进中＝阶段 1~5 / `cooperated` 已合作＝阶段 6 / `churned` 已流失＝阶段 7）＋ `urgency`（紧迫档**多选**、逗号分隔）——**由后端过滤**（前端本地过滤在分页后只能筛当前页），`total` 数的是**筛完之后**的总数。`list` 项含 `stage`（彩色点）、`urgency`、`value_tier`、逾期标红、`drop_in_x_days`（24h 掉公海⚠）、竞争徽标、跨线 `amount_masked`。
 - `GET /relations/:id/events`：默认 `range=1m`（近1月）；出参按 `created_by == 当前人` 分 `main` / `branch`（树杈），带 `createdByName` + `contactName`（`→需求§7.5` `→设计规范§八`）。
@@ -403,7 +403,7 @@
 - **列表入参（筛选，V1.21）**：`tab`（`private` / `sea`）＋ `page` / `page_size` ＋ **`view`**（`all`｜`following` 阶段 1~5｜`cooperated` 阶段 6｜`churned` 阶段 7）＋ **`urgency`**（紧迫档五档**多选**、逗号分隔，→ 需求 §8.2）。⚠ **视图各档的判定不写在本文件**（本文件只定"参数长什么样"），唯一落点＝`服务端 .../domain/relation-list-filter.ts`；**第五档「逾期未跟进」暂不提供**（依赖 `overdue`，→《欠账登记表》D-10）。
 - **列表项** `{id,company:{id,name},dept:{id,name},product_line:{id,name,color_key},stage:1-7,urgency,value_tier,customer_level,owner:{id,name},last_event_at,drop_in_x_days,overdue,competition,amount|amount_masked,old_customer,is_weekly}`
 - **详情** ＝ 列表项 ＋ `{next_action_hint,sea_status,round_no（当前轮次号＝已掉海次数+1，派生不落表）,prev_round?:{round_no,owner:{id,name},dead_or_churn?:reason,dropped_at,claimed_at?,event_count},competitors:[{id,name,positioning}],labels:{risk:[{label_id,label_code,label}],other:[]},members:[{employee:{id,name},member_type:"owner"|"collaborator",source,valid_until?}],stage_logs:[{from_stage,to_stage,action,reason?,operator:{id,name},created_at}],try_count_30d}`
-- `POST /relations`（激活）req `{company_id,dept_id,product_line_id}`（撞 `uk_active_rel` → **409/20401**）
+- `POST /relations`（激活）req `{company_id,dept_id,product_line_id}`（撞 `uk_active_rel` → **409/20401**，**人话分档**：同三元组已有**私海** → 「已有归属，请走转交或协同」；已有**公海**行 → 「该客户在本部门·产品线已在公海，请**直接领取**」—— 公海行走 `POST /sea/company/:id/claim` 承接**同一条**，**不另建行**，→ 需求 §6.3 /《欠账登记表》D-53）
 - `POST /contacts/:id/activate-relation`（**V1.23 新增**，2026-09-16 拍板）：把一条「**待关联**」联系人（还没挂公司）**关联到公司 ＋ 激活一条业务关系**，并把该联系人名下**未挂关系**的跟单**批量挂到新关系**（历史不断，→ 需求 §6.1 ④）。
   - req `{company_id,dept_id,product_line_id,position?}`（`position?` ＝ 此人在该公司的职位，写进就职关系；可空）。
   - resp ＝ **新关系的列表项**（同本节列表项形状，前端可直接跳详情）＋ `linked_events`（本次搬运的跟单条数）。
@@ -522,7 +522,7 @@
 
 ## 六、跨模块关键流程（实现务必对齐）
 
-1. **撞单**：激活 `uk_active_rel` 撞 → 409/20401 → 前端提示「已有归属」并给转交/协同入口；同部门显归属人、跨部门只说「已有其他部门跟进」不露名（`→需求§6.3`）。
+1. **撞单**：激活 `uk_active_rel` 撞 → 409/20401 → **按占位行的状态分两档**：已有**私海** → 前端提示「已有归属」并给转交/协同入口；已有**公海**行 → 提示「**请直接领取**」（走 `POST /sea/company/:id/claim` 承接**同一条**，**不另建行** —— 另建会把轮次与历史割裂，`→需求§6.3` /《欠账登记表》D-53）；同部门显归属人、跨部门只说「已有其他部门跟进」不露名（`→需求§6.3`）。
 2. **协同**：`collaborator`（审批通过，可带 `valid_until`）可共同写跟单+看全文；`ask_help`（轻量临时，默认7天自动收回，不授读权）——两码事（`→需求§13` `→架构C2`）。
 3. **领取公海**：幂等 + 继承全文；部门公海 = 公司公海映射视图（非独立一层，`→需求§6.3`）。
 4. **联系方式 / 脱敏口径（2026-09-14 重写）**：**详情一律给全号**（与角色无关）；**只有列表 / 卡片给 `phone_masked`**（含公海，防批量截图）；跨线金额给 `amount_masked`；非归属**被锁**联系人给 `phone_locked` 而不给 `phone`；跨部门**仍不返跟单全文**（`→需求§4.3`）。

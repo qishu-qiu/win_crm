@@ -51,6 +51,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CompanyService } from '../company/company.service';
 import { OrgService } from '../org/org.service';
+import { COMPANY_SEA_STATUS, type RelationTriple } from './domain/relation-active-key';
 import { checkValueTierForUrgency } from './domain/relation-attributes';
 import { buildRelationListFilter, type RelationListFilter } from './domain/relation-list-filter';
 import {
@@ -160,6 +161,14 @@ const RELATION_DUPLICATED_MESSAGE = '该公司在该部门·产品线下已有�
 const OWNER_OCCUPIED_MESSAGE = '该业务关系已有归属销售';
 
 /**
+ * 同三元组**已有公海行**时的人话（→ 接口 §4.4 / §5.6；D-53）。
+ * ★ 与「已有归属」（`RELATION_DUPLICATED_MESSAGE`）**刻意分两句**：两句指向的**下一步动作不同** ——
+ *   已有**私海**该走转交 / 协同；已有**公海**该**直接领取**（走 `POST /sea/company/:id/claim`
+ *   承接**同一条**关系）。挤成一句的话，销售会去点"转交"，而正确动作是把它从公海领回来。
+ */
+const RELATION_IN_SEA_MESSAGE = '该客户在本部门·产品线下已在公海，请直接领取（不要另建关系）';
+
+/**
  * 公海（无主）关系被写时的人话 —— 与《接口API文档》§5.6 的 `20408` 说明**逐字一致**。
  * （写动作拒的是「**未领取**」这个状态，不是「你没权限」：故 422 而非 403。）
  */
@@ -219,7 +228,7 @@ export class RelationService {
    * 顺序＝**先范围、再存在性、再唯一键、最后落库**：
    *   ① 范围（越权 / 只读角色）—— 最早拦，别让人用错误信息探出「这个 dept 存在不存在」；
    *   ② 三元组存在性 —— 跨域走 service 取引用（§5.2 路之①），不存在给 **400 参数错误**；
-   *   ③ 活跃唯一预检 —— 命中给 **409 / 20401**（含「请走转交或协同」的下一步动作）；
+   *   ③ 活跃唯一预检 —— 命中给 **409 / 20401**，**人话分两档**（私海 → 转交 / 协同；公海 → 直接领取，→ D-53）；
    *   ④ 事务：关系 ＋ owner 成员一起写（架构 §5.2 路之③）。
    * ★ owner ＝ **发起人自己**（激活即归属；换人走 `transfer` 审批，→ C2「主责变更」）。
    */
@@ -236,12 +245,8 @@ export class RelationService {
 
     await this.requireTripleExists(triple);
 
-    const duplicated = await this.repository.findActiveRelation(triple);
-    if (duplicated !== null) {
-      throw new AppError(ErrorCode.RELATION_DUPLICATED, 409, RELATION_DUPLICATED_MESSAGE, {
-        constraint: 'uk_active_rel',
-      });
-    }
+    const conflict = await this.activeSlotConflict(triple);
+    if (conflict !== null) throw conflict;
 
     const created = await this.prisma
       .$transaction(async (tx) => {
@@ -266,9 +271,15 @@ export class RelationService {
         );
         return relation;
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         // 并发下预检漏过 → DB 的 `uk_active_rel` / `uk_owner` 兜底，映射成**同一句**人话
-        throw mapPrismaError(error) ?? error;
+        const mapped = mapPrismaError(error);
+        // ⚠ `uk_active_rel` 那档必须**与预检同源**：重查一次占位行、按 `sea_status` 分档。
+        //   否则并发窗口下，销售会拿到「已有归属……走转交」—— 而正确动作其实是「去领取」（→ D-53）。
+        if (mapped !== null && mapped.constraint === 'uk_active_rel') {
+          throw (await this.activeSlotConflict(triple)) ?? mapped;
+        }
+        throw mapped ?? error;
       });
 
     // ⚠ 必须**读回一次**：事务里 `createRelation` 的那次 RETURNING 发生在**写 owner 成员之前**，
@@ -296,6 +307,28 @@ export class RelationService {
     );
 
     return this.buildVo(row, await this.loadRefs([row]));
+  }
+
+  /**
+   * 同三元组的**占位行** → 该给哪句 409（★ 分两档，→ 需求 §6.3 /《欠账登记表》D-53）。
+   *
+   * ★ 为什么要抽成一处：**预检**（日常路径）与 **P2002 兜底**（并发路径）都要给"同一句话"
+   *   （→ 本文件头「两条路径文案必须逐字一致」）。各写一遍的话，公海那档就会在并发窗口下
+   *   退回成"已有归属"，把销售往"转交"上引 —— 而它该做的是**领取**。
+   *
+   * ★ 判据只有一条：`deleted_at IS NULL AND merged_into IS NULL`（＝ 占位，★ 2026-09-21 起
+   *   **公海也占位**）—— 与 DB 生成列 `active_key` 的表达式**同源**（→ `findActiveRelation` 的 ★）。
+   *
+   * @returns `null` ＝ 该三元组没有占位行（可以建）；否则回一条 409 的 `AppError`
+   */
+  private async activeSlotConflict(triple: RelationTriple): Promise<AppError | null> {
+    const occupying = await this.repository.findActiveRelation(triple);
+    if (occupying === null) return null;
+
+    // 占位行在**公海** ⇒ 引导去领取（承接同一条）；否则（私海）⇒ 引导转交 / 协同
+    const message =
+      occupying.sea_status === COMPANY_SEA_STATUS ? RELATION_IN_SEA_MESSAGE : RELATION_DUPLICATED_MESSAGE;
+    return new AppError(ErrorCode.RELATION_DUPLICATED, 409, message, { constraint: 'uk_active_rel' });
   }
 
   // ===== F-01 公海「领取到私海」的跨域出口（→ 接口 §4.5 `POST /sea/company/:id/claim`；D-33）=====

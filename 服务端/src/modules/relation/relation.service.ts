@@ -216,6 +216,13 @@ const NEW_ROUND_STAGE = 1;
 const SEA_CLAIM_NOT_FOUND_MESSAGE = '该公司在本部门 · 产品线下没有待领取的公海关系，请刷新列表';
 
 /**
+ * 「该部门未承接这条产品线」的人话 —— 与《接口API文档》§2.4 `20409` 的说明**逐字一致**。
+ * ★ 报的是**组合**错，不是"你没权限"：两个 id 都真、也都在你的可建范围内，错的是
+ *   「这条线不归这个部门卖」（承接关系配置在 A7 `dept_ids`，由管理员维护）。
+ */
+const PRODUCT_LINE_NOT_SERVED_MESSAGE = '该产品线不是这个部门承接的，请换一条产品线';
+
+/**
  * 并发抢同一条：被同事先领走了（→ 数据架构 §10.2-3：条件 UPDATE 影响 0 行）。
  * ⚠ 与「定位不到」（400）**分两句人话**：这条是**竞态**（接口 §2.4 把"抢公海"归 409 族），
  *   那句是"本来就没有"——两件事对销售的动作不同（这里该刷新重试，那里该换个客户）。
@@ -260,12 +267,15 @@ export class RelationService {
   /**
    * 激活业务关系（→ §5.6 `POST /relations`）。
    *
-   * 顺序＝**先范围、再存在性、再唯一键、最后落库**：
+   * 顺序＝**先范围、再存在性、再组合、再唯一键、最后落库**：
    *   ① 范围（越权 / 只读角色）—— 最早拦，别让人用错误信息探出「这个 dept 存在不存在」；
    *   ② 三元组存在性 —— 跨域走 service 取引用（§5.2 路之①），不存在给 **400 参数错误**；
-   *   ③ 活跃唯一预检 —— 命中给 **409 / 20401**，**人话分两档**（私海 → 转交 / 协同；公海 → 直接领取，→ D-53）；
-   *   ④ 事务：关系 ＋ owner 成员一起写（架构 §5.2 路之③）。
+   *   ③ 「部门 × 产品线」是承接组合 —— 不是 → **422 / `20409`**（→ 架构 §7.2「可建产品线范围」/ D-74）；
+   *   ④ 活跃唯一预检 —— 命中给 **409 / 20401**，**人话分两档**（私海 → 转交 / 协同；公海 → 直接领取，→ D-53）；
+   *   ⑤ 事务：关系 ＋ owner 成员一起写（架构 §5.2 路之③）。
    * ★ owner ＝ **发起人自己**（激活即归属；换人走 `transfer` 审批，→ C2「主责变更」）。
+   * ★ 本方法**被两处调用**：`POST /relations` 与 `POST /contacts/:id/activate-relation`
+   *   （后者由 D 域编排、跨域路之①回头调本域，→ D-29）——故 ③ 两道口子**天然共用**，不会一边收一边漏。
    */
   async createRelation(dto: CreateRelationDto): Promise<RelationVo> {
     const viewer = requireViewer();
@@ -279,6 +289,11 @@ export class RelationService {
     if (!activateVerdict.ok) throw verdictError(activateVerdict);
 
     await this.requireTripleExists(triple);
+
+    // ★ 「部门 × 产品线」必须是**配置里存在的承接组合**（→ 架构 §7.2「可建产品线范围」）：
+    //   判据与录入页下拉**同源**（前端按 `dept_ids` 收敛什么，这里就放行什么）——
+    //   两边不同集正是 D-74 的原始症状（界面不给选、构造请求却收下）。
+    await this.requireLineServedByDept(triple.deptId, triple.productLineId);
 
     const conflict = await this.activeSlotConflict(triple);
     if (conflict !== null) throw conflict;
@@ -1167,6 +1182,30 @@ export class RelationService {
       throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：product_line_id 指向的产品线不存在', {
         constraint: 'relation.product_line_missing',
       });
+    }
+  }
+
+  /**
+   * 「部门 × 产品线」必须是**配置里存在的承接组合**（→ 架构 §7.2「可建产品线范围」；接口 §2.4 `20409`）。
+   *
+   * ★ 为什么排在**存在性之后**：id 指错了是 **400**（改 id 重试），组合不成立是 **422**（换一条产品线）——
+   *   两句人话指向的**下一步动作不同**，不许挤进同一句（同 D-53 撞键分档的取法）。
+   * ★ 判据走 **A 域出口**（`product_line.dept_ids` 反查，→ `org.getDeptProductLineIds`）：
+   *   C 域**不许查产品线表**（架构 §5.2 路之①）。
+   * ★ 与**录入页下拉同源**（→ D-74）：前端收敛什么，这里就放行什么；**别在这里再加窄**
+   *   （再窄＝第二套口径，就是 D-73 那次的翻车姿势）。
+   */
+  private async requireLineServedByDept(deptId: bigint, productLineId: bigint): Promise<void> {
+    const servedLineIds = await this.org.getDeptProductLineIds(deptId);
+    if (!servedLineIds.includes(productLineId)) {
+      throw new AppError(
+        ErrorCode.PRODUCT_LINE_NOT_SERVED,
+        422,
+        PRODUCT_LINE_NOT_SERVED_MESSAGE,
+        {
+          constraint: 'relation.product_line_not_served',
+        },
+      );
     }
   }
 

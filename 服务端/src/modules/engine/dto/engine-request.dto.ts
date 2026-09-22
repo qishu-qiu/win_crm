@@ -332,7 +332,12 @@ export class ActivateRelationDto {
   @Length(1, 32, { message: 'dept_id 长度不合法' })
   dept_id!: string;
 
-  @ApiProperty({ description: '产品线 id（→ A7）', example: '1' })
+  @ApiProperty({
+    description:
+      '产品线 id（→ A7）。**必须被 `dept_id` 承接**（`product_line.dept_ids` 含该部门），' +
+      '否则 **422 / `20409`** —— 与 `POST /relations` **共用同一道校验**（→ 架构 §7.2「可建产品线范围」/ D-74）',
+    example: '1',
+  })
   @IsString({ message: 'product_line_id 必须是字符串' })
   @Length(1, 32, { message: 'product_line_id 长度不合法' })
   product_line_id!: string;

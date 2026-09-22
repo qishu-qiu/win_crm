@@ -235,13 +235,15 @@ async function onEntryEventSubmit(draft: EntryEventDraft): Promise<void> {
 
 /**
  * 部门 / 产品线下拉的数据源（进入第 3 步且有公司时才拉）。
- * ★ **下拉集 = `me` 下发的 `activatable_dept_ids`，与 `relation` 域 `checkActivateScope` 逐字同集**
+ *
+ * ★ **部门候选** ＝ `me.activatable_dept_ids`，与 `relation` 域 `checkActivateScope` **逐字同集**
  *   （→ D-73，单一真相源）：`all` 档＝空数组＝不限制；`dept` 档＝管辖部门；`self` 档＝本人所属部门（含兼部门）。
  *   ★ **绝不在此之上再加规则** —— 曾误加「承接我业务线的部门也给」，比服务端宽 ⇒ 选中即 403
  *   （＝第二套权限口径；2026-09-22 真账号走查实测：销售二部承接了王海涛的产品线 1/2，被错误放进下拉，
- *   选中 → `relation.out_of_scope`）。
- *   产品线同理＝`product_line_ids`（空＝不限制）。
- *   ★ 越权兜底仍是 `POST /relations` 的 403：下拉收窄只是 UX，前端不判"能不能建"。
+ *   选中 → `relation.out_of_scope`）。越权兜底仍是 `POST /relations` 的 403：下拉收窄只是 UX。
+ * ★ **产品线候选**（2026-09-22 拍板，→《欠账登记表》**D-74** / 架构 §7.2）＝ **所选部门承接的产品线**，
+ *   由复用件 `RelationTargetPicker` 内部派生 ⇒ 本页**原样喂全量**、**不再按 `me.product_line_ids` 过滤**
+ *   （那个过滤是**假限制**：把可选线缩到"我挂的"，比口径窄 —— 与 D-73 那条方向相反）。
  * ★ **不隐藏停用项、只标注**：能不能用是**服务端**的判断，前端把状态**显示出来**即可。
  */
 async function loadOptions(): Promise<void> {
@@ -250,11 +252,10 @@ async function loadOptions(): Promise<void> {
   try {
     const [deptRows, lineRows] = await Promise.all([listDepartments(), listProductLines()])
     const myDeptIds = currentUser.value?.activatable_dept_ids ?? []
-    const myLineIds = currentUser.value?.product_line_ids ?? []
     departments.value = deptRows.filter(
       (d) => myDeptIds.length === 0 || myDeptIds.includes(d.id),
     )
-    productLines.value = lineRows.filter((l) => myLineIds.length === 0 || myLineIds.includes(l.id))
+    productLines.value = lineRows
     optionsLoaded.value = true
   } catch (error) {
     optionsError.value = errorText(error, '部门 / 产品线加载失败，请稍后重试')

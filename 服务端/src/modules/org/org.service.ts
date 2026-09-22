@@ -558,6 +558,24 @@ export class OrgService {
   }
 
   /**
+   * 某部门**承接的产品线 id 集合**（→ 数据架构 A7 `product_line.dept_ids` 的**反查**）。
+   *
+   * ★ 供 C 域判「这条产品线能不能在该部门建档」（→ 架构 §7.2「可建产品线范围」/ 接口 §2.4 `20409`）：
+   *   `product_line` 是 A 域的表，跨域只能问本出口，**C 域不许自己查**（架构 §5.2 路之①）。
+   * ★ 判据与前端录入页下拉**逐字同集**（前端也是按 `product_line.dept_ids` 含所选部门收敛）——
+   *   两边同源才不会出现「界面不给选、接口却收下」或反过来（→《欠账登记表》D-74）。
+   * ★ **不按 `status` 过滤**：停用线照样算作"承接"（前端口径是「**不隐藏停用项、只标注**」，
+   *   → `RelationTargetPicker.vue`）—— 这里过滤掉会让前后端不同集。
+   * ★ 部门不存在 / 已删除 → 空数组（调用方按「**不承接**」处理，**不默认放行**）。
+   */
+  async getDeptProductLineIds(deptId: bigint): Promise<bigint[]> {
+    const rows = await this.repository.listProductLines();
+    return rows
+      .filter((line) => parseIdList(line.dept_ids).includes(deptId))
+      .map((line) => line.id);
+  }
+
+  /**
    * 某员工的**部门集合（主 ＋ 兼）** —— 供 C 域判「@求助限同部门」（→ 需求 §4.3）。
    * 员工不存在 / 已删除 → 空数组（调用方按「不是同部门」处理，**不默认放行**）。
    */

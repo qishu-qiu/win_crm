@@ -653,7 +653,7 @@ export interface components {
              */
             activatable_dept_ids: string[];
             /**
-             * @description 本人关联的产品线集合（→ 员工 A7 `product_line_ids`）。**空数组 = 不限制**；前端据此收敛录入页产品线下拉
+             * @description 本人关联的产品线集合（→ 员工 A7 `product_line_ids`）。⚠ **2026-09-22 起前端已不消费本键**：录入页 / 联系人详情的产品线下拉改按「**所选部门承接的产品线**」（`product_line.dept_ids`，→ 架构 §7.2「可建产品线范围」/《欠账登记表》D-74）收敛 —— 原按本键过滤＝**假限制**（把可选线缩到"我挂的"，比口径窄）。**本键当前无消费方，存废待定**
              * @example [
              *       "1",
              *       "2"
@@ -1095,7 +1095,7 @@ export interface components {
              */
             dept_id: string;
             /**
-             * @description 产品线 id（→ A7）
+             * @description 产品线 id（→ A7）。**必须被 `dept_id` 承接**（`product_line.dept_ids` 含该部门），否则 **422 / `20409`** —— 判据与录入页产品线下拉**同源**（→ 架构 §7.2「可建产品线范围」/ D-74）
              * @example 1
              */
             product_line_id: string;
@@ -1624,7 +1624,7 @@ export interface components {
              */
             dept_id: string;
             /**
-             * @description 产品线 id（→ A7）
+             * @description 产品线 id（→ A7）。**必须被 `dept_id` 承接**（`product_line.dept_ids` 含该部门），否则 **422 / `20409`** —— 与 `POST /relations` **共用同一道校验**（→ 架构 §7.2「可建产品线范围」/ D-74）
              * @example 1
              */
             product_line_id: string;

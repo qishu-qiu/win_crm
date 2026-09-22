@@ -143,10 +143,14 @@ const submitError = ref('')
 
 /**
  * 部门 / 产品线下拉的数据源（展开面板时拉一次）。
- * ★ 与录入页**逐字同一口径**：下拉集 = `me.activatable_dept_ids`（＝ `checkActivateScope` 同集，
- *   `all` 档空数组＝不限制）+ `product_line_ids`（空＝不限制）。**不在其上再加规则**
- *   （曾误加「业务线交集」→ 比服务端宽 → 选中即 403，→ D-73 / 录入页同款注释）。
- *   越权兜底仍是服务端 403，前端不判"能不能建"。**不隐藏停用项**（能不能建由服务端判）。
+ *
+ * ★ 与录入页**逐字同一口径**：
+ *   ① **部门候选** ＝ `me.activatable_dept_ids`（＝ `checkActivateScope` 同集，`all` 档空数组＝不限制），
+ *      **不在其上再加规则**（曾误加「业务线交集」→ 比服务端宽 → 选中即 403，→ D-73）；越权兜底仍是服务端 403。
+ *   ② **产品线候选**（2026-09-22 拍板，→《欠账登记表》**D-74** / 架构 §7.2）＝ **所选部门承接的产品线**，
+ *      由复用件 `RelationTargetPicker` 内部派生 ⇒ 本页**原样喂全量**、不再按 `me.product_line_ids` 过滤
+ *      （那是**假限制**：缩到"我挂的线"，比口径窄）。
+ * ★ **不隐藏停用项**（能不能建由服务端判）。
  */
 async function loadOptions(): Promise<void> {
   optionsError.value = ''
@@ -154,11 +158,10 @@ async function loadOptions(): Promise<void> {
   try {
     const [deptRows, lineRows] = await Promise.all([listDepartments(), listProductLines()])
     const myDeptIds = currentUser.value?.activatable_dept_ids ?? []
-    const myLineIds = currentUser.value?.product_line_ids ?? []
     departments.value = deptRows.filter(
       (d) => myDeptIds.length === 0 || myDeptIds.includes(d.id),
     )
-    productLines.value = lineRows.filter((l) => myLineIds.length === 0 || myLineIds.includes(l.id))
+    productLines.value = lineRows
     optionsLoaded.value = true
   } catch (error) {
     optionsError.value = errorTextOf(error, '部门 / 产品线加载失败，请稍后重试')

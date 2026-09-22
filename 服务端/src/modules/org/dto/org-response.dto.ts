@@ -80,7 +80,10 @@ export class UserVoDto {
   @ApiProperty({
     type: [String],
     description:
-      '本人关联的产品线集合（→ 员工 A7 `product_line_ids`）。**空数组 = 不限制**；前端据此收敛录入页产品线下拉',
+      '本人关联的产品线集合（→ 员工 A7 `product_line_ids`）。' +
+      '⚠ **2026-09-22 起前端已不消费本键**：录入页 / 联系人详情的产品线下拉改按「**所选部门承接的产品线**」' +
+      '（`product_line.dept_ids`，→ 架构 §7.2「可建产品线范围」/《欠账登记表》D-74）收敛 —— ' +
+      '原按本键过滤＝**假限制**（把可选线缩到"我挂的"，比口径窄）。**本键当前无消费方，存废待定**',
     example: ['1', '2'],
   })
   product_line_ids!: string[];

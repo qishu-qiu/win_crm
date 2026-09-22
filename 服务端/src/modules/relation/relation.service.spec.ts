@@ -31,6 +31,7 @@ const COMPANY_ID = 3n;
 const DEPT_ID = 2n;
 const OTHER_DEPT_ID = 3n;
 const LINE_ID = 1n;
+const OTHER_LINE_ID = 9n;
 const RELATION_ID = 11n;
 const MANAGED_DEPT_ID = 5n;
 
@@ -143,6 +144,11 @@ interface FakeOptions {
   dropCount?: number;
   /** 掉海锚点行（两个出口共用：定时任务的全量扫 ＋ 列表页按 id 取） */
   seaWarningRows?: SeaWarningRowFixture[];
+  /**
+   * D-74：该部门**承接的产品线 id**（A 域出口 `getDeptProductLineIds` 的回值）。
+   * 缺省＝只承接 `LINE_ID`；显式 `[]` ＝ **一条都不承接**（≠ 不限制）。
+   */
+  servedLineIds?: bigint[];
 }
 
 /** 掉海锚点行的**真实形状**（列名照仓储 select：三列锚点 ＋ 在位 owner 成员） */
@@ -240,10 +246,16 @@ function createService(options: FakeOptions = {}) {
         { id: MANAGED_DEPT_ID, name: '华北大区' },
       ].filter((ref) => ids.includes(ref.id)),
     ),
+    // 第二条线（`OTHER_LINE_ID`）**存在但该部门不承接** —— 专门用来把「存在性」与「组合」分开测
     getProductLineRefs: jest.fn(async (ids: readonly bigint[]) =>
-      [{ id: LINE_ID, name: '标准线', color_key: 'blue' }].filter((ref) => ids.includes(ref.id)),
+      [
+        { id: LINE_ID, name: '标准线', color_key: 'blue' },
+        { id: OTHER_LINE_ID, name: '增值线', color_key: 'green' },
+      ].filter((ref) => ids.includes(ref.id)),
     ),
     getEmployeeDeptIds: jest.fn(async () => options.mentionedDeptIds ?? [DEPT_ID]),
+    // D-74：该部门承接的产品线（→ 架构 §7.2「可建产品线范围」）
+    getDeptProductLineIds: jest.fn(async () => options.servedLineIds ?? [LINE_ID]),
   };
   const company = {
     getCompanyRefs: jest.fn(async (ids: readonly bigint[]) =>
@@ -377,6 +389,43 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
       expect(error.httpStatus).toBe(400);
       expect(error.constraint).toBe('relation.company_missing');
       expect(repository.createRelation).not.toHaveBeenCalled();
+    });
+
+    it('★ 「部门 × 产品线」不是承接组合 → **422 / 20409**（→ 架构 §7.2「可建产品线范围」· D-74）', async () => {
+      // 产品线**存在**（跨域取得到引用）、部门也在我可建范围内 —— **错的是组合**（该部门不承接这条线）
+      const { service, repository } = createService({ servedLineIds: [LINE_ID] });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.createRelation({ ...CREATE_DTO, product_line_id: OTHER_LINE_ID.toString() }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(422);
+      expect(error.code).toBe(ErrorCode.PRODUCT_LINE_NOT_SERVED);
+      expect(error.constraint).toBe('relation.product_line_not_served');
+      expect(repository.createRelation).not.toHaveBeenCalled();
+    });
+
+    it('★ 该部门**一条线都没承接**（空集）→ 同样 422：**空集 ≠ 不限制**，不默认放行', async () => {
+      const { service } = createService({ servedLineIds: [] });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () => service.createRelation(CREATE_DTO)),
+      );
+
+      expect(error.httpStatus).toBe(422);
+      expect(error.constraint).toBe('relation.product_line_not_served');
+    });
+
+    it('★ 承接组合成立 → 放行（**与录入页下拉同源**：部门承接哪条，这里就放行哪条）', async () => {
+      const { service, repository } = createService({ servedLineIds: [LINE_ID, OTHER_LINE_ID] });
+
+      await runWithContext(contextOf(), () =>
+        service.createRelation({ ...CREATE_DTO, product_line_id: OTHER_LINE_ID.toString() }),
+      );
+
+      expect(repository.createRelation).toHaveBeenCalledTimes(1);
     });
 
     it('预检命中同键（占位行是**私海**）→ **409 / 20401**，人话＝「已有归属」那句', async () => {

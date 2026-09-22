@@ -52,6 +52,13 @@ export const ErrorCode = {
    *   加删成员一律拒 —— 与 `20404`（预约未完成禁止）同为「**状态不允许**」一族，故归 422。
    */
   SEA_WRITE_FORBIDDEN: 20408,
+  /**
+   * 422 · **该部门未承接这条产品线**（→ 架构 §7.2「可建产品线范围」；接口 §2.4 **2026-09-22 补**）。
+   * ★ 「公司 × 部门 × 产品线」里的**部门 × 产品线**必须是**配置里存在的承接组合**
+   *   （A7 `product_line.dept_ids`）：两个 id 各自都存在、类型也对，**错的是组合**，故归 422
+   *   （同 `20407` / `20408` 一族）；**不给 400** —— 那档是「字段缺失 / 类型错 / 枚举非法」（→ 接口 §2.4）。
+   */
+  PRODUCT_LINE_NOT_SERVED: 20409,
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];

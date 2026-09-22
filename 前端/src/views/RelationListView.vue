@@ -23,6 +23,8 @@ import {
   type RelationVo,
 } from '../api/relation'
 import { claimSeaRelation } from '../api/sea'
+import { isPageVisible } from '../access'
+import { currentUser } from '../session'
 import {
   ACTION_TYPE_OPTIONS,
   COMMITMENT_CTYPE_OPTIONS,
@@ -71,8 +73,15 @@ import { formatDateTime } from '../format'
  *   · **数据由服务端按数据范围收敛**（→ §2.2），页面**不再自己过滤**：
  *     前端过滤＝第二套范围口径（改了服务端忘了前端就露客户），这是本项目反复点名的
  *     「双真相源」；页面只负责**把服务端的答案显示出来**。
- *   · **交付 / 客服点公海 → 403** 是**正常分支**（§2.2「不进公海」）：显示内联无权限说明，
- *     不是报错崩溃（→ 设计规范 §5.1 空态 / §4.6 错误态）。
+ *   · **谁能看到「公海」页签 ＝ `access.ts` 那张矩阵说了算**（2026-09-22 · M6-10 收口）：
+ *     §4.2「系统 / 部门公海」行给定 —— 销售 ✅ / 经理 ✅ / 总经理 ✅ /
+ *     **交付 · 客服 ➖ / 管理员 ➖**（需求 §4.2 ★「交付 / 客服…**不进公海**」）。
+ *     §4.2 落地规则 4 明写「**不可见的页面不下发路由**（**不是"显示了再禁用"**）」
+ *     ⇒ 对本角色不可见时**这个页签根本不渲染**。
+ *     ⚠ 原实现是「页签照摆、点进去拿服务端 403 再内联提示」—— 那正是"显示了再禁用"，
+ *       且拿"点了会报错"当规则表达（本项目点名的假入口），已改。
+ *   · 服务端**仍兜底** 403（§2.2「不进公海」）：万一被绕过（旧页面 / 手改请求），
+ *     显示内联无权限说明，不是报错崩溃（→ 设计规范 §5.1 空态 / §4.6 错误态）。
  *   · 空态用 `a-empty`；**不预填演示数据**（→ 设计规范 §3.2 第 11 条）。
  *   · **筛选状态写入 URL query**（→ 设计规范 §4.2「筛选 / 查询栏」：可分享 / 刷新不丢）——
  *     实现见下方「URL ↔ 筛选 双向同步」一段（原欠账 D-21）。
@@ -91,6 +100,34 @@ const route = useRoute()
 const router = useRouter()
 
 const tab = ref<RelationTab>('private')
+
+/**
+ * 「公海」页签下不下发（**M6-10 角色矩阵**）。
+ *
+ * ★ 口径**不在本页**：`access.ts` 的 `sea` 行 ＝ 唯一落点（§4.2「系统 / 部门公海」行）——
+ *   本页只照它给的答案渲染，**不自己写角色判断**（写了就是第二套真相源 → `access.ts` 文件头）。
+ * ★ 为什么是"页签级"：§五 页 9/10 尚无独立路由，公海此刻住在本页的页签里；等那两页建成，
+ *   把这两行搬过去即可，`access.ts` 不用动。
+ * ⚠ 用 `hidden` 与否决定**渲不渲染**，不做"渲染了再禁用"（§4.2 落地规则 4 原文）。
+ */
+const seaTabVisible = computed(() => isPageVisible(currentUser.value?.role ?? '', 'sea'))
+
+/** 本角色可见的页签（顺序固定：私海 → 公海） */
+const relationTabs = computed<RelationTab[]>(() =>
+  seaTabVisible.value ? ['private', 'sea'] : ['private'],
+)
+
+/**
+ * 当前若停在**本角色不可见**的页签上（角色变了 / 换账号复用组件）→ 回私海并重新取数。
+ * ⚠ 必须重取：`tab` 变了但列表还是公海那份数据，就会出现"页签写着私海、行是公海的"。
+ */
+watch(seaTabVisible, (visible) => {
+  if (!visible && tab.value === 'sea') {
+    tab.value = 'private'
+    void load()
+  }
+})
+
 // ★ 列表项类型（＝ `RelationVo` ＋ `drop_in_x_days`，→ 接口 §5.6）：抽屉里仍用 `RelationVo`
 //   （详情不带那个字段），两者不可混（混了就会在详情侧读到 `undefined` 却显示成 `—`）
 const rows = ref<RelationListItem[]>([])
@@ -306,7 +343,8 @@ async function load(): Promise<void> {
     rows.value = result.list
     total.value = result.total
   } catch (error) {
-    // 403（交付 / 客服不进公海）与网络错误都走这里：**内联**说清，列表清空（不显示上次的残留）
+    // 403（交付 / 客服"不进公海" —— 页签已按矩阵不下发，这里是**服务端兜底**）与网络错误
+    // 都走这里：**内联**说清，列表清空（不显示上次的残留）
     rows.value = []
     total.value = 0
     errorText.value = error instanceof Error ? error.message : '加载失败，请稍后重试'
@@ -724,7 +762,7 @@ async function submitWaive(commitment: Commitment): Promise<void> {
 
     <div class="relations-tabs">
       <button
-        v-for="item in (['private', 'sea'] as RelationTab[])"
+        v-for="item in relationTabs"
         :key="item"
         type="button"
         class="relations-tab"

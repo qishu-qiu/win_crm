@@ -646,6 +646,21 @@ export interface components {
              */
             managed_dept_ids: string[];
             /**
+             * @description 可建业务关系的部门集合（→ §5.6 录入前部门归属校验的**同一口径**，单一真相源）。**空数组 = 不限制（总经理 / 管理员可建任意部门）**；销售＝主部门 ∪ 兼部门；部门经理＝管辖部门。前端据此收敛录入页部门下拉，不另立第二套权限
+             * @example [
+             *       "2"
+             *     ]
+             */
+            activatable_dept_ids: string[];
+            /**
+             * @description 本人关联的产品线集合（→ 员工 A7 `product_line_ids`）。**空数组 = 不限制**；前端据此收敛录入页产品线下拉
+             * @example [
+             *       "1",
+             *       "2"
+             *     ]
+             */
+            product_line_ids: string[];
+            /**
              * @description 权限矩阵（perm_key → level），level ∈ visible / masked / denied
              * @example {
              *       "customer.view": "visible"

@@ -19,6 +19,7 @@ import {
 import CompanyDupPicker from '../components/CompanyDupPicker.vue'
 import RelationTargetPicker from '../components/RelationTargetPicker.vue'
 import { type CompanyChoice } from '../company'
+import { currentUser } from '../session'
 import { recordContactEvent, type RecordEventInput } from '../api/engine'
 import {
   ACTION_TYPE_OPTIONS,
@@ -142,15 +143,22 @@ const submitError = ref('')
 
 /**
  * 部门 / 产品线下拉的数据源（展开面板时拉一次）。
- * ★ 与录入页同一口径：**不按数据范围筛**、**不隐藏停用项**（能不能建由服务端判）。
+ * ★ 与录入页**逐字同一口径**：下拉集 = `me.activatable_dept_ids`（＝ `checkActivateScope` 同集，
+ *   `all` 档空数组＝不限制）+ `product_line_ids`（空＝不限制）。**不在其上再加规则**
+ *   （曾误加「业务线交集」→ 比服务端宽 → 选中即 403，→ D-73 / 录入页同款注释）。
+ *   越权兜底仍是服务端 403，前端不判"能不能建"。**不隐藏停用项**（能不能建由服务端判）。
  */
 async function loadOptions(): Promise<void> {
   optionsError.value = ''
   optionsLoading.value = true
   try {
     const [deptRows, lineRows] = await Promise.all([listDepartments(), listProductLines()])
-    departments.value = deptRows
-    productLines.value = lineRows
+    const myDeptIds = currentUser.value?.activatable_dept_ids ?? []
+    const myLineIds = currentUser.value?.product_line_ids ?? []
+    departments.value = deptRows.filter(
+      (d) => myDeptIds.length === 0 || myDeptIds.includes(d.id),
+    )
+    productLines.value = lineRows.filter((l) => myLineIds.length === 0 || myLineIds.includes(l.id))
     optionsLoaded.value = true
   } catch (error) {
     optionsError.value = errorTextOf(error, '部门 / 产品线加载失败，请稍后重试')

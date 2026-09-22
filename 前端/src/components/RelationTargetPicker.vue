@@ -14,9 +14,9 @@ import { deptLabelOf, productLineLabelOf } from '../org'
  *     接口 `POST /relations` / `POST /contacts/:id/activate-relation` 的入参就是它们（→ 接口 §5.6）。
  *   · 选项来自 `GET /org/departments` / `GET /org/product-lines`（→ 接口 §5.3）。
  *
- * ★ 两条不放宽的口径（与录入页逐字一致）：
- *   ① **不按数据范围筛选项**：「这个部门我能不能建」由服务端判（越权 → 403）——
- *      前端筛一遍＝第二套权限口径；
+ * ★ 两条口径（与录入页逐字一致）：
+ *   ① **选项由页面按服务端下发的可建范围预先收敛**（`me.activatable_dept_ids` / `product_line_ids`，
+ *      空＝不限制）—— 范围服务端算、前端只渲染，不另立第二套权限；越权兜底仍是服务端 403；
  *   ② **停用项不隐藏、只标注**：隐藏＝替服务端做了决定，且用户看不到"为什么少了那条线"。
  */
 

@@ -19,6 +19,7 @@ import {
   type ProductLineVo,
 } from '../api/org'
 import { createRelation, type RelationVo } from '../api/relation'
+import { currentUser } from '../session'
 import {
   recordEvent,
   recordContactEvent,
@@ -234,18 +235,26 @@ async function onEntryEventSubmit(draft: EntryEventDraft): Promise<void> {
 
 /**
  * 部门 / 产品线下拉的数据源（进入第 3 步且有公司时才拉）。
- * ★ **不按数据范围筛**：「这个部门我能不能建」由服务端在 `POST /relations` 判（越权 → 403）——
- *   前端筛一遍＝第二套权限口径（改了服务端忘了前端就分叉）。
- * ★ **不隐藏停用项、只标注**：能不能用是**服务端**的判断，前端把状态**显示出来**即可
- *   （隐藏＝替服务端做了决定，且用户看不到"为什么少了那条线"）。
+ * ★ **下拉集 = `me` 下发的 `activatable_dept_ids`，与 `relation` 域 `checkActivateScope` 逐字同集**
+ *   （→ D-73，单一真相源）：`all` 档＝空数组＝不限制；`dept` 档＝管辖部门；`self` 档＝本人所属部门（含兼部门）。
+ *   ★ **绝不在此之上再加规则** —— 曾误加「承接我业务线的部门也给」，比服务端宽 ⇒ 选中即 403
+ *   （＝第二套权限口径；2026-09-22 真账号走查实测：销售二部承接了王海涛的产品线 1/2，被错误放进下拉，
+ *   选中 → `relation.out_of_scope`）。
+ *   产品线同理＝`product_line_ids`（空＝不限制）。
+ *   ★ 越权兜底仍是 `POST /relations` 的 403：下拉收窄只是 UX，前端不判"能不能建"。
+ * ★ **不隐藏停用项、只标注**：能不能用是**服务端**的判断，前端把状态**显示出来**即可。
  */
 async function loadOptions(): Promise<void> {
   optionsError.value = ''
   optionsLoading.value = true
   try {
     const [deptRows, lineRows] = await Promise.all([listDepartments(), listProductLines()])
-    departments.value = deptRows
-    productLines.value = lineRows
+    const myDeptIds = currentUser.value?.activatable_dept_ids ?? []
+    const myLineIds = currentUser.value?.product_line_ids ?? []
+    departments.value = deptRows.filter(
+      (d) => myDeptIds.length === 0 || myDeptIds.includes(d.id),
+    )
+    productLines.value = lineRows.filter((l) => myLineIds.length === 0 || myLineIds.includes(l.id))
     optionsLoaded.value = true
   } catch (error) {
     optionsError.value = errorText(error, '部门 / 产品线加载失败，请稍后重试')
@@ -402,7 +411,14 @@ function goRelationDetail(): void {
       </div>
     </div>
 
-    <div v-else-if="createdContact !== null" class="entry-card">
+    <!--
+      ★ 只在**跳过公司**（`companyChoice === null`）时才认「已建档（待关联）」。
+        选了公司却 `createRelation` 失败（越权 403 / 撞单 409）时**不能把用户当成功** ——
+        原条件只看 `createdContact !== null`，会把失败粉饰成「已建档（待关联）」，
+        且那句"未挂公司"也是错的（联系人其实已挂公司）；内联错误还会被结果态盖住。
+        2026-09-22 真账号走查实测。
+    -->
+    <div v-else-if="createdContact !== null && companyChoice === null" class="entry-card">
       <a-result
         status="success"
         title="已建档（待关联）"

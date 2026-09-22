@@ -60,6 +60,17 @@ export interface UserVo {
   role: string;
   dept: { id: bigint; name: string } | null;
   managed_dept_ids: bigint[];
+  /**
+   * 可建业务关系的部门集合（→ §5.6 录入前部门归属校验的**同一口径**，单一真相源）。
+   * **空数组 = 不限制（总经理 / 管理员可建任意部门）**；销售＝主部门 ∪ 兼部门；部门经理＝管辖部门。
+   * 前端据此收敛录入页部门下拉——**不另立第二套权限**，越权兜底仍是 `POST /relations` 的 403。
+   */
+  activatable_dept_ids: bigint[];
+  /**
+   * 本人关联的产品线集合（→ 员工 A7 `product_line_ids`）。**空数组 = 不限制**；
+   * 前端据此收敛录入页产品线下拉。
+   */
+  product_line_ids: bigint[];
   permissions: Record<string, string>;
   /**
    * 个人主题（`light` / `dark`；→ 设计规范 §八.1 / 接口 §4.14.9）。
@@ -626,6 +637,22 @@ export class OrgService {
     ]);
     const primaryDept = departments[0];
 
+    // ★ 可建部门 / 业务线：与 `relation` 域 `checkActivateScope` **同一口径**（单一真相源），
+    //   由服务端算、随 `me` 下发，前端只据此渲染下拉——不另立第二套权限（→ D-73）。
+    //   `resolveDataScope` 已在 `toRequestContext` 用，此处复用同一档位判定；`all` 档给空数组＝不限制。
+    const ownedDeptIds = unique([
+      facts.employee.primary_dept_id,
+      ...parseIdList(facts.employee.extra_dept_ids),
+    ]);
+    const scopeType = resolveDataScope(facts.roleCodes);
+    const activatableDeptIds =
+      scopeType === 'all'
+        ? []
+        : scopeType === 'dept'
+          ? facts.managedDeptIds
+          : unique([...ownedDeptIds, ...facts.managedDeptIds]);
+    const productLineIds = parseIdList(facts.employee.product_line_ids);
+
     return {
       id: facts.employee.id,
       name: facts.employee.name,
@@ -633,6 +660,8 @@ export class OrgService {
       role: resolvePrimaryRole(facts.roleCodes),
       dept: primaryDept === undefined ? null : { id: primaryDept.id, name: primaryDept.name },
       managed_dept_ids: facts.managedDeptIds,
+      activatable_dept_ids: activatableDeptIds,
+      product_line_ids: productLineIds,
       permissions: mergePermissionLevels(permissions, facts.roleCodes),
       // 偏好两列（migration 0009）：`theme` 原样给（`null` = 从未设置，前端回落默认）；
       // `nav_open` 是 JSON 列，**必须拉直**（脏值 / 非字符串元素一律丢弃，→ parseStringList）。

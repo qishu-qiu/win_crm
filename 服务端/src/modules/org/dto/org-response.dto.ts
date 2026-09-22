@@ -5,6 +5,7 @@
 //   · 《销售CRM接口API文档》§5.2：
 //       `POST /account/login` → `{access_token, refresh_token, user: UserVO}`
 //       `GET /account/me` → `UserVO = {id, name, username?, role, dept:{id,name}, managed_dept_ids:[],
+//                                      activatable_dept_ids:[], product_line_ids:[],
 //                                      permissions:{"perm_key":"level"}, theme, nav_open:[]}`
 //       `PUT /account/preferences` → 同上 `UserVO`（2026-09-18 落 · D-37；出参复用权威形状，不另造）
 //   · 同 §5.3：部门 `{id,name,parent_id,service_enabled,status,manager_ids:[],product_line_ids:[]}`；
@@ -65,6 +66,24 @@ export class UserVoDto {
     example: ['1', '2'],
   })
   managed_dept_ids!: string[];
+
+  @ApiProperty({
+    type: [String],
+    description:
+      '可建业务关系的部门集合（→ §5.6 录入前部门归属校验的**同一口径**，单一真相源）。' +
+      '**空数组 = 不限制（总经理 / 管理员可建任意部门）**；销售＝主部门 ∪ 兼部门；部门经理＝管辖部门。' +
+      '前端据此收敛录入页部门下拉，不另立第二套权限',
+    example: ['2'],
+  })
+  activatable_dept_ids!: string[];
+
+  @ApiProperty({
+    type: [String],
+    description:
+      '本人关联的产品线集合（→ 员工 A7 `product_line_ids`）。**空数组 = 不限制**；前端据此收敛录入页产品线下拉',
+    example: ['1', '2'],
+  })
+  product_line_ids!: string[];
 
   @ApiProperty({
     type: 'object',

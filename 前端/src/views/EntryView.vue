@@ -19,8 +19,21 @@ import {
   type ProductLineVo,
 } from '../api/org'
 import { createRelation, type RelationVo } from '../api/relation'
+import {
+  recordEvent,
+  recordContactEvent,
+  type RecordEventInput,
+} from '../api/engine'
+import {
+  ACTION_TYPE_OPTIONS,
+  EFFECTIVE_OUTCOME_OPTIONS,
+  QUICK_MARK_OUTCOME_OPTIONS,
+  actionTypeNameOf,
+  outcomeNameOf,
+} from '../engine'
 import CompanyDupPicker from '../components/CompanyDupPicker.vue'
 import RelationTargetPicker from '../components/RelationTargetPicker.vue'
+import EventComposer from '../components/EventComposer.vue'
 import { type CompanyChoice } from '../company'
 
 /**
@@ -171,6 +184,53 @@ const submitError = ref('')
 /** 提交结果：建成的关系 / 建成的联系人（**只建联系人＝跳过了公司**） */
 const createdRelation = ref<RelationVo | null>(null)
 const createdContact = ref<CreatedContact | null>(null)
+
+/** 写跟单下拉选项（值域来自 `src/engine.ts`，**不在这里抄**；喂给 `EventComposer`） */
+const actionTypeOptions = ACTION_TYPE_OPTIONS.map((code) => ({
+  value: code,
+  label: actionTypeNameOf(code),
+}))
+const outcomeOptions = [
+  { value: '', label: '（不填结果）' },
+  ...EFFECTIVE_OUTCOME_OPTIONS.map((code) => ({ value: code, label: outcomeNameOf(code) })),
+  ...QUICK_MARK_OUTCOME_OPTIONS.map((code) => ({
+    value: code,
+    label: `快速标记·${outcomeNameOf(code)}`,
+  })),
+]
+
+/** 写跟单草稿（与 `EventComposer` 的 `submit` 载荷同形；页面侧不依赖组件导出类型） */
+interface EntryEventDraft {
+  action_type: string
+  outcome?: string
+  summary?: string
+  duration_min?: number
+}
+
+/**
+ * 录入页结果态的写跟单提交（→ 接口 §5.7）。
+ * ★ 关系态走 `recordEvent`、待关联态走 `recordContactEvent`（两态互斥，按哪个非 `null` 判）。
+ *   失败原因（含「有效沟通必须写一句话结果」→ 422）由**请求层统一弹**，本页不重复堆一层。
+ */
+async function onEntryEventSubmit(draft: EntryEventDraft): Promise<void> {
+  const input: RecordEventInput = { action_type: draft.action_type }
+  if (draft.outcome) input.outcome = draft.outcome
+  if (draft.summary?.trim()) input.summary = draft.summary.trim()
+  if (draft.duration_min != null) input.duration_min = draft.duration_min
+
+  try {
+    if (createdRelation.value !== null) {
+      await recordEvent(createdRelation.value.id, input)
+      message.success('已记下这条跟单')
+    } else if (createdContact.value !== null) {
+      await recordContactEvent(createdContact.value.id, input)
+      // ★ 只说服务端确实会做（激活时批量回填 `relation_id`，→ 需求 §6.1 ④）；不说「已刷新跟进时间」
+      message.success('已记下这条跟单（关联公司后会挂到新关系的时间线上）')
+    }
+  } catch {
+    // 请求层统一弹
+  }
+}
 
 /**
  * 部门 / 产品线下拉的数据源（进入第 3 步且有公司时才拉）。
@@ -329,6 +389,17 @@ function goRelationDetail(): void {
           <a-button @click="resetAll">再录一个</a-button>
         </template>
       </a-result>
+
+      <!-- ★ 低摩擦录入（→ 需求 §10.2「写跟单 ≤10 秒」）：录完直接记一句，不必跳到详情页 -->
+      <div class="entry-after">
+        <p class="entry-after-hint">顺手记一句刚聊的内容？</p>
+        <EventComposer
+          mode="relation"
+          :action-type-options="actionTypeOptions"
+          :outcome-options="outcomeOptions"
+          @submit="onEntryEventSubmit"
+        />
+      </div>
     </div>
 
     <div v-else-if="createdContact !== null" class="entry-card">
@@ -342,6 +413,17 @@ function goRelationDetail(): void {
           <a-button @click="resetAll">再录一个</a-button>
         </template>
       </a-result>
+
+      <!-- ★ 待关联态也可记跟单（→ D-45：只绑联系人，关联公司后服务端批量挂到新关系） -->
+      <div class="entry-after">
+        <p class="entry-after-hint">这个人还没挂公司：先记一句，关联公司后自动挂到新关系的时间线上。</p>
+        <EventComposer
+          mode="contact"
+          :action-type-options="actionTypeOptions"
+          :outcome-options="outcomeOptions"
+          @submit="onEntryEventSubmit"
+        />
+      </div>
     </div>
 
     <template v-else>
@@ -525,6 +607,18 @@ function goRelationDetail(): void {
 <style scoped>
 .entry {
   max-width: 720px;
+}
+
+.entry-after {
+  margin-top: var(--crm-space-lg);
+  padding-top: var(--crm-space-md);
+  border-top: 1px solid var(--crm-color-border);
+}
+
+.entry-after-hint {
+  margin: 0 0 var(--crm-space-xs);
+  font-size: var(--crm-font-size-base);
+  color: var(--crm-color-text-tertiary);
 }
 
 .entry-title {

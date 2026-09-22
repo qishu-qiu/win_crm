@@ -70,6 +70,8 @@ interface FakeOptions {
   rules?: readonly SeaRuleLike[];
   /** 预警候选私海（M7-03 扫描用；缺省＝空） */
   candidates?: readonly SeaWarningCandidate[];
+  /** 列表页派生的锚点（2026-09-22：**按 id** 取；缺省＝空） */
+  anchors?: readonly SeaWarningCandidate[];
   /** C 域**掉海出口**的返回（M9-F；缺省＝掉成；**显式 `null`** ＝ 这条轮不到我掉） */
   dropResult?: { ownerId: bigint } | null;
   /** 规则配置页要看的 `active` 行（M9-F 规则配置片；缺省＝空） */
@@ -163,6 +165,10 @@ function createService(options: FakeOptions = {}) {
     // M7-03：候选私海（**只读**跨域出口）
     listSeaWarningCandidates: jest.fn<Promise<SeaWarningCandidate[]>, []>(async () =>
       options.candidates === undefined ? [] : [...options.candidates],
+    ),
+    // 2026-09-22：列表页派生用的**按 id 取锚点**（与上面那条同形状，只有"候选从哪来"不同）
+    getSeaWarningAnchors: jest.fn<Promise<SeaWarningCandidate[]>, [readonly bigint[]]>(async () =>
+      options.anchors === undefined ? [] : [...options.anchors],
     ),
     // M9-F 真掉海：C 域掉海出口（缺省＝掉成；显式 `null` ＝ 这条轮不到我掉）
     dropPrivateSeaRelation: jest.fn<Promise<{ ownerId: bigint } | null>, [bigint]>(async () =>
@@ -728,5 +734,102 @@ describe('SeaService 公海规则配置（M9-F）', () => {
 
     expect(error.httpStatus).toBe(401);
     expect(repository.replaceRuleVersion).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// 列表页掉海倒计时（2026-09-22 · 接口 §4.4 / §5.6 `drop_in_x_days`；由聚合层调）
+//   ★ 判据：**列表给的天数 ＝ 扫描用的那个数**（同一段算法），且**取不到就不给值**
+//     —— 不编 `0`（编了会把"这条判不了"显示成"今天到期"）、也不拿默认天数顶。
+// =============================================================================
+describe('SeaService.listDropCountdown（列表页派生 · 接口 §4.4）', () => {
+  beforeEach(() => {
+    // 列表出口读的是**系统时钟**（`new Date()`）⇒ 钉死假时钟，天数才可复算
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** 与扫描用例同一批候选（NOW ＝ 上海 09-20 20:00；规则 ＝ 10 天） */
+  function fiveCandidates(): SeaWarningCandidate[] {
+    return [
+      candidate({ id: 1n, lastEventAt: before(12 * DAY) }), // 到期日 09-18（**已过**）
+      candidate({ id: 2n, lastEventAt: before(10 * DAY - 3 * HOUR) }), // 到期日 09-20（**今天**）
+      candidate({ id: 3n, lastEventAt: before(9 * DAY) }), // 到期日 09-21
+      candidate({ id: 4n, lastEventAt: null, createdAt: before(7 * DAY) }), // 从没跟进：建档＋10 天
+      candidate({ id: 5n, lastEventAt: before(1 * DAY) }), // 到期日 09-29
+    ];
+  }
+
+  it('★★ **天数与扫描同源**：五条分别给 `-2 / 0 / 1 / 3 / 9`（含"今天到期 ＝ 0"这条边界）', async () => {
+    const { service } = createService({ rules: [GLOBAL_RULE], anchors: fiveCandidates() });
+
+    const countdown = await service.listDropCountdown([1n, 2n, 3n, 4n, 5n]);
+
+    expect([...countdown.entries()]).toEqual([
+      ['1', -2],
+      ['2', 0],
+      ['3', 1],
+      ['4', 3],
+      ['5', 9],
+    ]);
+  });
+
+  it('★ 规则表**只读一次**、锚点只问一次（一页多行共用同一批规则；**不按行查库**）', async () => {
+    const { service, repository, relation } = createService({
+      rules: [GLOBAL_RULE],
+      anchors: fiveCandidates(),
+    });
+
+    await service.listDropCountdown([1n, 2n, 3n, 4n, 5n]);
+
+    expect(repository.listActiveSeaRules).toHaveBeenCalledTimes(1);
+    expect(relation.getSeaWarningAnchors).toHaveBeenCalledTimes(1);
+    expect(relation.getSeaWarningAnchors).toHaveBeenCalledWith([1n, 2n, 3n, 4n, 5n]);
+    // ★ **不走全量扫**那条（列表页是高频读口，一页数据不该扫全库）
+    expect(relation.listSeaWarningCandidates).not.toHaveBeenCalled();
+  });
+
+  it('★★ 入参为空 ⇒ 回空 map 且**两条读一个都不发**（翻到空页不该白跑两趟库）', async () => {
+    const { service, repository, relation } = createService({ rules: [GLOBAL_RULE] });
+
+    await expect(service.listDropCountdown([])).resolves.toEqual(new Map());
+    expect(repository.listActiveSeaRules).not.toHaveBeenCalled();
+    expect(relation.getSeaWarningAnchors).not.toHaveBeenCalled();
+  });
+
+  it('★★ **一条生效规则都没有 ⇒ 一个数都不给**（口径同扫描：不拿默认天数顶）', async () => {
+    const { service } = createService({ rules: [], anchors: fiveCandidates() });
+
+    await expect(service.listDropCountdown([1n, 2n, 3n, 4n, 5n])).resolves.toEqual(new Map());
+  });
+
+  it('★ 命中规则但**规则没配跟进天数** ⇒ 该条**不在 map 里**（前端显示 `null`，**不是 0**）', async () => {
+    const { service } = createService({
+      rules: [{ ...GLOBAL_RULE, followFreqDays: null }],
+      anchors: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+    });
+
+    const countdown = await service.listDropCountdown([1n]);
+
+    expect(countdown.has('1')).toBe(false);
+    expect(countdown.size).toBe(0);
+  });
+
+  it('★ **没有规则管这条关系**（命中的规则是别部门的 L3）⇒ 同样不给值', async () => {
+    const { service } = createService({
+      rules: [{ ...GLOBAL_RULE, level: 3, deptId: 99n, followFreqDays: 1 }],
+      anchors: [candidate({ id: 1n, lastEventAt: before(12 * DAY) })],
+    });
+
+    await expect(service.listDropCountdown([1n])).resolves.toEqual(new Map());
+  });
+
+  it('★ **公海 / 无主**：C 域出口不给锚点 ⇒ 该行拿不到值（判"没有倒计时"的地方只有 C 域那条 SQL）', async () => {
+    const { service } = createService({ rules: [GLOBAL_RULE], anchors: [] });
+
+    await expect(service.listDropCountdown([1n])).resolves.toEqual(new Map());
   });
 });

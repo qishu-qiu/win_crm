@@ -69,6 +69,7 @@ import {
 } from './domain/sea-rule';
 import {
   classifySeaWarning,
+  countDaysUntilDrop,
   resolveDropDeadline,
   resolveSeaRuleFor,
   SEA_DROP_REASON,
@@ -489,26 +490,13 @@ export class SeaService {
     const droppedIds: bigint[] = [];
 
     for (const candidate of candidates) {
-      // ① 规则解析（L4→L1 取第一条，7 天缓冲已由仓储的 `effective_from <= now` 挡过一道）
-      const rule = resolveSeaRuleFor(
-        rules,
-        { deptId: candidate.deptId, productLineId: candidate.productLineId },
-        now,
-      );
+      // ① 规则解析 ＋ ② 到期时刻：**与列表页派生共用同一段**（→ `resolveDropDeadlineOf`），
+      //   两处各写一遍就会"扫描按 7 天判、列表显示按别的天数"（同一事实两个落点）
+      const { rule, dropAt } = this.resolveDropDeadlineOf(candidate, rules, now);
       if (rule === null) {
         skippedNoRule += 1;
         continue;
       }
-
-      // ② 到期时刻（触发①「最近 N 天无有效跟进」；本片只覆盖这一条，见 domain 文件头 ★）
-      //   ★ `ruleEffectiveFrom` 进来是 M9-F 的活：规则刚生效 ⇒ 锚点抬到生效日，
-      //     在途倒计时**重新起算**（每个客户至少再给一整轮，→ 需求 §6.3 / F1）
-      const dropAt = resolveDropDeadline({
-        lastEventAt: candidate.lastEventAt,
-        createdAt: candidate.createdAt,
-        followFreqDays: rule.followFreqDays,
-        ruleEffectiveFrom: rule.effectiveFrom,
-      });
       if (dropAt === null) {
         skippedNoFreq += 1;
         continue;
@@ -590,6 +578,93 @@ export class SeaService {
       droppedAt: now,
     });
     return true;
+  }
+
+  /**
+   * 算一条关系的**到期时刻**：① 规则解析（L4→L1）＋ ② 触发① 的锚点。
+   *
+   * ★ 为什么抽出来单独一段：**掉海扫描**（`scanSeaWarning`）与**列表页派生**
+   *   （`listDropCountdown`）都要这一步；分两处写就会出现「扫描按某条规则判、列表照另一套算法显示」
+   *   的漂移（本项目一号坑：同一事实两个落点）。
+   * ★ 两个返回值各有用途，**处置权在调用方**：
+   *   · `rule === null` ⇒ 这条关系**没有规则管**（不许拿默认天数顶替）；
+   *   · `dropAt === null` ⇒ 命中了规则但它**没配"跟进频次天数"** ⇒ 触发① 判不了这条
+   *     （→ `resolveDropDeadline` 尾注；另两条触发的锚点规格未写，→《欠账登记表》D-57）。
+   *   两种情形在扫描里计入不同的"跳过"数，在列表里都表现为"**取不到值**"（不编假值）。
+   *
+   * @param rules 生效中的规则行（调用方**一次读出、循环复用**，别按条查库）
+   */
+  private resolveDropDeadlineOf(
+    candidate: SeaWarningCandidate,
+    rules: readonly SeaRuleLike[],
+    now: Date,
+  ): { rule: SeaRuleLike | null; dropAt: Date | null } {
+    // ① 规则解析（L4→L1 取第一条，7 天缓冲已由仓储的 `effective_from <= now` 挡过一道）
+    const rule = resolveSeaRuleFor(
+      rules,
+      { deptId: candidate.deptId, productLineId: candidate.productLineId },
+      now,
+    );
+    if (rule === null) return { rule: null, dropAt: null };
+
+    // ② 到期时刻（触发①「最近 N 天无有效跟进」；本片只覆盖这一条，见 domain 文件头 ★）
+    //   ★ `ruleEffectiveFrom` 进来是 M9-F 的活：规则刚生效 ⇒ 锚点抬到生效日，
+    //     在途倒计时**重新起算**（每个客户至少再给一整轮，→ 需求 §6.3 / F1）
+    return {
+      rule,
+      dropAt: resolveDropDeadline({
+        lastEventAt: candidate.lastEventAt,
+        createdAt: candidate.createdAt,
+        followFreqDays: rule.followFreqDays,
+        ruleEffectiveFrom: rule.effectiveFrom,
+      }),
+    };
+  }
+
+  // ===== M9-F 列表页：掉海倒计时（接口 §4.4 / §5.6 `drop_in_x_days`；由桥③ 聚合层调）=====
+
+  /**
+   * 一批关系的**距掉海天数**（→ 接口 §4.4 / §5.6 `drop_in_x_days`；**派生、不落库**）。
+   *
+   * ★ 算法**不是新的**：就是扫描那三步 —— 规则解析 ＋ 到期时刻（`resolveDropDeadlineOf`）
+   *   ＋ 日差（`countDaysUntilDrop`）⇒ **列表显示的数**与**任务判它该不该掉**用的是同一个数
+   *   （否则会出现"页面写着还剩 2 天、任务却已经判它过期"）。
+   *
+   * ★ 返回值语义（**取不到就不给值**：不编 0、也不拿默认天数顶）：
+   *   · 有值 ＝ 距到期还有几个**自然日**（`0` ＝ 今天到期；**负数** ＝ 到期日已过 ⇒ 次日掉落）；
+   *   · **不在 map 里** ＝ 这条关系**判不了** —— 公海（无主）/ 已删已并 / 无规则命中 /
+   *     规则没配 `follow_freq_days`：C 域出口只回**私海 ＋ 有主 ＋ 有列可算**的那些。
+   *
+   * ★ **本方法不做数据范围收敛**（与 `scanSeaWarning` 同性质：出口服务的是**装配层**，不是某个登录人）。
+   *   ⚠ 因此**入参 id 必须来自 C 域已收敛过的列表出口**（`listRelations`）—— 拿别的 id 来问
+   *   就是绕过范围判定捞数据。当前唯一调用方＝聚合层 `relation-aggregate`（紧跟该列表之后取数，
+   *   一页 ≤ 100 条）。
+   *
+   * ★ 规则表**一次读、循环复用**（`sea_rule` 是配置级小表，行数 ≈ 层级组合数）：
+   *   一次列表一次往返即可；等行数真的涨起来了再谈缓存（**先测量再优化**，→ 反合理化表）。
+   *
+   * @param relationIds 待算的关系 id（通常＝当前页那些行）
+   * @returns `关系 id（十进制字符串） → 距掉海天数`
+   */
+  async listDropCountdown(relationIds: readonly bigint[]): Promise<Map<string, number>> {
+    const countdown = new Map<string, number>();
+    const ids = uniqueBigints(relationIds);
+    if (ids.length === 0) return countdown;
+
+    const now = new Date();
+    const [rules, anchors] = await Promise.all([
+      this.repository.listActiveSeaRules(now),
+      this.relation.getSeaWarningAnchors(ids),
+    ]);
+    // 一条生效规则都没有 ⇒ 一个数都不给（"没有规则"不等于"永不到期"）
+    if (rules.length === 0) return countdown;
+
+    for (const anchor of anchors) {
+      const { dropAt } = this.resolveDropDeadlineOf(anchor, rules, now);
+      if (dropAt === null) continue;
+      countdown.set(anchor.id.toString(), countDaysUntilDrop({ dropAt, now }));
+    }
+    return countdown;
   }
 
   /**

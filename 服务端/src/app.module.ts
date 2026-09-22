@@ -25,6 +25,10 @@
 //   ⑨ `SeaModule`     —— 第 4 层业务域（F 域 / 公海）：**F-01 接入** —— 目前只有一条
 //      「领取到私海」（`POST /sea/company/:id/claim`）＋ 订阅 `RelationClaimed` 的 **D 域**那一半。
 //      ⚠ 它与 D 域**同层**（架构 §3）：本模块只 import C 域，**不 import** D / E / G。
+//   ⑩ `CompanyAggregateModule` / `RelationAggregateModule` —— **聚合层**（编排层，**不属七域**）：
+//      跨域字段的**唯一装配点**（D-61 / D-10 桥③）—— 「公司详情」＝ B ＋ C ＋ D、「关系列表」＝ C ＋ F。
+//      它们的存在正是为了**不让业务域互相依赖**：业务域各出一个只读出口，拼装在最外层发生
+//      （架构 §3 层级；典型反例＝让 C 域去 import F 域，那就是反向依赖）。
 //
 // · `ContextModule` 内部已被 `SharedModule` import（为让横切层自给自足）。此处**再显式列一次**：
 //   Nest 按**模块类**去重，不会产生第二个实例，但能让「本进程装了 kernel」在根模块**一眼可见**
@@ -41,6 +45,7 @@ import { CompanyAggregateModule } from './modules/company-aggregate/company-aggr
 import { CompanyModule } from './modules/company/company.module';
 import { EngineModule } from './modules/engine/engine.module';
 import { OrgModule } from './modules/org/org.module';
+import { RelationAggregateModule } from './modules/relation-aggregate/relation-aggregate.module';
 import { RelationModule } from './modules/relation/relation.module';
 import { SeaModule } from './modules/sea/sea.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -57,6 +62,7 @@ import { SharedModule } from './shared/shared.module';
     CompanyModule,
     RelationModule,
     CompanyAggregateModule,
+    RelationAggregateModule,
     EngineModule,
     SeaModule,
   ],

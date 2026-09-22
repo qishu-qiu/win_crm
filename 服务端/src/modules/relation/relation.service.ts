@@ -136,6 +136,34 @@ export interface SeaWarningCandidate {
 }
 
 /**
+ * 仓储行 → 掉海预警出口形状。
+ *
+ * ★ **扫描出口（全量）与列表派生出口（按 id）共用这一个映射**：两个出口喂给 F 域的
+ *   `SeaWarningCandidate` 必须**逐字同源**（同一个字段名、同一个"没 owner 给 `null`"取法），
+ *   否则会出现"定时任务按 A 取锚点、列表按 B 取锚点"——同一客户两处倒计时不一样。
+ * ★ 形参写成**结构类型**（不引 Prisma 生成的类型）：本层只关心这几列，仓储 select 换法不该牵连此处。
+ */
+function toSeaWarningCandidates(
+  rows: readonly {
+    id: bigint;
+    dept_id: bigint;
+    product_line_id: bigint;
+    last_event_at: Date | null;
+    created_at: Date;
+    members: readonly { employee_id: bigint }[];
+  }[],
+): SeaWarningCandidate[] {
+  return rows.map((row) => ({
+    id: row.id,
+    deptId: row.dept_id,
+    productLineId: row.product_line_id,
+    ownerId: row.members[0]?.employee_id ?? null,
+    lastEventAt: row.last_event_at,
+    createdAt: row.created_at,
+  }));
+}
+
+/**
  * 列表入参（分页 ＋ 筛选）：controller 从 query DTO 翻译过来。
  * ★ 这里收的是**原始视图码 / 紧迫档数组**，各档判定交给 `domain/relation-list-filter.ts`
  *   —— service 只编排、不写规则（架构 §5.4）。
@@ -152,6 +180,13 @@ export interface RelationListQuery extends PaginationQuery {
   /** 关键词＝**公司名**模糊搜（→ §2.7；**D-07**） */
   keyword?: string;
 }
+
+/**
+ * 列表页签（`private` / `sea`，→ 接口 §4.4）**随本 service 出口一并转出**。
+ * ★ 为什么转出：`GET /relations` 已迁聚合层（聚合层要调本域的 `listRelations`），
+ *   而调用方**不许自己再抄一份 `'private' | 'sea'`**（抄的那份迟早与 `domain/relation-scope.ts` 分叉）。
+ */
+export type { RelationListTab } from './domain/relation-scope';
 
 /**
  * 与 `kernel/errors/prisma-error.mapper.ts` 的 `uk_active_rel` / `uk_owner` 两条**逐字一致**。
@@ -767,21 +802,33 @@ export class RelationService {
    * ★ **本方法不做数据范围收敛，也没有当前登录人** —— 它服务的是 **Worker 定时任务**
    *   （系统身份）：预警要盯住**所有**有主关系（→ 仓储注释 ★）。因此：
    *   · **只许系统任务调用**，HTTP 出口一律走 `listRelations`（那条有范围判定）；
+   *   ⓘ 2026-09-22 起本域多一个**同族**出口 `getSeaWarningAnchors`（**按 id 集合**取，服务列表页
+   *     的 `drop_in_x_days`）：形状同源（同一个映射函数）、只有"候选从哪来"不同（全库扫 vs 一页 id）；
    *   · F 域拿到的是**已装配好的最小字段**（不是 C 域的行形状）—— 形状换一次不该让调用方跟着改。
    * ★ **口径不在本层**：天数解析（L4→L1）＋ 到期时刻 ＋ 三档阈值全在
    *   `F 域 domain/sea-warning.ts`（掉海规则是 F 域的规则，C 域不掺和）。
    */
   async listSeaWarningCandidates(): Promise<SeaWarningCandidate[]> {
-    const rows = await this.repository.listPrivateSeaCandidatesForWarning();
+    return toSeaWarningCandidates(await this.repository.listPrivateSeaCandidatesForWarning());
+  }
 
-    return rows.map((row) => ({
-      id: row.id,
-      deptId: row.dept_id,
-      productLineId: row.product_line_id,
-      ownerId: row.members[0]?.employee_id ?? null,
-      lastEventAt: row.last_event_at,
-      createdAt: row.created_at,
-    }));
+  /**
+   * 按 **id 集合**取掉海倒计时的**锚点**（→ 接口 §4.4 / §5.6 `drop_in_x_days` 的跨域出口）。
+   *
+   * ★ 调用方＝**F 域出口**（`SeaService.listDropCountdown`，再往上由聚合层 `relation-aggregate`
+   *   拼进关系列表）。**天数怎么算不在本域**：规则解析 / 到期时刻 / 三档阈值全在
+   *   F 域 `domain/sea-warning.ts` —— 掉海规则是 F 域的规则，C 域只负责"这几列它长什么样"。
+   * ★ 形状＝ `SeaWarningCandidate`（与定时任务那个出口**同一份**，见 `toSeaWarningCandidates`）。
+   * ★ **本方法不判数据范围、也判不了**（同 `listSeaWarningCandidates`：出口服务的是装配层，不是登录人）
+   *   ⇒ **入参必须是已经过范围收敛的 id 集**（本域 `listRelations` 的出参）。调用方拿别人的 id 来问，
+   *   就是绕过范围判定 —— 故本域的约定是：**该出口只给聚合层用，且紧跟列表取数之后**（一页 ≤100 条）。
+   * ★ 入参为空 ⇒ **不查库直接回空**（`IN ()` 没有意义，也不该白跑一趟）。
+   */
+  async getSeaWarningAnchors(ids: readonly bigint[]): Promise<SeaWarningCandidate[]> {
+    const unique = uniqueBigints(ids);
+    if (unique.length === 0) return [];
+
+    return toSeaWarningCandidates(await this.repository.findSeaWarningCandidatesByIds(unique));
   }
 
   /**

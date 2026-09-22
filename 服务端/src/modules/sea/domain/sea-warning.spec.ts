@@ -7,6 +7,7 @@
 import {
   SEA_WARNING_THRESHOLDS,
   classifySeaWarning,
+  countDaysUntilDrop,
   resolveDropDeadline,
   resolveSeaRuleFor,
   type SeaRuleLike,
@@ -96,6 +97,42 @@ describe('classifySeaWarning：三档阈值判定（→ 需求 §6.3 预警节�
 
   it('阈值取自**唯一落点** `SEA_WARNING_THRESHOLDS`（**单位一律"天"**，与需求 §6.3 逐条对应）', () => {
     expect(SEA_WARNING_THRESHOLDS).toEqual({ agendaDays: 3, notifyOwnerDays: 1, alertManagerDays: 0 });
+  });
+});
+
+describe('countDaysUntilDrop：距掉海天数（→ 接口 §4.4 / §5.6 `drop_in_x_days` 的同一个数）', () => {
+  it('**到期当天** → `0`（当天的两个极端时刻都算 0：同一天内看多少次都是当天）', () => {
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(0, 0, 0), now: shanghaiDay(0, 23, 59) })).toBe(0);
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(0, 23, 59), now: shanghaiDay(0, 0, 1) })).toBe(0);
+  });
+
+  it('**到期日已过** → 负数（昨天到期 ⇒ `-1`；**不是 0** —— `0` 是"还没过"）', () => {
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(-1, 23, 59), now: shanghaiDay(0, 0, 0) })).toBe(-1);
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(-30), now: shanghaiDay(0, 12) })).toBe(-30);
+  });
+
+  it('**还有几天** → 正数照实给（`1` / `3` / `30`：列表要显示「N 天后」，**不是只给 ≤3 天**）', () => {
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(1, 0, 1), now: shanghaiDay(0, 0, 1) })).toBe(1);
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(3, 0, 0), now: shanghaiDay(0, 12) })).toBe(3);
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(30), now: shanghaiDay(0, 12) })).toBe(30);
+  });
+
+  it('★ **跨零点即新的一天**：同一分钟内的一秒之差，天数就变 1（判据是"哪一天"，不是时长）', () => {
+    // 09-20 23:59 看「09-21 00:00 到期」⇒ 1 天后
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(1, 0, 0), now: shanghaiDay(0, 23, 59) })).toBe(1);
+    // 一分钟后（09-21 00:00）再看同一个到期时刻 ⇒ **就是今天**（0）
+    expect(countDaysUntilDrop({ dropAt: shanghaiDay(1, 0, 0), now: shanghaiDay(1, 0, 0) })).toBe(0);
+  });
+
+  it('★ **与分档同源**：分档的边界就是本函数这个数（改一处即两处生效，不会各自漂移）', () => {
+    // 正好 3 天：闭区间算命中（`agenda`）——「数」与「档」取的是同一个 3
+    const at3 = { dropAt: shanghaiDay(3, 0, 0), now: shanghaiDay(0, 12) };
+    expect(countDaysUntilDrop(at3)).toBe(3);
+    expect(classifySeaWarning(at3)).toBe('agenda');
+    // 4 天：还没进任何一档（`none`）
+    const at4 = { dropAt: shanghaiDay(4), now: shanghaiDay(0, 12) };
+    expect(countDaysUntilDrop(at4)).toBe(4);
+    expect(classifySeaWarning(at4)).toBe('none');
   });
 });
 

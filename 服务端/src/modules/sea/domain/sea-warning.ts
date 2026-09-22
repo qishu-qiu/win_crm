@@ -30,6 +30,11 @@
 // ★ 为什么"阈值"与"算到期时刻"放同一个文件：它们**必须一起用**（先算到期、再分档），
 //   分两处写就会出现"一边改了天数、另一边还在按老口径分档"的漂移。
 //
+// ★ **2026-09-22 起本文件多一个消费方：列表页的 `drop_in_x_days`**（→ 接口 §4.4 / §5.6，
+//   由聚合层 `relation-aggregate` 拼装）。它取的是 `countDaysUntilDrop` —— 也就是分档用的**同一个数**，
+//   故"天数"这个口径**依然只有本文件一处**（多一个出口不等于多一份算法）。
+//   ⚠ 本文件仍**不产生任何写动作**：列表页只是把"还剩几天"显示出来，不判该不该掉（→ 文件头末行）。
+//
 // ★ M9-F（规则配置片）起，`resolveDropDeadline` 多收一个 `ruleEffectiveFrom`（规则的生效时刻）：
 //   「规则变更 → 生效时在途倒计时从生效日重新起算」（需求 §6.3 / F1）落在它身上。
 //   口径与边界（含"哪些关系算重新起算"）→ `sea-rule.ts` 文件头 ★ 段。
@@ -104,9 +109,24 @@ function shanghaiDayIndex(at: Date): number {
 }
 
 /**
+ * **距掉海还剩几个自然日**（Asia/Shanghai）—— 天数的**唯一落点**。
+ *
+ * · `0` ＝ 到期当天；`1` ＝ 到期前一天；负数 ＝ **到期日已过**（次日该掉）；>`0` 的其余值＝还有几天
+ * · 判据是「**两个时刻各落在哪个自然日**」的差 —— 不看还剩几小时几分（口径＝最小单位是天）
+ *
+ * ★ 为什么单列出来（而不是让各调用方自己算日差）：**分档**（`classifySeaWarning`）与
+ *   **出参字段**（接口 §4.4 / §5.6 的 `drop_in_x_days`，由 M9-F 桥③ 聚合层拼）取的是**同一个数**。
+ *   各算各的 ⇒ 列表上写着「2 天后」、扫描却按「3 天」分档（本项目一号坑：同一事实两个落点）。
+ *   ⇒ 分档函数**也走本函数**（见下），两处**永远同一个数**。
+ */
+export function countDaysUntilDrop(input: { dropAt: Date; now: Date }): number {
+  return shanghaiDayIndex(input.dropAt) - shanghaiDayIndex(input.now);
+}
+
+/**
  * 三档阈值判定（M7-04 的**核心纯函数**）。
  *
- * 判定方式＝**两个时刻各落在哪个自然日**（Asia/Shanghai），取日差 —— 不看还有几小时几分：
+ * 判定方式＝先取**距掉海的日差**（`countDaysUntilDrop`，**口径同上面那处，不另算一遍**）：
  * ```
  * 日差 < 0   → overdue        到期日已过（次日掉落）
  * 日差 = 0   → alert_manager  到期当天：标红 + 推部门经理
@@ -119,7 +139,7 @@ function shanghaiDayIndex(at: Date): number {
  * ★ 档位从急到缓逐级降：`overdue` → `alert_manager` → `notify_owner` → `agenda` → `none`。
  */
 export function classifySeaWarning(input: { dropAt: Date; now: Date }): SeaWarningTier {
-  const daysLeft = shanghaiDayIndex(input.dropAt) - shanghaiDayIndex(input.now);
+  const daysLeft = countDaysUntilDrop(input);
 
   if (daysLeft < SEA_WARNING_THRESHOLDS.alertManagerDays) return 'overdue';
   if (daysLeft === SEA_WARNING_THRESHOLDS.alertManagerDays) return 'alert_manager';

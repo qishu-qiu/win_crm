@@ -453,6 +453,43 @@ export class RelationRepository {
   }
 
   /**
+   * 按 **id 集合**取同一批"算倒计时那几列"（→ 接口 §4.4 `drop_in_x_days` 的锚点；桥③ 聚合层那条）。
+   *
+   * ★ 与 `listPrivateSeaCandidatesForWarning` 的差别**只有一处**：候选**来自入参**（一页 ≤100 条），
+   *   不是全库扫 —— 列表页是高频读口，每翻一页全量扫一遍私海不可接受。
+   * ★ 条件与扫描**逐字同源**（未删未并 ＋ `private` ＋ **在位 owner**）：两个出口对"哪些关系有倒计时"
+   *   必须是同一批，否则会出现「列表说还有 2 天、扫描说它不该有倒计时」这种自相矛盾。
+   *   ⇒ **公海 / 无主 / 已删已并的行不在结果里**：调用方按"**取不到＝不给值**"处理（不编 0）。
+   *   ⚠ 这也正是"公海不显示掉海倒计时"的**唯一落点**（公海＝无主 ⇒ 掉海只作用于私海→公海这一步，
+   *   → 需求 §6.3）—— 装配层**不再判一遍**，少一处判定就少一处漂移。
+   * ★ 只 select 那几列（同扫描）：出口只给"算倒计时"要的信息，不给公司名 / 金额 / 联系方式。
+   */
+  findSeaWarningCandidatesByIds(ids: readonly bigint[]) {
+    return this.prisma.businessRelation.findMany({
+      where: {
+        id: { in: [...ids] },
+        deleted_at: null,
+        merged_into: null,
+        sea_status: PRIVATE_SEA_STATUS,
+        members: { some: { member_type: OWNER_MEMBER_TYPE, revoked_at: null } },
+      },
+      select: {
+        id: true,
+        dept_id: true,
+        product_line_id: true,
+        last_event_at: true,
+        created_at: true,
+        // 在位 owner（`uk_owner` 保证至多一行在位 ⇒ `take: 1` 不会漏）
+        members: {
+          where: { member_type: OWNER_MEMBER_TYPE, revoked_at: null },
+          select: { employee_id: true },
+          take: 1,
+        },
+      },
+    });
+  }
+
+  /**
    * 「部门 × 产品线」维度的**在途私海条数**（M9-F 规则变更预告；→ 需求 §6.3「本次将影响 X 个客户」）。
    *
    * ★ 为什么是**聚合数**而不是逐条（与 `listPrivateSeaCandidatesForWarning` 的分工）：

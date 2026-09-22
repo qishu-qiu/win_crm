@@ -15,22 +15,25 @@
 //     §2.4：400 / 401 / 403 / 409 / 422 由横切层统一出口，**controller 不自己拼错误响应**。
 //   · 同 §2.5：非幂等写操作应带 `Idempotency-Key`；该横切能力**尚未实现**（M2 起同一现状），
 //     已记入《欠账登记表》D-06 —— 本批按现状不额外要求请求头，免得写了不校验（假契约）。
+//
+// ★ **2026-09-22：`GET /relations`（列表）已迁出本域** → 聚合层 `relation-aggregate`：
+//   列表项要带 `drop_in_x_days`（掉海倒计时），而那条数只有 **F 域**（L4）算得出，本域（L3）读不到它
+//   （架构 §3：只能高层依赖低层）⇒ 装配必须发生在更高层（桥③，姿势同 D-28 / D-61）。
+//   ⚠ 本域**保留**：`POST /relations`（激活）＋ 详情 / 改属性 / 成员；列表的**入参 / 出参 DTO 仍在
+//   `dto/`**（出参形状的唯一落点在本域，聚合层只负责往那个形状里填**一个**跨域字段）。
 // =============================================================================
-import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
-import { Audit, type PageResult } from '../../kernel/index';
-import type { RelationListTab } from './domain/relation-scope';
+import { Audit } from '../../kernel/index';
 import {
   AddRelationMemberDto,
   CreateRelationDto,
-  ListRelationQueryDto,
   UpdateRelationDto,
 } from './dto/relation-request.dto';
 import {
   RelationDetailVoDto,
   RelationMemberVoDto,
-  RelationPageVoDto,
   RelationVoDto,
 } from './dto/relation-response.dto';
 import {
@@ -46,37 +49,7 @@ import {
 export class RelationController {
   constructor(private readonly relation: RelationService) {}
 
-  // ===== M3-09 列表 / 激活 =====
-
-  @Get('relations')
-  @ApiBearerAuth('bearer')
-  @ApiOperation({
-    summary: '业务关系列表',
-    description:
-      '`tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。' +
-      '**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；' +
-      '经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。' +
-      '**M6-07 起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝' +
-      ' §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；' +
-      '**筛选**：`view`（视图：`all` / `following` / `cooperated` / `churned`）＋ `urgency`' +
-      '（紧迫档**多选**、逗号分隔）—— `total` 数的是**筛完之后**的总数。' +
-      '排序恒 `id desc`（`order_by` / `keyword` 等属后续）。' +
-      '⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly`' +
-      ' 属其它域（M4/M7/E），本批**不返回**（不填假值）',
-  })
-  @ApiOkResponse({ type: RelationPageVoDto })
-  listRelations(@Query() query: ListRelationQueryDto): Promise<PageResult<RelationVo>> {
-    return this.relation.listRelations(query.tab === 'sea' ? 'sea' : ('private' as RelationListTab), {
-      page: query.page,
-      pageSize: query.page_size,
-      view: query.view,
-      urgencies: query.urgency,
-      orderField: query.order_by,
-      // ⚠ `desc` 是**三态**（未给 / true / false）：只在给了的时候传 —— 缺省的"降序"由仓储一处定
-      ...(query.desc === undefined ? {} : { desc: query.desc === 'true' }),
-      keyword: query.keyword,
-    });
-  }
+  // ===== M3-09 激活（**列表已迁聚合层** `relation-aggregate`，见文件头 ★）=====
 
   @Audit(RELATION_AUDIT_ACTIONS.activate, 'business_relation')
   @Post('relations')

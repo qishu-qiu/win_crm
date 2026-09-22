@@ -141,6 +141,30 @@ interface FakeOptions {
   activeOwner?: { employee_id: bigint } | null;
   /** M9-F 掉海：条件 UPDATE 的影响行数（`0` ＝ 并发下刚被领走） */
   dropCount?: number;
+  /** 掉海锚点行（两个出口共用：定时任务的全量扫 ＋ 列表页按 id 取） */
+  seaWarningRows?: SeaWarningRowFixture[];
+}
+
+/** 掉海锚点行的**真实形状**（列名照仓储 select：三列锚点 ＋ 在位 owner 成员） */
+interface SeaWarningRowFixture {
+  id: bigint;
+  dept_id: bigint;
+  product_line_id: bigint;
+  last_event_at: Date | null;
+  created_at: Date;
+  members: { employee_id: bigint }[];
+}
+
+function seaWarningRowFixture(overrides: Partial<SeaWarningRowFixture> = {}): SeaWarningRowFixture {
+  return {
+    id: RELATION_ID,
+    dept_id: DEPT_ID,
+    product_line_id: LINE_ID,
+    last_event_at: null,
+    created_at: new Date('2026-09-10T09:00:00Z'),
+    members: [ownerMember(ME)],
+    ...overrides,
+  };
 }
 
 function createService(options: FakeOptions = {}) {
@@ -201,6 +225,9 @@ function createService(options: FakeOptions = {}) {
     listVisibleCompanyIds: jest.fn(async () =>
       (options.visibleCompanyIds ?? []).map((company_id) => ({ company_id })),
     ),
+    // 掉海锚点：定时任务那条**全量扫** ＋ 列表页那条**按 id 取**（两个出口形状同源）
+    listPrivateSeaCandidatesForWarning: jest.fn(async () => options.seaWarningRows ?? []),
+    findSeaWarningCandidatesByIds: jest.fn(async () => options.seaWarningRows ?? []),
     updateRelation: jest.fn(async () => options.row ?? relationFixture()),
   };
   const org = {
@@ -1190,6 +1217,63 @@ describe('RelationService（M3-06 ~ M3-11）', () => {
 
       expect(error.httpStatus).toBe(401);
       expect(repository.listVisibleCompanyIds).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // 掉海倒计时锚点（2026-09-22 · 接口 §4.4 / §5.6 `drop_in_x_days` 的跨域出口）
+  //   ★ 三个要点：**不需要登录上下文**（服务的是装配层，不是某个登录人）；入参空 → **不查库**；
+  //     形状与定时任务那条出口**逐字同源**（同一个映射函数 → 两处倒计时不会不一样）。
+  // ==========================================================================
+  describe('getSeaWarningAnchors：按 id 取掉海锚点（接口 §4.4）', () => {
+    it('按 id 取：回锚点（部门 / 产品线 / owner / 最近有效沟通 / 建档），且只走"按 id"那条仓储方法', async () => {
+      const { service, repository } = createService({ seaWarningRows: [seaWarningRowFixture()] });
+
+      const anchors = await service.getSeaWarningAnchors([RELATION_ID]);
+
+      expect(anchors).toEqual([
+        {
+          id: RELATION_ID,
+          deptId: DEPT_ID,
+          productLineId: LINE_ID,
+          ownerId: ME,
+          lastEventAt: null,
+          createdAt: new Date('2026-09-10T09:00:00Z'),
+        },
+      ]);
+      expect(repository.findSeaWarningCandidatesByIds).toHaveBeenCalledWith([RELATION_ID]);
+      // ★ 列表页**不许**走全量扫那条（一页一行数据、扫全库不可接受）
+      expect(repository.listPrivateSeaCandidatesForWarning).not.toHaveBeenCalled();
+    });
+
+    it('★ **不需要请求上下文**（服务的是装配层，不是"某个登录人"的出口）', async () => {
+      const { service } = createService({ seaWarningRows: [seaWarningRowFixture()] });
+
+      // ⚠ 刻意**不**包 `runWithContext`（同 `listSeaWarningCandidates` / `dropPrivateSeaRelation` 的约定）
+      await expect(service.getSeaWarningAnchors([RELATION_ID])).resolves.toHaveLength(1);
+    });
+
+    it('★ 入参为空 → 回空且**不查库**（`IN ()` 没有意义，也不该白跑一趟）', async () => {
+      const { service, repository } = createService({ seaWarningRows: [seaWarningRowFixture()] });
+
+      await expect(service.getSeaWarningAnchors([])).resolves.toEqual([]);
+      expect(repository.findSeaWarningCandidatesByIds).not.toHaveBeenCalled();
+    });
+
+    it('重复 id 先**去重**再查（出口不假设调用方送来的集合是干净的）', async () => {
+      const { service, repository } = createService({ seaWarningRows: [seaWarningRowFixture()] });
+
+      await service.getSeaWarningAnchors([RELATION_ID, RELATION_ID]);
+
+      expect(repository.findSeaWarningCandidatesByIds).toHaveBeenCalledWith([RELATION_ID]);
+    });
+
+    it('没有在位 owner 的行 → `ownerId: null`（**不补数据**；筛选口径本身由仓储的 SQL 承担）', async () => {
+      const { service } = createService({ seaWarningRows: [seaWarningRowFixture({ members: [] })] });
+
+      const [anchor] = await service.getSeaWarningAnchors([RELATION_ID]);
+
+      expect(anchor?.ownerId).toBeNull();
     });
   });
 });

@@ -11,9 +11,10 @@
 //     成员 `{employee:{id,name},member_type:"owner"|"collaborator",source,valid_until?}`
 //   · 同 §2.6：出参 **snake_case**；id 一律**十进制字符串**（`bigint` 由统一出参拦截器转）。
 //
-// ⚠ **M3 只给出本规模块真能算出来的字段**（设计规范 §3.2 第 11 条「禁假数据撑页面」的同类原则：
+// ⚠ **只给出真能算出来的字段**（设计规范 §3.2 第 11 条「禁假数据撑页面」的同类原则：
 //   不填假值、也不假装有字段）。未落地的字段与原因**逐条列出**，全部登记在《欠账登记表》（`过程产出/`）：
-//   · `drop_in_x_days` —— 掉海规则（L1-L4）属公海域，M7 才有；本批不猜
+//   · `drop_in_x_days` —— **列表项已出**（2026-09-22 桥③：F 域算天数、本域给锚点，装配在聚合层
+//     `relation-aggregate`，见 `RelationListItemVoDto`）；⚠ **详情仍未出**（→ 台账 D-10 残余）
 //   · `overdue` —— 逾期＝承诺（D 域）判定，M4 才有
 //   · `amount` / `amount_masked` —— 合同（E 域）回款，未接
 //   · `old_customer` / `is_weekly` —— 需历史合同 / 周报口径，未接
@@ -119,6 +120,31 @@ export class RelationVoDto {
 }
 
 /**
+ * 关系**列表项**（→ §5.6 列表项）＝ `RelationVoDto` ＋ `drop_in_x_days`。
+ *
+ * ★ 为什么**单开一个类**、不往 `RelationVoDto` 里加：该字段**只有列表有**（详情本期不出）
+ *   —— 加在基类上＝让详情的 Swagger 也宣称有这个字段，前端按生成物写就会取到 `undefined`
+ *   （"假装有字段"比"没有"更糟，→ 文件头 ⚠ 段的原则）。
+ * ★ 谁填它：**不是本域 service**。`drop_in_x_days` 由 **D-61 桥③ 聚合层**（`relation-aggregate`）
+ *   拼装 —— F 域算「距掉海还剩几个自然日」、本域给「锚点（部门 / 产品线 / 最近有效沟通 / 建档时刻）」。
+ *   与 `CompanyDetailVoDto` 的 `relations_summary` / `event_count_30d` **同一姿势**：
+ *   出参 DTO 描述的是 **HTTP 出参形状**，不等于本域 service 的返回类型。
+ */
+export class RelationListItemVoDto extends RelationVoDto {
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      '距掉海还剩几个**自然日**（Asia/Shanghai 日界；**派生、不落库**，→ §5.1 派生字段）。' +
+      '`0` ＝ **今天到期**（列表按「到期当天掉公海 ⚠」标红）；**负数** ＝ 到期日已过 ⇒ 次日掉落；' +
+      '正数 ＝ 还有几天。**拿不到就给 `null`**（公海 / 无主 / 没有规则命中 / 规则没配跟进天数）' +
+      '—— 一律**不编 0**（编了会把"判不了"显示成"今天到期"）。',
+    example: 3,
+  })
+  drop_in_x_days!: number | null;
+}
+
+/**
  * 关系列表**分页出参**（→ 接口 §2.3 统一响应包 · 分页形态 / §五 PageResult）。
  * ★ 键名逐字固定为 `list / total / page / page_size`（§2.3 G2）—— 别改成 `pageSize`：
  *   出参 snake_case 是 §2.6 的硬口径，改了整个前端拆包层都要跟着动。
@@ -126,8 +152,8 @@ export class RelationVoDto {
  *   的 `data` 就是这个对象，**不再是裸数组**。
  */
 export class RelationPageVoDto {
-  @ApiProperty({ type: [RelationVoDto], description: '当前页数据' })
-  list!: RelationVoDto[];
+  @ApiProperty({ type: [RelationListItemVoDto], description: '当前页数据' })
+  list!: RelationListItemVoDto[];
 
   @ApiProperty({ description: '符合筛选条件的全量条数（前端「共 N 条」）', example: 120 })
   total!: number;

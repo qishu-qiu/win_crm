@@ -18,6 +18,7 @@ import {
   RELATION_PAGE_SIZE_DEFAULT,
   listRelations,
   updateRelation,
+  type RelationListItem,
   type RelationTab,
   type RelationVo,
 } from '../api/relation'
@@ -38,6 +39,8 @@ import {
   RELATION_VIEW_OPTIONS,
   URGENCY_OPTIONS,
   VALUE_TIER_OPTIONS,
+  dropInDaysIsUrgent,
+  dropInDaysText,
   stageNameOf,
   toValueTier,
   urgencyColorOf,
@@ -62,6 +65,9 @@ import { formatDateTime } from '../format'
  *
  * 口径来源（★ 真相源，勿自造）：
  *   · 两个页签与列 →《销售CRM接口API文档》§4.4 / §5.6（列表项字段）。
+ *     ★ **2026-09-22 补「掉海」列**：值＝服务端派生的 `drop_in_x_days`（距掉海还剩几个自然日，
+ *       由桥③ 聚合层 `relation-aggregate` 拼装），**到期当天 / 已过期才标红**
+ *       （→《前端页面与交互文档》§5 页 5「**到期当天掉公海⚠**」）；本页**不算天数**，只翻译。
  *   · **数据由服务端按数据范围收敛**（→ §2.2），页面**不再自己过滤**：
  *     前端过滤＝第二套范围口径（改了服务端忘了前端就露客户），这是本项目反复点名的
  *     「双真相源」；页面只负责**把服务端的答案显示出来**。
@@ -85,7 +91,9 @@ const route = useRoute()
 const router = useRouter()
 
 const tab = ref<RelationTab>('private')
-const rows = ref<RelationVo[]>([])
+// ★ 列表项类型（＝ `RelationVo` ＋ `drop_in_x_days`，→ 接口 §5.6）：抽屉里仍用 `RelationVo`
+//   （详情不带那个字段），两者不可混（混了就会在详情侧读到 `undefined` 却显示成 `—`）
+const rows = ref<RelationListItem[]>([])
 const loading = ref(false)
 const errorText = ref('')
 
@@ -275,6 +283,9 @@ const columns = [
   { title: '开发价值', dataIndex: 'valueTier', key: 'valueTier', width: 90 },
   { title: '主责', dataIndex: 'owner', key: 'owner', width: 100 },
   { title: '最近沟通', dataIndex: 'lastEventAt', key: 'lastEventAt', width: 150 },
+  // 「距掉海」：数值来自服务端（§5.6 `drop_in_x_days`，按自然日）；本页只翻译成人话、
+  // 到期当天 / 已过期才标红（→ 前端文档 §5 页 5「到期当天掉公海⚠」）
+  { title: '掉海', dataIndex: 'dropInXDays', key: 'dropInXDays', width: 150 },
   { title: '操作', dataIndex: 'actions', key: 'actions', width: 90 },
 ]
 
@@ -820,6 +831,13 @@ async function submitWaive(commitment: Commitment): Promise<void> {
         <template v-else-if="column.key === 'lastEventAt'">
           {{ formatDateTime(record.last_event_at) }}
         </template>
+        <!-- 距掉海：**服务端算好的天数**，页面不参与计算（→ 接口 §5.6）；
+             `null`（公海 / 判不了）显示 `—` 而**不是 0 天** —— 那会把"算不出"伪装成"今天到期" -->
+        <template v-else-if="column.key === 'dropInXDays'">
+          <span :class="{ 'relations-drop-urgent': dropInDaysIsUrgent(record.drop_in_x_days) }">
+            {{ dropInDaysText(record.drop_in_x_days) }}
+          </span>
+        </template>
         <template v-else-if="column.key === 'actions'">
           <a-button type="link" size="small" @click="openTimeline(record)">时间线</a-button>
         </template>
@@ -1110,6 +1128,12 @@ async function submitWaive(commitment: Commitment): Promise<void> {
 /** 可点实体（→ README §九 不变量⑥「任何位置出现都可点开」，与链接同色、不加下划线噪音） */
 .relations-link {
   color: var(--crm-color-primary);
+}
+
+/** 掉海警示（→ 前端文档 §5 页 5「到期当天掉公海⚠」）：**只有到期当天 / 已过期**才标红 */
+.relations-drop-urgent {
+  font-weight: var(--crm-font-weight-strong);
+  color: var(--crm-color-error);
 }
 
 /** 状态＝圆点 ＋ 文字（→ 设计规范 §4.4） */

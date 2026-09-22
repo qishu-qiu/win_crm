@@ -13,6 +13,12 @@ import request from './request'
  *   先写一堆没人调的封装，等于把「契约」和「调用方」拆开维护，改一处漏一处。
  */
 export type RelationVo = components['schemas']['RelationVoDto']
+/**
+ * **列表项**（＝ `RelationVo` ＋ `drop_in_x_days`，→ 接口 §5.6）。
+ * ★ 与 `RelationVo` 分开：该字段**只有列表有**（详情不带）—— 合成一个类型就会让详情页
+ *   以为能读到它（读到 `undefined`，再显示成 `—`，把"没有这个字段"伪装成"没有倒计时"）。
+ */
+export type RelationListItem = components['schemas']['RelationListItemVoDto']
 export type RelationDetail = components['schemas']['RelationDetailVoDto']
 export type RelationMember = components['schemas']['RelationMemberVoDto']
 export type RelationPage = components['schemas']['RelationPageVoDto']

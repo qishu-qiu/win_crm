@@ -129,3 +129,28 @@ export function toValueTier(value: string | null | undefined): ValueTierValue | 
     ? (value as ValueTierValue)
     : null
 }
+
+/**
+ * 「距掉海」文案（→ 接口 §4.4 / 前端文档 §5 页 5：**到期当天掉公海 ⚠**）。
+ *
+ * ★ 数值口径**不在前端**：`drop_in_x_days` 是服务端按自然日（Asia/Shanghai）派生的**距到期天数**
+ *   （`0` ＝ 今天到期、**负数** ＝ 到期日已过（次日掉落）、`null` ＝ **判不了** →《接口》§5.6）。
+ *   前端只把那个数**翻译成一句人话**，不参与"还剩几天"的计算 ——
+ *   前端再算一遍＝第二套倒计时口径（服务端改了口径，这里会悄悄继续按老的显示）。
+ * ★ `null` 给 `—`，**不给 `0 天`**：它的意思是"这条算不出倒计时"（公海 / 没有规则命中 /
+ *   规则没配跟进天数），显示成"今天到期"就是**编数据**。
+ */
+export function dropInDaysText(days: number | null | undefined): string {
+  if (days === null || days === undefined) return '—'
+  if (days < 0) return '已到期（待掉落）'
+  if (days === 0) return '今天到期掉公海 ⚠'
+  return `${days} 天后`
+}
+
+/**
+ * 「距掉海」是否按**警示**渲染（→ 前端文档 §5 页 5「到期当天掉公海⚠」）。
+ * ★ 到期当天与**已过期**同样标红：前者是"今天不跟就没了"，后者是"已经该掉了（次日掉落）"。
+ */
+export function dropInDaysIsUrgent(days: number | null | undefined): boolean {
+  return days !== null && days !== undefined && days <= 0
+}

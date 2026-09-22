@@ -300,10 +300,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 业务关系列表
-         * @description `tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。**M6-07 起分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；**筛选**：`view`（视图：`all` / `following` / `cooperated` / `churned`）＋ `urgency`（紧迫档**多选**、逗号分隔）—— `total` 数的是**筛完之后**的总数。排序恒 `id desc`（`order_by` / `keyword` 等属后续）。⚠ 规格 §5.6 列表项里 `drop_in_x_days` / `overdue` / `amount` / `old_customer` / `is_weekly` 属其它域（M4/M7/E），本批**不返回**（不填假值）
+         * 业务关系列表（桥③ 聚合层）
+         * @description `tab=private`（默认）＝私海；`tab=sea`＝公海（＝无 owner 的关系）。**服务端按数据范围收敛**（→ §2.2）：销售＝我参与的关系 ＋ **我所属部门**的公海；经理＝管辖部门；总经理 / 管理员＝全部；**交付 / 客服看公海 → 403**（「不进公海」）。**分页**：`page`（默认 1）/ `page_size`（默认 20、最大 100），出参＝ §2.3 分页形态 `{list,total,page,page_size}`（**不再是裸数组**）；**筛选**：`view`（视图：`all` / `following` / `cooperated` / `churned`）＋ `urgency`（紧迫档**多选**、逗号分隔）—— `total` 数的是**筛完之后**的总数；**排序 / 搜索**：`order_by`（白名单）＋ `desc`（缺省 `true`）＋ `keyword`（公司名，→ §2.7）。★ **落点**：本端点 2026-09-22 由 C 域迁至本聚合层 —— 列表项的 `drop_in_x_days`（**距掉海还剩几个自然日**，`0`＝今天到期 / 负数＝已过期 / `null`＝判不了；**派生、不落库**）只有 F 域算得出，而 C(L3) 不许依赖 F(L4)，跨域装配只能发生在更高编排层（→《欠账登记表》**D-10** / D-61 桥③）。⚠ 该字段**照实给，不编假值**：公海（无主）/ 没有规则命中 / 规则没配跟进天数 ⇒ `null`。⚠ 规格 §5.6 列表项里 `overdue` / `amount` / `old_customer` / `is_weekly` **仍未返回**（分属 D / E 域，未就绪）
          */
-        get: operations["RelationController_listRelations"];
+        get: operations["RelationAggregateController_listRelations"];
         put?: never;
         /**
          * 激活业务关系
@@ -529,6 +529,30 @@ export interface paths {
          */
         get: operations["EngineController_todayAgenda"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sea/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 公海规则列表（L1-L4 ＋ 7 天缓冲预告）
+         * @description **含待生效行**（7 天缓冲期内的新版本行也是 `active`，F1 停用的是旧行）—— 出参 `pending` 区分"现在就生效"与"将于 X 生效"。**谁能看**：老板 / 管理员看全部；部门经理看 L1 / L2 全部（上级兜底）＋ 自己**管辖部门**的 L3 / L4；**销售与交付 / 客服 403**（→ 需求 §6.3 / 前端 §四.2）。四个天数各自可为 `null` ＝ 该维度**未配置**（前端请显示"未配置"，**不要回落成默认天数**）
+         */
+        get: operations["SeaController_listRules"];
+        /**
+         * 提交公海规则的新版本（7 天缓冲 ＋ 变更前预告影响面）
+         * @description `{level,dept_id?,product_line_id?,follow_freq_days?,deal_cycle_days?,stay_days?,no_progress_max?,confirmed?}`。**整行覆盖**：没给的字段＝该维度不配（落 `null`），不做"缺省＝沿用"的推断。**两段式确认**（不新增端点）：`confirmed` 不传 / `false` ⇒ **只回预告**（`affected_customers`，**零写库**）；`true` ⇒ 落库（**插新版本行 ＋ 旧行 `status=disabled`**）。**新版本 7 天后生效**（`effective_from` ＝提交日 + 7 天），生效瞬间受该规则约束的在途关系**倒计时从生效日重新起算**（每个客户至少再给一整轮，→ 需求 §6.3）。**谁能改**：L1 / L2 → 老板 / 管理员；L3 / L4 → 该部门的部门经理（或老板 / 管理员）；越权 → **403**。层级与两个 key 搭配错 → **400**；部门 / 产品线不存在 → **400**。⚠ `confirmed=false` 的预告调用**也会留一条** `sea.rule_update` 审计（配置动作本身即敏感动作，→ 架构 §7.4）
+         */
+        put: operations["SeaController_updateRules"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1044,6 +1068,23 @@ export interface components {
              */
             page_size: number;
         };
+        CreateRelationDto: {
+            /**
+             * @description 公司档案 id（→ B1）
+             * @example 3
+             */
+            company_id: string;
+            /**
+             * @description 承接部门 id —— **必须落在我可建范围内**（销售＝我所属部门含兼职；经理＝管辖部门；总经理＝任意）；⚠ `dept_id` 恒定不可变（→ 数据架构 C1），别部门想接＝自己激活一条
+             * @example 2
+             */
+            dept_id: string;
+            /**
+             * @description 产品线 id（→ A7）
+             * @example 1
+             */
+            product_line_id: string;
+        };
         RelationRefDto: {
             /**
              * @description id（十进制字符串）
@@ -1122,42 +1163,6 @@ export interface components {
             created_at: string;
             /** @description 最近更新时间（ISO） */
             updated_at: string;
-        };
-        RelationPageVoDto: {
-            /** @description 当前页数据 */
-            list: components["schemas"]["RelationVoDto"][];
-            /**
-             * @description 符合筛选条件的全量条数（前端「共 N 条」）
-             * @example 120
-             */
-            total: number;
-            /**
-             * @description 当前页码（从 1 开始）
-             * @example 1
-             */
-            page: number;
-            /**
-             * @description 每页条数（默认 20，最大 100，→ §2.7）
-             * @example 20
-             */
-            page_size: number;
-        };
-        CreateRelationDto: {
-            /**
-             * @description 公司档案 id（→ B1）
-             * @example 3
-             */
-            company_id: string;
-            /**
-             * @description 承接部门 id —— **必须落在我可建范围内**（销售＝我所属部门含兼职；经理＝管辖部门；总经理＝任意）；⚠ `dept_id` 恒定不可变（→ 数据架构 C1），别部门想接＝自己激活一条
-             * @example 2
-             */
-            dept_id: string;
-            /**
-             * @description 产品线 id（→ A7）
-             * @example 1
-             */
-            product_line_id: string;
         };
         RelationMemberVoDto: {
             /** @description 成员员工（员工被停用时取不到引用 → `null`） */
@@ -1817,6 +1822,193 @@ export interface components {
              */
             snooze_count: number;
         };
+        RelationListItemVoDto: {
+            /**
+             * @description 业务关系 id
+             * @example 1
+             */
+            id: string;
+            /** @description 公司档案（档案被逻辑删时取不到引用 → `null`） */
+            company: components["schemas"]["RelationRefDto"] | null;
+            /** @description 承接部门（`dept_id` 恒定不可变，→ C1） */
+            dept: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线（含固定配色键 `color_key`） */
+            product_line: components["schemas"]["ProductLineRefDto"] | null;
+            /**
+             * @description 工作流阶段：1~6 ＋ 7＝已流失
+             * @example 1
+             */
+            stage: number;
+            /**
+             * @description 紧迫档
+             * @enum {string}
+             */
+            urgency: "weekly" | "monthly" | "quarterly" | "long_term" | "gray";
+            /**
+             * @description 开发价值档（非灰度关系**必标**，→ C1）
+             * @enum {string|null}
+             */
+            value_tier: "high" | "medium" | "low" | "pending" | null;
+            /** @description 客户等级（**系统按滚动 12 个月回款自动算、不手填** → E 域未接，本批恒 `null`） */
+            customer_level: string | null;
+            /** @description 主责销售（**公海关系为 `null`**） */
+            owner: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description `private`＝私海（有 owner）/ `company_sea`＝公海（无 owner）
+             * @enum {string}
+             */
+            sea_status: "private" | "company_sea";
+            /** @description 最近一次**有效沟通**时间（快速标记不计入，→ C1） */
+            last_event_at: string | null;
+            /** @description 一句话「上次说好下次干嘛」 */
+            next_action_hint: string | null;
+            /**
+             * @description 竞品态势快照（`null`＝未知）
+             * @enum {string|null}
+             */
+            competition: "none" | "in_use" | "comparing" | null;
+            /** @description 建档时间（ISO） */
+            created_at: string;
+            /** @description 最近更新时间（ISO） */
+            updated_at: string;
+            /**
+             * @description 距掉海还剩几个**自然日**（Asia/Shanghai 日界；**派生、不落库**，→ §5.1 派生字段）。`0` ＝ **今天到期**（列表按「到期当天掉公海 ⚠」标红）；**负数** ＝ 到期日已过 ⇒ 次日掉落；正数 ＝ 还有几天。**拿不到就给 `null`**（公海 / 无主 / 没有规则命中 / 规则没配跟进天数）—— 一律**不编 0**（编了会把"判不了"显示成"今天到期"）。
+             * @example 3
+             */
+            drop_in_x_days: number | null;
+        };
+        RelationPageVoDto: {
+            /** @description 当前页数据 */
+            list: components["schemas"]["RelationListItemVoDto"][];
+            /**
+             * @description 符合筛选条件的全量条数（前端「共 N 条」）
+             * @example 120
+             */
+            total: number;
+            /**
+             * @description 当前页码（从 1 开始）
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description 每页条数（默认 20，最大 100，→ §2.7）
+             * @example 20
+             */
+            page_size: number;
+        };
+        SeaRuleVoDto: {
+            /**
+             * @description 规则行 id（`sea_rule.id`；版本行，**停用不删**）
+             * @example 7
+             */
+            id: string;
+            /**
+             * @description 层级：1 全局 / 2 产品线 / 3 部门 / 4 部门×产品线
+             * @enum {number}
+             */
+            level: 1 | 2 | 3 | 4;
+            /** @description 部门引用（层级 3 / 4 才有；层级 1 / 2 为 `null`） */
+            dept: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线引用（层级 2 / 4 才有；层级 1 / 3 为 `null`） */
+            product_line: components["schemas"]["RelationRefDto"] | null;
+            /**
+             * @description 跟进频次天数（触发①；`null` ＝ 未配）
+             * @example 30
+             */
+            follow_freq_days: number | null;
+            /**
+             * @description 成单周期天数（触发②；⚠ 锚点口径未定 ⇒ 只配不生效，→ D-57）
+             * @example 90
+             */
+            deal_cycle_days: number | null;
+            /**
+             * @description 公海停留超期天数（**只用于"公海停留超期→经理决策待办"**，不参与私海倒计时，→ F1 P-10）
+             * @example 60
+             */
+            stay_days: number | null;
+            /**
+             * @description 推进停滞天数（触发③；⚠ 锚点口径未定 ⇒ 只配不生效，→ D-57）
+             * @example 21
+             */
+            no_progress_max: number | null;
+            /**
+             * @description 生效时刻（ISO；＝**提交日 + 7 天**，→ 需求 §6.3 的 7 天缓冲）
+             * @example 2026-09-28T12:00:00.000Z
+             */
+            effective_from: string;
+            /**
+             * @description 行状态（`active` / `disabled`；**停用不删**，历史版本仍在表里）
+             * @example active
+             */
+            status: string;
+            /**
+             * @description 是否**还没生效**（`effective_from > 现在` ⇒ 7 天缓冲期内）
+             * @example false
+             */
+            pending: boolean;
+        };
+        UpdateSeaRuleDto: {
+            /**
+             * @description 规则层级（→ 数据架构 F1）：`1` 全局 / `2` 产品线 / `3` 部门 / `4` 部门×产品线。**层级与两个 key 必须搭配一致**（1＝两个都不给 / 2＝只给产品线 / 3＝只给部门 / 4＝都给），搭配错 → **400 / 20001**（搭配错了不会被库拦下，只会静默失配，故在入口就拒）
+             * @example 4
+             * @enum {number}
+             */
+            level: 1 | 2 | 3 | 4;
+            /**
+             * @description 部门 id（十进制字符串）。**层级 3 / 4 必给**；层级 1 / 2 给了就是搭配错（400）。⚠ 部门级 / 部门×产品级**只有该部门的部门经理**（或老板 / 管理员）能配 → 否则 **403**
+             * @example 2
+             */
+            dept_id?: string;
+            /**
+             * @description 产品线 id（十进制字符串）。**层级 2 / 4 必给**；层级 1 / 3 给了就是搭配错（400）
+             * @example 1
+             */
+            product_line_id?: string;
+            /**
+             * @description **跟进频次**天数（触发①「最近 N 天无有效跟进」→ 需求 §6.3）。`null` / 不给 ＝ **这一项不配**（扫描对该关系"判不了"，**不许拿默认天数顶替**）；给 0 或负数 → **400 / 20001**（"不配"请用 `null`，别用 0 表示）
+             * @example 30
+             */
+            follow_freq_days?: number | null;
+            /**
+             * @description **成单周期**天数（触发②「激活 N 天未签约」→ 需求 §6.3）。⚠ 触发②的**锚点口径规格未写**（"激活"＝首轮建档还是本轮领回）⇒ 本项**只配不改行为**，扫描暂不读它（→《欠账登记表》D-57）
+             * @example 90
+             */
+            deal_cycle_days?: number | null;
+            /**
+             * @description **公海停留超期**天数（→ F1 ★ P-10 修正：**只用于「公海停留超期 → 经理决策待办」**，**不参与私海掉落倒计时**）。⚠ 该任务与决策端点属后续片，本项**只配不生效**
+             * @example 60
+             */
+            stay_days?: number | null;
+            /**
+             * @description **推进停滞**天数（触发③「N 天内阶段未向前推进一格」→ 需求 §6.3）。⚠ 触发③的**锚点口径规格未写**（"向前"含不含回退）⇒ 本项**只配不改行为**（→《欠账登记表》D-57）
+             * @example 21
+             */
+            no_progress_max?: number | null;
+            /**
+             * @description **是否落库**：不传 / `false` ＝ 只回预告（`affected_customers`，**零写库**，供"先看看影响多大"）；`true` ＝ 提交变更（插新版本行 ＋ 旧行 `status=disabled`，新版本 **7 天后生效**）
+             * @example false
+             */
+            confirmed?: boolean;
+        };
+        SeaRuleUpdateResultDto: {
+            /**
+             * @description **是否已落库**：`false` ＝ 只回了预告（`confirmed` 未传 / `false`，**零写库**）；`true` ＝ 已插新版本行（旧行已置 `disabled`）
+             * @example true
+             */
+            applied: boolean;
+            /**
+             * @description **本次变更将影响 X 个客户** ＝ 新版本生效后由这条规则约束的**在途私海**客户数（含"新版本配了天数才真会掉海"的那批口径说明 → §5.16）
+             * @example 12
+             */
+            affected_customers: number;
+            /**
+             * @description 拟生效 / 已定生效时刻（ISO）＝ **提交日 + 7 天**
+             * @example 2026-09-28T12:00:00.000Z
+             */
+            effective_from: string;
+            /** @description 落库后的新版本行；**只回预告时为 `null`** */
+            rule: components["schemas"]["SeaRuleVoDto"] | null;
+        };
         ClaimSeaRelationDto: {
             /**
              * @description 承接部门 id（＝这条公海关系**所属部门**；销售＝本部门、经理＝管辖部门、总经理＝任意）。⚠ 跨部门领公海这件事**不存在**（→ 需求 §6.3）：别部门想要这个客户＝自己激活一条本部门的关系
@@ -2242,7 +2434,7 @@ export interface operations {
             };
         };
     };
-    RelationController_listRelations: {
+    RelationAggregateController_listRelations: {
         parameters: {
             query?: {
                 /** @description `private`＝私海（我参与 / 管辖部门 / 全部）；`sea`＝公海（＝无 owner 的关系） */
@@ -2656,6 +2848,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgendaItemVoDto"][];
+                };
+            };
+        };
+    };
+    SeaController_listRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeaRuleVoDto"][];
+                };
+            };
+        };
+    };
+    SeaController_updateRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSeaRuleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeaRuleUpdateResultDto"];
                 };
             };
         };

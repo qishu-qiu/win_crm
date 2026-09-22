@@ -242,6 +242,8 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         role: 'sale',
         dept: { id: 1n, name: '华东一部' },
         managed_dept_ids: [],
+        activatable_dept_ids: [1n, 2n],
+        product_line_ids: [],
         permissions: { 'customer.export': 'denied', 'customer.view': 'visible' },
         // 偏好未设置：`theme` 原样 `null`（前端回落默认）、`nav_open` 拉直成 `[]`
         theme: null,
@@ -582,6 +584,8 @@ describe('A 域服务（M1-08 / M1-09 / M1-10 / M1-13 / M1-15）', () => {
         role: 'dept_manager',
         dept: { id: 1n, name: '华东一部' },
         managed_dept_ids: [3n],
+        activatable_dept_ids: [3n],
+        product_line_ids: [],
         permissions: { 'customer.view': 'visible' },
         theme: null,
         nav_open: [],

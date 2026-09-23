@@ -29,6 +29,10 @@ Thumbs.db
 *.sqlite3
 dump/
 
+# 后端运行时进程产物（启动脚本/后端进程产生，非源码）
+服务端/backend.pid
+服务端/backend_dev.err
+
 # 项目内部数据（记忆/日志，非源码）
 .workbuddy/
 

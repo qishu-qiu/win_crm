@@ -8,7 +8,7 @@ echo   Backend :3000    Frontend :5173
 echo ============================================
 echo.
 
-REM Auto-discover backend/frontend folders by package.json marker (avoids hardcoding Chinese names)
+REM Auto-discover backend/frontend folders by package.json name marker
 set "BACKEND="
 set "FRONTEND="
 for /d %%d in ("%ROOT%*") do (
@@ -19,33 +19,42 @@ for /d %%d in ("%ROOT%*") do (
 )
 
 if not defined BACKEND (
-  echo ERROR: backend folder (win-crm-server) not found under %ROOT%
+  echo ERROR: backend folder win-crm-server not found under %ROOT%
   goto :end
 )
 if not defined FRONTEND (
-  echo ERROR: frontend folder (win-crm-web) not found under %ROOT%
+  echo ERROR: frontend folder win-crm-web not found under %ROOT%
   goto :end
 )
 
+REM Free ports 3000 / 5173 from any leftover dev process (so re-runs don't hit EADDRINUSE)
+echo Cleaning ports 3000 / 5173 (kill leftover dev processes)...
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /c:":3000 " ^| findstr "LISTENING"') do taskkill /F /PID %%p >nul 2>&1
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /c:":5173 " ^| findstr "LISTENING"') do taskkill /F /PID %%p >nul 2>&1
+echo.
+
 if not exist "%BACKEND%\node_modules" (
-  echo [1/2] Installing backend deps (first run is slow)...
+  echo [1/2] Installing backend deps, first run is slow...
   pushd "%BACKEND%"
   call npm install
   popd
 )
 if not exist "%FRONTEND%\node_modules" (
-  echo [2/2] Installing frontend deps (first run is slow)...
+  echo [2/2] Installing frontend deps, first run is slow...
   pushd "%FRONTEND%"
   call npm install
   popd
 )
 
 echo.
-echo Starting two services (each opens its own window)...
+echo NOTE: Backend needs MySQL(:3306) and Redis(:6379) running.
+echo       If they are down (e.g. after a reboot), start them in phpStudy first.
+echo.
+echo Starting two services (each opens its own window, kept open on error)...
 echo.
 
-start "Backend :3000" cmd /k "cd /d %BACKEND% && npm run start:web"
-start "Frontend :5173" cmd /k "cd /d %FRONTEND% && npm run dev"
+start "Backend :3000" cmd /k "cd /d %BACKEND% && npm run start:web & pause"
+start "Frontend :5173" cmd /k "cd /d %FRONTEND% && npm run dev & pause"
 
 echo Done. Wait about 10s for services to come up:
 echo   Backend API : http://localhost:3000    Swagger: http://localhost:3000/docs

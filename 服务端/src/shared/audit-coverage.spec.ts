@@ -20,6 +20,7 @@ import { EngineController } from '../modules/engine/engine.controller';
 import { OrgController } from '../modules/org/org.controller';
 import { RelationController } from '../modules/relation/relation.controller';
 import { SeaController } from '../modules/sea/sea.controller';
+import { TradeController } from '../modules/trade/trade.controller';
 
 /** 属于「增删改」的 HTTP 方法（与 `AuditLogInterceptor` 同一口径） */
 const WRITE_METHODS: readonly RequestMethod[] = [
@@ -36,6 +37,7 @@ const CONTROLLERS = [
   RelationController,
   EngineController,
   SeaController,
+  TradeController,
 ];
 
 /**

@@ -4,7 +4,7 @@
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
 > 配套真相源：《销售CRM业务需求文档》、《销售CRM数据架构文档》、《销售CRM设计规范》、《销售CRM前端页面与交互文档》（均 需求规格/）。
 > **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22），沿革查 `git log --follow -- 需求规格/销售CRM接口API文档.md`。
-> 生效日期：2026-09-28 ｜ 状态：**V1.42**（本版：**M8-06 Phase 2-A 落地** —— `GET /today-agenda` 加**实时兜底**（当日 `daily_agenda` 无行时按活数据即时派生「今日该找谁」＝本人未关闭且今日到期的承诺，惰性写入按 user/日/ref 去重，用户后续处理状态得以保留）；新增 `POST /today-agenda/:id/action`（done → 自动销关联承诺 / snoozed 同一条最多 3 次 / ignored 必填原因 422·20403），→ §4.14.4 / §5.6 / §5.7）。上版（**V1.41**）：**D-74 收口 ——「可建产品线范围」落地**：可建范围 ＝ **所选部门承接的产品线**（判据＝ `product_line.dept_ids` 含该部门，→ 数据架构 A7），**不是**「我挂的产品线」`me.product_line_ids`。**服务端**：C 域 `createRelation` 新增 `requireLineServedByDept`（判据走 A 域出口 `getDeptProductLineIds`；⚠ `POST /relations` 与 `POST /contacts/:id/activate-relation` **共用同一道**，不会一边收一边漏）→ 不成立给 **422 / `20409`**（§2.4 补码 ＋ §5.6 补校验顺序）；**前端**：录入页 / 联系人详情的产品线下拉改按**同一判据**派生（未选部门 ⇒ 不摆候选；换部门 ⇒ 清掉不合法的已选线）；口径正文 → 架构 §7.2「可建产品线范围」段）。上版（**V1.40**）：**D-73 收口** —— §5.2 `UserVO` 回填 `activatable_dept_ids` / `product_line_ids`（前者与 `checkActivateScope` **同集**；后者 2026-09-22 起**无消费方**），口径正文 → **架构 §7.2「新建（激活）时的部门范围」段**。再上版（**V1.39**）：**M9-F 展示片·D-10**：关系列表项补 `drop_in_x_days`（距掉海还剩几个自然日，按自然日 Asia/Shanghai；`0`＝今天到期、负数＝到期日已过、正数＝还有几天、`null`＝判不了）；由**聚合层** `relation-aggregate` 拼装 —— F 域算天数、C 域给锚点；`GET /relations` 由 C 域迁聚合层（C(L3) 读不到 F(L4) 的 `sea_rule`，→ 架构 §3 / D-61 桥③）；同批升前端页 5「掉海」列（到期当天 / 已过期标红，页面不算天数）。再上版（**V1.38**）：M9-F 规则配置片 —— `GET/PUT /sea/rules` 形状回填 §5.16（层级语义 / 7 天缓冲 / 两段式确认 `confirmed` / 变更预告 `affected_customers` / 谁能配哪一层）；同批 A10 登记动作名 `sea.rule_update`。
+> 生效日期：2026-09-28 ｜ 状态：**V1.43**（本版：**M8-06 Phase 2-B 落地** —— 新增 `visit` 域（纯行政考勤）：`POST /visits`（外出登记 `{depart_at,reason,relation_ids?}`）＋ `POST /visits/:id/return`（回来点一下，只写 `actual_return_at`，已回再点 422）＋ `GET /visits`（我的外出记录，可选 `?date=YYYY-MM-DD`），→ §4.7 / §5.8）。上版（**V1.42**）：**M8-06 Phase 2-A 落地** —— `GET /today-agenda` 加**实时兜底**（当日 `daily_agenda` 无行时按活数据即时派生「今日该找谁」＝本人未关闭且今日到期的承诺，惰性写入按 user/日/ref 去重，用户后续处理状态得以保留）；新增 `POST /today-agenda/:id/action`（done → 自动销关联承诺 / snoozed 同一条最多 3 次 / ignored 必填原因 422·20403），→ §4.14.4 / §5.6 / §5.7）。上版（**V1.41**）：**D-74 收口 ——「可建产品线范围」落地**：可建范围 ＝ **所选部门承接的产品线**（判据＝ `product_line.dept_ids` 含该部门，→ 数据架构 A7），**不是**「我挂的产品线」`me.product_line_ids`。**服务端**：C 域 `createRelation` 新增 `requireLineServedByDept`（判据走 A 域出口 `getDeptProductLineIds`；⚠ `POST /relations` 与 `POST /contacts/:id/activate-relation` **共用同一道**，不会一边收一边漏）→ 不成立给 **422 / `20409`**（§2.4 补码 ＋ §5.6 补校验顺序）；**前端**：录入页 / 联系人详情的产品线下拉改按**同一判据**派生（未选部门 ⇒ 不摆候选；换部门 ⇒ 清掉不合法的已选线）；口径正文 → 架构 §7.2「可建产品线范围」段）。上版（**V1.40**）：**D-73 收口** —— §5.2 `UserVO` 回填 `activatable_dept_ids` / `product_line_ids`（前者与 `checkActivateScope` **同集**；后者 2026-09-22 起**无消费方**），口径正文 → **架构 §7.2「新建（激活）时的部门范围」段**。再上版（**V1.39**）：**M9-F 展示片·D-10**：关系列表项补 `drop_in_x_days`（距掉海还剩几个自然日，按自然日 Asia/Shanghai；`0`＝今天到期、负数＝到期日已过、正数＝还有几天、`null`＝判不了）；由**聚合层** `relation-aggregate` 拼装 —— F 域算天数、C 域给锚点；`GET /relations` 由 C 域迁聚合层（C(L3) 读不到 F(L4) 的 `sea_rule`，→ 架构 §3 / D-61 桥③）；同批升前端页 5「掉海」列（到期当天 / 已过期标红，页面不算天数）。再上版（**V1.38**）：M9-F 规则配置片 —— `GET/PUT /sea/rules` 形状回填 §5.16（层级语义 / 7 天缓冲 / 两段式确认 `confirmed` / 变更预告 `affected_customers` / 谁能配哪一层）；同批 A10 登记动作名 `sea.rule_update`。
 > ⚠ **代码注释不绑文档版本号（2026-09-16 定）**：代码里引用规格一律写「《文档名》§X」，**不写 `V1.xx`** —— 绑版本号必漂移（实测 `V1.16` / `V1.27` / `V1.3` / `V1.32` 全成旧值：这正是坑 #1 / #6 的复现路径）。本版同批把 `服务端/src` ＋ `前端/src` 里的历史版本指针**全部去除**（逐文件**字面**替换，禁批量正则 → 铁律坑 19）。
 
 ---
@@ -261,7 +261,7 @@
   - 同一客户同一原因被忽略后 **7 天内不再重复推**。
 
 **4.14.5 外出登记（`→需求§7.5`）**
-- `POST /visits`：外出时登记 `{depart_at, reason, relation_id?}`（**就三样**，无预计返回时间/交通方式/目的地/备注）。
+- `POST /visits`：外出时登记 `{depart_at, reason, relation_ids?}`（`relation_ids` ＝去了哪些客户，**数组、可空**；**就三样**，无预计返回时间/交通方式/目的地/备注）。
 - `POST /visits/:id/return`：**回来点一下**，只写 `actual_return_at`。**纯行政，不产生业务事件、不关联报销**。
 
 **4.14.6 工单流转与审批人（`→需求§6.4` §7.9）**
@@ -450,7 +450,7 @@
 - 预约 `{id,relation_id,contact?,appointment_at,note,status,drop_in_x_days}`
 - `POST /appointments` req `{relation_id,contact_id?,appointment_at,note?}`；`PUT /appointments/:id` 改期 req 同（写 `reschedule_log`）
 - `POST /appointments/:id/complete` → resp `{event_id}`（服务端强制生成事件，否则 **422**）
-- `POST /visits` req `{depart_at,reason,relation_ids?:[]}`；`POST /visits/:id/return` req `{}`（写 `actual_return_at`）
+- `POST /visits` req `{depart_at,reason,relation_ids?:[]}`（`relation_ids` ＝ 去了哪些客户，**可空**＝只登记行踪，纯行政不校验归属）；`POST /visits/:id/return` req `{}`：只写 `actual_return_at`，**已回再点 422**。`GET /visits`：`employee_id` 取当前登录人，按 `depart_at` 倒序最近 50 条，可选 `?date=YYYY-MM-DD` 只看某天（→ M8-06 Phase 2-B）。
 
 ### 5.9 合同 / 回款 / 分配 contract / payment / split
 - 列表项 `{id,contract_no,company:{id,name},product_line,signer:{id,name},amount,paid_amount,pay_progress,status,sign_date,service_end,expire_level:0|30|60|90}`

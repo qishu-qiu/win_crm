@@ -49,6 +49,7 @@ import { RelationAggregateModule } from './modules/relation-aggregate/relation-a
 import { RelationModule } from './modules/relation/relation.module';
 import { SeaModule } from './modules/sea/sea.module';
 import { TradeModule } from './modules/trade/trade.module';
+import { VisitModule } from './modules/visit/visit.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SharedModule } from './shared/shared.module';
 
@@ -67,6 +68,7 @@ import { SharedModule } from './shared/shared.module';
     EngineModule,
     SeaModule,
     TradeModule,
+    VisitModule,
   ],
   controllers: [HealthController],
 })

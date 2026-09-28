@@ -10,6 +10,15 @@ import {
   type ContactLinkFilter,
 } from '../contact'
 
+// ★ Phase 1 统一交互原件（应用骨架 ＋ 通用件）：页面只喂数据 / 接事件，组件不连接口
+import CrmTable from '../components/CrmTable.vue'
+import EmptyState from '../components/EmptyState.vue'
+import EntityLink from '../components/EntityLink.vue'
+import ErrorBlock from '../components/ErrorBlock.vue'
+import FilterChip from '../components/FilterChip.vue'
+import PageContainer from '../components/PageContainer.vue'
+import StatusTag from '../components/StatusTag.vue'
+
 /**
  * 联系人档案 · 列表页（M6-09 片 2）—— **最小版**：列表 ＋ 筛选（全部 / 未关联公司）＋ 三态。
  *
@@ -209,52 +218,44 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="contacts">
-    <h2 class="contacts-title">联系人档案</h2>
-    <p class="contacts-hint">{{ filterHint }}</p>
-
+  <PageContainer title="联系人档案" :description="filterHint">
     <div class="contacts-filters">
       <span class="contacts-filter-label">范围</span>
-      <button
+      <FilterChip
         v-for="item in CONTACT_LINK_FILTERS"
         :key="item.value"
-        type="button"
-        class="contacts-chip"
-        :class="{ 'is-active': filter === item.value }"
-        @click="selectFilter(item.value)"
-      >
-        {{ item.label }}
-      </button>
+        :label="item.label"
+        :active="filter === item.value"
+        @toggle="selectFilter(item.value)"
+      />
     </div>
 
-    <p v-if="errorText" class="contacts-error">{{ errorText }}</p>
+    <ErrorBlock v-if="errorText" :message="errorText" @retry="load" />
 
-    <a-table
+    <CrmTable
       :columns="columns"
       :data-source="rows"
       :loading="loading"
       :pagination="paginationConfig"
-      row-key="id"
       size="middle"
       @change="onPageChange"
     >
       <template #bodyCell="{ column, record }">
         <!-- 实体可点（A1）：人名一律可点，落点＝联系人详情页 -->
         <template v-if="column.key === 'name'">
-          <router-link class="contacts-link" :to="`/contacts/${record.id}`">
-            {{ record.name }}
-          </router-link>
+          <EntityLink :to="`/contacts/${record.id}`" :label="record.name" />
         </template>
         <template v-else-if="column.key === 'position'">{{ record.position ?? '—' }}</template>
         <template v-else-if="column.key === 'phone'">
           {{ record.phone_masked }}
           <!-- 上锁是**服务端给的状态**（本页只标注）：「申请解锁」属 G 域审批，未建 → 不摆假入口 -->
-          <a-tag v-if="record.phone_locked" color="default">已上锁</a-tag>
+          <StatusTag v-if="record.phone_locked" text="已上锁" />
         </template>
         <template v-else-if="column.key === 'status'">
-          <a-tag :color="record.is_current ? 'green' : 'default'">
-            {{ record.is_current ? '在职' : '已离职' }}
-          </a-tag>
+          <StatusTag
+            :text="record.is_current ? '在职' : '已离职'"
+            :color="record.is_current ? 'var(--crm-color-success)' : 'var(--crm-color-text-tertiary)'"
+          />
         </template>
         <template v-else-if="column.key === 'decisionRole'">
           {{ decisionRoleNameOf(record.decision_role) }}
@@ -262,30 +263,13 @@ onMounted(() => {
       </template>
 
       <template #emptyText>
-        <a-empty :description="`${filterLabel}：没有联系人`" />
+        <EmptyState :description="`${filterLabel}：没有联系人`" />
       </template>
-    </a-table>
-  </section>
+    </CrmTable>
+  </PageContainer>
 </template>
 
 <style scoped>
-.contacts {
-  max-width: 1080px;
-}
-
-.contacts-title {
-  margin: 0 0 var(--crm-space-xs);
-  font-size: var(--crm-font-size-2xl);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
-.contacts-hint {
-  margin: 0 0 var(--crm-space-lg);
-  font-size: var(--crm-font-size-base);
-  color: var(--crm-color-text-tertiary);
-}
-
 /** 筛选栏：单行 inline、控件高统一（与业务关系列表的 chip 同款视觉，不为一处控件新造一套） */
 .contacts-filters {
   display: flex;
@@ -298,41 +282,5 @@ onMounted(() => {
 .contacts-filter-label {
   font-size: var(--crm-font-size-xs);
   color: var(--crm-color-text-tertiary);
-}
-
-.contacts-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--crm-space-xxs);
-  height: 28px;
-  padding: 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-text-secondary);
-  background: var(--crm-color-bg-container);
-  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
-  border-radius: var(--crm-radius-pill);
-  cursor: pointer;
-}
-
-.contacts-chip.is-active {
-  color: var(--crm-color-primary);
-  border-color: var(--crm-color-primary);
-  background: var(--crm-color-primary-bg);
-}
-
-/** 错误态：§4.6「错误文案红 12px」（与登录页 / 建档页 / 关系列表同一形态） */
-.contacts-error {
-  margin: 0 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-error);
-}
-
-/** 可点人名：用主色 + hover 下划线（**不用 AntD Link 组件的默认蓝**，与全局主色 token 同源） */
-.contacts-link {
-  color: var(--crm-color-primary);
-}
-
-.contacts-link:hover {
-  text-decoration: underline;
 }
 </style>

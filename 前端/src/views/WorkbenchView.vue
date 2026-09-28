@@ -4,6 +4,11 @@ import { useRouter } from 'vue-router'
 
 import { fetchTodayAgenda, type AgendaItem } from '../api/engine'
 import { agendaStatusNameOf, refTypeNameOf } from '../engine'
+// ★ Phase 1 统一交互原件（应用骨架 ＋ 通用件）：页面只喂数据 / 接事件，组件不连接口
+import ContentCard from '../components/ContentCard.vue'
+import EmptyState from '../components/EmptyState.vue'
+import KpiCard from '../components/KpiCard.vue'
+import PageContainer from '../components/PageContainer.vue'
 
 /**
  * 工作台（M4-17 最小版 → **M6-06 补全**）—— 「今日该找谁」。
@@ -98,6 +103,13 @@ const groups = computed<AgendaGroup[]>(() => {
   return [...grouped.values()]
 })
 
+/** 卡片头右侧元信息（共 N 条 / 同类合并为 M 组） */
+const agendaMeta = computed(() =>
+  groups.value.length < totalCount.value
+    ? `共 ${totalCount.value} 条 · 同类合并为 ${groups.value.length} 组`
+    : `共 ${totalCount.value} 条`,
+)
+
 const expandedKeys = ref<string[]>([])
 
 function isExpanded(key: string): boolean {
@@ -147,38 +159,26 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="workbench">
-    <header class="workbench-head">
-      <h2 class="workbench-title">工作台</h2>
-      <p class="workbench-sub">
-        {{ todayText }} · 今日 <span class="workbench-num">{{ totalCount }}</span> 条待处理
-      </p>
-    </header>
+  <PageContainer title="工作台" :description="`${todayText} · 今日 ${totalCount} 条待处理`">
 
     <!-- 今日概览（只放能从动线条目真算出来的数） -->
     <a-row :gutter="16" class="workbench-kpi-row">
       <a-col :span="8">
-        <div class="workbench-kpi">
-          <div class="workbench-kpi-label">今日待处理</div>
-          <div class="workbench-kpi-value is-primary">{{ totalCount }}</div>
-          <div class="workbench-kpi-note">服务端已按优先级排序</div>
-        </div>
+        <KpiCard label="今日待处理" :value="totalCount" accent>
+          <template #hint>服务端已按优先级排序</template>
+        </KpiCard>
       </a-col>
       <a-col :span="8">
-        <div class="workbench-kpi">
-          <div class="workbench-kpi-label">已推明天</div>
-          <div class="workbench-kpi-value">{{ snoozedCount }}</div>
-          <div class="workbench-kpi-note">同一条最多推 3 次</div>
-        </div>
+        <KpiCard label="已推明天" :value="snoozedCount">
+          <template #hint>同一条最多推 3 次</template>
+        </KpiCard>
       </a-col>
       <a-col :span="8">
-        <div class="workbench-kpi">
-          <div class="workbench-kpi-label">涉及客户</div>
-          <div class="workbench-kpi-value">{{ relationCount }}</div>
-          <div class="workbench-kpi-note">
+        <KpiCard label="涉及客户" :value="relationCount">
+          <template #hint>
             {{ relationlessCount > 0 ? `另有 ${relationlessCount} 条只有联系人` : '按业务关系去重' }}
-          </div>
-        </div>
+          </template>
+        </KpiCard>
       </a-col>
     </a-row>
 
@@ -195,32 +195,23 @@ onMounted(() => {
       </span>
     </div>
 
-    <p v-if="errorText" class="workbench-error">{{ errorText }}</p>
-
-    <div class="workbench-card">
-      <div class="workbench-card-head">
-        <span class="workbench-card-title">今日安排</span>
-        <span class="workbench-card-meta">
-          共 {{ totalCount }} 条<template v-if="groups.length < totalCount">
-            · 同类合并为 {{ groups.length }} 组</template
-          >
-        </span>
-      </div>
+    <ContentCard title="今日安排" :meta="agendaMeta" :body-padding="false">
 
       <a-skeleton v-if="loading" class="workbench-skeleton" active :paragraph="{ rows: 4 }" />
 
-      <a-empty
+      <EmptyState
         v-else-if="items.length === 0"
-        class="workbench-empty"
         :description="
           errorText === ''
             ? '今天还没有动线条目（动线由每日清晨自动组装，定时任务属 M7 未接）'
             : '暂时取不到今日动线'
         "
       >
-        <a-button v-if="errorText !== ''" @click="load">重试</a-button>
-        <a-button v-else type="primary" @click="goRelations">写跟进</a-button>
-      </a-empty>
+        <template #actions>
+          <a-button v-if="errorText !== ''" @click="load">重试</a-button>
+          <a-button v-else type="primary" @click="goRelations">写跟进</a-button>
+        </template>
+      </EmptyState>
 
       <template v-else>
         <div v-for="group in groups" :key="group.key" class="workbench-group">
@@ -285,73 +276,12 @@ onMounted(() => {
           </div>
         </div>
       </template>
-    </div>
-  </section>
+    </ContentCard>
+  </PageContainer>
 </template>
 
 <style scoped>
-.workbench {
-  max-width: 1080px;
-}
 
-.workbench-head {
-  margin-bottom: var(--crm-space-lg);
-}
-
-.workbench-title {
-  margin: 0 0 var(--crm-space-xs);
-  font-size: var(--crm-font-size-2xl);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
-.workbench-sub {
-  margin: 0;
-  font-size: var(--crm-font-size-base);
-  color: var(--crm-color-text-secondary);
-}
-
-.workbench-num {
-  font-variant-numeric: var(--crm-font-numeric);
-  font-weight: var(--crm-font-weight-strong);
-}
-
-/** 概览卡：§七.2 最轻一档（描边、无阴影、padding 16） */
-.workbench-kpi-row {
-  margin-bottom: var(--crm-space-sm);
-}
-
-.workbench-kpi {
-  padding: var(--crm-space-md);
-  background: var(--crm-color-bg-container);
-  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
-  border-radius: var(--crm-radius-lg);
-}
-
-.workbench-kpi-label {
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-text-secondary);
-}
-
-.workbench-kpi-value {
-  margin-top: var(--crm-space-xxs);
-  font-size: var(--crm-font-size-3xl);
-  font-weight: var(--crm-font-weight-strong);
-  line-height: 1.2;
-  font-variant-numeric: var(--crm-font-numeric);
-  color: var(--crm-color-text);
-}
-
-/** 全屏只给「待处理」这一个数上主色（不铺第二个语义色） */
-.workbench-kpi-value.is-primary {
-  color: var(--crm-color-primary);
-}
-
-.workbench-kpi-note {
-  margin-top: var(--crm-space-xxs);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-text-tertiary);
-}
 
 /** 缺口说明：如实登记"哪几个数还没接"，不让读者以为页面漏做 */
 .workbench-gap {
@@ -376,47 +306,12 @@ onMounted(() => {
   color: var(--crm-color-text-tertiary);
 }
 
-/** 错误态：§4.6「错误文案红 12px」（与登录页 / 建档页 / 关系页同一形态） */
-.workbench-error {
-  margin: 0 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-error);
-}
 
-/** 列表卡：§七.2 列表一档（占主区、靠分割线、无阴影） */
-.workbench-card {
-  background: var(--crm-color-bg-container);
-  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
-  border-radius: var(--crm-radius-lg);
-}
-
-.workbench-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 56px;
-  padding: 0 var(--crm-space-lg);
-  border-bottom: var(--crm-border-width) solid var(--crm-color-border-secondary);
-}
-
-.workbench-card-title {
-  font-size: var(--crm-font-size-lg);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
-.workbench-card-meta {
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-text-tertiary);
-}
 
 .workbench-skeleton {
   padding: var(--crm-space-md) var(--crm-space-lg);
 }
 
-.workbench-empty {
-  padding: var(--crm-space-xl) var(--crm-space-lg);
-}
 
 .workbench-row {
   display: flex;

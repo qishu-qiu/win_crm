@@ -137,3 +137,48 @@ export class SeaRuleUpdateResultDto {
   })
   rule!: SeaRuleVoDto | null;
 }
+
+/**
+ * 一条经理待办（→ 接口 §5.16 `GET /sea/manager-todo`）：公海停留超期、待部门经理决策保留 / 删除。
+ *
+ * ★ `relation_id` 即后续 `POST /sea/manager-decision` 的处置对象；`company` / `dept` / `product_line`
+ *   用实体引用（与 §5.16 `SeaRuleVo` 同一姿势）；`days_in_sea` / `overdue_days` 按北京时间自然日。
+ */
+export class SeaManagerTodoItemDto {
+  @ApiProperty({ description: '业务关系 id（十进制字符串；后续 `POST /sea/manager-decision` 的处置对象）' })
+  relation_id!: string;
+
+  @ApiProperty({ type: RelationRefDto, nullable: true, description: '公司档案（档案被逻辑删时取不到 → `null`）' })
+  company!: RelationRefDto | null;
+
+  @ApiProperty({ type: RelationRefDto, nullable: true, description: '承接部门' })
+  dept!: RelationRefDto | null;
+
+  @ApiProperty({ type: RelationRefDto, nullable: true, description: '产品线' })
+  product_line!: RelationRefDto | null;
+
+  @ApiProperty({ description: '入公海时刻（最近一条 `sea_record.dropped_at`，ISO）' })
+  sea_entered_at!: string;
+
+  @ApiProperty({ description: '已在公海停留的自然日数' })
+  days_in_sea!: number;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: '适用公海停留超期阈值（`sea_rule.stay_days`；取不到规则 ⇒ 该关系不进列表）',
+  })
+  stay_days!: number | null;
+
+  @ApiProperty({ description: '超期天数 ＝ days_in_sea − stay_days（>0 才进列表）' })
+  overdue_days!: number;
+}
+
+/** 经理待办结果（→ 接口 §5.16） */
+export class SeaManagerTodoResultDto {
+  @ApiProperty({ description: '超期待决策的客户数' })
+  total!: number;
+
+  @ApiProperty({ type: [SeaManagerTodoItemDto], description: '公海停留超期的关系（按 `overdue_days` 降序）' })
+  items!: SeaManagerTodoItemDto[];
+}

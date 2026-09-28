@@ -26,11 +26,12 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@
 
 import { Audit } from '../../kernel/index';
 import { ClaimSeaRelationDto, UpdateSeaRuleDto } from './dto/sea-request.dto';
-import { SeaClaimVoDto, SeaRuleUpdateResultDto, SeaRuleVoDto } from './dto/sea-response.dto';
+import { SeaClaimVoDto, SeaManagerTodoResultDto, SeaRuleUpdateResultDto, SeaRuleVoDto } from './dto/sea-response.dto';
 import {
   SEA_AUDIT_ACTIONS,
   SeaService,
   type SeaClaimVo,
+  type SeaManagerTodoResult,
   type SeaRuleUpdateResultVo,
   type SeaRuleVo,
 } from './sea.service';
@@ -39,6 +40,24 @@ import {
 @Controller()
 export class SeaController {
   constructor(private readonly sea: SeaService) {}
+
+  // ===== 经理待办（M8-06 Phase 4 切片③；→ 接口 §5.16）=====
+
+  @Get('sea/manager-todo')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '经理待办：公海停留超期、待决策保留/删除',
+    description:
+      '**部门经理 / 总经理 / 管理员可见**（销售 / 交付·客服 403）。列出「已在公司公海停留超过适用 ' +
+      '`sea_rule.stay_days`」的关系（按 `sea_record` 最近入海时刻算停留时长，北京时间自然日），' +
+      '待经理在 `POST /sea/manager-decision` 决策保留/删除。超期判据复用 `resolveSeaRuleFor`（L4→L1 ＋ ' +
+      '7 天缓冲）；取不到规则 / 规则没配 `stay_days` 的关系不进列表（不编默认天数，→ F1 P-10）。' +
+      '⚠ 报表/看板不脱敏（§2.4）。',
+  })
+  @ApiOkResponse({ type: SeaManagerTodoResultDto })
+  listManagerTodo(): Promise<SeaManagerTodoResult> {
+    return this.sea.listManagerTodo();
+  }
 
   // ===== 公海规则配置（M9-F；→ 接口 §4.14.10 / §5.16）=====
 

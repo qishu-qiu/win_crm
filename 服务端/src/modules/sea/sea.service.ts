@@ -142,6 +142,33 @@ export interface SeaRuleUpdateResultVo {
   rule: SeaRuleVo | null;
 }
 
+/** 一条经理待办（→ 接口 §5.16 `GET /sea/manager-todo`） */
+export interface SeaManagerTodoItem {
+  relation_id: string;
+  company: RelationRef | null;
+  dept: RelationRef | null;
+  product_line: RelationRef | null;
+  /** 入公海时刻（最近一条 `sea_record.dropped_at`，ISO） */
+  sea_entered_at: string;
+  /** 已在公海停留的自然日数 */
+  days_in_sea: number;
+  /** 适用公海停留超期阈值（`sea_rule.stay_days`；取不到规则 → 该关系不进列表） */
+  stay_days: number | null;
+  /** 超期天数 ＝ days_in_sea − stay_days（>0 才进列表） */
+  overdue_days: number;
+}
+
+/** 经理待办结果（→ 接口 §5.16） */
+export interface SeaManagerTodoResult {
+  /** 超期待决策的客户数 */
+  total: number;
+  /** 按 `overdue_days` 降序（最超期在前） */
+  items: SeaManagerTodoItem[];
+}
+
+/** 实体引用（＝ `RelationRefDto` 的运行时形状；本域不依赖 D 域 DTO 类） */
+type RelationRef = { id: string; name: string };
+
 /** 规则行的读形状（＝ `listActiveRulesForConfig` / `replaceRuleVersion` 的 select，列名出不了本层） */
 interface SeaRuleRow {
   id: bigint;
@@ -279,6 +306,73 @@ export class SeaService {
     const now = new Date();
 
     return rows.map((row) => toRuleVo(row, names, now));
+  }
+
+  // ===== M8-06 Phase 4 切片③：经理待办（公海停留超期 → 经理决策）=====
+
+  /**
+   * 经理待办：公海停留超期、待部门经理决策保留 / 删除（→ 接口 §5.16 `GET /sea/manager-todo`）。
+   *
+   * ★ **谁能看**：部门经理 / 总经理 / 管理员（销售 / 交付·客服 403）—— 与 `listSeaRules` 同一档。
+   * ★ 超期判据 ＝ **同一套规则解析**（`resolveSeaRuleFor`，L4→L1；含 7 天缓冲 `effective_from`）：
+   *   关系在公海（company_sea）且「当前 − 最近入海时刻（`sea_record.dropped_at`）」＞ 适用
+   *   `sea_rule.stay_days` ⇒ 进列表。取不到规则 / 规则没配 `stay_days` ⇒ 不进（不编默认天数，→ F1 P-10）。
+   * ★ 停留时长按**北京时间自然日**（与掉海倒计时同口径，→ 架构 §十二 / 废止 #41）。
+   * ★ 范围收敛：经理只看管辖部门；老板 / 管理员看全部（与 `listActiveRulesForConfig` 同一档）。
+   */
+  async listManagerTodo(): Promise<SeaManagerTodoResult> {
+    const context = requireViewer();
+    if (context.dataScope.type !== 'all' && context.dataScope.type !== 'dept') {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '只有部门经理 / 总经理 / 管理员能查看经理待办', {
+        constraint: 'sea.manager_todo.forbidden',
+      });
+    }
+    const scopeDeptIds: readonly bigint[] | null =
+      context.dataScope.type === 'all' ? null : [...context.dataScope.deptIds];
+    const now = new Date();
+
+    const [rows, ruleRows] = await Promise.all([
+      this.repository.listSeaManagerTodo(scopeDeptIds),
+      this.repository.listActiveRulesForConfig(scopeDeptIds),
+    ]);
+
+    // ★ 复用规则解析：把 `stay_days` 带上（SeaRuleLike 本体不含），扩展字段不影响层级命中
+    const rules: (SeaRuleLike & { stayDays: number | null })[] = ruleRows.map((r) => ({
+      level: r.level,
+      deptId: r.dept_id,
+      productLineId: r.product_line_id,
+      followFreqDays: r.follow_freq_days,
+      effectiveFrom: r.effective_from,
+      stayDays: r.stay_days,
+    }));
+
+    const items: SeaManagerTodoItem[] = [];
+    for (const row of rows) {
+      if (row.sea_entered_at === null) continue;
+      const rule = resolveSeaRuleFor(
+        rules,
+        { deptId: row.dept_id, productLineId: row.product_line_id },
+        now,
+      ) as (SeaRuleLike & { stayDays: number | null }) | null;
+      if (rule === null || rule.stayDays === null) continue;
+
+      const daysInSea = calendarDaysSince(row.sea_entered_at, now);
+      if (daysInSea <= rule.stayDays) continue; // 未超期
+
+      items.push({
+        relation_id: row.relation_id.toString(),
+        company: refOfName(row.company_id, row.company_name),
+        dept: refOfName(row.dept_id, row.dept_name),
+        product_line: refOfName(row.product_line_id, row.product_line_name),
+        sea_entered_at: row.sea_entered_at.toISOString(),
+        days_in_sea: daysInSea,
+        stay_days: rule.stayDays,
+        overdue_days: daysInSea - rule.stayDays,
+      });
+    }
+
+    items.sort((left, right) => right.overdue_days - left.overdue_days);
+    return { total: items.length, items };
   }
 
   /**
@@ -761,4 +855,18 @@ function toRuleVo(row: SeaRuleRow, names: RuleRefNames, now: Date): SeaRuleVo {
     status: row.status,
     pending: row.effective_from.getTime() > now.getTime(),
   };
+}
+
+/** 北京时间自然日差（→ 与 `domain/sea-warning` 的日界口径一致：+08:00 后整除一天） */
+function calendarDaysSince(from: Date, now: Date): number {
+  const MS_PER_DAY = 86_400_000;
+  const a = from.getTime() + 8 * 3_600_000;
+  const b = now.getTime() + 8 * 3_600_000;
+  return Math.floor((b - a) / MS_PER_DAY);
+}
+
+/** 单 id → 实体引用；名字取不到（档案被删）→ `null`（不编名） */
+function refOfName(id: bigint, name: string | null): RelationRef | null {
+  if (name === null) return null;
+  return { id: id.toString(), name };
 }

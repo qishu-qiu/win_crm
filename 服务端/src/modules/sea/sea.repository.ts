@@ -14,6 +14,7 @@
 // =============================================================================
 import { Injectable } from '@nestjs/common';
 
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { COMPANY_SEA_STATUS, PRIVATE_SEA_STATUS } from '../relation/domain/relation-active-key';
 import { SEA_RULE_LEVEL, SEA_RULE_STATUS } from './domain/sea-rule';
@@ -229,4 +230,68 @@ export class SeaRepository {
       effectiveFrom: row.effective_from,
     }));
   }
+
+  // ===== M8-06 Phase 4 切片③：经理待办（公海停留超期 → 经理决策）=====
+
+  /**
+   * 取「在公海（company_sea）且属于可见部门」的关系，及其**最近一次入海时刻**
+   * （＝ `sea_record` 最近一条 `dropped_at`，`idx_rel_time`；无历史行的关系不在此列）。
+   *
+   * ★ 名称一次 join 带出（company / department / product_line），省一次往返；
+   *   名字取不到（档案被逻辑删）→ `null`，由 service 决定回 `null` 引用。
+   * ★ 范围收敛在**本层**：`deptIds === null` ＝ 不收敛（老板 / 管理员）；
+   *   给集合 ＝ 经理管辖部门（与 `listActiveRulesForConfig` 同一档）。
+   */
+  async listSeaManagerTodo(deptIds: readonly bigint[] | null): Promise<SeaManagerTodoRow[]> {
+    const scopeFilter: Prisma.Sql[] = [
+      Prisma.sql`br.sea_status = 'company_sea'`,
+      Prisma.sql`br.deleted_at IS NULL`,
+    ];
+    if (deptIds !== null) {
+      scopeFilter.push(
+        Prisma.sql`br.dept_id IN (${Prisma.join(
+          deptIds.map((id) => Prisma.sql`${id}`),
+          ', ',
+        )})`,
+      );
+    }
+    const whereSql = Prisma.join(scopeFilter, ' AND ');
+
+    return this.prisma.$queryRaw<SeaManagerTodoRow[]>`
+      SELECT
+        br.id AS relation_id,
+        br.company_id AS company_id,
+        c.full_name AS company_name,
+        br.dept_id AS dept_id,
+        d.name AS dept_name,
+        br.product_line_id AS product_line_id,
+        pl.name AS product_line_name,
+        MAX(sr.dropped_at) AS sea_entered_at
+      FROM business_relation br
+      INNER JOIN (
+        SELECT relation_id, MAX(dropped_at) AS dropped_at
+        FROM sea_record
+        WHERE deleted_at IS NULL
+        GROUP BY relation_id
+      ) sr ON sr.relation_id = br.id
+      LEFT JOIN company c ON c.id = br.company_id
+      LEFT JOIN department d ON d.id = br.dept_id
+      LEFT JOIN product_line pl ON pl.id = br.product_line_id
+      WHERE ${whereSql}
+      GROUP BY br.id, br.company_id, c.full_name, br.dept_id, d.name, br.product_line_id, pl.name
+    `;
+  }
+}
+
+/** 一条经理待办候选（→ `listSeaManagerTodo` 的 raw 行） */
+export interface SeaManagerTodoRow {
+  relation_id: bigint;
+  company_id: bigint;
+  company_name: string | null;
+  dept_id: bigint;
+  dept_name: string | null;
+  product_line_id: bigint;
+  product_line_name: string | null;
+  /** 最近一次入公海时刻（`sea_record.dropped_at` 最大值） */
+  sea_entered_at: Date | null;
 }

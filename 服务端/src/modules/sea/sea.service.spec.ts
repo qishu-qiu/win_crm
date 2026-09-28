@@ -76,6 +76,8 @@ interface FakeOptions {
   dropResult?: { ownerId: bigint } | null;
   /** 规则配置页要看的 `active` 行（M9-F 规则配置片；缺省＝空） */
   configRules?: readonly SeaRuleRowFixture[];
+  /** 经理待办候选（M8-06 切片③；缺省＝空） */
+  managerTodoRows?: readonly SeaManagerTodoRowFixture[];
   /** 「部门 × 产品线」在途私海条数（C 域聚合出口；缺省＝空） */
   seaGroups?: readonly { deptId: bigint; productLineId: bigint; count: number }[];
   /** 部门 / 产品线的名字引用（跨域装配用；缺省＝照 id 造一个名字） */
@@ -95,6 +97,19 @@ interface SeaRuleRowFixture {
   no_progress_max: number | null;
   effective_from: Date;
   status: string;
+}
+
+/** `listSeaManagerTodo` 行的**真实形状**（列名照仓储的 select） */
+interface SeaManagerTodoRowFixture {
+  relation_id: bigint;
+  company_id: bigint;
+  company_name: string | null;
+  dept_id: bigint;
+  dept_name: string | null;
+  product_line_id: bigint;
+  product_line_name: string | null;
+  /** 最近一次入公海时刻（`sea_record.dropped_at`） */
+  sea_entered_at: Date | null;
 }
 
 function createService(options: FakeOptions = {}) {
@@ -120,6 +135,10 @@ function createService(options: FakeOptions = {}) {
     // M9-F 规则配置：读 `active` 行（**含待生效**）
     listActiveRulesForConfig: jest.fn<Promise<SeaRuleRowFixture[]>, [readonly bigint[] | null]>(
       async () => (options.configRules === undefined ? [] : [...options.configRules]),
+    ),
+    // M8-06 切片③：经理待办候选（只读）
+    listSeaManagerTodo: jest.fn<Promise<SeaManagerTodoRowFixture[]>, [readonly bigint[] | null]>(
+      async () => (options.managerTodoRows === undefined ? [] : [...options.managerTodoRows]),
     ),
     // M9-F 规则配置：插新版本行 ＋ 旧行 disabled（**唯一写口**）
     replaceRuleVersion: jest.fn<
@@ -734,6 +753,107 @@ describe('SeaService 公海规则配置（M9-F）', () => {
 
     expect(error.httpStatus).toBe(401);
     expect(repository.replaceRuleVersion).not.toHaveBeenCalled();
+  });
+});
+
+describe('SeaService.listManagerTodo（M8-06 Phase 4 切片③）', () => {
+  const OVERDUE_AT = new Date('2026-06-01T00:00:00.000Z'); // 远早于 now（2026-09-28）→ 停留 ~119 天
+  const DEPT_RULE = configRule({
+    level: 3,
+    dept_id: DEPT_ID,
+    product_line_id: null,
+    stay_days: 60,
+    effective_from: new Date('2026-01-01T00:00:00.000Z'),
+  });
+
+  it('销售（self 范围）→ 403 / sea.manager_todo.forbidden，且不查库', async () => {
+    const { service, repository } = createService();
+
+    const error = await runWithContext(ruleContextOf(['sale']), () =>
+      captureAppError(() => service.listManagerTodo()),
+    );
+
+    expect(error.httpStatus).toBe(403);
+    expect(error.constraint).toBe('sea.manager_todo.forbidden');
+    expect(repository.listSeaManagerTodo).not.toHaveBeenCalled();
+  });
+
+  it('经理 → 返回公海停留超期的关系（overdue_days = days_in_sea − stay_days），按降序', async () => {
+    const { service } = createService({
+      configRules: [DEPT_RULE],
+      managerTodoRows: [
+        {
+          relation_id: RELATION_ID,
+          company_id: COMPANY_ID,
+          company_name: '合肥测试建材有限公司',
+          dept_id: DEPT_ID,
+          dept_name: '销售一部',
+          product_line_id: LINE_ID,
+          product_line_name: '标准线',
+          sea_entered_at: OVERDUE_AT,
+        },
+      ],
+    });
+
+    const result = await runWithContext(ruleContextOf(['dept_manager'], [DEPT_ID]), () =>
+      service.listManagerTodo(),
+    );
+
+    expect(result.total).toBe(1);
+    const item = result.items[0];
+    expect(item.relation_id).toBe(RELATION_ID.toString());
+    expect(item.company).toEqual({ id: COMPANY_ID.toString(), name: '合肥测试建材有限公司' });
+    expect(item.dept).toEqual({ id: DEPT_ID.toString(), name: '销售一部' });
+    expect(item.stay_days).toBe(60);
+    expect(item.overdue_days).toBeGreaterThan(40); // ~119 − 60
+  });
+
+  it('未超期（days_in_sea ≤ stay_days）→ 不进列表（total=0）', async () => {
+    const { service } = createService({
+      configRules: [DEPT_RULE],
+      managerTodoRows: [
+        {
+          relation_id: RELATION_ID,
+          company_id: COMPANY_ID,
+          company_name: '合肥',
+          dept_id: DEPT_ID,
+          dept_name: '销售一部',
+          product_line_id: LINE_ID,
+          product_line_name: '标准线',
+          sea_entered_at: new Date(Date.now() - 86_400_000), // 昨天才进公海 → days_in_sea≈1
+        },
+      ],
+    });
+
+    const result = await runWithContext(ruleContextOf(['dept_manager'], [DEPT_ID]), () =>
+      service.listManagerTodo(),
+    );
+
+    expect(result.total).toBe(0);
+  });
+
+  it('取不到规则（configRules 空）→ 不进列表（不编默认天数，→ F1 P-10）', async () => {
+    const { service } = createService({
+      configRules: [],
+      managerTodoRows: [
+        {
+          relation_id: RELATION_ID,
+          company_id: COMPANY_ID,
+          company_name: '合肥',
+          dept_id: DEPT_ID,
+          dept_name: '销售一部',
+          product_line_id: LINE_ID,
+          product_line_name: '标准线',
+          sea_entered_at: OVERDUE_AT,
+        },
+      ],
+    });
+
+    const result = await runWithContext(ruleContextOf(['dept_manager'], [DEPT_ID]), () =>
+      service.listManagerTodo(),
+    );
+
+    expect(result.total).toBe(0);
   });
 });
 

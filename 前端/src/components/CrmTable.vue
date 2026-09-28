@@ -7,7 +7,8 @@
  */
 withDefaults(
   defineProps<{
-    rowKey?: string
+    /** 行键：同 AntD Table —— 字符串（字段名）或函数（复合键 / 去重用） */
+    rowKey?: string | ((record: any, index: number) => string)
     size?: 'small' | 'middle' | 'large'
   }>(),
   { rowKey: 'id', size: 'middle' },

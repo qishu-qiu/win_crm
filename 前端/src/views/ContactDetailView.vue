@@ -18,6 +18,12 @@ import {
 } from '../api/org'
 import CompanyDupPicker from '../components/CompanyDupPicker.vue'
 import RelationTargetPicker from '../components/RelationTargetPicker.vue'
+// ★ Phase 1 统一交互原件（应用骨架 ＋ 通用件）：页面只喂数据 / 接事件，组件不连接口
+import CrmTable from '../components/CrmTable.vue'
+import EmptyState from '../components/EmptyState.vue'
+import ErrorBlock from '../components/ErrorBlock.vue'
+import PageContainer from '../components/PageContainer.vue'
+import StatusTag from '../components/StatusTag.vue'
 import { type CompanyChoice } from '../company'
 import { currentUser } from '../session'
 import { recordContactEvent, type RecordEventInput } from '../api/engine'
@@ -309,20 +315,22 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="contact">
-    <a-button type="link" size="small" class="contact-back" @click="router.push('/contacts')">
-      ← 返回联系人档案
-    </a-button>
+  <PageContainer :title="detail?.name ?? '联系人'">
+    <template #extra>
+      <a-button type="link" size="small" @click="router.push('/contacts')">
+        ← 返回联系人档案
+      </a-button>
+    </template>
 
-    <p v-if="errorText" class="contact-error">{{ errorText }}</p>
+    <ErrorBlock v-if="errorText" :message="errorText" @retry="load" />
 
     <a-spin :spinning="loading">
       <template v-if="detail">
         <h2 class="contact-title">{{ detail.name }}</h2>
 
         <div class="contact-badges">
-          <span class="contact-badge">状态：{{ contactStatusNameOf(detail.status) }}</span>
-          <span class="contact-badge">决策角色：{{ decisionRoleNameOf(detail.decision_role) }}</span>
+          <StatusTag :text="`状态：${contactStatusNameOf(detail.status)}`" />
+          <StatusTag :text="`决策角色：${decisionRoleNameOf(detail.decision_role)}`" />
         </div>
 
         <!-- 「⚠ 尚未关联公司」横幅 ＋「关联公司」入口（→ 前端文档 §5 第 14/15 条） -->
@@ -467,7 +475,7 @@ onMounted(() => {
         </div>
 
         <h3 class="contact-section">就职 / 跳槽历史</h3>
-        <a-table
+        <CrmTable
           :columns="employmentColumns"
           :data-source="detail.employments"
           :pagination="false"
@@ -480,15 +488,16 @@ onMounted(() => {
             <template v-else-if="column.key === 'joined'">{{ formatDate(record.joined_at) }}</template>
             <template v-else-if="column.key === 'left'">{{ formatDate(record.left_at) }}</template>
             <template v-else-if="column.key === 'current'">
-              <a-tag :color="record.is_current ? 'green' : 'default'">
-                {{ record.is_current ? '在职' : '已离职' }}
-              </a-tag>
+              <StatusTag
+                :text="record.is_current ? '在职' : '已离职'"
+                :color="record.is_current ? 'var(--crm-color-success)' : 'var(--crm-color-text-tertiary)'"
+              />
             </template>
           </template>
           <template #emptyText>
-            <a-empty description="还没有就职记录（＝待关联）" />
+            <EmptyState description="还没有就职记录（＝待关联）" />
           </template>
-        </a-table>
+        </CrmTable>
 
         <p class="contact-note">
           「申请解锁」属后续里程碑（解锁审批未建）—— 本页只标注上锁状态，不摆点了没用的按钮；
@@ -498,43 +507,15 @@ onMounted(() => {
 
       <a-empty v-else-if="!loading && errorText === ''" description="没有这位联系人" />
     </a-spin>
-  </section>
+  </PageContainer>
 </template>
 
 <style scoped>
-.contact {
-  max-width: 1080px;
-}
-
-.contact-back {
-  padding-left: 0;
-  margin-bottom: var(--crm-space-sm);
-}
-
-.contact-title {
-  margin: 0 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-2xl);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
 .contact-badges {
   display: flex;
   flex-wrap: wrap;
   gap: var(--crm-space-xs);
   margin-bottom: var(--crm-space-md);
-}
-
-.contact-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-text-secondary);
-  background: var(--crm-color-bg-container);
-  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
-  border-radius: var(--crm-radius-pill);
 }
 
 .contact-banner {

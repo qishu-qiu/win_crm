@@ -61,6 +61,7 @@ import {
 } from './domain/commitment-rules';
 import {
   type ActivateRelationDto,
+  type AgendaActionDto,
   type CreateCommitmentDto,
   type CreateEventDto,
   type QuickMarkDto,
@@ -70,6 +71,7 @@ import { resolveEventCountSince } from './domain/event-count-window';
 import { AUTO_EVENT_SOURCE, isSummaryRequired, SYSTEM_ACTION_TYPE } from './domain/event-effective';
 import { buildEventIdempotencyKey } from './domain/event-idempotency';
 import { decideLastEventUpdate } from './domain/last-event';
+import { validateAgendaAction } from './domain/agenda-action';
 import { EngineRepository, type EngineTxClient } from './engine.repository';
 
 /**
@@ -99,6 +101,12 @@ export const ENGINE_AUDIT_ACTIONS = {
   contactActivateRelation: 'contact.activate_relation',
   /** ★ 查看跟单全文 → `GET /relations/:id/events`：**读路径**，只对**管理员**写（本文件手工调 `recordStandalone`） */
   eventView: 'event.view',
+  /**
+   * ★ 今日动线处理反馈 → `POST /today-agenda/:id/action`（写动作，由统一切面留痕）。
+   * ⚠ 动作名 `agenda.action` 是**一类**（done / snoozed / ignored 都是「处理这条动线」），
+   *   不按动作拆三个——审计检索时按「谁处理了哪条动线」归组即可。
+   */
+  agendaAction: 'agenda.action',
 } as const;
 
 /** 跟单事件出参（→ §5.7；未落地字段见 `dto/engine-response.dto.ts` 文件头清单） */
@@ -814,22 +822,28 @@ export class EngineService {
     return toCommitmentVo(updated);
   }
 
-  // ===== M4-10 今日动线（简版）=====
+  // ===== M4-10 今日动线（简版）＋ M8-06 Phase 2-A 实时兜底 =====
 
   /**
    * 今日该找谁（→ §5.7 `GET /today-agenda`）。
    *
-   * ★ 本批＝**直查 `daily_agenda`**（计划 M4-10 原文）：不实时组装、不查承诺 / 预约 / 节奏。
-   *   真实来源是每日 05:00 的组装任务（→ 数据架构 D4），属 M7；本批库里没有当日行就返回空数组。
+   * ★ **实时兜底（P0-②）**：当日 `daily_agenda` 无任何行（M7 每日 05:00 组装任务尚未跑 /
+   *   首次使用）时，按活数据**即时派生**「今日该找谁」——本人未关闭且**今日及之前到期**的承诺
+   *   （逾期 ＋ 今日到期，→ §4.14.4）。派生项**惰性写入** `daily_agenda`（按 user / biz_date /
+   *   ref 去重），用户后续的处理动作（done / snoozed / ignored）得以持久保留；下次读取直接命中
+   *   已组装行，不再重复派生。
    * ★ 出参要的 `relation:{id,name}` / `contact:{id,name}` 都走**跨域出口**批量取（一次一问）。
    */
   async todayAgenda(): Promise<AgendaItemVo[]> {
     const viewer = requireViewer();
-    const rows = await this.repository.listAgendaOfUser(
-      viewer.employeeId,
-      todayDateKey(new Date()),
-      AGENDA_LIMIT,
-    );
+    const bizDate = todayDateKey(new Date());
+    let rows = await this.repository.listAgendaOfUser(viewer.employeeId, bizDate, AGENDA_LIMIT);
+
+    // ★ 实时兜底：当日无组装行 → 派生（承诺 overdue / 今日到期），写入后再读一次
+    if (rows.length === 0) {
+      await this.assembleAgendaForUser(viewer.employeeId, new Date(), bizDate);
+      rows = await this.repository.listAgendaOfUser(viewer.employeeId, bizDate, AGENDA_LIMIT);
+    }
 
     const [relations, contacts] = await Promise.all([
       this.relation.getRelationRefs(uniqueBigints(rows.map((row) => row.relation_id))),
@@ -838,7 +852,106 @@ export class EngineService {
     const relationNames = toNameMap(relations);
     const contactNames = toNameMap(contacts);
 
-    return rows.map((row) => ({
+    return rows.map((row) => this.toAgendaVo(row, relationNames, contactNames));
+  }
+
+  /**
+   * 实时兜底的数据装配：本人未关闭且今日到期的承诺 → 派生动线条目（→ §4.14.4）。
+   * ★ 去重：同 `(user, biz_date, ref_type, ref_id)` 已派生过就跳过（用户改过的状态不回退）；
+   *   **本域事务**包整批派生（多个承诺各自 insert，但彼此无一致性要求，事务只为「要么都落要么都滚」）。
+   */
+  private async assembleAgendaForUser(userId: bigint, now: Date, bizDate: Date): Promise<void> {
+    const commitments = await this.repository.listOpenCommitmentsDueBy(
+      userId,
+      endOfTodayLocal(now),
+    );
+    if (commitments.length === 0) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      const client: EngineTxClient = tx;
+      for (const c of commitments) {
+        if (c.due_at === null) continue; // 空 due_at 不参与派生（where 已 lte 过滤，这里仅为 TS 收口）
+        const existing = await this.repository.findAgendaByRef(
+          userId,
+          bizDate,
+          'commitment',
+          c.id,
+          client,
+        );
+        if (existing !== null) continue;
+        const overdue = c.due_at < startOfTodayLocal(now);
+        await this.repository.createAgenda(
+          {
+            user_id: userId,
+            biz_date: bizDate,
+            ref_type: 'commitment',
+            ref_id: c.id,
+            relation_id: c.relation_id,
+            contact_id: c.contact_id,
+            reason: overdue ? `已逾期：${c.content}` : `今天到期：${c.content}`,
+            priority: overdue ? 20 : 10,
+            action_hint: '兑现承诺',
+            status: 'open',
+            snooze_count: 0,
+          },
+          client,
+        );
+      }
+    });
+  }
+
+  /**
+   * 今日动线处理反馈（→ §4.14.4 `POST /today-agenda/:id/action`）。
+   *
+   * 顺序＝**先权限、再校验、最后落库**：
+   *   ① 动线存在 ＋ **属于本人**（仓储带 `user_id` 条件，别人的 → 404）；
+   *   ② 动作合法性（domain 纯规则）：`ignored` 必填原因、`snoozed` 不超上限；
+   *   ③ 更新状态（snoozed 递增 `snooze_count`）；
+   *   ④ `done` **自动销承诺**（→ §4.14.4「done → 自动销承诺」）：
+   *      动线指向 `ref_type=commitment` 时，把那条承诺一并关掉（只动本域 `commitment` 表）。
+   */
+  async actOnAgenda(id: string, dto: AgendaActionDto): Promise<AgendaItemVo> {
+    const viewer = requireViewer();
+    const agendaId = jsonToBigint(id, 'id');
+
+    const row = await this.repository.findAgendaById(viewer.employeeId, agendaId);
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 404, '动线条目不存在或不属于你', {
+        constraint: 'agenda.not_found',
+      });
+    }
+
+    const { action, reason } = validateAgendaAction(
+      { action: dto.action, reason: dto.reason },
+      row.snooze_count,
+    );
+
+    const updated = await this.repository.updateAgenda(agendaId, {
+      status: action,
+      action_reason: reason,
+      snooze_count: action === 'snoozed' ? row.snooze_count + 1 : row.snooze_count,
+      updated_by: viewer.employeeId,
+    });
+
+    // ★ `done` 自动销承诺（→ §4.14.4）：动线指向的承诺一并关掉，避免「销了动线、承诺还挂着」
+    if (action === 'done' && row.ref_type === 'commitment' && row.ref_id !== null) {
+      await this.repository.closeCommitmentById(row.ref_id, viewer.employeeId);
+    }
+
+    const [relations, contacts] = await Promise.all([
+      this.relation.getRelationRefs(uniqueBigints([updated.relation_id])),
+      this.company.getContactRefs(uniqueBigints([updated.contact_id])),
+    ]);
+    return this.toAgendaVo(updated, toNameMap(relations), toNameMap(contacts));
+  }
+
+  /** 动线行 → 出参（纯装配；权限 / 合法性都不在这一层做） */
+  private toAgendaVo(
+    row: AgendaRow,
+    relationNames: Map<string, string>,
+    contactNames: Map<string, string>,
+  ): AgendaItemVo {
+    return {
       id: row.id,
       ref_type: row.ref_type,
       ref_id: row.ref_id,
@@ -849,7 +962,7 @@ export class EngineService {
       action_hint: row.action_hint,
       status: row.status,
       snooze_count: row.snooze_count,
-    }));
+    };
   }
 
   // ===== M4-11 建档事件（由 `engine-event.subscriber.ts` 调）=====
@@ -1046,6 +1159,9 @@ type EventRow = NonNullable<Awaited<ReturnType<EngineRepository['findEventByIdem
 /** 仓储读出的承诺行（结构取自 `COMMITMENT_SELECT`，同上：不手抄字段） */
 type CommitmentRow = NonNullable<Awaited<ReturnType<EngineRepository['findCommitmentById']>>>;
 
+/** 仓储读出的动线行（结构取自 `AGENDA_SELECT`，同上：不手抄字段） */
+type AgendaRow = NonNullable<Awaited<ReturnType<EngineRepository['findAgendaById']>>>;
+
 /** 跨域引用表（id 十进制串 → 名字） */
 interface RefMaps {
   employees: Map<string, string>;
@@ -1108,6 +1224,24 @@ function todayDateKey(now: Date): Date {
   const month = `${now.getMonth() + 1}`.padStart(2, '0');
   const day = `${now.getDate()}`.padStart(2, '0');
   return new Date(`${now.getFullYear()}-${month}-${day}`);
+}
+
+/**
+ * 今天的**零点**（本地时区，→ 实时兜底「逾期」判定：due_at 小于它 ＝ 今天之前就到期）。
+ * ★ 与 `todayDateKey` 同口径取本地年月日，避免 UTC 零点折算把「今天」错判成「昨天」。
+ */
+function startOfTodayLocal(now: Date): Date {
+  return todayDateKey(now);
+}
+
+/**
+ * 今天的**最后一刻**（本地 23:59:59.999，→ 实时兜底「今日到期」上界：due_at <= 它 ＝ 今天到期）。
+ * `due_at` 是 `DateTime(0)`（秒精度），毫秒部分不影响「当天」判定。
+ */
+function endOfTodayLocal(now: Date): Date {
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return new Date(`${now.getFullYear()}-${month}-${day}T23:59:59.999`);
 }
 
 /** 承诺行 → 出参（纯装配） */

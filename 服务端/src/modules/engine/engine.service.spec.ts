@@ -135,6 +135,10 @@ interface FakeOptions {
   visibleRelationIds?: bigint[];
   /** D-61 桥③：`countEventsOfRelationsSince` 的回值（默认 0） */
   eventCount?: number;
+  /** `POST /today-agenda/:id/action`：`findAgendaById` 返回的动线行（默认 `null` ＝ 查不到） */
+  agendaById?: Record<string, unknown> | null;
+  /** 实时兜底：`listOpenCommitmentsDueBy` 返回的到期承诺（默认 `[]`） */
+  dueCommitments?: Record<string, unknown>[];
 }
 
 function createService(options: FakeOptions = {}) {
@@ -163,6 +167,15 @@ function createService(options: FakeOptions = {}) {
     reassignOpenCommitments: jest.fn(async () => ({ count: options.reassignedCommitments ?? 0 })),
     // D-61 桥③：按关系集数「近 30 天跟单条数」（计数窗 / 排除系统事件都在仓储那头的 `where` 里）
     countEventsOfRelationsSince: jest.fn(async () => options.eventCount ?? 0),
+    // M8-06 Phase 2-A：动线处理反馈 + 实时兜底
+    findAgendaById: jest.fn(async () => options.agendaById ?? null),
+    findAgendaByRef: jest.fn(async () => null),
+    createAgenda: jest.fn(async (data: Record<string, unknown>) => agendaRow({ ...data })),
+    updateAgenda: jest.fn(async (id: bigint, data: Record<string, unknown>) =>
+      agendaRow({ ...data, id }),
+    ),
+    listOpenCommitmentsDueBy: jest.fn(async () => options.dueCommitments ?? []),
+    closeCommitmentById: jest.fn(async (id: bigint) => ({ id, status: 'done' })),
   };
   const relation = {
     // C 域跨域出口：**权限在这里判**（D 域不重复实现），单测只关心「它抛了 D 域就别往下走」
@@ -1198,10 +1211,36 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
       expect(items[0]?.ref_type).toBe('commitment');
     });
 
-    it('没有当日条目 → 空数组（本批**不实时组装**，也不假装有事）', async () => {
-      const { service } = createService({ agenda: [] });
+    it('实时兜底：当日无组装行且**无到期承诺** → 仍返回空数组（不假装有事）', async () => {
+      const { service } = createService({ agenda: [], dueCommitments: [] });
 
       expect(await runWithContext(contextOf(), () => service.todayAgenda())).toEqual([]);
+    });
+
+    it('实时兜底：当日无组装行但有到期承诺 → 惰性派生动线并写入 `daily_agenda`', async () => {
+      const { service, repository } = createService({
+        agenda: [],
+        dueCommitments: [
+          {
+            id: 201n,
+            relation_id: RELATION_ID,
+            contact_id: CONTACT_ID,
+            content: '发报价单',
+            due_at: new Date('2026-09-15T00:00:00Z'),
+          },
+        ],
+      });
+
+      const items = await runWithContext(contextOf(), () => service.todayAgenda());
+
+      // ★ 去重后只插一条（同 ref 不重复）；due_at 早于今天 ⇒ 标「已逾期」
+      expect(repository.createAgenda).toHaveBeenCalledTimes(1);
+      const written = repository.createAgenda.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(written.ref_type).toBe('commitment');
+      expect(written.ref_id).toBe(201n);
+      expect(String(written.reason)).toContain('逾期');
+      expect(items).toHaveLength(1);
+      expect(items[0]?.ref_id).toBe('201');
     });
 
     it('「只有联系人、还没挂关系」的条目 → `relation` 为 `null`，**不编一个关系**', async () => {
@@ -1211,6 +1250,103 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
 
       expect(item?.relation).toBeNull();
       expect(item?.contact).toEqual({ id: CONTACT_ID, name: '张总' });
+    });
+  });
+
+  // ===== M8-06 Phase 2-A 今日动线处理反馈 =====
+
+  describe('actOnAgenda（M8-06 Phase 2-A）', () => {
+    const AGENDA_DONE = agendaRow({ ref_type: 'commitment', ref_id: COMMITMENT_ID, snooze_count: 0 });
+
+    it('`done` → 动线置 done，并**自动销掉指向的承诺**', async () => {
+      const { service, repository } = createService({ agendaById: AGENDA_DONE });
+
+      const vo = await runWithContext(contextOf(), () =>
+        service.actOnAgenda(AGENDA_ID.toString(), { action: 'done' }),
+      );
+
+      expect(repository.updateAgenda).toHaveBeenCalledWith(AGENDA_ID, {
+        status: 'done',
+        action_reason: null,
+        snooze_count: 0,
+        updated_by: ME,
+      });
+      expect(repository.closeCommitmentById).toHaveBeenCalledWith(COMMITMENT_ID, ME);
+      expect(vo.status).toBe('done');
+    });
+
+    it('`snoozed` → snooze_count ＋1，动线仍可见', async () => {
+      const { service, repository } = createService({
+        agendaById: agendaRow({ ref_type: 'commitment', ref_id: COMMITMENT_ID, snooze_count: 1 }),
+      });
+
+      await runWithContext(contextOf(), () =>
+        service.actOnAgenda(AGENDA_ID.toString(), { action: 'snoozed' }),
+      );
+
+      const written = repository.updateAgenda.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(written.status).toBe('snoozed');
+      expect(written.snooze_count).toBe(2);
+      expect(repository.closeCommitmentById).not.toHaveBeenCalled();
+    });
+
+    it('`ignored` 没给原因 → **422 / 20403**，不落库、不销承诺', async () => {
+      const { service, repository } = createService({ agendaById: AGENDA_DONE });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.actOnAgenda(AGENDA_ID.toString(), { action: 'ignored' }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(422);
+      expect(error.constraint).toBe('agenda.ignored_reason_required');
+      expect(repository.updateAgenda).not.toHaveBeenCalled();
+      expect(repository.closeCommitmentById).not.toHaveBeenCalled();
+    });
+
+    it('动线不属于本人（查不到）→ **404**', async () => {
+      const { service, repository } = createService({ agendaById: null });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.actOnAgenda(AGENDA_ID.toString(), { action: 'done' }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(404);
+      expect(error.constraint).toBe('agenda.not_found');
+      expect(repository.updateAgenda).not.toHaveBeenCalled();
+    });
+
+    it('`snoozed` 已达上限（snooze_count=3）→ **422**，强制 done/ignored', async () => {
+      const { service, repository } = createService({
+        agendaById: agendaRow({ ref_type: 'commitment', ref_id: COMMITMENT_ID, snooze_count: 3 }),
+      });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.actOnAgenda(AGENDA_ID.toString(), { action: 'snoozed' }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(422);
+      expect(error.constraint).toBe('agenda.snooze_capped');
+      expect(repository.updateAgenda).not.toHaveBeenCalled();
+    });
+
+    it('`action` 不在白名单 → **400**（枚举非法）', async () => {
+      const { service, repository } = createService({ agendaById: AGENDA_DONE });
+
+      const error = await captureAppError(() =>
+        runWithContext(contextOf(), () =>
+          service.actOnAgenda(AGENDA_ID.toString(), { action: 'postpone' }),
+        ),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('agenda.action_invalid');
+      expect(repository.updateAgenda).not.toHaveBeenCalled();
     });
   });
 

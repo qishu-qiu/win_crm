@@ -27,6 +27,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@
 import { Audit } from '../../kernel/index';
 import {
   ActivateRelationDto,
+  AgendaActionDto,
   CreateCommitmentDto,
   CreateEventDto,
   ListEventQueryDto,
@@ -236,11 +237,36 @@ export class EngineController {
     summary: '今日该找谁（工作台）',
     description:
       '**只返回登录人自己的**动线条目（`daily_agenda.user_id`），且只含 `open` / `snoozed`（已办的 `done` / `ignored` 不再推）。' +
-      '⚠ 本批**不实时组装**：条目由每日 05:00 的组装任务产生（属 M7），库里没有当日行就是**空数组**。' +
+      '★ **实时兜底（M8-06 Phase 2-A，P0-②）**：当日 `daily_agenda` 无行时，按活数据即时派生' +
+      '「今日该找谁」——本人未关闭且**今日及之前到期**的承诺（逾期 ＋ 今日到期，→ §4.14.4）；' +
+      '派生项惰性写入 `daily_agenda`（按 user / 日 / ref 去重），用户后续处理动作得以保留。' +
       '`relation` 可为 `null`（「只有联系人、还没挂关系」的提醒，→ 数据架构 D4）',
   })
   @ApiOkResponse({ type: [AgendaItemVoDto] })
   todayAgenda(): Promise<AgendaItemVo[]> {
     return this.engine.todayAgenda();
+  }
+
+  // ===== M8-06 Phase 2-A 今日动线处理反馈 =====
+
+  @Audit(ENGINE_AUDIT_ACTIONS.agendaAction, 'daily_agenda')
+  @Post('today-agenda/:id/action')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '处理一条今日动线（done / snoozed / ignored）',
+    description:
+      '`{action,reason?}`（→ §4.14.4 / §5.6）。`done` → 闭环并**自动销掉动线指向的承诺**；' +
+      '`snoozed` → 推后、**同一条最多 3 次**（第 4 次 → 422，强制 done/ignored）；' +
+      '`ignored` → **必填原因**（422 / `20403`，经理可见某人 ignored 占比）。' +
+      '⚠ 动线必须属于当前登录人，别人的 → **404**',
+  })
+  @ApiParam({ name: 'id', description: '动线条目 id（十进制字符串）' })
+  @ApiOkResponse({ type: AgendaItemVoDto })
+  actOnAgenda(
+    @Param('id') id: string,
+    @Body() body: AgendaActionDto,
+  ): Promise<AgendaItemVo> {
+    return this.engine.actOnAgenda(id, body);
   }
 }

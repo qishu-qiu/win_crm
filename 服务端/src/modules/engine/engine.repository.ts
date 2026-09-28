@@ -352,4 +352,94 @@ export class EngineRepository {
       take: limit,
     });
   }
+
+  // ===== M8-06 Phase 2-A：动线处理反馈 + 实时兜底 =====
+
+  /** 按主键取一条动线（**带 `user_id` 条件**：别人的动线不许动） */
+  findAgendaById(userId: bigint, id: bigint) {
+    return this.prisma.dailyAgenda.findFirst({
+      where: { id, user_id: userId },
+      select: AGENDA_SELECT,
+    });
+  }
+
+  /** 实时兜底去重：同 `(user, biz_date, ref_type, ref_id)` 是否已派生过 */
+  findAgendaByRef(
+    userId: bigint,
+    bizDate: Date,
+    refType: string,
+    refId: bigint,
+    tx?: EngineTxClient,
+  ) {
+    const client = tx ?? this.prisma;
+    return client.dailyAgenda.findFirst({
+      where: { user_id: userId, biz_date: bizDate, ref_type: refType, ref_id: refId },
+      select: AGENDA_SELECT,
+    });
+  }
+
+  /** 写一条动线条目（实时兜底派生用；status 默认 `open`） */
+  createAgenda(
+    data: {
+      user_id: bigint;
+      biz_date: Date;
+      ref_type: string;
+      ref_id: bigint | null;
+      relation_id: bigint | null;
+      contact_id: bigint | null;
+      reason: string | null;
+      priority: number;
+      action_hint: string | null;
+      status: string;
+      snooze_count: number;
+    },
+    tx?: EngineTxClient,
+  ) {
+    const client = tx ?? this.prisma;
+    return client.dailyAgenda.create({ data, select: AGENDA_SELECT });
+  }
+
+  /** 更新动线处理状态（done / snoozed / ignored 都走这里） */
+  updateAgenda(
+    id: bigint,
+    data: {
+      status: string;
+      action_reason: string | null;
+      snooze_count: number;
+      updated_by: bigint;
+    },
+  ) {
+    return this.prisma.dailyAgenda.update({ where: { id }, data, select: AGENDA_SELECT });
+  }
+
+  /**
+   * 实时兜底的数据源：本人**未关闭**且**今日及之前到期**的承诺（→ 接口 §4.14.4「今日到期承诺 / 逾期未跟进」）。
+   * ★ 只取本域 `commitment` 表（`owner_id` ＝ 当前登录人，承诺跟关系走，→ 需求 §8.1）；
+   *   不跨域、不 JOIN 关系表（可见性由承诺归属自身保证）。
+   */
+  listOpenCommitmentsDueBy(ownerId: bigint, dueBefore: Date) {
+    return this.prisma.commitment.findMany({
+      where: { owner_id: ownerId, status: 'open', due_at: { lte: dueBefore } },
+      select: {
+        id: true,
+        relation_id: true,
+        contact_id: true,
+        content: true,
+        due_at: true,
+      },
+      orderBy: { due_at: 'asc' },
+    });
+  }
+
+  /**
+   * `done` 自动销承诺（→ §4.14.4「done → 自动销承诺」）：动线指向的承诺一并关掉，
+   * 避免「销了动线、承诺还挂着」。只动 `commitment` 本域表、**不校验归属**（动线已校验属于本人）。
+   */
+  closeCommitmentById(id: bigint, doneBy: bigint) {
+    return this.prisma.commitment.update({
+      where: { id },
+      data: { status: 'done', done_at: new Date(), done_by: doneBy },
+      select: { id: true, status: true },
+    });
+  }
 }

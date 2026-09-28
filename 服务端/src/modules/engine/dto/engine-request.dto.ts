@@ -351,3 +351,34 @@ export class ActivateRelationDto {
   @Length(0, 64, { message: 'position 最长 64 字' })
   position?: string;
 }
+
+/**
+ * `POST /today-agenda/:id/action`（今日动线处理反馈，→ 接口 §4.14.4 / §5.6）。
+ *
+ * 规格原文 req：`{action:"done"|"snoozed"|"ignored",reason?}`：
+ *   · `done` → 闭环（并自动销掉动线指向的承诺，→ §4.14.4「自动销承诺」）；
+ *   · `snoozed` → 推后，**同一动线最多 3 次**（超了 → 422，强制 done/ignored）；
+ *   · `ignored` → **必填 reason**（→ 422 / `20403`，经理可见某人 ignored 占比）。
+ */
+export class AgendaActionDto {
+  @ApiProperty({
+    enum: ['done', 'snoozed', 'ignored'],
+    description:
+      '处理动作：`done` 已办（自动销关联承诺）/ `snoozed` 明天再说（最多 3 次）/ ' +
+      '`ignored` 忽略（必填原因）',
+    example: 'done',
+  })
+  @IsIn(['done', 'snoozed', 'ignored'], { message: 'action 取值不合法' })
+  action!: string;
+
+  @ApiPropertyOptional({
+    description:
+      '忽略原因（**仅 `action=ignored` 传且必填**，≤255 字；`snoozed` / `done` 一律不传）。' +
+      '经理侧看板可看某人 ignored 占比（→ 需求 §10.4）',
+    example: '客户已离职，不再跟进',
+  })
+  @IsOptional()
+  @IsString({ message: 'reason 必须是字符串' })
+  @Length(1, 255, { message: 'reason 长度须为 1~255' })
+  reason?: string;
+}

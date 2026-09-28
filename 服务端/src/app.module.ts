@@ -47,6 +47,7 @@ import { EngineModule } from './modules/engine/engine.module';
 import { OrgModule } from './modules/org/org.module';
 import { RelationAggregateModule } from './modules/relation-aggregate/relation-aggregate.module';
 import { RelationModule } from './modules/relation/relation.module';
+import { ReportModule } from './modules/report/report.module';
 import { SeaModule } from './modules/sea/sea.module';
 import { TargetModule } from './modules/target/target.module';
 import { TradeModule } from './modules/trade/trade.module';
@@ -68,6 +69,7 @@ import { SharedModule } from './shared/shared.module';
     RelationAggregateModule,
     EngineModule,
     SeaModule,
+    ReportModule,
     TargetModule,
     TradeModule,
     VisitModule,

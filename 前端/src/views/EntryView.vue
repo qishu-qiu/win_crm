@@ -36,6 +36,9 @@ import CompanyDupPicker from '../components/CompanyDupPicker.vue'
 import RelationTargetPicker from '../components/RelationTargetPicker.vue'
 import EventComposer from '../components/EventComposer.vue'
 import { type CompanyChoice } from '../company'
+// ★ Phase 1 统一交互原件（应用骨架 ＋ 通用件）：页面只喂数据 / 接事件，组件不连接口
+import ContentCard from '../components/ContentCard.vue'
+import PageContainer from '../components/PageContainer.vue'
 
 /**
  * 录入页（M6-09 片 1）—— **3 步步骤条：① 联系人 → ② 公司 → ③ 确认**，
@@ -380,12 +383,8 @@ function goRelationDetail(): void {
 </script>
 
 <template>
-  <section class="entry">
-    <h2 class="entry-title">录入</h2>
-    <p class="entry-hint">
-      三步走完一次录入：先记人，再挂公司，最后确认激活业务关系。第 2 步可以跳过（暂不填公司，
-      先存为待跟进）。
-    </p>
+  <PageContainer title="录入" description="三步走完一次录入：先记人，再挂公司，最后确认激活业务关系。第 2 步可以跳过（暂不填公司，先存为待跟进）。">
+    <div class="entry-body">
 
     <!-- 结果态：建成后不再显示步骤条与表单（避免"填了会怎样"的误会） -->
     <div v-if="createdRelation !== null" class="entry-card">
@@ -447,8 +446,7 @@ function goRelationDetail(): void {
       <a-steps class="entry-steps" :current="step - 1" :items="STEP_ITEMS" size="small" />
 
       <!-- ===== 第 1 步：联系人 ===== -->
-      <div v-if="step === 1" class="entry-card">
-        <h3 class="entry-card-title">1 · 联系人</h3>
+      <ContentCard v-if="step === 1" title="1 · 联系人">
 
         <!--
           ⚠ **提交走 `@click` ＋ `@press-enter`，不用 `<a-form @finish>`**：本表单没有
@@ -508,11 +506,10 @@ function goRelationDetail(): void {
           </ul>
           <a-button type="link" @click="goContacts">去联系人档案看看</a-button>
         </div>
-      </div>
+      </ContentCard>
 
       <!-- ===== 第 2 步：公司（可跳过） ===== -->
-      <div v-else-if="step === 2" class="entry-card">
-        <h3 class="entry-card-title">2 · 公司</h3>
+      <ContentCard v-else-if="step === 2" title="2 · 公司">
 
         <!-- 撞库选公司：**跨页复用件**（本页第 2 步 与 联系人详情页「关联公司」共用一份，→ 架构 §4.4） -->
         <CompanyDupPicker
@@ -551,11 +548,10 @@ function goRelationDetail(): void {
           <a-button type="link" @click="skipCompany">暂不填公司，先存为待跟进</a-button>
           <a-button type="text" @click="step = 1">上一步</a-button>
         </div>
-      </div>
+      </ContentCard>
 
       <!-- ===== 第 3 步：确认（＝激活业务关系） ===== -->
-      <div v-else class="entry-card">
-        <h3 class="entry-card-title">3 · 确认</h3>
+      <ContentCard v-else title="3 · 确认">
 
         <dl class="entry-summary">
           <div class="entry-summary-row">
@@ -616,13 +612,14 @@ function goRelationDetail(): void {
           </a-button>
           <a-button type="text" :disabled="submitting" @click="step = 2">上一步</a-button>
         </div>
-      </div>
+      </ContentCard>
     </template>
-  </section>
+    </div>
+  </PageContainer>
 </template>
 
 <style scoped>
-.entry {
+.entry-body {
   max-width: 720px;
 }
 
@@ -638,19 +635,6 @@ function goRelationDetail(): void {
   color: var(--crm-color-text-tertiary);
 }
 
-.entry-title {
-  margin: 0 0 var(--crm-space-xs);
-  font-size: var(--crm-font-size-2xl);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
-.entry-hint {
-  margin: 0 0 var(--crm-space-lg);
-  font-size: var(--crm-font-size-base);
-  color: var(--crm-color-text-tertiary);
-}
-
 .entry-steps {
   margin-bottom: var(--crm-space-md);
 }
@@ -661,13 +645,6 @@ function goRelationDetail(): void {
   background: var(--crm-color-bg-container);
   border: var(--crm-border-width) solid var(--crm-color-border-secondary);
   border-radius: var(--crm-radius-lg);
-}
-
-.entry-card-title {
-  margin: 0 0 var(--crm-space-md);
-  font-size: var(--crm-font-size-lg);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
 }
 
 /** 错误态：§4.6「错误文案红色 12px 置于控件下」（与登录页同一形态） */

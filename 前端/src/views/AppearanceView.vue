@@ -4,6 +4,9 @@ import { computed } from 'vue'
 
 import { pushPreferences } from '../session'
 import { THEME_OPTIONS, setTheme, theme, type ThemeName } from '../theme'
+// ★ Phase 1 统一交互原件（应用骨架 ＋ 通用件）：页面只喂数据 / 接事件，组件不连接口
+import ContentCard from '../components/ContentCard.vue'
+import PageContainer from '../components/PageContainer.vue'
 
 /**
  * 外观设置（`/me/appearance`）—— **M6-11 主题（白天 / 夜间）** 的切换落点。
@@ -48,14 +51,9 @@ const selected = computed<ThemeName>({
 </script>
 
 <template>
-  <section class="appearance">
-    <h2 class="appearance-title">外观设置</h2>
-    <p class="appearance-desc">
-      主题只影响你自己看到的外观（白天 / 夜间两套），不影响任何数据与他人界面。
-    </p>
+  <PageContainer title="外观设置" description="主题只影响你自己看到的外观（白天 / 夜间两套），不影响任何数据与他人界面。">
 
-    <a-card :bordered="false" class="appearance-card">
-      <h3 class="appearance-card-title">主题</h3>
+    <ContentCard title="主题">
       <a-radio-group v-model:value="selected" button-style="solid">
         <a-radio-button v-for="item in THEME_OPTIONS" :key="item.value" :value="item.value">
           {{ item.label }}
@@ -64,44 +62,16 @@ const selected = computed<ThemeName>({
       <p class="appearance-hint">
         切换立即生效并保存到你的账号 —— 刷新页面、换台设备登录，看到的都还是这一套。
       </p>
-    </a-card>
+    </ContentCard>
 
     <p class="appearance-hint">
       个人资料 / 修改密码 / 通知偏好属后续里程碑（通知偏好的字段规格尚未定稿）——
       本页不摆点了没用的入口。
     </p>
-  </section>
+  </PageContainer>
 </template>
 
 <style scoped>
-.appearance {
-  max-width: 720px;
-}
-
-.appearance-title {
-  margin: 0 0 var(--crm-space-xs);
-  font-size: var(--crm-font-size-2xl);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
-.appearance-desc {
-  margin: 0 0 var(--crm-space-lg);
-  font-size: var(--crm-font-size-base);
-  color: var(--crm-color-text-secondary);
-}
-
-.appearance-card {
-  margin-bottom: var(--crm-space-lg);
-}
-
-.appearance-card-title {
-  margin: 0 0 var(--crm-space-md);
-  font-size: var(--crm-font-size-lg);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
 .appearance-hint {
   margin: var(--crm-space-md) 0 0;
   font-size: var(--crm-font-size-xs);

@@ -245,10 +245,15 @@ export class CreateContactDto {
   @Length(1, 50, { message: '姓名长度需为 1~50 位' })
   name!: string;
 
-  @ApiProperty({ description: '主号（撞单校验核心；服务端会先做归一：去空格 / `+86` / `-`）', example: '13800000000' })
+  @ApiPropertyOptional({
+    description:
+      '主号（撞单校验核心；服务端会先做归一：去空格 / `+86` / `-`）。★ M8-06 Phase 2-A2b：**可空** —— 不填但有 `wechat` 时自动用唯一假号占位，后续改联系人补真实号；phone 与 wechat 都空 → 400',
+    example: '13800000000',
+  })
+  @IsOptional()
   @IsString({ message: '手机号必须是字符串' })
   @Length(1, 32, { message: '手机号长度需为 1~32 位' })
-  phone!: string;
+  phone?: string;
 
   @ApiPropertyOptional({ description: '附加号（可多个；不参与撞单）', type: [ExtraPhoneDto] })
   @IsOptional()

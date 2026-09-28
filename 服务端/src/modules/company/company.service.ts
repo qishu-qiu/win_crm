@@ -115,6 +115,8 @@ export interface DupCandidateVo {
 export interface SearchDupResult {
   candidates: DupCandidateVo[];
   suggest: 'use_exists' | 'create_new';
+  /** ★ M8-06 Phase 2（A3）：按 phone 命中时回命中联系人 `{id,name}`（无则 null） */
+  matched_contact?: { id: bigint; name: string } | null;
 }
 
 /** 联系人简卡（→ §5.5 `ContactBrief`；列表 / 卡片一律打码） */
@@ -353,7 +355,18 @@ export class CompanyService {
       })
       .slice(0, MAX_CANDIDATES);
 
-    return { candidates, suggest: candidates.length > 0 ? 'use_exists' : 'create_new' };
+    // ★ M8-06 Phase 2（A3）：按 phone 命中时额外回**命中联系人 id+name**（前端直接跳到该联系人）
+    let matched_contact: { id: bigint; name: string } | null = null;
+    if (phone !== undefined && phone !== '') {
+      const hit = await this.repository.findContactByPhone(normalizeContactPhone(phone));
+      if (hit !== null) matched_contact = { id: hit.id, name: hit.name };
+    }
+
+    return {
+      candidates,
+      suggest: candidates.length > 0 ? 'use_exists' : 'create_new',
+      matched_contact,
+    };
   }
 
   // ===== M2-10 建档（联系人）=====
@@ -365,22 +378,44 @@ export class CompanyService {
    */
   async createContact(dto: CreateContactDto): Promise<CreatedContactVo> {
     const operatorId = this.requireWriter();
-    const phone = normalizeContactPhone(dto.phone);
+    const rawPhone = dto.phone?.trim() ?? '';
+    const wechat = dto.wechat?.trim() ?? '';
 
-    if (isEmptyPhone(phone)) {
-      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：phone 不能为空', {
-        constraint: 'company.contact.phone_empty',
+    // ★ M8-06 Phase 2（A2b）：phone **可空** —— 不填但有微信 → 用唯一假号占位（9 开头 11 位、明显
+    //   非合法 mainland mobile，→ `generatePlaceholderPhone`），后续改联系人补真实号；phone 与
+    //   wechat 都空 → 400。纯空白 / 分隔符也当「未填」。★ 只有**真号**才走撞库查重（占位号随机唯一，不查重）。
+    let phone: string;
+    let phoneProvided = false;
+    if (rawPhone !== '') {
+      const normalized = normalizeContactPhone(rawPhone);
+      if (!isEmptyPhone(normalized)) {
+        phone = normalized;
+        phoneProvided = true;
+      } else if (wechat !== '') {
+        phone = await this.generatePlaceholderPhone();
+      } else {
+        throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：phone 与 wechat 至少给一个', {
+          constraint: 'company.contact.phone_or_wechat_required',
+        });
+      }
+    } else if (wechat !== '') {
+      phone = await this.generatePlaceholderPhone();
+    } else {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：phone 与 wechat 至少给一个', {
+        constraint: 'company.contact.phone_or_wechat_required',
       });
     }
 
-    const duplicated = await this.repository.findContactByPhone(phone);
-    if (duplicated !== null) {
-      // ⚠ 文案必须与 `kernel/errors/prisma-error.mapper.ts` 里 `uk_phone_active` 那条**逐字一致**：
-      //   预检（日常路径）与 P2002 兜底（并发路径）是同一件事，两句话就是两套口径
-      //   —— 单测同时钉住两条路径输出同一句（→ 本文件 spec「并发撞号」用例）
-      throw new AppError(ErrorCode.UNIQUE_CONFLICT, 409, '该手机号已存在', {
-        constraint: 'uk_phone_active',
-      });
+    if (phoneProvided) {
+      const duplicated = await this.repository.findContactByPhone(phone);
+      if (duplicated !== null) {
+        // ⚠ 文案必须与 `kernel/errors/prisma-error.mapper.ts` 里 `uk_phone_active` 那条**逐字一致**：
+        //   预检（日常路径）与 P2002 兜底（并发路径）是同一件事，两句话就是两套口径
+        //   —— 单测同时钉住两条路径输出同一句（→ 本文件 spec「并发撞号」用例）
+        throw new AppError(ErrorCode.UNIQUE_CONFLICT, 409, '该手机号已存在', {
+          constraint: 'uk_phone_active',
+        });
+      }
     }
 
     const companyId = dto.company_id === undefined ? undefined : jsonToBigint(dto.company_id, 'company_id');
@@ -443,6 +478,27 @@ export class CompanyService {
         ? {}
         : { phone_history_hint: `该号曾属于 ${owner.name}` }),
     };
+  }
+
+  /**
+   * 生成**唯一假号占位**（→ M8-06 Phase 2-A2b）：11 位、`9` 开头（明显非合法 mainland mobile，
+   * 与真实手机号一眼区分），随机 10 位保证全局唯一、避开 `uk_phone_active`。极少概率撞已占位号时重试，
+   * 退化用时间戳兜底。
+   */
+  private async generatePlaceholderPhone(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = `9${this.randomDigits(10)}`;
+      const hit = await this.repository.findContactByPhone(candidate);
+      if (hit === null) return candidate;
+    }
+    return `9${(Date.now() % 10_000_000_000).toString().padStart(10, '0')}`;
+  }
+
+  /** 生成 `count` 位随机数字串（占位号用） */
+  private randomDigits(count: number): string {
+    let out = '';
+    for (let i = 0; i < count; i++) out += Math.floor(Math.random() * 10).toString();
+    return out;
   }
 
   /**

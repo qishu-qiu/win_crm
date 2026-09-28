@@ -432,6 +432,30 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       expect(result.candidates[0]?.credit_code_masked).toBe('9134****00XX');
     });
 
+    // ===== M8-06 Phase 2（A3）：按 phone 命中额外回联系人 id+name =====
+
+    it('按 phone 命中联系人 → 回 `matched_contact:{id,name}`（前端据此直接跳转）', async () => {
+      const { service } = createService({
+        companiesByPhone: [companyRow({ id: 5n, credit_code: '91340000MA2T0000XX' })],
+        contactByPhone: contactRow({ id: 7n, name: '赵六' }),
+      });
+
+      const result = await service.searchDup({ phone: '138 0000 0000' });
+
+      expect(result.matched_contact).not.toBeNull();
+      expect(result.matched_contact).toMatchObject({ id: 7n, name: '赵六' });
+      // 命中联系人不影响公司候选（两路独立）
+      expect(result.candidates).toHaveLength(1);
+    });
+
+    it('按 phone 未命中联系人 → `matched_contact` 为 null', async () => {
+      const { service } = createService({ contactByPhone: null });
+
+      const result = await service.searchDup({ phone: '138 0000 0000' });
+
+      expect(result.matched_contact).toBeNull();
+    });
+
     it('同一家公司被两路命中只出一条，且判级取更高（`same` 不被 `high_sim` 盖掉）', async () => {
       const row = companyRow({ id: 8n, full_name: '安徽鑫中网信息技术有限公司', name_core: '鑫中网' });
       const { service } = createService({ byCreditCode: row, candidates: [{ ...row, name_core: '鑫中网络' }] });
@@ -550,6 +574,47 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       );
 
       expect(error.httpStatus).toBe(400);
+      expect(repository.createContact).not.toHaveBeenCalled();
+    });
+
+    // ===== M8-06 Phase 2（A2b）：phone 可空 + 假号占位 =====
+
+    it('不填 phone 但有 wechat → 自动用**唯一假号占位**（9 开头 11 位），落库并返回占位号', async () => {
+      const { service, repository } = createService({});
+
+      const created = await runWithContext(CONTEXT, () =>
+        service.createContact({ name: '张伟', wechat: 'wx_abc' }),
+      );
+
+      // ★ 占位号格式：11 位、`9` 开头（明显非合法 mainland mobile）
+      expect(created.phone).toMatch(/^9\d{10}$/);
+      const written = repository.createContact.mock.calls[0]?.[0] as { phone: string };
+      expect(written.phone).toBe(created.phone);
+      // 占位期间不应走「撞库查重」（findContactByPhone 仅为占位唯一性自检，且候选必为空）
+      expect(repository.findContactByPhone).toHaveBeenCalled();
+    });
+
+    it('phone 与 wechat **都空** → 400 / phone_or_wechat_required', async () => {
+      const { service, repository } = createService({});
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.createContact({ name: '张伟' })),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('company.contact.phone_or_wechat_required');
+      expect(repository.createContact).not.toHaveBeenCalled();
+    });
+
+    it('phone 只填分隔符、且无 wechat → 400（归一后为空＝没填，不悄悄占位）', async () => {
+      const { service, repository } = createService({});
+
+      const error = await runWithContext(CONTEXT, () =>
+        captureAppError(() => service.createContact({ name: '张伟', phone: ' - - ' })),
+      );
+
+      expect(error.httpStatus).toBe(400);
+      expect(error.constraint).toBe('company.contact.phone_or_wechat_required');
       expect(repository.createContact).not.toHaveBeenCalled();
     });
   });

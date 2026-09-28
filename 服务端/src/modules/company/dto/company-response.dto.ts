@@ -104,6 +104,13 @@ export class SearchDupResultVoDto {
     enum: ['use_exists', 'create_new'],
   })
   suggest!: string;
+
+  @ApiPropertyOptional({
+    type: Object,
+    nullable: true,
+    description: '★ M8-06 Phase 2（A3）：按 phone 命中时回命中联系人 `{id,name}`（无则 null）；前端据此直接跳到该联系人',
+  })
+  matched_contact?: { id: string; name: string } | null;
 }
 
 /** 联系人简卡（→ §5.5 `ContactBrief`；列表 / 卡片一律 `phone_masked`） */

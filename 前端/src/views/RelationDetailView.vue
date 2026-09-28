@@ -11,6 +11,14 @@ import {
   valueTierNameOf,
 } from '../relation'
 
+// ★ Phase 1 统一交互原件（应用骨架 ＋ 通用件）：页面只喂数据 / 接事件，组件不连接口
+import CrmTable from '../components/CrmTable.vue'
+import EmptyState from '../components/EmptyState.vue'
+import ErrorBlock from '../components/ErrorBlock.vue'
+import PageContainer from '../components/PageContainer.vue'
+import PersonChip from '../components/PersonChip.vue'
+import StatusTag from '../components/StatusTag.vue'
+
 /**
  * 业务关系详情页（M6-08）—— **本片只做「详情 ＋ 成员」**。
  *
@@ -95,25 +103,22 @@ function memberSourceNameOf(code: string | null): string {
 </script>
 
 <template>
-  <section class="detail">
-    <a-button type="link" size="small" class="detail-back" @click="router.push('/relations')">
-      ← 返回业务关系列表
-    </a-button>
+  <PageContainer :title="detail?.company?.name ?? '（档案已删除）'">
+    <template #extra>
+      <a-button type="link" size="small" @click="router.push('/relations')">
+        ← 返回业务关系列表
+      </a-button>
+    </template>
 
-    <p v-if="errorText" class="detail-error">{{ errorText }}</p>
+    <ErrorBlock v-if="errorText" :message="errorText" @retry="load" />
 
     <a-spin :spinning="loading">
       <template v-if="detail">
-        <h2 class="detail-title">{{ detail.company?.name ?? '（档案已删除）' }}</h2>
-
         <div class="detail-badges">
-          <span class="detail-badge">阶段：{{ stageNameOf(detail.stage) }}</span>
-          <span class="detail-badge">
-            <span class="detail-dot" :style="{ background: urgencyColorOf(detail.urgency) }" />
-            {{ urgencyNameOf(detail.urgency) }}
-          </span>
-          <span class="detail-badge">开发价值：{{ valueTierNameOf(detail.value_tier) }}</span>
-          <span class="detail-badge">{{ detail.sea_status === 'private' ? '私海' : '公海' }}</span>
+          <StatusTag :text="`阶段：${stageNameOf(detail.stage)}`" />
+          <StatusTag :text="urgencyNameOf(detail.urgency)" :color="urgencyColorOf(detail.urgency)" />
+          <StatusTag :text="`开发价值：${valueTierNameOf(detail.value_tier)}`" />
+          <StatusTag :text="detail.sea_status === 'private' ? '私海' : '公海'" />
         </div>
 
         <a-descriptions :column="3" size="small" bordered class="detail-facts">
@@ -123,16 +128,16 @@ function memberSourceNameOf(code: string | null): string {
         </a-descriptions>
 
         <h3 class="detail-section">成员</h3>
-        <a-table
+        <CrmTable
           :columns="memberColumns"
           :data-source="detail.members"
           :pagination="false"
-          row-key="employee.id"
           size="small"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'employee'">
-              {{ record.employee?.name ?? '（员工已停用）' }}
+              <PersonChip v-if="record.employee" :name="record.employee.name" />
+              <span v-else>（员工已停用）</span>
             </template>
             <template v-else-if="column.key === 'memberType'">
               {{ memberTypeNameOf(record.member_type) }}
@@ -145,9 +150,9 @@ function memberSourceNameOf(code: string | null): string {
             </template>
           </template>
           <template #emptyText>
-            <a-empty description="暂无成员" />
+            <EmptyState description="暂无成员" />
           </template>
-        </a-table>
+        </CrmTable>
 
         <p class="detail-hint">
           合同 / 工单 / 关系网 / 复盘等分组属后续里程碑（服务端尚未提供对应数据）——
@@ -155,52 +160,17 @@ function memberSourceNameOf(code: string | null): string {
         </p>
       </template>
 
-      <a-empty v-else-if="!loading && errorText === ''" description="没有这条业务关系" />
+      <EmptyState v-else-if="!loading && errorText === ''" description="没有这条业务关系" />
     </a-spin>
-  </section>
+  </PageContainer>
 </template>
 
 <style scoped>
-.detail {
-  max-width: 1080px;
-}
-
-.detail-back {
-  padding-left: 0;
-  margin-bottom: var(--crm-space-sm);
-}
-
-.detail-title {
-  margin: 0 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-2xl);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
 .detail-badges {
   display: flex;
   flex-wrap: wrap;
   gap: var(--crm-space-xs);
   margin-bottom: var(--crm-space-md);
-}
-
-.detail-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--crm-space-xxs);
-  height: 28px;
-  padding: 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-text-secondary);
-  background: var(--crm-color-bg-container);
-  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
-  border-radius: var(--crm-radius-pill);
-}
-
-.detail-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--crm-radius-pill);
 }
 
 .detail-facts {
@@ -212,12 +182,6 @@ function memberSourceNameOf(code: string | null): string {
   font-size: var(--crm-font-size-lg);
   font-weight: var(--crm-font-weight-strong);
   color: var(--crm-color-text);
-}
-
-.detail-error {
-  margin: 0 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-error);
 }
 
 .detail-hint {

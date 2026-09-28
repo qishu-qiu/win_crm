@@ -52,6 +52,18 @@ import {
 } from '../relation'
 import { formatDateTime } from '../format'
 
+// ★ Phase 1 统一交互原件（应用骨架 ＋ 通用件）：页面只喂数据 / 接事件，组件不连接口
+import CrmDrawer from '../components/CrmDrawer.vue'
+import CrmTable from '../components/CrmTable.vue'
+import EmptyState from '../components/EmptyState.vue'
+import EntityLink from '../components/EntityLink.vue'
+import ErrorBlock from '../components/ErrorBlock.vue'
+import FilterChip from '../components/FilterChip.vue'
+import HoverCard from '../components/HoverCard.vue'
+import PageContainer from '../components/PageContainer.vue'
+import PersonChip from '../components/PersonChip.vue'
+import StatusTag from '../components/StatusTag.vue'
+
 /**
  * 业务关系列表页（M3-14 起 · 方案 A 最小页）—— **私海 / 公海两个页签**，
  * M4-17 起每行可**点开时间线**（写跟单 / 看承诺）。
@@ -753,56 +765,43 @@ async function submitWaive(commitment: Commitment): Promise<void> {
 </script>
 
 <template>
-  <section class="relations">
-    <h2 class="relations-title">业务关系</h2>
-    <p class="relations-hint">
-      列表由服务端按你的数据范围收敛：销售＝我参与的关系 ＋ 我所属部门的公海；经理＝管辖部门；
-      总经理 / 管理员＝全部。
-    </p>
-
+  <PageContainer
+    title="业务关系"
+    description="列表由服务端按你的数据范围收敛：销售＝我参与的关系 ＋ 我所属部门的公海；经理＝管辖部门；总经理 / 管理员＝全部。"
+  >
     <div class="relations-tabs">
-      <button
+      <FilterChip
         v-for="item in relationTabs"
         :key="item"
-        type="button"
-        class="relations-tab"
-        :class="{ 'is-active': tab === item }"
-        :aria-current="tab === item ? 'page' : undefined"
-        @click="tab = item"
-      >
-        {{ item === 'private' ? '私海' : '公海' }}
-      </button>
+        :label="item === 'private' ? '私海' : '公海'"
+        :active="tab === item"
+        @toggle="tab = item"
+      />
     </div>
 
     <!-- 筛选栏（→ 前端文档 §5；**筛选在服务端做**，见脚本头注释） -->
     <div class="relations-filters">
       <span class="relations-filter-label">视图</span>
-      <button
+      <FilterChip
         v-for="item in RELATION_VIEW_OPTIONS"
         :key="item.value"
-        type="button"
-        class="relations-chip"
-        :class="{ 'is-active': view === item.value }"
-        @click="selectView(item.value)"
-      >
-        {{ item.label }}
-      </button>
+        :label="item.label"
+        :active="view === item.value"
+        @toggle="selectView(item.value)"
+      />
 
       <span class="relations-filter-label">紧迫档</span>
-      <button
+      <FilterChip
         v-for="item in URGENCY_OPTIONS"
         :key="item.value"
-        type="button"
-        class="relations-chip"
-        :class="{ 'is-active': urgencies.includes(item.value) }"
-        @click="toggleUrgency(item.value)"
-      >
-        <span class="relations-dot" :style="{ background: urgencyColorOf(item.value) }" />
-        {{ item.label }}
-      </button>
+        :label="item.label"
+        :dot-color="urgencyColorOf(item.value)"
+        :active="urgencies.includes(item.value)"
+        @toggle="toggleUrgency(item.value)"
+      />
     </div>
 
-    <p v-if="errorText" class="relations-error">{{ errorText }}</p>
+    <ErrorBlock v-if="errorText" :message="errorText" @retry="load" />
 
     <!-- 批量快速标记动作条（→ 前端文档 §5 第 5 条 / §3）：**只在私海**（公海不提供动作，→ §9/10） -->
     <div v-if="tab === 'private' && selectedRelationIds.length > 0" class="relations-bulk">
@@ -831,22 +830,21 @@ async function submitWaive(commitment: Commitment): Promise<void> {
       </span>
     </div>
 
-    <a-table
+    <CrmTable
       :columns="columns"
       :data-source="rows"
       :loading="loading"
       :pagination="paginationConfig"
       :row-selection="rowSelection"
-      row-key="id"
       size="middle"
       @change="onPageChange"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'company'">
-          <!-- 实体可点（→ README §九 不变量⑥「任何位置出现都可点开」；解欠账 D-13） -->
-          <router-link v-if="record.company" :to="`/relations/${record.id}`" class="relations-link">
-            {{ record.company.name }}
-          </router-link>
+          <!-- 实体可点（→ README §九 不变量⑥）；悬浮卡显示公司名（§3.1 A3） -->
+          <HoverCard v-if="record.company" :title="record.company.name">
+            <EntityLink :to="`/relations/${record.id}`" :label="record.company.name" />
+          </HoverCard>
           <template v-else>（档案已删除）</template>
         </template>
         <template v-else-if="column.key === 'dept'">{{ record.dept?.name ?? '—' }}</template>
@@ -855,16 +853,14 @@ async function submitWaive(commitment: Commitment): Promise<void> {
         </template>
         <template v-else-if="column.key === 'stage'">{{ stageNameOf(record.stage) }}</template>
         <template v-else-if="column.key === 'urgency'">
-          <span class="relations-urgency">
-            <span class="relations-dot" :style="{ background: urgencyColorOf(record.urgency) }" />
-            {{ urgencyNameOf(record.urgency) }}
-          </span>
+          <StatusTag :text="urgencyNameOf(record.urgency)" :color="urgencyColorOf(record.urgency)" />
         </template>
         <template v-else-if="column.key === 'valueTier'">
           {{ valueTierNameOf(record.value_tier) }}
         </template>
         <template v-else-if="column.key === 'owner'">
-          {{ record.owner?.name ?? '（公海 · 待领取）' }}
+          <PersonChip v-if="record.owner" :name="record.owner.name" />
+          <span v-else>（公海 · 待领取）</span>
         </template>
         <template v-else-if="column.key === 'lastEventAt'">
           {{ formatDateTime(record.last_event_at) }}
@@ -882,17 +878,20 @@ async function submitWaive(commitment: Commitment): Promise<void> {
       </template>
 
       <template #emptyText>
-        <a-empty :description="errorText === '' ? `${tabLabel}暂无业务关系` : '无权限查看该列表'" />
+        <EmptyState
+          :type="errorText === '' ? 'noData' : 'noPermission'"
+          :description="errorText === '' ? `${tabLabel}暂无业务关系` : '无权限查看该列表'"
+        />
       </template>
-    </a-table>
+    </CrmTable>
 
-    <a-drawer
+    <CrmDrawer
       v-model:open="drawerOpen"
       :title="drawerTitle"
       :width="760"
       @close="onDrawerClose"
     >
-      <p v-if="timelineError" class="relations-error">{{ timelineError }}</p>
+      <ErrorBlock v-if="timelineError" :message="timelineError" @retry="refreshTimeline" />
 
       <!-- ★ 公海（无主）：**只给「领取到私海」＋「开发价值」两个入口**，其余写动作一概不出现
            （→ 前端文档 §5 第 9/10 条 / 需求 §6.3） -->
@@ -955,12 +954,11 @@ async function submitWaive(commitment: Commitment): Promise<void> {
       </template>
 
       <h3 class="drawer-section">时间线（按时间倒序，默认近 1 个月）</h3>
-      <a-table
+      <CrmTable
         :columns="eventColumns"
         :data-source="events"
         :loading="timelineLoading"
         :pagination="false"
-        row-key="id"
         size="small"
       >
         <template #bodyCell="{ column, record }">
@@ -974,7 +972,7 @@ async function submitWaive(commitment: Commitment): Promise<void> {
         <template #emptyText>
           <a-empty description="近 1 个月还没有跟单记录" />
         </template>
-      </a-table>
+      </CrmTable>
 
       <h3 class="drawer-section">承诺</h3>
       <!-- 建承诺也是写：公海不出现（列表照旧可读） -->
@@ -998,11 +996,10 @@ async function submitWaive(commitment: Commitment): Promise<void> {
         <a-button :loading="submittingCommitment" @click="submitCommitment">建承诺</a-button>
       </div>
 
-      <a-table
+      <CrmTable
         :columns="commitmentColumns"
         :data-source="commitments"
         :pagination="false"
-        row-key="id"
         size="small"
       >
         <template #bodyCell="{ column, record }">
@@ -1045,51 +1042,16 @@ async function submitWaive(commitment: Commitment): Promise<void> {
         <template #emptyText>
           <a-empty description="暂无承诺" />
         </template>
-      </a-table>
-    </a-drawer>
-  </section>
+      </CrmTable>
+    </CrmDrawer>
+  </PageContainer>
 </template>
 
 <style scoped>
-.relations {
-  max-width: 1080px;
-}
-
-.relations-title {
-  margin: 0 0 var(--crm-space-xs);
-  font-size: var(--crm-font-size-2xl);
-  font-weight: var(--crm-font-weight-strong);
-  color: var(--crm-color-text);
-}
-
-.relations-hint {
-  margin: 0 0 var(--crm-space-lg);
-  font-size: var(--crm-font-size-base);
-  color: var(--crm-color-text-tertiary);
-}
-
 .relations-tabs {
   display: flex;
   gap: var(--crm-space-xs);
   margin-bottom: var(--crm-space-md);
-}
-
-/** 页签＝同一控件的两种状态，不靠加粗堆层级（与外壳导航同款样式） */
-.relations-tab {
-  height: 32px;
-  padding: 0 var(--crm-space-md);
-  font-size: var(--crm-font-size-base);
-  color: var(--crm-color-text-secondary);
-  background: var(--crm-color-bg-container);
-  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
-  border-radius: var(--crm-radius-sm);
-  cursor: pointer;
-}
-
-.relations-tab.is-active {
-  color: var(--crm-color-primary);
-  border-color: var(--crm-color-primary);
-  background: var(--crm-color-primary-bg);
 }
 
 /** 筛选栏：视图 seg ＋ 紧迫档 chip（→ 设计规范 §4.2 单行 inline、控件高统一、高频筛选项 ≤5） */
@@ -1109,27 +1071,6 @@ async function submitWaive(commitment: Commitment): Promise<void> {
 
 .relations-filter-label:first-child {
   margin-left: 0;
-}
-
-/** chip 与页签**同一族视觉**（选中＝主色描边 ＋ 浅底），不为一处控件新造一套 */
-.relations-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--crm-space-xxs);
-  height: 28px;
-  padding: 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-text-secondary);
-  background: var(--crm-color-bg-container);
-  border: var(--crm-border-width) solid var(--crm-color-border-secondary);
-  border-radius: var(--crm-radius-pill);
-  cursor: pointer;
-}
-
-.relations-chip.is-active {
-  color: var(--crm-color-primary);
-  border-color: var(--crm-color-primary);
-  background: var(--crm-color-primary-bg);
 }
 
 /** 批量动作条：同类操作聚成一条、只勾选后才出现（→ 设计规范 §4.4） */
@@ -1156,35 +1097,10 @@ async function submitWaive(commitment: Commitment): Promise<void> {
   color: var(--crm-color-text-secondary);
 }
 
-/** 错误态：§4.6「错误文案红 12px」（与登录页 / 建档页同一形态） */
-.relations-error {
-  margin: 0 0 var(--crm-space-sm);
-  font-size: var(--crm-font-size-xs);
-  color: var(--crm-color-error);
-}
-
-/** 可点实体（→ README §九 不变量⑥「任何位置出现都可点开」，与链接同色、不加下划线噪音） */
-.relations-link {
-  color: var(--crm-color-primary);
-}
-
 /** 掉海警示（→ 前端文档 §5 页 5「到期当天掉公海⚠」）：**只有到期当天 / 已过期**才标红 */
 .relations-drop-urgent {
   font-weight: var(--crm-font-weight-strong);
   color: var(--crm-color-error);
-}
-
-/** 状态＝圆点 ＋ 文字（→ 设计规范 §4.4） */
-.relations-urgency {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--crm-space-xxs);
-}
-
-.relations-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--crm-radius-pill);
 }
 
 .drawer-section {

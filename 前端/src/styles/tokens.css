@@ -115,6 +115,9 @@
   --crm-breakpoint-tablet: 768px;
   --crm-breakpoint-sm-desktop: 992px;
   --crm-breakpoint-desktop: 1280px;
+
+  /* 页面正文最大宽（§六.2：内容最大宽 1440 居中） */
+  --crm-content-max-width: 1440px;
 }
 
 /* ========== dark（夜间） ========== */

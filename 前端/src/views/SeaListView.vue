@@ -166,6 +166,10 @@ watch(
 
 <template>
   <PageContainer :title="title">
+    <a-space class="sea-nav" wrap>
+      <router-link to="/sea/records">掉海记录</router-link>
+      <router-link to="/sea/manager-decision">经理决策待办</router-link>
+    </a-space>
     <!-- 部门公海：先选部门 -->
     <a-form v-if="props.scope === 'department'" layout="inline" class="sea-dept-bar">
       <a-form-item label="部门">

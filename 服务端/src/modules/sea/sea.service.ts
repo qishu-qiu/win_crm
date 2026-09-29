@@ -56,6 +56,7 @@ import {
   type SeaWarningCandidate,
   type RelationVo,
 } from '../relation/relation.service';
+import { COMPANY_SEA_STATUS } from '../relation/domain/relation-active-key';
 import { SeaRepository } from './sea.repository';
 import {
   canManageSeaRule,
@@ -102,6 +103,8 @@ export const SEA_AUDIT_ACTIONS = {
    *   落没落库看那次请求的出参 `applied`。
    */
   ruleUpdate: 'sea.rule_update',
+  /** 经理决策：公海超期关系保留 / 删除（→ 接口 §5.16 `POST /sea/manager-decision`） */
+  managerDecision: 'sea.manager_decision',
 } as const;
 
 /**
@@ -178,6 +181,35 @@ export interface SeaManagerTodoResult {
   total: number;
   /** 按 `overdue_days` 降序（最超期在前） */
   items: SeaManagerTodoItem[];
+}
+
+/** 经理决策结果（→ 接口 §5.16 `POST /sea/manager-decision`） */
+export interface SeaManagerDecisionResultVo {
+  /** 决策结果：`keep`（保留）／ `delete`（已删除关系） */
+  decision: string;
+  /** 是否执行了删除（`keep`=false ／ `delete`=true） */
+  deleted: boolean;
+}
+
+/** 一条掉海记录（→ 接口 §5.16 `GET /sea/records` 列表项） */
+export interface SeaRecordItemVo {
+  record_id: string;
+  relation_id: string;
+  company: RelationRef | null;
+  dept: RelationRef | null;
+  product_line: RelationRef | null;
+  reason: string;
+  dropped_at: string;
+  claimed_by: RelationRef | null;
+  claimed_at: string | null;
+}
+
+/** 掉海记录列表（→ 接口 §5.16 `GET /sea/records`） */
+export interface SeaRecordListResultVo {
+  total: number;
+  page: number;
+  page_size: number;
+  list: SeaRecordItemVo[];
 }
 
 /** 实体引用（＝ `RelationRefDto` 的运行时形状；本域不依赖 D 域 DTO 类） */
@@ -387,6 +419,101 @@ export class SeaService {
 
     items.sort((left, right) => right.overdue_days - left.overdue_days);
     return { total: items.length, items };
+  }
+
+  /**
+   * 经理决策：公海超期关系**保留 / 删除**（→ 接口 §5.16 `POST /sea/manager-decision`）。
+   *
+   * ★ **权限**：部门经理 / 总经理（排除销售 ／ 管理员只读 ／ 交付 · 客服，→ §4.5「部门经理决策」）；
+   *   权限不足**入口即 403**（`sea.manager_decision.forbidden`），不进 `getRelation`。
+   * ★ **范围**：由 `relation.getRelation` 的读口径兜底（经理只管辖部门公海、总·管全部；越界 403
+   *   `out_of_scope`）—— 本层不重复写范围判定。
+   * ★ **决策**：`keep` ⇒ 维持公海、什么都不改；`delete` ⇒ 调 C 域出口逻辑删关系（跨域路①）＋
+   *   写本域 `sea_record`（`reason=dept_manager_delete`、转移方向 `company_sea`→`company_sea`），
+   *   不自动流转（→ 需求 §6.3）；关系不在公海或已删 ⇒ 400 `sea.relation_not_in_sea`。
+   * ★ **留痕**：controller 标 `@Audit(SEA_AUDIT_ACTIONS.managerDecision, 'business_relation')`。
+   */
+  async managerDecision(
+    relationId: string,
+    decision: 'keep' | 'delete',
+  ): Promise<SeaManagerDecisionResultVo> {
+    const viewer = requireViewer();
+    // ★ 权限（决策权＝部门经理 / 总经理，不属"客户经营写角色"那套通用口径）
+    if (!viewer.roleCodes.includes('dept_manager') && !viewer.roleCodes.includes('gm')) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '只有部门经理 / 总经理能决策公海关系的保留或删除', {
+        constraint: 'sea.manager_decision.forbidden',
+      });
+    }
+    // ★ 取关系（存在 ＋ 读范围）：不存在 → 400（`requireRelation`）；越界 → 403（`out_of_scope`）
+    const rel = await this.relation.getRelation(relationId);
+    if (rel.sea_status !== COMPANY_SEA_STATUS) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '该关系不在公海，无法执行删除决策', {
+        constraint: 'sea.relation_not_in_sea',
+      });
+    }
+    if (decision === 'keep') {
+      return { decision: 'keep', deleted: false };
+    }
+    // ★ delete：调 C 域出口逻辑删关系，再写本域 `sea_record`（→ 架构 §5.2 跨域三条路）
+    const deleted = await this.relation.softDeleteRelation(BigInt(relationId), viewer.employeeId);
+    if (!deleted) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '该关系不在公海或已被删除，无法执行删除决策', {
+        constraint: 'sea.relation_not_in_sea',
+      });
+    }
+    // ★ 归属人快照：关系已在公海（无 owner 成员），取**最近一次掉海记录**的 `owner_id`（→ F2 `sea_record.owner_id` 必填）
+    const lastRecord = await this.repository.findLatestRecord(BigInt(relationId));
+    const ownerId = lastRecord?.ownerId ?? 0n;
+    const now = new Date();
+    await this.repository.createSeaRecord({
+      relationId: BigInt(relationId),
+      ownerId,
+      reason: SEA_DROP_REASON.deptManagerDelete,
+      droppedAt: now,
+      fromSea: COMPANY_SEA_STATUS,
+      toSea: COMPANY_SEA_STATUS,
+    });
+    return { decision: 'delete', deleted: true };
+  }
+
+  /**
+   * 掉海记录列表（→ 接口 §5.16 `GET /sea/records`）。
+   *
+   * ★ **范围收敛**在 repository（按 `business_relation.dept_id`）：销售＝本部门 / 经理＝管辖部门 /
+   *   总经理·管理员＝全部；**交付 · 客服 → 403**（不进公海）。
+   * ★ 一条关系可能多次掉海（多条 `sea_record`），本列表**逐条列出**、按 `dropped_at` 倒序分页；
+   *   名字（公司 / 部门 / 产品线，以及领回员工）由本层装配（跨域不许查对方的表）。
+   */
+  async listSeaRecords(page: number, pageSize: number): Promise<SeaRecordListResultVo> {
+    const context = requireViewer();
+    if (context.dataScope.type === 'serving') {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '交付 / 客服不进公海，无法查看掉海记录', {
+        constraint: 'sea.records.forbidden',
+      });
+    }
+    const scopeDeptIds: readonly bigint[] | null =
+      context.dataScope.type === 'all' ? null : [...context.dataScope.deptIds];
+    const { total, rows } = await this.repository.listSeaRecords(scopeDeptIds, page, pageSize);
+    const employeeIds = uniqueBigints(
+      rows.map((r) => r.claimed_by).filter((id): id is bigint => id !== null),
+    );
+    const employeeRefs = employeeIds.length > 0 ? await this.org.getEmployeeRefs(employeeIds) : [];
+    const employeeMap = new Map(employeeRefs.map((e) => [e.id.toString(), e.name]));
+    const items: SeaRecordItemVo[] = rows.map((r) => ({
+      record_id: r.record_id.toString(),
+      relation_id: r.relation_id.toString(),
+      company: refOfName(r.company_id, r.company_name),
+      dept: refOfName(r.dept_id, r.dept_name),
+      product_line: refOfName(r.product_line_id, r.product_line_name),
+      reason: r.reason,
+      dropped_at: r.dropped_at.toISOString(),
+      claimed_by:
+        r.claimed_by === null
+          ? null
+          : { id: r.claimed_by.toString(), name: employeeMap.get(r.claimed_by.toString()) ?? '未知' },
+      claimed_at: r.claimed_at === null ? null : r.claimed_at.toISOString(),
+    }));
+    return { total, page, page_size: pageSize, list: items };
   }
 
   /**

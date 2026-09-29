@@ -735,6 +735,31 @@ export class RelationRepository {
     });
   }
 
+  /** 取关系的当前 `sea_status`（`POST /sea/manager-decision` 删除前校验：必须在公海） */
+  findRelationSeaStatus(relationId: bigint): Promise<string | null> {
+    return this.prisma.businessRelation
+      .findFirst({
+        where: { id: relationId, deleted_at: null },
+        select: { sea_status: true },
+      })
+      .then((row) => (row === null ? null : row.sea_status));
+  }
+
+  /**
+   * 经理决策「删除关系」：逻辑删 `business_relation`（`→ 接口 §5.16 `POST /sea/manager-decision`；
+   * 数据架构 F2 `reason=dept_manager_delete`；**不自动流转**，→ 需求 §6.3）。
+   * ★ 只改 `deleted_at` ＋ `updated_by`：**不撤 owner 成员、不回公海**（关系直接消失，比掉海更彻底）；
+   *   写 `sea_record` 由 F 域 service 在调完本方法后落（架构 §5.2 跨域三条路）。
+   */
+  softDeleteRelation(relationId: bigint, operatorId: bigint): Promise<number> {
+    return this.prisma.businessRelation
+      .updateMany({
+        where: { id: relationId, deleted_at: null },
+        data: { deleted_at: new Date(), updated_by: operatorId },
+      })
+      .then((r) => r.count);
+  }
+
   // ===== D-61 桥③ `event_count_30d`：某公司下**可见**的关系 id（2026-09-21）=====
   //
   // ★ 为什么在本域：`business_relation` 是 C 域的表，而「哪些关系我能看」的规则

@@ -21,17 +21,31 @@
 //   —— 对象类型取**路径参数指向的对象**（路径里是**公司 id**，故记 `company`），
 //   与 D 域 `POST /contacts/:id/activate-relation` 标 `'contact'` 同一取法。
 // =============================================================================
-import { Body, Controller, Get, HttpCode, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
 import { Audit } from '../../kernel/index';
-import { ClaimSeaRelationDto, UpdateSeaRuleDto } from './dto/sea-request.dto';
-import { SeaClaimVoDto, SeaManagerTodoResultDto, SeaRuleUpdateResultDto, SeaRuleVoDto } from './dto/sea-response.dto';
+import {
+  ClaimSeaRelationDto,
+  ManagerDecisionDto,
+  SeaRecordsQueryDto,
+  UpdateSeaRuleDto,
+} from './dto/sea-request.dto';
+import {
+  ManagerDecisionResultDto,
+  SeaClaimVoDto,
+  SeaManagerTodoResultDto,
+  SeaRecordListResultDto,
+  SeaRuleUpdateResultDto,
+  SeaRuleVoDto,
+} from './dto/sea-response.dto';
 import {
   SEA_AUDIT_ACTIONS,
   SeaService,
   type SeaClaimVo,
+  type SeaManagerDecisionResultVo,
   type SeaManagerTodoResult,
+  type SeaRecordListResultVo,
   type SeaRuleUpdateResultVo,
   type SeaRuleVo,
 } from './sea.service';
@@ -122,5 +136,38 @@ export class SeaController {
   @ApiOkResponse({ type: SeaClaimVoDto })
   claim(@Param('id') id: string, @Body() body: ClaimSeaRelationDto): Promise<SeaClaimVo> {
     return this.sea.claimCompanySeaRelation(id, body);
+  }
+
+  @Audit(SEA_AUDIT_ACTIONS.managerDecision, 'business_relation')
+  @Post('sea/manager-decision')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '经理决策：公海超期关系保留 / 删除',
+    description:
+      '**部门经理 / 总经理**可决策（销售 / 管理员只读 ／ 交付 · 客服 → 403）。' +
+      "`decision='keep'` ⇒ 维持公海、什么都不改；`decision='delete'` ⇒ **逻辑删关系**" +
+      '（`business_relation.deleted_at`，不自动流转）＋ 写 `sea_record`（`reason=dept_manager_delete`）留痕。' +
+      '`relation_id` 来自 `GET /sea/manager-todo` 的待办项；关系不在公海或已删 → **400**。',
+  })
+  @ApiOkResponse({ type: ManagerDecisionResultDto })
+  managerDecision(@Body() body: ManagerDecisionDto): Promise<SeaManagerDecisionResultVo> {
+    return this.sea.managerDecision(body.relation_id, body.decision);
+  }
+
+  @Get('sea/records')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '掉海记录列表（→ §5.16 `GET /sea/records`）',
+    description:
+      '列出 `sea_record` 掉海历史（按 `dropped_at` 倒序，分页）。**谁看得到什么由服务端按数据范围收敛**：' +
+      '销售＝本部门 / 经理＝管辖部门 / 总经理·管理员＝全部；**交付 · 客服 → 403**。' +
+      '名字（公司 / 部门 / 产品线 / 领回人）由服务端装配；`claimed_by` 为 `null` ＝ 还没被领回。',
+  })
+  @ApiOkResponse({ type: SeaRecordListResultDto })
+  listSeaRecords(@Query() query: SeaRecordsQueryDto): Promise<SeaRecordListResultVo> {
+    const page = query.page ?? 1;
+    const pageSize = query.page_size ?? 20;
+    return this.sea.listSeaRecords(page, pageSize);
   }
 }

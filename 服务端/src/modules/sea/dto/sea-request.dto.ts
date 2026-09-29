@@ -9,8 +9,9 @@
 //   · 同 §2.4：字段缺失 / 类型错 → **400 / 20001**（横切层校验管道统一出口）。
 //   · 同 §2.6：入参出参 **snake_case**；所有 id 都是**十进制字符串**（后端 `bigint`，前端 string）。
 // =============================================================================
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 
 /** `POST /sea/company/:id/claim`（领取到私海）——`:id` ＝ **公司 id** */
 export class ClaimSeaRelationDto {
@@ -151,4 +152,50 @@ export class UpdateSeaRuleDto {
   @IsOptional()
   @IsBoolean({ message: 'confirmed 必须是布尔值' })
   confirmed?: boolean;
+}
+
+/**
+ * `POST /sea/manager-decision` —— 经理决策公海超期关系**保留 / 删除**（→ 接口 §5.16 `POST /sea/manager-decision`）。
+ *
+ * ★ 语义（→ §4.5）：`keep` ＝ 维持公海、什么都不改；`delete` ＝ **逻辑删关系**（`business_relation.deleted_at`，
+ *   不自动流转）＋ 写 `sea_record`（`reason=dept_manager_delete`）留痕。
+ * ★ `relation_id` 来自 `GET /sea/manager-todo` 的待办项（→ §5.16 `SeaManagerTodoItemDto`）。
+ */
+export class ManagerDecisionDto {
+  @ApiProperty({
+    description: '业务关系 id（十进制字符串；来自 `GET /sea/manager-todo` 的待办项 `relation_id`）',
+    example: '12',
+  })
+  @IsString({ message: 'relation_id 必须是字符串' })
+  @Length(1, 32, { message: 'relation_id 长度不合法' })
+  relation_id!: string;
+
+  @ApiProperty({
+    enum: ['keep', 'delete'],
+    description: '经理决策：`keep`（保留，维持公海）／ `delete`（逻辑删关系，写 `sea_record` 留痕，不自动流转）',
+    example: 'delete',
+  })
+  @IsString({ message: 'decision 必须是字符串' })
+  @IsIn(['keep', 'delete'], { message: 'decision 只能是 keep 或 delete' })
+  decision!: 'keep' | 'delete';
+}
+
+/**
+ * `GET /sea/records` 分页入参（→ 接口 §5.16；默认 1 / 20、最大 100 归一归后端）。
+ */
+export class SeaRecordsQueryDto {
+  @ApiPropertyOptional({ description: '页码（默认 1）', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page 必须是整数' })
+  @Min(1, { message: 'page 至少 1' })
+  page?: number;
+
+  @ApiPropertyOptional({ description: '每页条数（默认 20、最大 100）', example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page_size 必须是整数' })
+  @Min(1, { message: 'page_size 至少 1' })
+  @Max(100, { message: 'page_size 最多 100' })
+  page_size?: number;
 }

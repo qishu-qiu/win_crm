@@ -4,7 +4,7 @@
 > 文档性质：四件套之三（①业务需求 ②数据架构 ③**接口 API** ④前端页面与交互）。
 > 配套真相源：《销售CRM业务需求文档》、《销售CRM数据架构文档》、《销售CRM设计规范》、《销售CRM前端页面与交互文档》（均 需求规格/）。
 > **版本沿革**：文档内不留「修改记录」章节（2026-09-12 决定 →《废止口径登记表》#22），沿革查 `git log --follow -- 需求规格/销售CRM接口API文档.md`。
-> 生效日期：2026-09-29 ｜ 状态：**V1.49**（本版：**Phase 6 公海列表落地** —— `GET /sea/company` / `GET /sea/department` 专用端点（替换 `GET /relations?tab=sea` 顶替），聚合层 `SeaAggregateController` 落点，列表项＝关系列表项 ＋ 公海停留信息（`sea_entered_at` / `sea_reason` / `days_in_sea` / `stay_days` / `remaining_days`，复用 manager-todo 同套规则解析 ＋ 日界）；前端 3 列卡片流（系统 / 部门公海）＋ 导航注册；§5.16 回填两端点形状。上版（**V1.48**）：**看板 5 区补全** —— `GET /reports/dashboard` 的 `pending_todo` / `warnings` / `dept_compare` / `top_sales` / `zombie_weekly` 形状落地并接真实数据；KPI 三指标 ＋ `sea_todo` 复用 `GET /sea/manager-todo` 不变；老板/经理/管理员可见（销售 403）；**不脱敏**（§2.4）。上版（**V1.47**）：**M8-06 Phase 4 切片② 落地** —— 新建 `report` 模块 `GET /reports/dashboard`：KPI 三指标（今日新增 / 今日待跟进 / 本月签约额＋环比）＋ `sea_todo` 复用 `GET /sea/manager-todo`；老板/经理/管理员可见（销售 403）；**不脱敏**（§2.4）。上版（**V1.46**）：**M8-06 Phase 4 切片③ 落地** —— `sea` 域新增 `GET /sea/manager-todo`（老板/经理/管理员可见，销售 403）：列出公海停留超期（`sea_record.dropped_at` 至今 ＞ 适用 `sea_rule.stay_days`，复用 `resolveSeaRuleFor` L4→L1；取不到规则/未配 stay_days 不进列表）的关系，待 `POST /sea/manager-decision` 决策；→ §5.16 / F1 P-10）。上版（**V1.45**）：**M8-06 Phase 4 切片① 落地** —— 新增 `target` 域：`GET /targets/progress`（**老板/经理可见，销售 403**）→ 当月可见 scope（company/dept/employee）目标进度条，`rate`＝回款额/目标额、`time_rate`＝当月已过时间占比、`signed_amount`＝当月签约额（按 `Contract.sign_date` 落月聚合），→ §4.12 / §5.13。⚠ 报表/看板**不脱敏**（§2.4）返回真实金额）。上版（**V1.44**）：**M8-06 Phase 2-C 落地** —— 建档联系人 `phone` 改**可空**：不填但有 `wechat` 自动用**唯一假号占位**（9 开头 11 位、明显非合法 mainland mobile，后续改联系人补真实号；phone 与 wechat 都空 → 400）；`POST /companies/search-dup` 按 phone 命中时额外回 `matched_contact:{id,name}`（前端据而直接跳到该联系人），→ §5.4 / §5.5）。上版（**V1.43**）：**M8-06 Phase 2-B 落地** —— 新增 `visit` 域（纯行政考勤）：`POST /visits`（外出登记 `{depart_at,reason,relation_ids?}`）＋ `POST /visits/:id/return`（回来点一下，只写 `actual_return_at`，已回再点 422）＋ `GET /visits`（我的外出记录，可选 `?date=YYYY-MM-DD`），→ §4.7 / §5.8）。上版（**V1.42**）：**M8-06 Phase 2-A 落地** —— `GET /today-agenda` 加**实时兜底**（当日 `daily_agenda` 无行时按活数据即时派生「今日该找谁」＝本人未关闭且今日到期的承诺，惰性写入按 user/日/ref 去重，用户后续处理状态得以保留）；新增 `POST /today-agenda/:id/action`（done → 自动销关联承诺 / snoozed 同一条最多 3 次 / ignored 必填原因 422·20403），→ §4.14.4 / §5.6 / §5.7）。上版（**V1.41**）：**D-74 收口 ——「可建产品线范围」落地**：可建范围 ＝ **所选部门承接的产品线**（判据＝ `product_line.dept_ids` 含该部门，→ 数据架构 A7），**不是**「我挂的产品线」`me.product_line_ids`。**服务端**：C 域 `createRelation` 新增 `requireLineServedByDept`（判据走 A 域出口 `getDeptProductLineIds`；⚠ `POST /relations` 与 `POST /contacts/:id/activate-relation` **共用同一道**，不会一边收一边漏）→ 不成立给 **422 / `20409`**（§2.4 补码 ＋ §5.6 补校验顺序）；**前端**：录入页 / 联系人详情的产品线下拉改按**同一判据**派生（未选部门 ⇒ 不摆候选；换部门 ⇒ 清掉不合法的已选线）；口径正文 → 架构 §7.2「可建产品线范围」段）。上版（**V1.40**）：**D-73 收口** —— §5.2 `UserVO` 回填 `activatable_dept_ids` / `product_line_ids`（前者与 `checkActivateScope` **同集**；后者 2026-09-22 起**无消费方**），口径正文 → **架构 §7.2「新建（激活）时的部门范围」段**。再上版（**V1.39**）：**M9-F 展示片·D-10**：关系列表项补 `drop_in_x_days`（距掉海还剩几个自然日，按自然日 Asia/Shanghai；`0`＝今天到期、负数＝到期日已过、正数＝还有几天、`null`＝判不了）；由**聚合层** `relation-aggregate` 拼装 —— F 域算天数、C 域给锚点；`GET /relations` 由 C 域迁聚合层（C(L3) 读不到 F(L4) 的 `sea_rule`，→ 架构 §3 / D-61 桥③）；同批升前端页 5「掉海」列（到期当天 / 已过期标红，页面不算天数）。再上版（**V1.38**）：M9-F 规则配置片 —— `GET/PUT /sea/rules` 形状回填 §5.16（层级语义 / 7 天缓冲 / 两段式确认 `confirmed` / 变更预告 `affected_customers` / 谁能配哪一层）；同批 A10 登记动作名 `sea.rule_update`。
+> 生效日期：2026-09-29 ｜ 状态：**V1.50**（本版：**Phase 6 收尾** —— `GET /sea/records`（掉海记录列表，→ §5.16 F-05）＋ `POST /sea/manager-decision`（经理决策保留／删除，→ §5.16 F-06；delete＝逻辑删关系 ＋ 写 `sea_record`（`reason=dept_manager_delete`）留痕，不自动流转）。上版（**V1.49**）：**Phase 6 公海列表落地** —— `GET /sea/company` / `GET /sea/department` 专用端点（替换 `GET /relations?tab=sea` 顶替），聚合层 `SeaAggregateController` 落点，列表项＝关系列表项 ＋ 公海停留信息（`sea_entered_at` / `sea_reason` / `days_in_sea` / `stay_days` / `remaining_days`，复用 manager-todo 同套规则解析 ＋ 日界）；前端 3 列卡片流（系统 / 部门公海）＋ 导航注册；§5.16 回填两端点形状。上版（**V1.48**）：**看板 5 区补全** —— `GET /reports/dashboard` 的 `pending_todo` / `warnings` / `dept_compare` / `top_sales` / `zombie_weekly` 形状落地并接真实数据；KPI 三指标 ＋ `sea_todo` 复用 `GET /sea/manager-todo` 不变；老板/经理/管理员可见（销售 403）；**不脱敏**（§2.4）。上版（**V1.47**）：**M8-06 Phase 4 切片② 落地** —— 新建 `report` 模块 `GET /reports/dashboard`：KPI 三指标（今日新增 / 今日待跟进 / 本月签约额＋环比）＋ `sea_todo` 复用 `GET /sea/manager-todo`；老板/经理/管理员可见（销售 403）；**不脱敏**（§2.4）。上版（**V1.46**）：**M8-06 Phase 4 切片③ 落地** —— `sea` 域新增 `GET /sea/manager-todo`（老板/经理/管理员可见，销售 403）：列出公海停留超期（`sea_record.dropped_at` 至今 ＞ 适用 `sea_rule.stay_days`，复用 `resolveSeaRuleFor` L4→L1；取不到规则/未配 stay_days 不进列表）的关系，待 `POST /sea/manager-decision` 决策；→ §5.16 / F1 P-10）。上版（**V1.45**）：**M8-06 Phase 4 切片① 落地** —— 新增 `target` 域：`GET /targets/progress`（**老板/经理可见，销售 403**）→ 当月可见 scope（company/dept/employee）目标进度条，`rate`＝回款额/目标额、`time_rate`＝当月已过时间占比、`signed_amount`＝当月签约额（按 `Contract.sign_date` 落月聚合），→ §4.12 / §5.13。⚠ 报表/看板**不脱敏**（§2.4）返回真实金额）。上版（**V1.44**）：**M8-06 Phase 2-C 落地** —— 建档联系人 `phone` 改**可空**：不填但有 `wechat` 自动用**唯一假号占位**（9 开头 11 位、明显非合法 mainland mobile，后续改联系人补真实号；phone 与 wechat 都空 → 400）；`POST /companies/search-dup` 按 phone 命中时额外回 `matched_contact:{id,name}`（前端据而直接跳到该联系人），→ §5.4 / §5.5）。上版（**V1.43**）：**M8-06 Phase 2-B 落地** —— 新增 `visit` 域（纯行政考勤）：`POST /visits`（外出登记 `{depart_at,reason,relation_ids?}`）＋ `POST /visits/:id/return`（回来点一下，只写 `actual_return_at`，已回再点 422）＋ `GET /visits`（我的外出记录，可选 `?date=YYYY-MM-DD`），→ §4.7 / §5.8）。上版（**V1.42**）：**M8-06 Phase 2-A 落地** —— `GET /today-agenda` 加**实时兜底**（当日 `daily_agenda` 无行时按活数据即时派生「今日该找谁」＝本人未关闭且今日到期的承诺，惰性写入按 user/日/ref 去重，用户后续处理状态得以保留）；新增 `POST /today-agenda/:id/action`（done → 自动销关联承诺 / snoozed 同一条最多 3 次 / ignored 必填原因 422·20403），→ §4.14.4 / §5.6 / §5.7）。上版（**V1.41**）：**D-74 收口 ——「可建产品线范围」落地**：可建范围 ＝ **所选部门承接的产品线**（判据＝ `product_line.dept_ids` 含该部门，→ 数据架构 A7），**不是**「我挂的产品线」`me.product_line_ids`。**服务端**：C 域 `createRelation` 新增 `requireLineServedByDept`（判据走 A 域出口 `getDeptProductLineIds`；⚠ `POST /relations` 与 `POST /contacts/:id/activate-relation` **共用同一道**，不会一边收一边漏）→ 不成立给 **422 / `20409`**（§2.4 补码 ＋ §5.6 补校验顺序）；**前端**：录入页 / 联系人详情的产品线下拉改按**同一判据**派生（未选部门 ⇒ 不摆候选；换部门 ⇒ 清掉不合法的已选线）；口径正文 → 架构 §7.2「可建产品线范围」段）。上版（**V1.40**）：**D-73 收口** —— §5.2 `UserVO` 回填 `activatable_dept_ids` / `product_line_ids`（前者与 `checkActivateScope` **同集**；后者 2026-09-22 起**无消费方**），口径正文 → **架构 §7.2「新建（激活）时的部门范围」段**。再上版（**V1.39**）：**M9-F 展示片·D-10**：关系列表项补 `drop_in_x_days`（距掉海还剩几个自然日，按自然日 Asia/Shanghai；`0`＝今天到期、负数＝到期日已过、正数＝还有几天、`null`＝判不了）；由**聚合层** `relation-aggregate` 拼装 —— F 域算天数、C 域给锚点；`GET /relations` 由 C 域迁聚合层（C(L3) 读不到 F(L4) 的 `sea_rule`，→ 架构 §3 / D-61 桥③）；同批升前端页 5「掉海」列（到期当天 / 已过期标红，页面不算天数）。再上版（**V1.38**）：M9-F 规则配置片 —— `GET/PUT /sea/rules` 形状回填 §5.16（层级语义 / 7 天缓冲 / 两段式确认 `confirmed` / 变更预告 `affected_customers` / 谁能配哪一层）；同批 A10 登记动作名 `sea.rule_update`。
 > ⚠ **代码注释不绑文档版本号（2026-09-16 定）**：代码里引用规格一律写「《文档名》§X」，**不写 `V1.xx`** —— 绑版本号必漂移（实测 `V1.16` / `V1.27` / `V1.3` / `V1.32` 全成旧值：这正是坑 #1 / #6 的复现路径）。本版同批把 `服务端/src` ＋ `前端/src` 里的历史版本指针**全部去除**（逐文件**字面**替换，禁批量正则 → 铁律坑 19）。
 
 ---
@@ -570,6 +570,62 @@
   - **resp ＝ `GET /sea/company` 逐字同形**（同分页形态 ＋ 同列表项 ＋ 同公海停留信息）。
 
 ---
+
+#### F-05 `GET /sea/records` —— 掉海记录列表（**Phase 6 收尾**，2026-09-29 落地）
+
+> 落点：`SeaController`（`@Controller()` 无前缀，路由 `sea/records`）→ `SeaService.listSeaRecords` → `SeaRepository.listSeaRecords`（`$queryRaw` 一次性 join `business_relation`＋`company`＋`department`＋`product_line`，按 `business_relation.dept_id` 范围收敛；`claimed_by` 员工名由 `SeaService` 经 `OrgService.getEmployeeRefs` 装配 —— **跨域不许查对方的表**，→ 架构 §5.2）。
+> 脱敏：本端点**不脱敏**（历史／汇总出口不脱敏，→ 需求 §8 /《废止口径登记表》#30）。
+
+- **用途**：列出 `sea_record` 掉海历史（一条关系可能**多次掉海** ⇒ 逐条列出，不按关系去重），按 `dropped_at` 倒序分页。
+- **范围收敛（★ 服务端按数据范围，前端不判角色）**：销售＝本部门公海记录 ／ 经理＝管辖部门 ／ 总经理·管理员＝全部；**交付 · 客服 → 403**（不进公海）。口径同 `GET /sea/company`／`GET /sea/department`（→ §5.16 F-01／F-02）。
+- **入参**（复用 §2.7 分页）：`page`（默认 1）／`page_size`（默认 20、最大 100）。
+- **出参**：`SeaRecordListResultDto`：
+
+  | 字段 | 类型 | 说明 |
+  | --- | --- | --- |
+  | `total` | int | 全量掉海记录数（同一 where 计数，**不是 `list.length`**） |
+  | `page` | int | 当前页 |
+  | `page_size` | int | 每页条数 |
+  | `list` | `SeaRecordItemDto[]` | 掉海记录列表，按 `dropped_at` 倒序 |
+
+- **`SeaRecordItemDto`**：
+
+  | 字段 | 类型 | 说明 |
+  | --- | --- | --- |
+  | `record_id` | string(bigint) | 掉海记录 id（`sea_record.id`） |
+  | `relation_id` | string(bigint) | 业务关系 id |
+  | `company` | `RelationRefDto`｜`null` | 公司档案（`company` 被逻辑删 ⇒ `null`） |
+  | `dept` | `RelationRefDto`｜`null` | 承接部门 |
+  | `product_line` | `RelationRefDto`｜`null` | 产品线 |
+  | `reason` | string | 掉海原因码（→ 数据架构 F2 `sea_record.reason`：`follow_timeout`／`dept_manager_delete`／…） |
+  | `dropped_at` | string(ISO) | 掉海时刻 |
+  | `claimed_by` | `RelationRefDto`｜`null` | 领回人（员工；未领回 ⇒ `null`） |
+  | `claimed_at` | string(ISO)｜`null` | 领回时刻（未领回 ⇒ `null`） |
+
+- **错误码**：`401`（未登录）／`403`（交付·客服 不进公海）。
+
+#### F-06 `POST /sea/manager-decision` —— 经理决策：公海超期关系保留 / 删除（**Phase 6 收尾**，2026-09-29 落地）
+
+> 落点：`SeaController`（`sea/manager-decision`）→ `SeaService.managerDecision`；**删除关系的另一半在 C 域**：调 `RelationService.softDeleteRelation`（校验关系在公海 `company_sea` 且未删 ＋ 逻辑删 `business_relation.deleted_at`）—— **跨域路①（要同步结果才调对方 service）**（→ 架构 §5.2）；F 域再写 `sea_record`（`reason=dept_manager_delete`）。**★ `sea_record.owner_id` 必填**：删除时关系已在公海（无 owner 成员），取**最近一次掉海记录**的 `owner_id`（→ 数据架构 F2）作归属人快照。
+> 留痕：`@Audit(SEA_AUDIT_ACTIONS.managerDecision, 'business_relation')`（→ 架构 §7.4；机械卡 `shared/audit-coverage.spec.ts`）。
+
+- **用途**：**部门经理 / 总经理** 决策公海超期关系（`GET /sea/manager-todo` 待办项）保留或删除。**销售 / 管理员（只读）／交付 · 客服 → 403**（决策权＝部门经理／总经理，不属"客户经营写角色"通用口径，→ §4.5）。
+- **入参**：`ManagerDecisionDto`：
+
+  | 字段 | 类型 | 说明 |
+  | --- | --- | --- |
+  | `relation_id` | string(bigint) | 业务关系 id（来自 `GET /sea/manager-todo` 的待办项） |
+  | `decision` | enum `keep`｜`delete` | `keep`＝维持公海、什么都不改；`delete`＝逻辑删关系（不自动流转）＋ 写 `sea_record` 留痕 |
+
+- **出参**：`ManagerDecisionResultDto`：
+
+  | 字段 | 类型 | 说明 |
+  | --- | --- | --- |
+  | `decision` | string | 回显（`keep`／`delete`） |
+  | `deleted` | bool | 是否执行了删除（`keep`＝`false`／`delete`＝`true`） |
+
+- **语义**：`delete` ⇒ 逻辑删 `business_relation`（`deleted_at`，**不撤 owner 成员、不回公海** —— 比掉海更彻底）；写 `sea_record`（`reason=dept_manager_delete`、`from_sea`／`to_sea` 均 `company_sea`）。关系不在公海或已删 ⇒ **400**。
+- **错误码**：`400`（`sea.relation_not_in_sea`：relation 不在公海／已删）／`403`（`sea.manager_decision.forbidden`：非部门经理·总经理）／`401`。
 
 ## 六、跨模块关键流程（实现务必对齐）
 

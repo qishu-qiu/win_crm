@@ -128,3 +128,54 @@ export async function listDepartmentSea(
   })
   return data
 }
+
+/**
+ * 掉海记录列表（`GET /sea/records`，→ 接口 §5.16 / Phase 6）。
+ *
+ * ★ **谁看得到什么由服务端按数据范围收敛**（销售＝本部门 / 经理＝管辖部门 / 总经理·管理员＝全部；
+ *   交付·客服 **403**）—— 前端**不自己判角色**。
+ * ★ `total` **只信服务端**（同一 where 的全量计数），不拿 `list.length` 当总数。
+ * ★ 原因码（`reason`）原样透传；本封装不编中文（页面按码映射，取不到的码显示原始码）。
+ */
+export type SeaRecordItem = components['schemas']['SeaRecordItemDto']
+export type SeaRecordListResult = components['schemas']['SeaRecordListResultDto']
+
+export async function listSeaRecords(page = 1, pageSize = 20): Promise<SeaRecordListResult> {
+  const { data } = await request.get<SeaRecordListResult>('/sea/records', {
+    params: { page, page_size: pageSize },
+  })
+  return data
+}
+
+/**
+ * 经理决策输入（`POST /sea/manager-decision`，→ 接口 §5.16 / Phase 6）。
+ * ★ `relation_id` 来自 `GET /sea/manager-todo` 的待办项；`decision` ∈ `keep`/`delete`。
+ */
+export type ManagerDecisionInput = components['schemas']['ManagerDecisionDto']
+export type ManagerDecisionResult = components['schemas']['ManagerDecisionResultDto']
+
+export async function managerDecision(
+  relationId: string,
+  decision: 'keep' | 'delete',
+): Promise<ManagerDecisionResult> {
+  const { data } = await request.post<ManagerDecisionResult>('/sea/manager-decision', {
+    relation_id: relationId,
+    decision,
+  })
+  return data
+}
+
+/** 经理待办结果（`GET /sea/manager-todo`，→ 接口 §5.16） */
+export type SeaManagerTodoItem = components['schemas']['SeaManagerTodoItemDto']
+export type SeaManagerTodoResult = components['schemas']['SeaManagerTodoResultDto']
+
+/**
+ * 经理待办：公海超期关系（→ 接口 §5.16 `GET /sea/manager-todo`）。
+ *
+ * ★ **谁看得到由服务端判**（部门经理 / 总经理；销售 / 交付·客服 403）—— 前端**不自己判角色**，
+ *   把 403 当正常分支（「该角色无待决策」），不是崩掉。
+ */
+export async function getManagerTodo(): Promise<SeaManagerTodoResult> {
+  const { data } = await request.get<SeaManagerTodoResult>('/sea/manager-todo')
+  return data
+}

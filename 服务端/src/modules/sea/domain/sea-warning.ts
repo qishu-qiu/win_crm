@@ -234,4 +234,6 @@ export function resolveDropDeadline(
 export const SEA_DROP_REASON = {
   /** 跟进频次未达标（触发①「最近 N 天无有效跟进」，锚点 ＝ `last_event_at`） */
   followTimeout: 'follow_timeout',
+  /** 经理决策「删除关系」（→ 接口 §5.16 `POST /sea/manager-decision`；逻辑删 ＋ 不自动流转，→ 需求 §6.3） */
+  deptManagerDelete: 'dept_manager_delete',
 } as const;

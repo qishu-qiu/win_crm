@@ -34,12 +34,14 @@ export class SeaRepository {
    * ★ 返回 `null` ＝ **从来没掉过海**：调用方**跳过、不造行** —— 掉海扫描属 M7 后续片，
    *   现在补一条「假装掉过海」的记录＝**凭实现倒推业务事实**（本项目一号坑的变体）。
    */
-  findLatestRecord(relationId: bigint) {
-    return this.prisma.seaRecord.findFirst({
-      where: { relation_id: relationId },
-      orderBy: [{ dropped_at: 'desc' }, { id: 'desc' }],
-      select: { id: true },
-    });
+  findLatestRecord(relationId: bigint): Promise<{ id: bigint; ownerId: bigint } | null> {
+    return this.prisma.seaRecord
+      .findFirst({
+        where: { relation_id: relationId },
+        orderBy: [{ dropped_at: 'desc' }, { id: 'desc' }],
+        select: { id: true, owner_id: true },
+      })
+      .then((row) => (row === null ? null : { id: row.id, ownerId: row.owner_id }));
   }
 
   /** 回填「谁 / 何时领回」（→ F2 `claimed_by` / `claimed_at`；`idx_claimer` 供领取率 / 公海报表用） */
@@ -71,13 +73,16 @@ export class SeaRepository {
     ownerId: bigint;
     reason: string;
     droppedAt: Date;
+    /** 转移方向（默认 私海→公海）；经理删除关系时填 `company_sea`→`company_sea` */
+    fromSea?: string;
+    toSea?: string;
   }) {
     return this.prisma.seaRecord.create({
       data: {
         relation_id: data.relationId,
         owner_id: data.ownerId,
-        from_sea: PRIVATE_SEA_STATUS,
-        to_sea: COMPANY_SEA_STATUS,
+        from_sea: data.fromSea ?? PRIVATE_SEA_STATUS,
+        to_sea: data.toSea ?? COMPANY_SEA_STATUS,
         reason: data.reason,
         dropped_at: data.droppedAt,
       },
@@ -317,6 +322,63 @@ export class SeaRepository {
       WHERE x.rn = 1
     `;
   }
+
+  /**
+   * 掉海记录列表（→ 接口 §5.16 `GET /sea/records`）。
+   *
+   * ★ 范围收敛在**本层**：`deptIds === null` ＝ 不收敛（老板 / 管理员）；给集合 ＝ 经理管辖部门（与
+   *   `listSeaManagerTodo` 同一档）。按 `business_relation.dept_id` 收敛（部门恒定，→ C1）。
+   * ★ 一条关系可能多次掉海（多条 `sea_record`），本列表**逐条列出**（不按关系去重）；
+   *   排序按 `dropped_at` 倒序（最新掉海的在前）；分页。
+   * ★ 名字一次 join 带出（company / department / product_line），省往返；名字取不到 → `null`，由 service 装配。
+   * ★ `claimed_by` 是员工 id，名字由 service 走 `OrgService.getEmployeeRefs` 装配（跨域不许查表）。
+   */
+  async listSeaRecords(
+    deptIds: readonly bigint[] | null,
+    page: number,
+    pageSize: number,
+  ): Promise<{ total: number; rows: SeaRecordListItemRow[] }> {
+    const whereSql = this.seaRecordScopeFilter(deptIds);
+    const rows = await this.prisma.$queryRaw<SeaRecordListItemRow[]>`
+      SELECT
+        sr.id AS record_id,
+        sr.relation_id AS relation_id,
+        sr.reason AS reason,
+        sr.dropped_at AS dropped_at,
+        sr.claimed_by AS claimed_by,
+        sr.claimed_at AS claimed_at,
+        br.company_id AS company_id,
+        c.full_name AS company_name,
+        br.dept_id AS dept_id,
+        d.name AS dept_name,
+        br.product_line_id AS product_line_id,
+        pl.name AS product_line_name
+      FROM sea_record sr
+      INNER JOIN business_relation br ON br.id = sr.relation_id AND br.deleted_at IS NULL
+      LEFT JOIN company c ON c.id = br.company_id
+      LEFT JOIN department d ON d.id = br.dept_id
+      LEFT JOIN product_line pl ON pl.id = br.product_line_id
+      WHERE ${whereSql}
+      ORDER BY sr.dropped_at DESC, sr.id DESC
+      LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+    `;
+    const [{ total }] = await this.prisma.$queryRaw<{ total: bigint }[]>`
+      SELECT COUNT(*) AS total
+      FROM sea_record sr
+      INNER JOIN business_relation br ON br.id = sr.relation_id AND br.deleted_at IS NULL
+      WHERE ${whereSql}
+    `;
+    return { total: Number(total), rows };
+  }
+
+  /** 掉海记录列表的范围条件（`deptIds === null` ＝ 不收敛） */
+  private seaRecordScopeFilter(deptIds: readonly bigint[] | null): Prisma.Sql {
+    if (deptIds === null) return Prisma.sql`1=1`;
+    return Prisma.sql`br.dept_id IN (${Prisma.join(
+      deptIds.map((id) => Prisma.sql`${id}`),
+      ', ',
+    )})`;
+  }
 }
 
 /** 一条经理待办候选（→ `listSeaManagerTodo` 的 raw 行） */
@@ -341,4 +403,20 @@ export interface SeaRecordSummaryRow {
   sea_entered_at: Date | null;
   /** 本次掉海原因码（→ 数据架构 F2 `sea_record.reason` 值域）；从未掉海 → `null` */
   reason: string | null;
+}
+
+/** 一条掉海记录原始行（→ `listSeaRecords`） */
+export interface SeaRecordListItemRow {
+  record_id: bigint;
+  relation_id: bigint;
+  reason: string;
+  dropped_at: Date;
+  claimed_by: bigint | null;
+  claimed_at: Date | null;
+  company_id: bigint;
+  company_name: string | null;
+  dept_id: bigint;
+  dept_name: string | null;
+  product_line_id: bigint;
+  product_line_name: string | null;
 }

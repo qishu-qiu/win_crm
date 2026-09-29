@@ -94,6 +94,23 @@ const routes: RouteRecordRaw[] = [
     meta: { page: 'sea' },
   },
   {
+    // 掉海记录（§五 页 9/10「入公海历史」的全局视图 / 接口 §5.16 `GET /sea/records`）：
+    // 谁看得到什么由后端按数据范围收敛（销售＝本部门 / 经理＝管辖 / 总·管＝全部；交付·客服 403）。
+    path: '/sea/records',
+    name: 'sea-records',
+    component: () => import('../views/SeaRecordsView.vue'),
+    meta: { page: 'sea' },
+  },
+  {
+    // 经理决策待办（§五 页 9/10「经理决策待办：超期关系 保留/删除」／
+    // 接口 §5.16 `GET /sea/manager-todo` ＋ `POST /sea/manager-decision`）：可见性由后端按角色判，
+    // 前端不自己判角色（403 当正常分支）。
+    path: '/sea/manager-decision',
+    name: 'sea-manager-decision',
+    component: () => import('../views/SeaManagerDecisionView.vue'),
+    meta: { page: 'sea' },
+  },
+  {
     path: '/relations/:id',
     name: 'relation-detail',
     component: () => import('../views/RelationDetailView.vue'),

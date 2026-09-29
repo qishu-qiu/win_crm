@@ -182,3 +182,69 @@ export class SeaManagerTodoResultDto {
   @ApiProperty({ type: [SeaManagerTodoItemDto], description: '公海停留超期的关系（按 `overdue_days` 降序）' })
   items!: SeaManagerTodoItemDto[];
 }
+
+/**
+ * 经理决策结果（→ 接口 §5.16 `POST /sea/manager-decision`）。
+ *
+ * ★ `decision` 原样回显、`deleted` ＝ 是否真的执行了删除（`keep` ＝ `false`；`delete` ＝ `true`）。
+ */
+export class ManagerDecisionResultDto {
+  @ApiProperty({ description: '决策结果：`keep`（保留）／ `delete`（已删除关系）', example: 'delete' })
+  decision!: string;
+
+  @ApiProperty({ type: Boolean, description: '是否执行了删除（`keep`=false ／ `delete`=true）' })
+  deleted!: boolean;
+}
+
+/**
+ * 一条掉海记录（→ 接口 §5.16 `GET /sea/records`）。
+ *
+ * ★ `company` / `dept` / `product_line` 用实体引用（与 §5.16 其它端点同一姿势）；
+ *   `claimed_by` 是领回员工引用（没被领回 ⇒ `null`）。
+ */
+export class SeaRecordItemDto {
+  @ApiProperty({ description: '掉海记录 id（`sea_record.id`）' })
+  record_id!: string;
+
+  @ApiProperty({ description: '业务关系 id（十进制字符串）' })
+  relation_id!: string;
+
+  @ApiProperty({ type: RelationRefDto, nullable: true, description: '公司档案（档案被逻辑删时取不到 → `null`）' })
+  company!: RelationRefDto | null;
+
+  @ApiProperty({ type: RelationRefDto, nullable: true, description: '承接部门' })
+  dept!: RelationRefDto | null;
+
+  @ApiProperty({ type: RelationRefDto, nullable: true, description: '产品线' })
+  product_line!: RelationRefDto | null;
+
+  @ApiProperty({
+    description:
+      '掉海原因码（→ 数据架构 F2 `sea_record.reason`）：`follow_timeout`(跟进超时) / `dept_manager_delete`(经理删除) 等',
+  })
+  reason!: string;
+
+  @ApiProperty({ description: '掉海时刻（ISO）' })
+  dropped_at!: string;
+
+  @ApiProperty({ type: RelationRefDto, nullable: true, description: '领回人（员工；未领回 ⇒ `null`）' })
+  claimed_by!: RelationRefDto | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '领回时刻（ISO；未领回 ⇒ `null`）' })
+  claimed_at!: string | null;
+}
+
+/** 掉海记录列表（→ 接口 §5.16 `GET /sea/records`；分页，按 `dropped_at` 倒序） */
+export class SeaRecordListResultDto {
+  @ApiProperty({ description: '总记录数' })
+  total!: number;
+
+  @ApiProperty({ type: [SeaRecordItemDto], description: '掉海记录列表（按 `dropped_at` 倒序）' })
+  list!: SeaRecordItemDto[];
+
+  @ApiProperty({ description: '当前页' })
+  page!: number;
+
+  @ApiProperty({ description: '每页条数' })
+  page_size!: number;
+}

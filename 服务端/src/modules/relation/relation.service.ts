@@ -1004,6 +1004,22 @@ export class RelationService {
   }
 
   /**
+   * 经理决策「删除关系」（→ 接口 §5.16 `POST /sea/manager-decision`；F 域编排）。
+   *
+   * ★ 本方法只做 C 域这一半：校验关系**在公海（`company_sea`）且未删** ＋ 逻辑删；
+   *   写 `sea_record`（`reason=dept_manager_delete`）是 F 域的表，由 F 域 service 在调完本方法之后落
+   *   （架构 §5.2 跨域三条路：要同步结果才调对方 service）。
+   * ★ 返回 `null` ＝ 关系不存在或不在公海（调用方据此给 400：`sea.relation_not_in_sea`）；
+   *   返回 `{ ownerId }` ＝ 已逻辑删，并带出"被删时归属人"供 F 域写 `sea_record.owner_id`。
+   */
+  async softDeleteRelation(relationId: bigint, operatorId: bigint): Promise<boolean> {
+    const seaStatus = await this.repository.findRelationSeaStatus(relationId);
+    if (seaStatus === null || seaStatus !== COMPANY_SEA_STATUS) return false;
+    const count = await this.repository.softDeleteRelation(relationId, operatorId);
+    return count === 1;
+  }
+
+  /**
    * 改关系属性（→ §5.6 `PUT /relations/:id`）。
    *
    * ★ 「非灰度必标开发价值」判的是**合并后的最终态**（`urgency` / `value_tier` 各自取改完的样子）：

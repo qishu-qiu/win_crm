@@ -309,7 +309,7 @@ export class SeaRepository {
           ) AS rn
         FROM business_relation br
         INNER JOIN sea_record sr
-          ON sr.relation_id = br.id AND sr.deleted_at IS NULL
+          ON sr.relation_id = br.id
         WHERE br.deleted_at IS NULL
           AND br.sea_status = 'company_sea'
           AND br.id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}`), ', ')})

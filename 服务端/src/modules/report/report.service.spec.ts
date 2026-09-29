@@ -1,9 +1,10 @@
 // =============================================================================
-// 报表/看板服务用例（M8-06 Phase 4 切片②）—— **假数据，不连库**
+// 报表/看板服务用例（M8-06 Phase 4 切片②/③）—— **假数据，不连库**
 //
-// 钉的是**编排**：权限（销售 403）、KPI 聚合、以及 `sea_todo` 复用 `SeaService.listManagerTodo()`
-//（不重复实现规则解析）。5 个占位列表（pending_todo / warnings / dept_compare / top_sales /
-// zombie_weekly）本版回 `[]`，形状待规格补全（→ 欠账 D-33 ⑤）。
+// 钉的是**编排**：权限（销售 403）、KPI 聚合、5 个列表分区（pending_todo /
+// warnings / dept_compare / top_sales / zombie_weekly）**本版落真实结构**，
+// 以及 `sea_todo` 复用 `SeaService.listManagerTodo()`（不重复实现规则解析、
+// `warnings` 的 `sea_drop` 卡直接由 sea_todo 派生）。
 // =============================================================================
 import { AppError, type RequestContext, runWithContext } from '../../kernel/index';
 import { type SeaManagerTodoResult, SeaService } from '../sea/sea.service';
@@ -26,6 +27,12 @@ function createService(managerTodo?: SeaManagerTodoResult): ServiceHarness {
     sumMonthSigned: jest.fn<Promise<{ amount: number; chainRatio: number | null }>, [readonly bigint[] | null, unknown]>(
       async () => ({ amount: 0, chainRatio: null }),
     ),
+    listPendingTodo: jest.fn<Promise<unknown[]>, [readonly bigint[] | null, unknown, number?]>(async () => []),
+    listContractExpire: jest.fn<Promise<unknown[]>, [readonly bigint[] | null, unknown, unknown, number?]>(async () => []),
+    listNewBiz: jest.fn<Promise<unknown[]>, [readonly bigint[] | null, unknown, number?]>(async () => []),
+    listDeptCompare: jest.fn<Promise<unknown[]>, [readonly bigint[] | null, unknown]>(async () => []),
+    listTopSales: jest.fn<Promise<unknown[]>, [readonly bigint[] | null, unknown, number?]>(async () => []),
+    listZombieWeekly: jest.fn<Promise<unknown[]>, [readonly bigint[] | null, unknown, unknown, number?]>(async () => []),
   } as unknown as jest.Mocked<ReportRepository>;
 
   const sea = {
@@ -51,7 +58,7 @@ function saleContext(): RequestContext {
   return { userId: 7n, roles: ['sale'], dataScope: { type: 'self' }, scopeNote: '' } as unknown as RequestContext;
 }
 
-describe('ReportService.getDashboard（M8-06 Phase 4 切片②）', () => {
+describe('ReportService.getDashboard（M8-06 Phase 4 切片②/③）', () => {
   it('销售（self 范围）→ 403 / report.dashboard.forbidden，且不查库', async () => {
     const { service, repository, sea } = createService();
 
@@ -70,7 +77,7 @@ describe('ReportService.getDashboard（M8-06 Phase 4 切片②）', () => {
     expect(sea.listManagerTodo).not.toHaveBeenCalled();
   });
 
-  it('经理 → 聚合 KPI ＋ 复用 sea_todo（占位列表回 `[]`）', async () => {
+  it('经理 → 聚合 KPI ＋ 复用 sea_todo ＋ 5 区落真实结构', async () => {
     const managerTodo: SeaManagerTodoResult = {
       total: 2,
       items: [
@@ -92,10 +99,12 @@ describe('ReportService.getDashboard（M8-06 Phase 4 切片②）', () => {
 
     expect(result.kpi).toBeDefined();
     expect(result.sea_todo.total).toBe(2);
-    expect(result.pending_todo).toEqual([]);
-    expect(result.warnings).toEqual([]);
-    expect(result.dept_compare).toEqual([]);
-    expect(result.top_sales).toEqual([]);
-    expect(result.zombie_weekly).toEqual([]);
+    // 5 个分区均返回数组（repository 假数据为空，结构已成型）
+    expect(Array.isArray(result.pending_todo)).toBe(true);
+    expect(Array.isArray(result.dept_compare)).toBe(true);
+    expect(Array.isArray(result.top_sales)).toBe(true);
+    expect(Array.isArray(result.zombie_weekly)).toBe(true);
+    // warnings 的 sea_drop 卡由 sea_todo 同源派生
+    expect(result.warnings.filter((w) => w.type === 'sea_drop').length).toBe(1);
   });
 });

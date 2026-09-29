@@ -31,6 +31,7 @@ export type RoleCode = 'sale' | 'service' | 'delivery' | 'dept_manager' | 'gm' |
 
 /** 已建页面的键（与 §五 页面清单的编号对应关系写在下方各行注释里） */
 export type PageKey =
+  | 'dashboard'
   | 'workbench'
   | 'entry'
   | 'relations'
@@ -38,6 +39,9 @@ export type PageKey =
   | 'contacts'
   | 'contactDetail'
   | 'appearance'
+  // 系统设置（§五 页 25）：本轮只建成「公海规则」一个子页（其余 5 子页建设中，不摆假入口，
+  // →《欠账登记表》D-70）；页签级落点，故登记为独立 PageKey 由路由 / 守卫接矩阵。
+  | 'settings'
   // ⚠ **不是独立路由**：§五 页 9/10「系统公海 / 部门公海」尚未建页，当前由**业务关系列表页的
   //   「公海」页签**代位（M3-14 起）。§4.2 那两格只有这一个落点，故登记在这里；等独立页建成，
   //   把消费方从页签换成页面即可（`pageAccessOf(role,'sea')` 不用动）。
@@ -58,6 +62,17 @@ const RELATION_PAGE_ROW: Record<RoleCode, PageAccess> = {
 
 /** 逐行抄自 §4.2 矩阵（已建页面 5 行 ＋ 公海页签 1 行；每行注释＝矩阵里对应的「页面」格） */
 const ACCESS: Record<PageKey, Record<RoleCode, PageAccess>> = {
+  // 数据看板：销售 🔒 个人视角（含「我的日报」）｜ 交付 / 客服 ➖ ｜ 经理 ✅ 部门盘＋目标＋僵尸榜＋公海决策 ｜ 总经理 ✅ 全公司＋总目标＋分部门 ｜ 管理员 ➖
+  // ⚠ 「个人视角（我的日报）」端点尚未建，销售现被 `GET /reports/dashboard` 403（→ 接口 §5.13）；
+  //   按矩阵登记 🔒（可见），页面侧对 403 给「个人视角即将上线」占位，不在此改矩阵去对齐接口。
+  dashboard: {
+    sale: 'readonly',
+    service: 'hidden',
+    delivery: 'hidden',
+    dept_manager: 'full',
+    gm: 'full',
+    admin: 'hidden',
+  },
   // 工作台：销售 ✅ ｜ 交付 / 客服 ✅ ｜ 经理 ✅ ｜ 总经理 ✅ ｜ 管理员 ➖
   workbench: {
     sale: 'full',
@@ -91,6 +106,18 @@ const ACCESS: Record<PageKey, Record<RoleCode, PageAccess>> = {
     sale: 'full',
     service: 'full',
     delivery: 'full',
+    dept_manager: 'full',
+    gm: 'full',
+    admin: 'full',
+  },
+  // 系统设置（§五 页 25；当前仅「公海规则」子页可用，→ D-70）：
+  // 谁能进＝接口 §5.16 的读权限口径 —— 老板 / 管理员看全部、部门经理看管辖部门、
+  // **销售与交付 / 客服 403**（公海＝作业池，不参与客户经营，→ 需求 §4.2）。
+  // ⚠ 与矩阵 §4.2「系统设置整块给管理员」一致；部门经理能进是因为其管辖部门的 L3/L4 规则可配。
+  settings: {
+    sale: 'hidden',
+    service: 'hidden',
+    delivery: 'hidden',
     dept_manager: 'full',
     gm: 'full',
     admin: 'full',
@@ -192,6 +219,7 @@ export interface NavGroup {
  */
 const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   // §4.1 顺序：数据看板 → 工作台 → 预约管理 → 业务关系 → 录入 → …（未建的整段跳过）
+  { key: 'dashboard', label: '数据看板', page: 'dashboard', path: '/dashboard', children: [] },
   { key: 'workbench', label: '工作台', page: 'workbench', path: '/', children: [] },
   { key: 'relations', label: '业务关系', page: 'relations', path: '/relations', children: [] },
   { key: 'entry', label: '录入', page: 'entry', path: '/entry', children: [] },
@@ -201,6 +229,9 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
     label: '客户档案',
     children: [{ page: 'contacts', path: '/contacts', label: '联系人档案' }],
   },
+  // §4.1 一级菜单「系统设置」（页 25）：本轮只建成「公海规则」子页，菜单只挂这一项入口，
+  // 其余 5 子页未建、不摆（→ D-70）。建子页在这里加叶子（不另立路由/判权）。
+  { key: 'settings', label: '系统设置', page: 'settings', path: '/settings', children: [] },
 ]
 
 /** 扁平化的菜单叶子（顺序＝侧栏从上到下；落点计算与测试用） */

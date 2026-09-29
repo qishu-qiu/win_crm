@@ -88,6 +88,14 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/AppearanceView.vue'),
     meta: { page: 'appearance' },
   },
+  {
+    // 系统设置（§五 页 25）：本轮只建成「公海规则」一个子页（其余 5 子页建设中，
+    // 页内以「建设中」展示、不摆假路由，→ 欠账 D-70）；可见性由 `access.ts` 矩阵接。
+    path: '/settings',
+    name: 'settings',
+    component: () => import('../views/SystemSettingsView.vue'),
+    meta: { page: 'settings' },
+  },
   // 未知路径 → 回工作台（**不留在白屏**；登录与否由守卫先处理，角色可见性由守卫兜底）
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]

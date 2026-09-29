@@ -5,7 +5,7 @@ import { reactive } from 'vue'
  * 记一条跟单（写跟单表单的**复用件**）—— 架构 §4.4 约定 2「第二次出现就必须搬进 `components/`」。
  *
  * ★ 本件是**第三次**出现同款表单（关系列表页时间线抽屉 / 联系人详情页 / 录入页结果态），
- *   抽件收口、统一一处。两处既有内联表单**本批迁移留作下一批**（登记欠账），新增调用方一律用本件。
+ *   抽件收口、统一一处。两处既有内联表单（关系列表抽屉「记一条跟单」/ 联系人详情「待关联」）**已迁至本件**（→ D-72，2026-09-29），新增调用方一律用本件。
  *
  * ★ **架构约束（§4.4）**：组件**不许 import `api/`**——下拉选项由**页面喂进**（`actionTypeOptions` /
  *   `outcomeOptions`），提交也由**页面接 `submit` 事件后自己调接口**（组件不连接口、不弹提示）。
@@ -22,7 +22,7 @@ import { reactive } from 'vue'
  *   `POST /contacts/:id/events` 会 403 指引改到关系里记（→ 接口 §5.7），故页面只在待关联处摆本件。
  */
 /** 写跟单表单抛给父页的草稿（→ 架构 §4.4：组件不连接口，由页面接 `submit` 后自己调） */
-interface EventComposerDraft {
+export interface EventComposerDraft {
   action_type: string
   outcome?: string
   summary?: string

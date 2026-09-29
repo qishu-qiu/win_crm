@@ -63,6 +63,8 @@ import HoverCard from '../components/HoverCard.vue'
 import PageContainer from '../components/PageContainer.vue'
 import PersonChip from '../components/PersonChip.vue'
 import StatusTag from '../components/StatusTag.vue'
+import EventComposer from '../components/EventComposer.vue'
+import type { EventComposerDraft } from '../components/EventComposer.vue'
 
 /**
  * 业务关系列表页（M3-14 起 · 方案 A 最小页）—— **私海 / 公海两个页签**，
@@ -471,14 +473,6 @@ const drawerTitle = computed(() =>
     : `时间线 · ${activeRelation.value.company?.name ?? '（档案已删除）'}`,
 )
 
-/** 写跟单表单（默认「电话 + 有进展」——最常见的一次有效沟通） */
-const eventForm = ref<{
-  action_type: string
-  outcome: string
-  summary: string
-  duration_min: number | null
-}>({ action_type: 'phone', outcome: 'advanced', summary: '', duration_min: null })
-
 /** 建承诺表单（→ 需求 §10.1：三快选：我发资料 / 他给答复 / 约见面） */
 const commitmentForm = ref({ party: 'me', ctype: 'deliver', content: '', due_at: '' })
 
@@ -652,21 +646,19 @@ function onDrawerClose(): void {
   valueTierDraft.value = null
 }
 
-async function submitEvent(): Promise<void> {
+async function submitEvent(draft: EventComposerDraft): Promise<void> {
   const relation = activeRelation.value
   if (relation === null) return
 
-  const input: RecordEventInput = { action_type: eventForm.value.action_type }
-  if (eventForm.value.outcome !== '') input.outcome = eventForm.value.outcome
-  if (eventForm.value.summary.trim() !== '') input.summary = eventForm.value.summary.trim()
-  if (eventForm.value.duration_min !== null) input.duration_min = eventForm.value.duration_min
+  const input: RecordEventInput = { action_type: draft.action_type }
+  if (draft.outcome !== undefined && draft.outcome !== '') input.outcome = draft.outcome
+  if (draft.summary !== undefined && draft.summary.trim() !== '') input.summary = draft.summary.trim()
+  if (draft.duration_min !== undefined && draft.duration_min !== null) input.duration_min = draft.duration_min
 
   submittingEvent.value = true
   try {
     await recordEvent(relation.id, input)
     message.success('已记下这条跟单')
-    eventForm.value.summary = ''
-    eventForm.value.duration_min = null
     await refreshTimeline()
     // 列表上的「最近沟通」也要跟着变（同一次动作，两处显示不能不一致）
     await load()
@@ -927,30 +919,13 @@ async function submitWaive(commitment: Commitment): Promise<void> {
 
       <template v-else>
         <h3 class="drawer-section">记一条跟单</h3>
-        <div class="drawer-form">
-          <a-select
-            v-model:value="eventForm.action_type"
-            :options="actionTypeOptions"
-            style="width: 120px"
-          />
-          <a-select
-            v-model:value="eventForm.outcome"
-            :options="outcomeOptions"
-            style="width: 170px"
-          />
-          <a-input
-            v-model:value="eventForm.summary"
-            placeholder="一句话结果（有效沟通必填）"
-            style="width: 240px"
-          />
-          <a-input-number
-            v-model:value="eventForm.duration_min"
-            :min="1"
-            placeholder="分钟"
-            style="width: 100px"
-          />
-          <a-button type="primary" :loading="submittingEvent" @click="submitEvent">记下来</a-button>
-        </div>
+        <EventComposer
+          :mode="'relation'"
+          :action-type-options="actionTypeOptions"
+          :outcome-options="outcomeOptions"
+          :submitting="submittingEvent"
+          @submit="submitEvent"
+        />
       </template>
 
       <h3 class="drawer-section">时间线（按时间倒序，默认近 1 个月）</h3>

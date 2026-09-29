@@ -33,8 +33,8 @@ export class CompanyAggregateController {
       '★ `event_count_30d`：**近 30 个自然日**该公司各关系下的跟单条数合计（**派生、不落列**）；' +
       '**只计当前查看者可见的关系**（＝私海那四档范围），**不计系统事件**（建档 / 领取）。' +
       '⚠ 故同一家公司，不同的人看到的这个数字**可以不同**（各自的可见范围不同）—— 这是口径，不是 bug。' +
-      '★ `relations_summary` 本期**仅含业务线**（dept / product_line）；`sign_date`/`amount`（E 域合同）待补，' +
-      '**不编假值**。★ **公司档案本身是全公司共享资料层，不做数据范围过滤。**',
+      '★ `relations_summary`：`dept` / `product_line` 来自 C 域，`sign_date`（该线最近签约日）/ `amount`（该线已签约金额合计）来自 E 域合同' +
+      '（按「部门×业务线」聚合，→ D-61 桥③，2026-09-29 已补）。★ **公司档案本身是全公司共享资料层，不做数据范围过滤。**',
   })
   @ApiParam({ name: 'id', description: '公司 id（十进制字符串）' })
   @ApiOkResponse({ type: CompanyDetailVoDto })

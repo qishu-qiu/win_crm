@@ -850,7 +850,9 @@ export class RelationRepository {
   findRelationsByCompany(companyId: bigint) {
     return this.prisma.businessRelation.findMany({
       where: { company_id: companyId, deleted_at: null, merged_into: null },
-      select: { dept_id: true, product_line_id: true },
+      // ★ 多查 `id`：聚合层要把「部门×业务线」组合里的每条关系 id 收集起来，
+      //   才能按 relation_id 把 E 域已签约合同（sign_date / amount）聚合进 `relations_summary`（→ D-61）
+      select: { id: true, dept_id: true, product_line_id: true },
     });
   }
 }

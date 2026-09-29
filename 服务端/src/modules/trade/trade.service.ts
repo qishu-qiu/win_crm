@@ -168,6 +168,25 @@ export class TradeService {
   }
 
   /**
+   * 某公司已签约合同（sign_date 非空）按关系归组（→ D-61 桥③ 聚合层拼 `relations_summary`）。
+   *
+   * ★ 不收敛数据范围：公司详情是全公司共享资料层（→ §5.4），业务线签约信息全公司可见。
+   * ★ `sign_date` 格式与 `buildVo` 同（`toISOString()`，`→ trade.service.ts:307`）；
+   *   `amount` 是 `Decimal(12,2)` → 转字符串（前端按字符串展示，避免浮点漂移）。
+   * ★ 此处**只取、不写**，不标 `@Audit`（不是业务写动作）。
+   */
+  async getSignedContractsByCompany(
+    companyId: bigint,
+  ): Promise<{ relation_id: bigint; sign_date: string | null; amount: string }[]> {
+    const rows = await this.repository.findSignedContractsByCompanyId(companyId);
+    return rows.map((row) => ({
+      relation_id: row.relation_id,
+      sign_date: row.sign_date === null ? null : row.sign_date.toISOString(),
+      amount: row.amount.toString(),
+    }));
+  }
+
+  /**
    * 合同列表（→ §5.9 `GET /contracts`；按数据范围四档收敛）。
    *
    * ★ 档位判定走 `context.dataScope`（→ 架构 §7.1 横切层）：`all` 全公司、`dept` 管辖部门、

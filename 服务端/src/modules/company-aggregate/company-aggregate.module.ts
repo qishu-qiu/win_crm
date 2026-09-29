@@ -23,11 +23,14 @@ import { Module } from '@nestjs/common';
 import { CompanyModule } from '../company/company.module';
 import { EngineModule } from '../engine/engine.module';
 import { RelationModule } from '../relation/relation.module';
+import { TradeModule } from '../trade/trade.module';
 import { CompanyAggregateController } from './company-aggregate.controller';
 import { CompanyAggregateService } from './company-aggregate.service';
 
 @Module({
-  imports: [CompanyModule, RelationModule, EngineModule],
+  // ★ D-61 补 `sign_date` / `amount`：聚合层合法 import E 域（TradeModule）取已签约合同，
+  //   业务域零改动（桥③ 长期价值）；TradeModule 已 `exports: [TradeService]`
+  imports: [CompanyModule, RelationModule, EngineModule, TradeModule],
   controllers: [CompanyAggregateController],
   providers: [CompanyAggregateService],
 })

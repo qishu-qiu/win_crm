@@ -595,6 +595,50 @@ export class RelationService {
     );
   }
 
+  /**
+   * 部门公海列表（`GET /sea/department`，Phase 6）—— 在 viewer 公海范围内**按单个部门**收敛。
+   *
+   * ★ 与 `listRelations('sea')` 同源：同一套分页 / 筛选 / 排序 / 范围判定 ＋ 同一套 `RelationVo` 映射，
+   *   只是把范围从「全量（all）/ 管辖部门（dept）」进一步收成「指定的那一个部门」。
+   * ★ 范围校验：公海读门口径由 `resolveRelationListScope('sea')` 给（销售＝本部门 / 经理＝管辖 /
+   *   总·管＝全部）；指定部门**必须在范围内**，否则 403（不许用 400 反推「这个部门有没有公海」）。
+   * ★ 落点：复用本域私海 / 公海列表的同一管道（`listByDepts` ＋ `loadRefs` ＋ `buildVo`），不另写一套。
+   */
+  async listSeaRelationsByDept(
+    deptId: string,
+    query: RelationListQuery = {},
+  ): Promise<PageResult<RelationVo>> {
+    const viewer = requireViewer();
+    const scope = resolveRelationListScope('sea', viewer);
+    if (scope.kind === 'denied') {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权限：交付 / 客服不进公海', {
+        constraint: 'relation.sea.denied',
+      });
+    }
+    const deptIdValue = jsonToBigint(deptId, 'dept_id');
+    if (scope.kind !== 'all' && !scope.deptIds.includes(deptIdValue)) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '无权查看其他部门的公海', {
+        constraint: 'relation.out_of_scope',
+      });
+    }
+
+    const pagination = resolvePagination(query);
+    const filter = buildRelationListFilter(query.view, query.urgencies);
+    const options: RelationListOptions = {
+      orderField: query.orderField,
+      desc: query.desc,
+      keyword: query.keyword,
+    };
+    const { rows, total } = await this.listByDepts('sea', [deptIdValue], filter, pagination, options);
+
+    const refs = await this.loadRefs(rows);
+    return buildPageResult(
+      rows.map((row) => this.buildVo(row, refs)),
+      total,
+      pagination,
+    );
+  }
+
   // ===== M3-10 详情 / 改属性 =====
 
   /** 关系详情（→ §5.6；本批 ＝ 列表项 ＋ 成员） */
@@ -713,11 +757,19 @@ export class RelationService {
    * ★ 跨域拼装：dept / product_line 名字走 org 出口（A 域），C 域不许查 `department` / `product_line` 表。
    * ★ 返回**去重**后的业务线（同一 部门×产品线 只列一次）；引用取不到（已删）的条目跳过、不编名字。
    * ★ 不收敛数据范围：公司详情是全公司共享资料层，业务线列表同样全公司可见（→ §13.2）。
-   * ⚠ **不含** `sign_date` / `amount`：那在 E 域 `contract`（本期未建 module）⇒ 聚合层待补、不编假值。
+   * ★ `relation_ids`：同一「部门×业务线」组合可能对应多条关系（去重只发生在展示层），
+   *   故这里把组合里**每条关系的 id** 都收齐，交给聚合层按 relation_id 把 E 域已签约合同
+   *   （`sign_date` / `amount`）聚合进 `relations_summary`（→ D-61 桥③）。
+   *   ⚠ `relation_ids` 是**内部拼装用的中间字段**：聚合层会把它从 HTTP 出参里剥掉，
+   *   只在服务层返回里存在（→ `company-aggregate.service.ts`）。
    */
   async getRelationsByCompany(
     companyId: bigint,
-  ): Promise<{ dept: { id: bigint; name: string }; product_line: { id: bigint; name: string; color_key: string | null } }[]> {
+  ): Promise<{
+    dept: { id: bigint; name: string };
+    product_line: { id: bigint; name: string; color_key: string | null };
+    relation_ids: bigint[];
+  }[]> {
     const rows = await this.repository.findRelationsByCompany(companyId);
     if (rows.length === 0) return [];
 
@@ -732,19 +784,30 @@ export class RelationService {
       productLines.map((line) => [line.id.toString(), { name: line.name, colorKey: line.color_key }]),
     );
 
-    const seen = new Set<string>();
-    const result: { dept: { id: bigint; name: string }; product_line: { id: bigint; name: string; color_key: string | null } }[] = [];
+    // ★ 按「部门×业务线」去重，但**保留**同一组合下每条关系的 id（供聚合层挂合同）
+    const seen = new Map<string, number>();
+    const result: {
+      dept: { id: bigint; name: string };
+      product_line: { id: bigint; name: string; color_key: string | null };
+      relation_ids: bigint[];
+    }[] = [];
     for (const row of rows) {
       const key = `${row.dept_id.toString()}:${row.product_line_id.toString()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const existing = seen.get(key);
       const deptNameValue = deptName.get(row.dept_id.toString());
       const line = productLineMap.get(row.product_line_id.toString());
       if (deptNameValue === undefined || line === undefined) continue;
-      result.push({
-        dept: { id: row.dept_id, name: deptNameValue },
-        product_line: { id: row.product_line_id, name: line.name, color_key: line.colorKey },
-      });
+
+      if (existing === undefined) {
+        result.push({
+          dept: { id: row.dept_id, name: deptNameValue },
+          product_line: { id: row.product_line_id, name: line.name, color_key: line.colorKey },
+          relation_ids: [row.id],
+        });
+        seen.set(key, result.length - 1);
+      } else {
+        result[existing].relation_ids.push(row.id);
+      }
     }
     return result;
   }

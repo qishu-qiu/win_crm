@@ -222,6 +222,18 @@ export class TradeRepository {
     return { rows, total };
   }
 
+  /**
+   * 某公司**已签约**合同（sign_date 非空）的「关系 → 签约日期 / 金额」组。
+   * ★ 签约口径＝`sign_date IS NOT NULL`（系统**无 `signed` 状态**，→ `domain/contract.ts` 状态枚举）；
+   *   逻辑删跳过。仅取聚合层要的三列（→ D-61 桥③ 拼 `relations_summary`）。
+   */
+  findSignedContractsByCompanyId(companyId: bigint) {
+    return this.prisma.contract.findMany({
+      where: { company_id: companyId, deleted_at: null, sign_date: { not: null } },
+      select: { relation_id: true, sign_date: true, amount: true },
+    });
+  }
+
   /** 全部（`all` 档：总经理 / 管理员；管理员只读在 service 层拦） */
   listContractsAll(filter: ContractFilter, pagination: Pagination, options: ContractListOptions) {
     return this.pageOf({ deleted_at: null }, filter, pagination, options);

@@ -387,13 +387,26 @@ export class ProductLineRefVoDto {
   color_key!: string | null;
 }
 
-/** 业务线列表项（→ §5.4 `relations_summary` 本期子集；dept / product_line 由 C 域拼装） */
+/** 业务线列表项（→ §5.4 `relations_summary`；dept / product_line 来自 C 域，sign_date / amount 来自 E 域合同，由聚合层拼装） */
 export class RelationsSummaryItemVoDto {
   @ApiProperty({ type: DeptRefVoDto, description: '部门（A 域引用）' })
   dept!: DeptRefVoDto;
 
   @ApiProperty({ type: ProductLineRefVoDto, description: '业务线（A 域引用，含固定配色键）' })
   product_line!: ProductLineRefVoDto;
+
+  @ApiProperty({
+    description: '该业务线最近签约日期（ISO 串；多条合同取最大；无签约合同为 `null`，→ D-61 桥③）',
+    example: '2026-09-01T00:00:00.000Z',
+    nullable: true,
+  })
+  sign_date!: string | null;
+
+  @ApiProperty({
+    description: '该业务线已签约合同金额合计（字符串，两位小数；单位＝元；多个合同求和，→ D-61 桥③）',
+    example: '120000.00',
+  })
+  amount!: string;
 }
 
 /**
@@ -435,8 +448,9 @@ export class CompanyDetailVoDto extends CompanyVoDto {
   @ApiProperty({
     type: [RelationsSummaryItemVoDto],
     description:
-      '业务线列表（→ §5.4 `relations_summary` 本期子集，D-61 桥③ 聚合层拼装）。' +
-      '仅含 `dept` / `product_line`；`sign_date` / `amount`（E 域合同）待补，不编假值',
+      '业务线列表（→ §5.4 `relations_summary`，D-61 桥③ 聚合层拼装）：' +
+      '`dept` / `product_line` 来自 C 域；`sign_date`（该线最近签约日）/ `amount`（该线已签约金额合计）来自 E 域合同。' +
+      '★ 签约口径＝合同 `sign_date` 非空；金额跨同一「部门×业务线」多条合同求和（字符串两位小数，单位元）',
   })
   relations_summary!: RelationsSummaryItemVoDto[];
 

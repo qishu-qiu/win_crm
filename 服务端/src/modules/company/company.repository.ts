@@ -125,10 +125,11 @@ export interface CreateContactData {
   created_by: bigint;
   /**
    * ★ 待关联（未挂公司）联系人的**归属人** ＝ 建档录入人（→ 需求 §6.1 ⑦，migration `0007`）。
-   * ⚠ 建档时**总是**写（哪怕当场就挂了公司）：挂公司后归属改走 `business_relation` 的 owner 成员、
-   *   本列不再参与判定 —— 保留值无害，且「先建档、后补公司」的路径不必再回填一次。
+   * ⚠ 带 `company_id` 建档（当场就挂公司）时 `owner_id` 置 `null`：归属改走 `business_relation` 的 owner
+   *   成员（→ 需求 §6.1 ⑦；与「激活业务关系」动线同口径，→ D-76），否则 `engine.recordContactEvent`
+   *   的「已挂公司的人 `owner_id` 为 `null`」不变式被破、绕过「请到业务关系里记」的 403。
    */
-  owner_id: bigint;
+  owner_id: bigint | null;
   extra_phones?: { type: string; number: string; note?: string }[];
   wechat?: string;
   email?: string;

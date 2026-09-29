@@ -500,8 +500,8 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       expect(repository.createContact.mock.calls[0]?.[0]).toMatchObject({
         phone: '13800000000',
         name: '张伟',
-        // ★ 归属＝建档人（→ 需求 §6.1 ⑦）
-        owner_id: OPERATOR_ID,
+        // ★ 带 company_id 建档＝当场已挂公司 ⇒ owner_id 置 null（归属走业务关系 owner，→ D-76）
+        owner_id: null,
       });
       expect(repository.createCompanyContact).toHaveBeenCalledWith(
         { company_id: 3n, contact_id: 11n, position: '采购总监' },

@@ -436,8 +436,10 @@ export class CompanyService {
             name: dto.name.trim(),
             phone,
             created_by: operatorId,
-            // ★ 归属＝建档人自己（→ 需求 §6.1 ⑦）：未挂公司期间，这条线索出现在**他**的「我的待关联」里
-            owner_id: operatorId,
+            // ★ 带 `company_id` 建档＝当场已挂公司 ⇒ 归属走业务关系 owner，本列置 `null`
+            //   （→ 需求 §6.1 ⑦；否则 `engine.recordContactEvent` 的「已挂公司 `owner_id` 为 `null`」
+            //   不变式被破、绕过「请到业务关系里记」的 403，→ D-76）；未挂公司才归建档人自己
+            owner_id: companyId !== undefined ? null : operatorId,
             ...(dto.extra_phones === undefined ? {} : { extra_phones: dto.extra_phones }),
             ...(dto.wechat === undefined ? {} : { wechat: dto.wechat }),
             ...(dto.email === undefined ? {} : { email: dto.email }),

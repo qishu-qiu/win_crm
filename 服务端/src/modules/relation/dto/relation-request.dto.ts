@@ -237,3 +237,17 @@ export class AddRelationMemberDto {
   @IsDateString({}, { message: 'valid_until 需为 ISO 日期字符串' })
   valid_until?: string;
 }
+
+/**
+ * `GET /sea/department` 查询参数（→ §5.16，Phase 6）：
+ * 复用 `ListRelationQueryDto` 的分页 / 筛选（view / urgency）/ 排序 / 关键词，外加**必填** `dept_id`。
+ *
+ * ★ `dept_id` 必填：部门公海只列该部门下的公海关系；范围校验（必须是 viewer 可读部门）在
+ *   C 域 `listSeaRelationsByDept` 内做（越范围 → 403，不反推"这个部门有没有公海"）。
+ */
+export class ListSeaDepartmentQueryDto extends ListRelationQueryDto {
+  @ApiProperty({ description: '部门 id（十进制字符串）；部门公海只列该部门下的公海关系' })
+  @IsString({ message: 'dept_id 必须是字符串' })
+  @Length(1, 32, { message: 'dept_id 长度不合法' })
+  dept_id!: string;
+}

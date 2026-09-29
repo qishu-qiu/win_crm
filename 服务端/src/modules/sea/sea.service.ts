@@ -158,6 +158,20 @@ export interface SeaManagerTodoItem {
   overdue_days: number;
 }
 
+/** 一条公海关系的「停留信息」出参（→ 接口 §5.16 列表项附加字段；`GET /sea/company` · `/sea/department` 卡片） */
+export interface SeaStayInfoVo {
+  /** 最近一次入公海时刻（ISO） */
+  sea_entered_at: string | null;
+  /** 入海原因码（→ 数据架构 F2 `sea_record.reason`）；`null` ＝ 取不到历史行 */
+  sea_reason: string | null;
+  /** 已在公海停留的自然日数（北京时间日界） */
+  days_in_sea: number;
+  /** 适用公海停留阈值（`sea_rule.stay_days`；取不到规则 ⇒ `null`） */
+  stay_days: number | null;
+  /** 剩余天数 ＝ `stay_days − days_in_sea`；负数＝已超期；`stay_days` 为 `null` ⇒ `null` */
+  remaining_days: number | null;
+}
+
 /** 经理待办结果（→ 接口 §5.16） */
 export interface SeaManagerTodoResult {
   /** 超期待决策的客户数 */
@@ -797,6 +811,62 @@ export class SeaService {
         relation_ids: batch.relationIds.map((id) => id.toString()),
       },
     });
+  }
+
+  /**
+   * 一批公海关系的「停留信息」（→ 接口 §5.16 `GET /sea/company` · `/sea/department` 卡片）：
+   * 最近入海时刻 / 入海原因 / 在公海天数 / 适用 `stay_days` / 剩余天数。
+   *
+   * ★ 口径**逐字复用** `listManagerTodo` 那套：规则解析（`resolveSeaRuleFor` L4→L1 ＋ 7 天缓冲）
+   *   ＋ 北京时间自然日差（`calendarDaysSince`）—— 两处算出来的"剩余天数"必须一致（同一事实两个落点＝本项目一号坑）。
+   * ★ 取不到就给 `null`（无规则命中 / 规则没配 `stay_days` ⇒ 不编默认天数、不编 0）；
+   *   负数 `remaining_days` ＝ 已超期（在公海天数已超过 `stay_days`）。
+   * ★ **本方法不做数据范围收敛**（与 `listDropCountdown` 同性质，服务的是装配层）；入参 id 必须来自
+   *   C 域已收敛过的列表出口（`listRelations` / `listSeaRelationsByDept`）。
+   *
+   * @returns `关系 id（十进制字符串）→ 停留信息`；没有 `sea_record` 的关系**不在 map 里**。
+   */
+  async listSeaStayInfo(
+    relationIds: readonly bigint[],
+  ): Promise<Map<string, SeaStayInfoVo>> {
+    const map = new Map<string, SeaStayInfoVo>();
+    if (relationIds.length === 0) return map;
+
+    const now = new Date();
+    const [records, ruleRows] = await Promise.all([
+      this.repository.listLatestSeaRecords(relationIds),
+      this.repository.listActiveRulesForConfig(null),
+    ]);
+
+    const rules: (SeaRuleLike & { stayDays: number | null })[] = ruleRows.map((row) => ({
+      level: row.level,
+      deptId: row.dept_id,
+      productLineId: row.product_line_id,
+      followFreqDays: row.follow_freq_days,
+      effectiveFrom: row.effective_from,
+      stayDays: row.stay_days,
+    }));
+
+    for (const rec of records) {
+      if (rec.sea_entered_at === null) continue;
+      // ★ 窄化：入参 `rules` 已带 `stayDays`，但 `resolveSeaRuleFor` 返回类型只写 `SeaRuleLike`，
+      //   这里断言回「带 stayDays」以取停留阈值（→ 与 `listManagerTodo` 同一取值路径）。
+      const rule = resolveSeaRuleFor(
+        rules,
+        { deptId: rec.dept_id, productLineId: rec.product_line_id },
+        now,
+      ) as (SeaRuleLike & { stayDays: number | null }) | undefined;
+      const stayDays = rule?.stayDays ?? null;
+      const daysInSea = calendarDaysSince(rec.sea_entered_at, now);
+      map.set(rec.relation_id.toString(), {
+        sea_entered_at: rec.sea_entered_at.toISOString(),
+        sea_reason: rec.reason,
+        days_in_sea: daysInSea,
+        stay_days: stayDays,
+        remaining_days: stayDays === null ? null : stayDays - daysInSea,
+      });
+    }
+    return map;
   }
 }
 

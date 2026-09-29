@@ -236,7 +236,17 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   { key: 'workbench', label: '工作台', page: 'workbench', path: '/', children: [] },
   // §4.1 顺序：工作台 → **预约管理** → 业务关系（页 4；默认落「过期」Tab，→ 前端文档 §五 页 4）。
   { key: 'appointment', label: '预约管理', page: 'appointment', path: '/appointment/expired', children: [] },
-  { key: 'relations', label: '业务关系', page: 'relations', path: '/relations', children: [] },
+  {
+    // §4.1 一级菜单「业务关系」：本轮建成「我的关系」＋ 公海两页（系统 / 部门，→ §五 页 9/10）。
+    // 公海两页复用已登记的 `sea` 矩阵行（销售可领 / 交付·客服 ➖ / 经理·总经理 ✅ / 管理员 ➖）。
+    key: 'relations',
+    label: '业务关系',
+    children: [
+      { page: 'relations', path: '/relations', label: '我的关系' },
+      { page: 'sea', path: '/sea/company', label: '系统公海' },
+      { page: 'sea', path: '/sea/department', label: '部门公海' },
+    ],
+  },
   { key: 'entry', label: '录入', page: 'entry', path: '/entry', children: [] },
   {
     // 纯分组：§4.1 的一级菜单「客户档案」，自身没有页面

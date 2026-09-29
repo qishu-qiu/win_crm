@@ -25,6 +25,20 @@ export interface RelationListItemVo extends RelationVo {
   drop_in_x_days: number | null;
 }
 
+/** 公海列表项（聚合后）＝ 关系列表项 ＋ 公海停留信息（Phase 6；→ 接口 §5.16 `GET /sea/company` · `/sea/department`） */
+export interface SeaListItemVo extends RelationListItemVo {
+  /** 最近一次入公海时刻（ISO） */
+  sea_entered_at: string | null;
+  /** 入海原因码（→ 数据架构 F2 `sea_record.reason`） */
+  sea_reason: string | null;
+  /** 已在公海停留的自然日数（北京时间日界） */
+  days_in_sea: number | null;
+  /** 适用公海停留阈值 `sea_rule.stay_days`；取不到规则 ⇒ `null` */
+  stay_days: number | null;
+  /** 剩余天数 ＝ `stay_days − days_in_sea`；负数＝已超期；`null` ⇒ `null` */
+  remaining_days: number | null;
+}
+
 @Injectable()
 export class RelationAggregateService {
   constructor(
@@ -65,6 +79,58 @@ export class RelationAggregateService {
         ...row,
         drop_in_x_days: countdown.get(row.id.toString()) ?? null,
       })),
+    };
+  }
+
+  /**
+   * 系统公海列表（→ 接口 §5.16 `GET /sea/company`，Phase 6）。
+   *
+   * ★ ＝ `listRelations('sea')` 的**专用端点**：同一套 C 域范围收敛（销售＝本部门 / 经理＝管辖 /
+   *   总·管＝全部；交付·客服 403）＋ 同一套 `RelationVo` 映射，**额外**拼公海停留信息
+   *   （`sea_entered_at` / `sea_reason` / `days_in_sea` / `stay_days` / `remaining_days`）。
+   * ★ 不再用 `tab='sea'` 顶替——菜单固定两项、语义清晰（→ 前端交互文档 §五 页 9/10）。
+   * ★ 落点：F 域 `listSeaStayInfo` 与 `listDropCountdown` 本就服务装配层，这里只是多拼一份，零新编排。
+   */
+  async listCompanySea(query: RelationListQuery = {}): Promise<PageResult<SeaListItemVo>> {
+    const page = await this.relation.listRelations('sea', query);
+    return this.enrichSeaPage(page);
+  }
+
+  /**
+   * 部门公海列表（→ 接口 §5.16 `GET /sea/department`，Phase 6）。
+   *
+   * ★ 在 viewer 公海范围内**按单个部门**收敛（范围校验在 C 域 `listSeaRelationsByDept` 内：
+   *   越范围 403，不反推）；其余口径与 `listCompanySea` 一致。
+   */
+  async listDepartmentSea(
+    deptId: string,
+    query: RelationListQuery = {},
+  ): Promise<PageResult<SeaListItemVo>> {
+    const page = await this.relation.listSeaRelationsByDept(deptId, query);
+    return this.enrichSeaPage(page);
+  }
+
+  /** 把一页公海关系（C 域 `RelationVo`）拼上 F 域派生项 → 公海列表项（抽取：两个公海端点共用） */
+  private async enrichSeaPage(page: PageResult<RelationVo>): Promise<PageResult<SeaListItemVo>> {
+    const ids = page.list.map((row) => row.id);
+    const [countdown, stay] = await Promise.all([
+      this.sea.listDropCountdown(ids),
+      this.sea.listSeaStayInfo(ids),
+    ]);
+    return {
+      ...page,
+      list: page.list.map((row) => {
+        const stayInfo = stay.get(row.id.toString());
+        return {
+          ...row,
+          drop_in_x_days: countdown.get(row.id.toString()) ?? null,
+          sea_entered_at: stayInfo?.sea_entered_at ?? null,
+          sea_reason: stayInfo?.sea_reason ?? null,
+          days_in_sea: stayInfo?.days_in_sea ?? null,
+          stay_days: stayInfo?.stay_days ?? null,
+          remaining_days: stayInfo?.remaining_days ?? null,
+        };
+      }),
     };
   }
 }

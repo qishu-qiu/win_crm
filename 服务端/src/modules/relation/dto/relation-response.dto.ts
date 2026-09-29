@@ -165,6 +165,43 @@ export class RelationPageVoDto {
   page_size!: number;
 }
 
+/**
+ * 公海列表项（→ §5.16 `GET /sea/company` · `/sea/department`，Phase 6）＝ 关系列表项 ＋ 公海停留信息。
+ * ★ 与 `RelationListItemVoDto` 同一姿势：停留信息是**列表特有**、由聚合层拼装，不放进 `RelationVoDto` 基类。
+ * ★ `remaining_days` 负数＝已超期；`stay_days` / `remaining_days` 为 `null` ＝ 规则未配（前端显示「未配置」）。
+ */
+export class SeaListItemVoDto extends RelationListItemVoDto {
+  @ApiProperty({ type: String, nullable: true, description: '最近一次入公海时刻（ISO）；无历史行 ⇒ `null`' })
+  sea_entered_at!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '入海原因码（→ 数据架构 F2 `sea_record.reason`）；`null` ＝ 取不到' })
+  sea_reason!: string | null;
+
+  @ApiProperty({ type: Number, description: '已在公海停留的自然日数（北京时间日界）' })
+  days_in_sea!: number;
+
+  @ApiProperty({ type: Number, nullable: true, description: '适用公海停留阈值 `sea_rule.stay_days`；取不到规则 ⇒ `null`（前端显示「未配置」）' })
+  stay_days!: number | null;
+
+  @ApiProperty({ type: Number, nullable: true, description: '剩余天数 ＝ `stay_days − days_in_sea`；负数＝已超期；`stay_days` 为 `null` ⇒ `null`' })
+  remaining_days!: number | null;
+}
+
+/** 公海列表分页出参（→ §5.16 `GET /sea/company` · `/sea/department`） */
+export class SeaListPageVoDto {
+  @ApiProperty({ type: [SeaListItemVoDto], description: '当前页数据' })
+  list!: SeaListItemVoDto[];
+
+  @ApiProperty({ description: '符合筛选条件的全量条数（前端「共 N 条」）', example: 120 })
+  total!: number;
+
+  @ApiProperty({ description: '当前页码（从 1 开始）', example: 1 })
+  page!: number;
+
+  @ApiProperty({ description: '每页条数（默认 20，最大 100，→ §2.7）', example: 20 })
+  page_size!: number;
+}
+
 /** 关系成员（→ §5.6 `members[]`） */
 export class RelationMemberVoDto {
   @ApiProperty({ type: RelationRefDto, nullable: true, description: '成员员工（员工被停用时取不到引用 → `null`）' })

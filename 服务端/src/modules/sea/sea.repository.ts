@@ -271,7 +271,6 @@ export class SeaRepository {
       INNER JOIN (
         SELECT relation_id, MAX(dropped_at) AS dropped_at
         FROM sea_record
-        WHERE deleted_at IS NULL
         GROUP BY relation_id
       ) sr ON sr.relation_id = br.id
       LEFT JOIN company c ON c.id = br.company_id
@@ -279,6 +278,43 @@ export class SeaRepository {
       LEFT JOIN product_line pl ON pl.id = br.product_line_id
       WHERE ${whereSql}
       GROUP BY br.id, br.company_id, c.full_name, br.dept_id, d.name, br.product_line_id, pl.name
+    `;
+  }
+
+  /**
+   * 批量取一批关系**最近一条入公海记录**（→ `GET /sea/company` · `/sea/department` 卡片的
+   * 「进入时间 / 进入原因」；Phase 6）。
+   *
+   * ★ 复用 `listSeaManagerTodo` 的 join 思路：本域 `sea_record` 与 C 域 `business_relation`
+   *   同一句 raw 里取（那条查询已经这么干了 —— 跨域只读聚合在仓储层是本项目已接受的落点）。
+   * ★ 只取「在公海（`company_sea`）且未删」的关系；窗口函数 `ROW_NUMBER` 按
+   *   `dropped_at desc, id desc` 取每个关系最新一条（同秒靠 id 定序，与 C 域取法一致）。
+   * ★ 同时带出 `dept_id` / `product_line_id`：卡片的「剩余 X 天」要按部门 / 产品线解析
+   *   `stay_days`（→ `SeaService.listSeaStayInfo`），省一次往返。
+   */
+  async listLatestSeaRecords(relationIds: readonly bigint[]): Promise<SeaRecordSummaryRow[]> {
+    if (relationIds.length === 0) return [];
+    const ids = [...new Set(relationIds)];
+    return this.prisma.$queryRaw<SeaRecordSummaryRow[]>`
+      SELECT x.relation_id, x.dept_id, x.product_line_id, x.sea_entered_at, x.reason
+      FROM (
+        SELECT
+          br.id AS relation_id,
+          br.dept_id AS dept_id,
+          br.product_line_id AS product_line_id,
+          sr.dropped_at AS sea_entered_at,
+          sr.reason AS reason,
+          ROW_NUMBER() OVER (
+            PARTITION BY br.id ORDER BY sr.dropped_at DESC, sr.id DESC
+          ) AS rn
+        FROM business_relation br
+        INNER JOIN sea_record sr
+          ON sr.relation_id = br.id AND sr.deleted_at IS NULL
+        WHERE br.deleted_at IS NULL
+          AND br.sea_status = 'company_sea'
+          AND br.id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}`), ', ')})
+      ) x
+      WHERE x.rn = 1
     `;
   }
 }
@@ -294,4 +330,15 @@ export interface SeaManagerTodoRow {
   product_line_name: string | null;
   /** 最近一次入公海时刻（`sea_record.dropped_at` 最大值） */
   sea_entered_at: Date | null;
+}
+
+/** 一条关系的「最近入海记录」摘要（→ `listLatestSeaRecords`） */
+export interface SeaRecordSummaryRow {
+  relation_id: bigint;
+  dept_id: bigint;
+  product_line_id: bigint;
+  /** 最近一次入公海时刻（`sea_record.dropped_at` 最大值） */
+  sea_entered_at: Date | null;
+  /** 本次掉海原因码（→ 数据架构 F2 `sea_record.reason` 值域）；从未掉海 → `null` */
+  reason: string | null;
 }

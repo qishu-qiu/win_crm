@@ -76,6 +76,24 @@ const routes: RouteRecordRaw[] = [
     meta: { page: 'relations' },
   },
   {
+    // 系统公海（§五 页 9 / 接口 §5.16 `GET /sea/company`）：3 列卡片流（→ `SeaListView`）。
+    // 谁看得到什么由后端按数据范围收敛（销售＝本部门 / 经理＝管辖 / 总·管＝全部；交付·客服 403）。
+    path: '/sea/company',
+    name: 'sea-company',
+    component: () => import('../views/SeaListView.vue'),
+    props: { scope: 'company' },
+    meta: { page: 'sea' },
+  },
+  {
+    // 部门公海（§五 页 10 / 接口 §5.16 `GET /sea/department`）：在 viewer 可读范围内按单部门收敛；
+    // `dept_id` 经路由 query 传入（→ `SeaListView` 顶部部门选择器）。
+    path: '/sea/department',
+    name: 'sea-department',
+    component: () => import('../views/SeaListView.vue'),
+    props: { scope: 'department' },
+    meta: { page: 'sea' },
+  },
+  {
     path: '/relations/:id',
     name: 'relation-detail',
     component: () => import('../views/RelationDetailView.vue'),

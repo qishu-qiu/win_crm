@@ -2098,6 +2098,37 @@ export interface components {
              */
             page_size: number;
         };
+        SeaListItemVoDto: components["schemas"]["RelationListItemVoDto"] & {
+            /** @description 最近一次入公海时刻（ISO）；无历史行 ⇒ `null` */
+            sea_entered_at: string | null;
+            /** @description 入海原因码（→ 数据架构 F2 `sea_record.reason`）；`null` ＝ 取不到 */
+            sea_reason: string | null;
+            /** @description 已在公海停留的自然日数（北京时间日界） */
+            days_in_sea: number;
+            /** @description 适用公海停留阈值 `sea_rule.stay_days`；取不到规则 ⇒ `null`（前端显示「未配置」） */
+            stay_days: number | null;
+            /** @description 剩余天数 ＝ `stay_days − days_in_sea`；负数＝已超期；`stay_days` 为 `null` ⇒ `null` */
+            remaining_days: number | null;
+        };
+        SeaListPageVoDto: {
+            /** @description 当前页数据 */
+            list: components["schemas"]["SeaListItemVoDto"][];
+            /**
+             * @description 符合筛选条件的全量条数（前端「共 N 条」）
+             * @example 120
+             */
+            total: number;
+            /**
+             * @description 当前页码（从 1 开始）
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description 每页条数（默认 20，最大 100，→ §2.7）
+             * @example 20
+             */
+            page_size: number;
+        };
         SeaManagerTodoItemDto: {
             /** @description 业务关系 id（十进制字符串；后续 `POST /sea/manager-decision` 的处置对象） */
             relation_id: string;
@@ -2927,6 +2958,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RelationPageVoDto"];
+                };
+            };
+        };
+    };
+    SeaAggregateController_listCompanySea: {
+        parameters: {
+            query?: {
+                /** @description 页码（默认 1；`< 1` 回第 1 页） */
+                page?: number;
+                /** @description 每页条数（默认 20；超 100 按 100 计） */
+                page_size?: number;
+                /** @description 排序字段（**白名单**，→ §2.7）：`id`（默认）/ `created_at` 建档时间 / `last_event_at` 最近跟进 / `stage` 阶段 */
+                order_by?: "id" | "created_at" | "last_event_at" | "stage";
+                /** @description 是否降序（默认 `true`） */
+                desc?: "true" | "false";
+                /** @description 模糊搜**公司名**（→ §2.7） */
+                keyword?: string;
+                /** @description 视图（→ 前端文档 §5）：`all` / `following` / `cooperated` / `churned` */
+                view?: "all" | "following" | "cooperated" | "churned";
+                /** @description 紧迫档**多选**，逗号分隔 */
+                urgency?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeaListPageVoDto"];
+                };
+            };
+        };
+    };
+    SeaAggregateController_listDepartmentSea: {
+        parameters: {
+            query?: {
+                /** @description 部门 id（十进制字符串）；部门公海只列该部门下的公海关系 */
+                dept_id: string;
+                /** @description 页码（默认 1；`< 1` 回第 1 页） */
+                page?: number;
+                /** @description 每页条数（默认 20；超 100 按 100 计） */
+                page_size?: number;
+                /** @description 排序字段（**白名单**，→ §2.7）：`id`（默认）/ `created_at` 建档时间 / `last_event_at` 最近跟进 / `stage` 阶段 */
+                order_by?: "id" | "created_at" | "last_event_at" | "stage";
+                /** @description 是否降序（默认 `true`） */
+                desc?: "true" | "false";
+                /** @description 模糊搜**公司名**（→ §2.7） */
+                keyword?: string;
+                /** @description 视图（→ 前端文档 §5）：`all` / `following` / `cooperated` / `churned` */
+                view?: "all" | "following" | "cooperated" | "churned";
+                /** @description 紧迫档**多选**，逗号分隔 */
+                urgency?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeaListPageVoDto"];
                 };
             };
         };

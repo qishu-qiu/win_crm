@@ -26,10 +26,11 @@ import { RelationModule } from '../relation/relation.module';
 import { SeaModule } from '../sea/sea.module';
 import { RelationAggregateController } from './relation-aggregate.controller';
 import { RelationAggregateService } from './relation-aggregate.service';
+import { SeaAggregateController } from './sea-aggregate.controller';
 
 @Module({
   imports: [RelationModule, SeaModule],
-  controllers: [RelationAggregateController],
+  controllers: [RelationAggregateController, SeaAggregateController],
   providers: [RelationAggregateService],
 })
 export class RelationAggregateModule {}

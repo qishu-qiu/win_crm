@@ -20,6 +20,10 @@ export type SeaRuleVo = components['schemas']['SeaRuleVoDto']
 export type UpdateSeaRuleInput = components['schemas']['UpdateSeaRuleDto']
 /** 提交结果（→ 接口 §5.16 `SeaRuleUpdateResultDto`） */
 export type SeaRuleUpdateResult = components['schemas']['SeaRuleUpdateResultDto']
+/** 公海列表分页（→ 接口 §5.16 `SeaListPageVoDto`） */
+export type SeaListPageVo = components['schemas']['SeaListPageVoDto']
+/** 公海列表项（→ 接口 §5.16 `SeaListItemVoDto`） */
+export type SeaListItem = components['schemas']['SeaListItemVoDto']
 
 /**
  * 领取公海客户到私海（`POST /sea/company/:id/claim`，→ 接口 §4.5 / 需求 §6.3 动线）。
@@ -63,5 +67,64 @@ export async function listSeaRules(): Promise<SeaRuleVo[]> {
  */
 export async function updateSeaRules(input: UpdateSeaRuleInput): Promise<SeaRuleUpdateResult> {
   const { data } = await request.put<SeaRuleUpdateResult>('/sea/rules', input)
+  return data
+}
+
+/**
+ * 公海列表查询入参（→ 接口 §5.16 `GET /sea/company` · `/sea/department`）。
+ * ★ 分页默认 1 / 20、上限 100 的**归一归后端**（→ §2.7）；前端不夹第二套。
+ * ★ `urgency` 多选**以逗号串传**（后端按逗号拆；空数组＝整个不带该参数，不传空语义）。
+ * ★ `desc` 以布尔传，落 query 时转 `'true' / 'false'`（后端白名单只收这两串）。
+ */
+export interface SeaListQuery {
+  page?: number
+  pageSize?: number
+  view?: string
+  urgencies?: readonly string[]
+  order_by?: string
+  desc?: boolean
+  keyword?: string
+}
+
+/** 把 `SeaListQuery` 摊成后端要的 query（缺省项整个不带，→ 同 `listRelations` 姿势） */
+function toSeaParams(query: SeaListQuery): Record<string, unknown> {
+  const { page, pageSize, view, urgencies, order_by, desc, keyword } = query
+  return {
+    ...(page === undefined ? {} : { page }),
+    ...(pageSize === undefined ? {} : { page_size: pageSize }),
+    ...(view === undefined ? {} : { view }),
+    ...(urgencies === undefined || urgencies.length === 0 ? {} : { urgency: urgencies.join(',') }),
+    ...(order_by === undefined ? {} : { order_by }),
+    ...(desc === undefined ? {} : { desc: desc ? 'true' : 'false' }),
+    ...(keyword === undefined ? {} : { keyword }),
+  }
+}
+
+/**
+ * 系统公海列表（`GET /sea/company`，→ 接口 §5.16 / Phase 6）。
+ *
+ * ★ **谁看得到什么由服务端判**（销售＝本部门公海 / 经理＝管辖部门 / 总经理·管理员＝全部；
+ *   交付·客服 **403**）—— 前端**不自己判角色**、不自己决定"该列哪些"；把 403 当正常分支展示
+ *   （「该角色不进公海」），不是崩掉。
+ * ★ `total` **只信服务端**（同一个 where 的全量计数），不拿 `list.length` 当总数。
+ */
+export async function listCompanySea(query: SeaListQuery = {}): Promise<SeaListPageVo> {
+  const { data } = await request.get<SeaListPageVo>('/sea/company', { params: toSeaParams(query) })
+  return data
+}
+
+/**
+ * 部门公海列表（`GET /sea/department`，→ 接口 §5.16 / Phase 6）。
+ *
+ * ★ `deptId` 必填：只列该部门下的公海关系；越出 viewer 可读部门 → 服务端 **403**（不反推）。
+ * ★ 其余口径与 `listCompanySea` 一致。
+ */
+export async function listDepartmentSea(
+  deptId: string,
+  query: SeaListQuery = {},
+): Promise<SeaListPageVo> {
+  const { data } = await request.get<SeaListPageVo>('/sea/department', {
+    params: { dept_id: deptId, ...toSeaParams(query) },
+  })
   return data
 }

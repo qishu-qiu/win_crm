@@ -25,6 +25,7 @@ import { SeaModule } from '../modules/sea/sea.module';
 import { JobRunner } from './job-runner.service';
 import { JobScheduler } from './job-scheduler.service';
 import { SeaWarningJob } from './sea-warning.job';
+import { IdempotencyCleanupJob } from './idempotency-cleanup.job';
 import { SCHEDULED_JOBS } from './job.types';
 
 @Module({
@@ -35,11 +36,15 @@ import { SCHEDULED_JOBS } from './job.types';
     JobRunner,
     JobScheduler,
     SeaWarningJob,
+    IdempotencyCleanupJob,
     {
       // ★ 任务清单**只在这里列一次**：调度器按数组注入，新增任务不必改它的构造函数
       provide: SCHEDULED_JOBS,
-      useFactory: (seaWarning: SeaWarningJob) => [seaWarning],
-      inject: [SeaWarningJob],
+      useFactory: (seaWarning: SeaWarningJob, idemCleanup: IdempotencyCleanupJob) => [
+        seaWarning,
+        idemCleanup,
+      ],
+      inject: [SeaWarningJob, IdempotencyCleanupJob],
     },
   ],
   // 本片没有别的模块要调 jobs；导出 runner 供后续（如"手动触发一次"的运维口）复用

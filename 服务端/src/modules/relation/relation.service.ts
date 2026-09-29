@@ -788,6 +788,29 @@ export class RelationService {
   }
 
   /**
+   * **我可见的全部私海关系 id**（→ D 域 `GET /appointments` 范围收敛；不按公司切）。
+   *
+   * ★ 与 `listVisibleRelationIdsOfCompany` **同一套私海条件**（复用 `resolveRelationListScope('private', …)`），
+   *   只是**不收 `company_id`** —— 预约要跨公司列在我名下，不该按公司切一刀。
+   * ★ `denied` 兜底空集（同公司版那句 ★）；其余三档各走自己的仓储方法。
+   */
+  async listVisibleRelationIds(): Promise<bigint[]> {
+    const viewer = requireViewer();
+    const scope = resolveRelationListScope('private', viewer);
+    if (scope.kind === 'denied') return [];
+
+    const now = new Date();
+    const rows =
+      scope.kind === 'all'
+        ? await this.repository.listAllPrivateRelationIds()
+        : scope.kind === 'dept'
+          ? await this.repository.listPrivateRelationIdsOfDepts(scope.deptIds)
+          : await this.repository.listPrivateRelationIdsOfEmployee(viewer.employeeId, now);
+
+    return rows.map((row) => row.id);
+  }
+
+  /**
    * 「**我可见的公司**」的 company_id 集合（→ 需求 §6.1 ⑪ 联系人列表收敛；D-28）。
    *
    * @returns **`null` ＝ 不收敛**（`all` 档：总经理 / 管理员，→ 需求 §4.2）；否则是 id 集合

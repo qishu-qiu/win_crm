@@ -28,16 +28,19 @@ import { Audit } from '../../kernel/index';
 import {
   ActivateRelationDto,
   AgendaActionDto,
+  CreateAppointmentDto,
   CreateCommitmentDto,
   CreateEventDto,
   ListEventQueryDto,
   QuickMarkDto,
+  RescheduleAppointmentDto,
   UpdateCommitmentDto,
 } from './dto/engine-request.dto';
 import {
   ActionEventVoDto,
   ActivateRelationResultDto,
   AgendaItemVoDto,
+  AppointmentItemVoDto,
   CommitmentVoDto,
   QuickMarkResultDto,
 } from './dto/engine-response.dto';
@@ -47,6 +50,7 @@ import {
   type ActionEventVo,
   type ActivateRelationVo,
   type AgendaItemVo,
+  type AppointmentItemVo,
   type CommitmentVo,
   type EventRange,
   type QuickMarkResultVo,
@@ -268,5 +272,74 @@ export class EngineController {
     @Body() body: AgendaActionDto,
   ): Promise<AgendaItemVo> {
     return this.engine.actOnAgenda(id, body);
+  }
+
+  // ===== 预约（appointment，→ 接口 §4.7 / §5.8）=====
+  //
+  // ★ 落点在 D 域控制器（与事件 / 承诺同文件）：完成预约的强制事件由 `EngineService` 在本域落库，
+  //   跨域写表被架构 §5.2 禁，故**不**另立 appointment 模块。路径直接写 `/appointments`（无前缀）。
+
+  @Get('appointments')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '预约管理列表（四 Tab：today / future / expired / missing）',
+    description:
+      '范围＝我可见的私海关系（`RelationService` 收敛；越权 / 公海的关系不出现）。' +
+      '`tab=today` 今天待赴约、`tab=future` 明天起、`tab=expired` 今天之前仍未赴约（前端标红）、' +
+      '`tab=missing` **没有今天或未来待赴约**的关系（"该约还没约的客户"，只有关系行、无预约实体）。' +
+      '★ `drop_in_x_days` 恒 `null`（D 域不跨 F 域算倒计时，→ 架构 §3），前端按 `relation_id` 自行取。' +
+      '`row_type` 区分 `appointment` / `missing`，前端据此切换「完成 / 改期」与「新增预约」',
+  })
+  @ApiOkResponse({ type: [AppointmentItemVoDto] })
+  listAppointments(@Query('tab') tab: string): Promise<AppointmentItemVo[]> {
+    return this.engine.listAppointments(tab ?? 'today');
+  }
+
+  @Audit(ENGINE_AUDIT_ACTIONS.appointmentCreate, 'appointment')
+  @Post('appointments')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '新建预约',
+    description:
+      '`{relation_id,contact_id?,appointment_at,note?}`（→ §5.8）。' +
+      '`relation_id` 必须可写（越权 / 只读 → 403；公海关系 → 422）；`contact_id` 给了必须存在（→ 400）；' +
+      '`appointment_at` 必填（→ 422）',
+  })
+  @ApiOkResponse({ type: AppointmentItemVoDto })
+  createAppointment(@Body() body: CreateAppointmentDto): Promise<AppointmentItemVo> {
+    return this.engine.createAppointment(body);
+  }
+
+  @Audit(ENGINE_AUDIT_ACTIONS.appointmentReschedule, 'appointment')
+  @Put('appointments/:id')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '改期（appointment_id 路径传）',
+    description: '`{appointment_at,note?}`。`appointment_at` 必填（→ 422）；须关系可写（越权 → 403）',
+  })
+  @ApiParam({ name: 'id', description: '预约 id（十进制字符串）' })
+  @ApiOkResponse({ type: AppointmentItemVoDto })
+  rescheduleAppointment(
+    @Param('id') id: string,
+    @Body() body: RescheduleAppointmentDto,
+  ): Promise<AppointmentItemVo> {
+    return this.engine.rescheduleAppointment(id, body);
+  }
+
+  @Audit(ENGINE_AUDIT_ACTIONS.appointmentComplete, 'appointment')
+  @Post('appointments/:id/complete')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '完成预约（服务端强制生成跟单事件，否则 422）',
+    description:
+      '★ 完成＝一次有效跟进：服务端**强制生成一条 `action_event`**（落库 `appointment_id` 回联），' +
+      '并回写关系的 `last_event_at`。已完成再点 → **422 / `appointment.already_done`**；须关系可写（越权 → 403）',
+  })
+  @ApiParam({ name: 'id', description: '预约 id（十进制字符串）' })
+  completeAppointment(@Param('id') id: string): Promise<{ event_id: string }> {
+    return this.engine.completeAppointment(id);
   }
 }

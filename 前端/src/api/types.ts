@@ -525,9 +525,49 @@ export interface paths {
         };
         /**
          * 今日该找谁（工作台）
-         * @description **只返回登录人自己的**动线条目（`daily_agenda.user_id`），且只含 `open` / `snoozed`（已办的 `done` / `ignored` 不再推）。⚠ 本批**不实时组装**：条目由每日 05:00 的组装任务产生（属 M7），库里没有当日行就是**空数组**。`relation` 可为 `null`（「只有联系人、还没挂关系」的提醒，→ 数据架构 D4）
+         * @description **只返回登录人自己的**动线条目（`daily_agenda.user_id`），且只含 `open` / `snoozed`（已办的 `done` / `ignored` 不再推）。★ **实时兜底（M8-06 Phase 2-A，P0-②）**：当日 `daily_agenda` 无行时，按活数据即时派生「今日该找谁」——本人未关闭且**今日及之前到期**的承诺（逾期 ＋ 今日到期，→ §4.14.4）；派生项惰性写入 `daily_agenda`（按 user / 日 / ref 去重），用户后续处理动作得以保留。`relation` 可为 `null`（「只有联系人、还没挂关系」的提醒，→ 数据架构 D4）
          */
         get: operations["EngineController_todayAgenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/today-agenda/{id}/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 处理一条今日动线（done / snoozed / ignored）
+         * @description `{action,reason?}`（→ §4.14.4 / §5.6）。`done` → 闭环并**自动销掉动线指向的承诺**；`snoozed` → 推后、**同一条最多 3 次**（第 4 次 → 422，强制 done/ignored）；`ignored` → **必填原因**（422 / `20403`，经理可见某人 ignored 占比）。⚠ 动线必须属于当前登录人，别人的 → **404**
+         */
+        post: operations["EngineController_actOnAgenda"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sea/manager-todo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 经理待办：公海停留超期、待决策保留/删除
+         * @description **部门经理 / 总经理 / 管理员可见**（销售 / 交付·客服 403）。列出「已在公司公海停留超过适用 `sea_rule.stay_days`」的关系（按 `sea_record` 最近入海时刻算停留时长，北京时间自然日），待经理在 `POST /sea/manager-decision` 决策保留/删除。超期判据复用 `resolveSeaRuleFor`（L4→L1 ＋ 7 天缓冲）；取不到规则 / 规则没配 `stay_days` 的关系不进列表（不编默认天数，→ F1 P-10）。⚠ 报表/看板不脱敏（§2.4）。
+         */
+        get: operations["SeaController_listManagerTodo"];
         put?: never;
         post?: never;
         delete?: never;
@@ -574,6 +614,138 @@ export interface paths {
          * @description `{dept_id, product_line_id}` 定位「公司 × 部门 × 产品线」下**那一条公海关系**（与 `POST /relations` 同形）。**谁能领**＝可写角色 ＋ 读范围（销售＝本部门公海、经理＝管辖部门、总经理＝全部；**管理员（只读）与交付 / 客服一律 403**）—— 与公海读门同一档，不另开一格权限。**抢到才算**：条件 UPDATE（`sea_status = company_sea`）影响 1 行，并发被同事先领走 → **409**；定位不到（本就无 / 刚刚被领走）→ **400**；`dept_id` / `product_line_id` / 公司不存在 → **400**。**幂等（语义）**：领成功后关系已是私海，重复调用 → 400（**不是 500、不会双写**）。**级联**：阶段回到 1（新一轮，上一轮阶段留痕保留）＋ owner 成员切给领取人 ＋ 该关系所有 **open 承诺 `owner_id` 转新 owner**（承诺随关系走，→ 接口 §5.6 尾）；入公海历史（`sea_record`）回填 `claimed_by` / `claimed_at`（**没有历史行则不造行**，`claimed_at` 回 `null`）。出参＝**关系列表项**（与 §5.6 同一形状）＋ `claimed_at`，前端据此跳 `/relations/:id`
          */
         post: operations["SeaController_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 经营看板
+         * @description **部门经理 / 总经理 / 管理员可见**（销售 / 交付·客服 403）。KPI：今日新增、今日待跟进、本月签约额（环比上月）。`sea_todo` 复用 `GET /sea/manager-todo`（公海停留超期待决策）。`pending_todo` / `warnings` / `dept_compare` / `top_sales` / `zombie_weekly` 在接口 §5.13 仍为占位、形状待定（→ 欠账 D-33 ⑤），本版回 `[]`。⚠ 报表/看板**不脱敏**（§2.4）返回真实金额。
+         */
+        get: operations["ReportController_getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/targets/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 目标进度（回款完成率 vs 时间进度）
+         * @description **老板/经理可见**（销售 → 403）。返回**当前月(period)**可见 scope（company/dept/employee）的目标进度条：`rate`＝回款额/目标额；`time_rate`＝当月已过时间占比；`diff_points`＝回款额−目标额；`signed_amount`＝当月签约额。★ 报表/看板**不脱敏**（接口 §2.4）：本接口返回真实金额。口径：签约/回款额＝`Contract.sign_date` 落在当月的合计（→ 数据架构 E1）。
+         */
+        get: operations["TargetController_getProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contracts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 合同列表（按数据范围四档收敛）
+         * @description `all`＝全公司；`dept`＝管辖部门；`self`＝我签 / 我 owner 的关系；`serving`＝服务期内（只读）。
+         */
+        get: operations["TradeController_listContracts"];
+        put?: never;
+        /**
+         * 创建合同
+         * @description 挂在某条业务关系上；`contract_no` 由服务端生成（唯一）。可见性走底层关系（跨域 C 域 service）；金额须 > 0；撞号 → **409**。
+         */
+        post: operations["TradeController_createContract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contracts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 合同详情
+         * @description 可见性同底层关系；不存在 → 400
+         */
+        get: operations["TradeController_getContract"];
+        /**
+         * 更新合同
+         * @description 可改收款方式 / 状态 / 续约 / 服务期 / 附件（只传给了值的字段）。交付 / 客服只读 → **403**；其余可写角色须能看到底层关系。
+         */
+        put: operations["TradeController_updateContract"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我的外出记录
+         * @description 按 `depart_at` 倒序、最近 50 条；可选 `?date=YYYY-MM-DD` 只看某天（本地日）。`employee_id` 取当前登录人
+         */
+        get: operations["VisitController_listMyVisits"];
+        put?: never;
+        /**
+         * 登记外出（出去点一下）
+         * @description 就三样：`depart_at`（出去时间）/ `reason`（去干什么一句话）/ `relation_ids?`（去了哪些客户）。★ 纯行政考勤：**不产生业务事件、不关联报销**（→ 需求 §7.5 / §14.2）。`employee_id` 取当前登录人
+         */
+        post: operations["VisitController_createVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/visits/{id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 回来点一下
+         * @description 只写 `actual_return_at`（纯行政）。已回过的再点 → **422**；不是自己的 → **404**
+         */
+        post: operations["VisitController_returnVisit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -974,6 +1146,8 @@ export interface components {
              * @enum {string}
              */
             suggest: "use_exists" | "create_new";
+            /** @description ★ M8-06 Phase 2（A3）：按 phone 命中时回命中联系人 `{id,name}`（无则 null）；前端据此直接跳到该联系人 */
+            matched_contact?: Record<string, never> | null;
         };
         ExtraPhoneDto: {
             /**
@@ -997,10 +1171,10 @@ export interface components {
              */
             name: string;
             /**
-             * @description 主号（撞单校验核心；服务端会先做归一：去空格 / `+86` / `-`）
+             * @description 主号（撞单校验核心；服务端会先做归一：去空格 / `+86` / `-`）。★ M8-06 Phase 2-A2b：**可空** —— 不填但有 `wechat` 时自动用唯一假号占位，后续改联系人补真实号；phone 与 wechat 都空 → 400
              * @example 13800000000
              */
-            phone: string;
+            phone?: string;
             /** @description 附加号（可多个；不参与撞单） */
             extra_phones?: components["schemas"]["ExtraPhoneDto"][];
             /** @description 微信 */
@@ -1837,6 +2011,19 @@ export interface components {
              */
             snooze_count: number;
         };
+        AgendaActionDto: {
+            /**
+             * @description 处理动作：`done` 已办（自动销关联承诺）/ `snoozed` 明天再说（最多 3 次）/ `ignored` 忽略（必填原因）
+             * @example done
+             * @enum {string}
+             */
+            action: "done" | "snoozed" | "ignored";
+            /**
+             * @description 忽略原因（**仅 `action=ignored` 传且必填**，≤255 字；`snoozed` / `done` 一律不传）。经理侧看板可看某人 ignored 占比（→ 需求 §10.4）
+             * @example 客户已离职，不再跟进
+             */
+            reason?: string;
+        };
         RelationListItemVoDto: {
             /**
              * @description 业务关系 id
@@ -1910,6 +2097,30 @@ export interface components {
              * @example 20
              */
             page_size: number;
+        };
+        SeaManagerTodoItemDto: {
+            /** @description 业务关系 id（十进制字符串；后续 `POST /sea/manager-decision` 的处置对象） */
+            relation_id: string;
+            /** @description 公司档案（档案被逻辑删时取不到 → `null`） */
+            company: components["schemas"]["RelationRefDto"] | null;
+            /** @description 承接部门 */
+            dept: components["schemas"]["RelationRefDto"] | null;
+            /** @description 产品线 */
+            product_line: components["schemas"]["RelationRefDto"] | null;
+            /** @description 入公海时刻（最近一条 `sea_record.dropped_at`，ISO） */
+            sea_entered_at: string;
+            /** @description 已在公海停留的自然日数 */
+            days_in_sea: number;
+            /** @description 适用公海停留超期阈值（`sea_rule.stay_days`；取不到规则 ⇒ 该关系不进列表） */
+            stay_days: number | null;
+            /** @description 超期天数 ＝ days_in_sea − stay_days（>0 才进列表） */
+            overdue_days: number;
+        };
+        SeaManagerTodoResultDto: {
+            /** @description 超期待决策的客户数 */
+            total: number;
+            /** @description 公海停留超期的关系（按 `overdue_days` 降序） */
+            items: components["schemas"]["SeaManagerTodoItemDto"][];
         };
         SeaRuleVoDto: {
             /**
@@ -2087,6 +2298,241 @@ export interface components {
             updated_at: string;
             /** @description 本次领回 `sea_record.claimed_at`（ISO），即**这次从公海领回的时间**；**`null` ＝ 这条关系没有入公海历史**（掉海扫描属 M7 后续片：没有历史就**不造行**，不假装掉过海）—— 与「领取成功」不矛盾 */
             claimed_at: string | null;
+        };
+        MonthSignedDto: {
+            /** @description 本月签约额（元） */
+            amount: number;
+            /** @description 环比上月 ＝ (本月 − 上月) / 上月；上月为 0 → `null` */
+            chain_ratio: Record<string, never> | null;
+        };
+        DashboardKpiDto: {
+            /** @description 今日新增关系数（`business_relation.created_at` 落北京今日） */
+            today_new: number;
+            /** @description 今日待跟进数（`commitment.due_at` 落北京今日且 `status=open`） */
+            today_todo: number;
+            /** @description 本月签约额（`contract.sign_date` 落北京当月且 `status∈{running,done}` 汇总） */
+            month_signed: components["schemas"]["MonthSignedDto"];
+        };
+        DashboardResultDto: {
+            kpi: components["schemas"]["DashboardKpiDto"];
+            /** @description 今日待跟进明细（接口 §5.13 占位，形状待定 → 欠账 D-33 ⑤） */
+            pending_todo: Record<string, never>[];
+            /** @description 活跃预警（接口 §5.13 占位；无独立预警表，纯派生，形状待定） */
+            warnings: Record<string, never>[];
+            /** @description 部门业绩对比（接口 §5.13 占位，形状待定） */
+            dept_compare: Record<string, never>[];
+            /** @description 销冠榜（接口 §5.13 占位，形状待定） */
+            top_sales: Record<string, never>[];
+            /** @description 周重点僵尸榜（接口 §5.13 占位；`business_relation.urgency=weekly` 派生，形状待定） */
+            zombie_weekly: Record<string, never>[];
+            /** @description 公海停留超期待决策（复用 `GET /sea/manager-todo`） */
+            sea_todo: components["schemas"]["SeaManagerTodoResultDto"];
+        };
+        TargetProgressItemDto: {
+            /** @description scope 类型：company / dept / employee */
+            scope_type: string;
+            /** @description scope id（十进制字符串；company 层恒 "0"） */
+            scope_id: string;
+            /** @description scope 名称（company＝全公司；dept/employee＝档案名） */
+            name: string;
+            /** @description 目标额（回款口径，→ 数据架构 `target.amount`） */
+            target_amount: number;
+            /** @description 当月已回款额（Contract.paid_amount 合计） */
+            paid_amount: number;
+            /** @description 当月签约额（Contract.amount 合计） */
+            signed_amount: number;
+            /** @description 回款完成率 ＝ paid_amount / target_amount（0~1+） */
+            rate: number;
+            /** @description 时间进度 ＝ 当月已过时间占比（0~1，封顶 1） */
+            time_rate: number;
+            /** @description 差额 ＝ paid_amount − target_amount */
+            diff_points: number;
+            /** @description 是否已被调整（当前无调整追踪，恒 false） */
+            adjusted: boolean;
+        };
+        TargetProgressResultDto: {
+            /** @description 统计单元（目标按组织口径聚合，恒 company） */
+            stat_unit: string;
+            /** @description 各 scope 目标进度条 */
+            items: components["schemas"]["TargetProgressItemDto"][];
+        };
+        CreateContractDto: {
+            /**
+             * @description 业务关系 id（→ C 域；合同挂在哪条关系上，公司/产品线由此派生）
+             * @example 10
+             */
+            relation_id: string;
+            /**
+             * @description 签约联系人 id（→ B 域联系人；可空）
+             * @example 5
+             */
+            contact_id?: string;
+            /**
+             * @description 合同金额（Decimal 字符串，>0，最多两位小数）
+             * @example 120000.00
+             */
+            amount: string;
+            /**
+             * @description 收款方式（如 cash/bank/check；落字典，可空）
+             * @example bank
+             */
+            pay_type?: string;
+            /**
+             * @description 签约日期（YYYY-MM-DD）
+             * @example 2026-09-23
+             */
+            sign_date?: string;
+            /** @description 服务开始日期（YYYY-MM-DD） */
+            service_start?: string;
+            /** @description 服务结束日期（YYYY-MM-DD） */
+            service_end?: string;
+            /**
+             * @description 是否自动续约
+             * @example false
+             */
+            auto_renew?: boolean;
+            /** @description 续约提醒天数（如 [30,60,90]） */
+            remind_days?: string[];
+        };
+        ContractRefDto: {
+            /**
+             * @description id（十进制字符串）
+             * @example 3
+             */
+            id: string;
+            /**
+             * @description 名称快照
+             * @example 安徽鑫中网信息技术有限公司
+             */
+            name: string;
+        };
+        ContractVoDto: {
+            /**
+             * @description 合同 id
+             * @example 1
+             */
+            id: string;
+            /**
+             * @description 合同编号（唯一，服务端生成）
+             * @example CN20260923000001
+             */
+            contract_no: string;
+            /** @description 公司档案 */
+            company: components["schemas"]["ContractRefDto"] | null;
+            /** @description 产品线 */
+            product_line: components["schemas"]["ProductLineRefDto"] | null;
+            /** @description 签单人（业绩归属，终身不变） */
+            signer: components["schemas"]["ContractRefDto"] | null;
+            /**
+             * @description 合同金额（Decimal 字符串）
+             * @example 120000.00
+             */
+            amount: string;
+            /**
+             * @description 已回款金额（Decimal 字符串）
+             * @example 0.00
+             */
+            paid_amount: string;
+            /**
+             * @description 回款进度（0~100）
+             * @example 0
+             */
+            pay_progress: number;
+            /**
+             * @description 合同状态
+             * @enum {string}
+             */
+            status: "unpaid" | "partial" | "running" | "done" | "terminated";
+            /** @description 签约日期（ISO） */
+            sign_date: string | null;
+            /** @description 服务结束日期（ISO） */
+            service_end: string | null;
+            /**
+             * @description 到期预警档（0/30/60/90）
+             * @example 0
+             */
+            expire_level: number;
+            /** @description 创建时间（ISO） */
+            created_at: string;
+            /** @description 更新时间（ISO） */
+            updated_at: string;
+        };
+        ContractPageResultDto: {
+            /** @description 当前页数据 */
+            list: components["schemas"]["ContractVoDto"][];
+            /**
+             * @description 全量条数
+             * @example 120
+             */
+            total: number;
+            /**
+             * @description 当前页码（从 1 开始）
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description 每页条数（默认 20，最大 100）
+             * @example 20
+             */
+            page_size: number;
+        };
+        UpdateContractDto: {
+            /**
+             * @description 收款方式
+             * @example bank
+             */
+            pay_type?: string;
+            /**
+             * @description 合同状态（人工终态 terminated 等）
+             * @enum {string}
+             */
+            status?: "unpaid" | "partial" | "running" | "done" | "terminated";
+            /** @description 是否自动续约 */
+            auto_renew?: boolean;
+            /** @description 续约提醒天数 */
+            remind_days?: string[];
+            /** @description 服务开始日期（YYYY-MM-DD）；传 null 清空 */
+            service_start?: string;
+            /** @description 服务结束日期（YYYY-MM-DD）；传 null 清空 */
+            service_end?: string;
+            /** @description 附件（JSON；落库 `attachments` 列） */
+            attachments?: Record<string, never>;
+        };
+        CreateVisitDto: {
+            /**
+             * @description 出去时间（ISO 8601，本地时区；纯考勤记录，不做未来校验）
+             * @example 2026-09-28T09:30:00
+             */
+            depart_at: string;
+            /**
+             * @description 去干什么（一句话，≤255 字；行政知道他不在公司、去干啥了）
+             * @example 拜访 A 客户谈续约
+             */
+            reason: string;
+            /**
+             * @description 去了哪些客户（业务关系 id 数组，**可空**＝只登记行踪不挂客户）；纯行政、不校验归属
+             * @example [
+             *       1001,
+             *       1002
+             *     ]
+             */
+            relation_ids?: number[];
+        };
+        VisitLogDto: {
+            /** @description 外出登记 id（十进制字符串） */
+            id: string;
+            /** @description 登记人（员工 id，＝当前登录人） */
+            employee_id: string;
+            /** @description 出去时间（ISO 8601） */
+            depart_at: string;
+            /** @description 去干什么（一句话） */
+            reason: string;
+            /** @description 回来时间（ISO 8601）；`null`＝还没回 */
+            actual_return_at?: string;
+            /** @description 去了哪些客户（业务关系 id 数组；空＝只登记行踪） */
+            relation_ids?: string[];
+            /** @description 创建时间（ISO 8601） */
+            created_at: string;
         };
     };
     responses: never;
@@ -2867,6 +3313,51 @@ export interface operations {
             };
         };
     };
+    EngineController_actOnAgenda: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 动线条目 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgendaActionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgendaItemVoDto"];
+                };
+            };
+        };
+    };
+    SeaController_listManagerTodo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeaManagerTodoResultDto"];
+                };
+            };
+        };
+    };
     SeaController_listRules: {
         parameters: {
             query?: never;
@@ -2931,6 +3422,213 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeaClaimVoDto"];
+                };
+            };
+        };
+    };
+    ReportController_getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardResultDto"];
+                };
+            };
+        };
+    };
+    TargetController_getProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetProgressResultDto"];
+                };
+            };
+        };
+    };
+    TradeController_listContracts: {
+        parameters: {
+            query?: {
+                /** @description 页码（默认 1） */
+                page?: number;
+                /** @description 每页条数（默认 20，最大 100） */
+                page_size?: number;
+                /** @description 排序字段（白名单）：id / sign_date / service_end / amount / created_at */
+                order_by?: "id" | "sign_date" | "service_end" | "amount" | "created_at";
+                /** @description 是否降序（默认 true） */
+                desc?: "true" | "false";
+                /** @description 状态筛选 */
+                status?: "unpaid" | "partial" | "running" | "done" | "terminated";
+                /** @description 关键字：合同号 / 公司名（模糊） */
+                keyword?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractPageResultDto"];
+                };
+            };
+        };
+    };
+    TradeController_createContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateContractDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractVoDto"];
+                };
+            };
+        };
+    };
+    TradeController_getContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 合同 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractVoDto"];
+                };
+            };
+        };
+    };
+    TradeController_updateContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 合同 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateContractDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractVoDto"];
+                };
+            };
+        };
+    };
+    VisitController_listMyVisits: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitLogDto"][];
+                };
+            };
+        };
+    };
+    VisitController_createVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVisitDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitLogDto"];
+                };
+            };
+        };
+    };
+    VisitController_returnVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 外出登记 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitLogDto"];
                 };
             };
         };

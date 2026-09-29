@@ -62,9 +62,11 @@ import {
 import {
   type ActivateRelationDto,
   type AgendaActionDto,
+  type CreateAppointmentDto,
   type CreateCommitmentDto,
   type CreateEventDto,
   type QuickMarkDto,
+  type RescheduleAppointmentDto,
   type UpdateCommitmentDto,
 } from './dto/engine-request.dto';
 import { resolveEventCountSince } from './domain/event-count-window';
@@ -107,6 +109,12 @@ export const ENGINE_AUDIT_ACTIONS = {
    *   不按动作拆三个——审计检索时按「谁处理了哪条动线」归组即可。
    */
   agendaAction: 'agenda.action',
+  /** ★ 新建预约 → `POST /appointments`（写动作，由统一切面留痕） */
+  appointmentCreate: 'appointment.create',
+  /** ★ 改期 → `PUT /appointments/:id`（写动作，由统一切面留痕） */
+  appointmentReschedule: 'appointment.reschedule',
+  /** ★ 完成预约（强制生成跟单事件）→ `POST /appointments/:id/complete`（写动作，由统一切面留痕） */
+  appointmentComplete: 'appointment.complete',
 } as const;
 
 /** 跟单事件出参（→ §5.7；未落地字段见 `dto/engine-response.dto.ts` 文件头清单） */
@@ -178,6 +186,24 @@ export interface QuickMarkResultVo {
 export interface ActivateRelationVo extends RelationVo {
   /** 本次搬运的**孤儿跟单**条数（关联前只挂在联系人、没挂关系的那批） */
   linked_events: number;
+}
+
+/**
+ * 预约管理列表项（→ §5.8 预约项 ＋ 前端 §五 页 4）。
+ * ★ **统一形状**覆盖四 Tab（今日 / 未来 / 过期 / 未预约）：`appointment_id` 为 `null` ＝「未预约」行
+ *   （只有关系、没有预约实体）。`drop_in_x_days` 恒 `null`（前端按 `relation_id` 从关系列表取，→ 架构 §3）。
+ */
+export interface AppointmentItemVo {
+  relation_id: bigint;
+  company_name: string;
+  appointment_id: bigint | null;
+  contact: { id: bigint; name: string } | null;
+  appointment_at: string | null;
+  note: string | null;
+  status: string | null;
+  drop_in_x_days: number | null;
+  /** `appointment` 有约行 / `missing` 缺约行 */
+  row_type: 'appointment' | 'missing';
 }
 
 /** `RelationCreated` 事件的载荷（→ C 域 `createRelation` 发出；**最小信息**，架构 §5.3） */
@@ -963,6 +989,194 @@ export class EngineService {
       status: row.status,
       snooze_count: row.snooze_count,
     };
+  }
+
+  // ===== 预约（appointment，→ 接口 §4.7 / §5.8）=====
+  //
+  // ★ 落点在 D 域：完成预约要强制生成 `action_event`（F 域表），跨域写表被架构 §5.2 禁，
+  //   故预约的增 / 改 / 完成 ＋ 事件落库都在本域一个 `$transaction`。
+  // ★ 范围收敛：列表 / 新建 / 改期 / 完成一律先过 `RelationService`，越权（只读 / 公海）→ 403 / 422。
+
+  /** 预约管理列表（四 Tab：today / future / expired / missing） */
+  async listAppointments(tab: string): Promise<AppointmentItemVo[]> {
+    const relationIds = await this.relation.listVisibleRelationIds();
+    const dayStart = todayDateKey(new Date()); // 本地 00:00（与 sea / agenda 同一把尺）
+    const dayEnd = addDays(dayStart, 1); // 明天 00:00
+    const relationNames = toNameMap(await this.relation.getRelationRefs(relationIds));
+
+    // 「未预约」：可见关系里、没有"今天或未来待赴约"的那批 ⇒ 只出关系行（无预约实体）
+    if (tab === 'missing') {
+      const upcoming = await this.repository.listUpcomingAppointmentRelationIds(relationIds, dayStart);
+      const hasUpcoming = new Set(upcoming.map((r) => r.relation_id.toString()));
+      return relationIds
+        .filter((id) => !hasUpcoming.has(id.toString()))
+        .map((id) => ({
+          relation_id: id,
+          company_name: relationNames.get(id.toString()) ?? '',
+          appointment_id: null,
+          contact: null,
+          appointment_at: null,
+          note: null,
+          status: null,
+          drop_in_x_days: null,
+          row_type: 'missing' as const,
+        }));
+    }
+
+    const kind = tab === 'future' ? 'future' : tab === 'expired' ? 'expired' : 'today';
+    const rows = await this.repository.listAppointments(relationIds, kind, dayStart, dayEnd);
+    const contactIds = uniqueBigints(
+      rows.map((r) => r.contact_id).filter((c): c is bigint => c !== null),
+    );
+    const contactNames = toNameMap(await this.company.getContactRefs(contactIds));
+    return this.toAppointmentItems(rows, relationNames, contactNames);
+  }
+
+  /** 统一把预约行拼成出参（含联系人中文名；掉海倒计时 `drop_in_x_days` 恒 `null`，前端填） */
+  private toAppointmentItems(
+    rows: ReadonlyArray<{
+      relation_id: bigint;
+      contact_id: bigint | null;
+      id: bigint;
+      appointment_at: Date;
+      note: string | null;
+      status: string;
+    }>,
+    relationNames: Map<string, string>,
+    contactNames: Map<string, string>,
+  ): AppointmentItemVo[] {
+    return rows.map((row) => ({
+      relation_id: row.relation_id,
+      company_name: relationNames.get(row.relation_id.toString()) ?? '',
+      appointment_id: row.id,
+      contact: refOf(contactNames, row.contact_id),
+      appointment_at: row.appointment_at.toISOString(),
+      note: row.note,
+      status: row.status,
+      drop_in_x_days: null,
+      row_type: 'appointment' as const,
+    }));
+  }
+
+  /** 新建预约（relation_id 必须可写；contact_id 给了必须存在） */
+  async createAppointment(dto: CreateAppointmentDto): Promise<AppointmentItemVo> {
+    const viewer = requireViewer();
+    const relation = await this.relation.requireWritableRelation(dto.relation_id);
+
+    let contactId: bigint | null = null;
+    if (dto.contact_id !== undefined && dto.contact_id !== '') {
+      contactId = jsonToBigint(dto.contact_id, 'contact_id');
+      const contacts = await this.company.getContactRefs([contactId]);
+      if (contacts.length === 0) {
+        throw new AppError(ErrorCode.PARAM_INVALID, 400, 'contact_id 指向的联系人不存在', {
+          constraint: 'appointment.contact_missing',
+        });
+      }
+    }
+
+    const appointmentAt = parseOptionalDate(dto.appointment_at, 'appointment_at');
+    if (appointmentAt === null) {
+      throw new AppError(ErrorCode.REQUIRED_MISSING, 422, '预约时间必填', {
+        constraint: 'appointment.at_required',
+      });
+    }
+
+    const row = await this.repository.createAppointment({
+      relation_id: relation.id,
+      contact_id: contactId,
+      appointment_at: appointmentAt,
+      note: dto.note ?? null,
+      created_by: viewer.employeeId,
+    });
+    const relationNames = toNameMap(await this.relation.getRelationRefs([row.relation_id]));
+    const contactNames = toNameMap(await this.company.getContactRefs(contactId === null ? [] : [contactId]));
+    return this.toAppointmentItems([row], relationNames, contactNames)[0];
+  }
+
+  /** 改期（只动时间 ＋ 备注，写 `reschedule_log`；须关系可写） */
+  async rescheduleAppointment(id: string, dto: RescheduleAppointmentDto): Promise<AppointmentItemVo> {
+    const appointmentId = jsonToBigint(id, 'id');
+    const row = await this.repository.findAppointmentById(appointmentId);
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 404, '预约不存在', { constraint: 'appointment.not_found' });
+    }
+    await this.relation.requireWritableRelation(row.relation_id.toString());
+
+    const appointmentAt = parseOptionalDate(dto.appointment_at, 'appointment_at');
+    if (appointmentAt === null) {
+      throw new AppError(ErrorCode.REQUIRED_MISSING, 422, '预约时间必填', {
+        constraint: 'appointment.at_required',
+      });
+    }
+    const rescheduleLog = {
+      from: row.appointment_at.toISOString(),
+      to: appointmentAt.toISOString(),
+      at: new Date().toISOString(),
+    };
+    const updated = await this.repository.updateAppointment(appointmentId, {
+      appointment_at: appointmentAt,
+      note: dto.note ?? row.note,
+      reschedule_log: rescheduleLog,
+    });
+    const relationNames = toNameMap(await this.relation.getRelationRefs([updated.relation_id]));
+    const contactNames = toNameMap(
+      await this.company.getContactRefs(updated.contact_id === null ? [] : [updated.contact_id]),
+    );
+    return this.toAppointmentItems([updated], relationNames, contactNames)[0];
+  }
+
+  /**
+   * 完成预约：服务端**强制生成一条跟单事件**，否则 422（→ §5.8）。
+   * ★ 事件 ＋ 置 `done` 在同一 `$transaction`（本域两表同库）；完成＝一次有效跟进 ⇒ 回写 `last_event_at`。
+   */
+  async completeAppointment(id: string): Promise<{ event_id: string }> {
+    const viewer = requireViewer();
+    const appointmentId = jsonToBigint(id, 'id');
+    const row = await this.repository.findAppointmentById(appointmentId);
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 404, '预约不存在', { constraint: 'appointment.not_found' });
+    }
+    const relation = await this.relation.requireWritableRelation(row.relation_id.toString());
+    if (row.status === 'done') {
+      throw new AppError(ErrorCode.REQUIRED_MISSING, 422, '这条预约已经完成，不能重复完成', {
+        constraint: 'appointment.already_done',
+      });
+    }
+
+    const eventAt = new Date();
+    const created = await this.prisma
+      .$transaction(async (tx) => {
+        const client = tx as EngineTxClient;
+        const event = await this.repository.createEvent(
+          {
+            relation_id: relation.id,
+            contact_id: row.contact_id,
+            actor_id: viewer.employeeId,
+            owner_snapshot: relation.ownerId,
+            action_type: 'appointment',
+            summary: '完成预约',
+            outcome: null,
+            competition: null,
+            competitor_id: null,
+            competition_note: null,
+            duration_min: null,
+            source: AUTO_EVENT_SOURCE,
+            visit_log_id: null,
+            appointment_id: row.id,
+            idempotency_key: null,
+            event_at: eventAt,
+          },
+          client,
+        );
+        await this.repository.completeAppointment(row.id, event.id, client);
+        return event;
+      })
+      .catch((error: unknown) => {
+        throw mapPrismaError(error) ?? error;
+      });
+
+    await this.relation.touchLastEventAt(relation.id, created.event_at);
+    return { event_id: created.id.toString() };
   }
 
   // ===== M4-11 建档事件（由 `engine-event.subscriber.ts` 调）=====

@@ -353,6 +353,49 @@ export class ActivateRelationDto {
 }
 
 /**
+ * `POST /appointments`（新建预约，→ 接口 §4.7 / §5.8）。
+ *
+ * 规格原文 req：`{relation_id,contact_id?,appointment_at,note?}`（→ §5.8）。
+ * ★ `relation_id` 必填且**必须可写**（C 域出口：越权 / 只读角色 → 403；公海关系 → 422）；
+ *   `contact_id` 选填，给了就必须存在（不存在 → 400）。
+ */
+export class CreateAppointmentDto {
+  @ApiProperty({ description: '业务关系 id（须可在我名下建档 / 可写，否则 403 / 422）', example: '5' })
+  @IsString({ message: 'relation_id 必须是字符串' })
+  @Length(1, 32, { message: 'relation_id 长度不合法' })
+  relation_id!: string;
+
+  @ApiPropertyOptional({ description: '对着哪个联系人（选填）', example: '7' })
+  @IsOptional()
+  @IsString({ message: 'contact_id 必须是字符串' })
+  @Length(1, 32, { message: 'contact_id 长度不合法' })
+  contact_id?: string;
+
+  @ApiProperty({ description: '预约时间（ISO 字符串）；必填', example: '2026-09-30T14:00:00.000Z' })
+  @IsDateString({}, { message: 'appointment_at 需为 ISO 日期字符串' })
+  appointment_at!: string;
+
+  @ApiPropertyOptional({ description: '备注（≤255 字）', example: '带上报价单当面聊' })
+  @IsOptional()
+  @IsString({ message: 'note 必须是字符串' })
+  @Length(0, 255, { message: 'note 最长 255 字' })
+  note?: string;
+}
+
+/** `PUT /appointments/:id`（改期，→ 接口 §5.8） */
+export class RescheduleAppointmentDto {
+  @ApiProperty({ description: '改到的时间（ISO 字符串）；必填', example: '2026-10-02T10:00:00.000Z' })
+  @IsDateString({}, { message: 'appointment_at 需为 ISO 日期字符串' })
+  appointment_at!: string;
+
+  @ApiPropertyOptional({ description: '改备注（不传＝保留原备注）', example: '客户改到周五' })
+  @IsOptional()
+  @IsString({ message: 'note 必须是字符串' })
+  @Length(0, 255, { message: 'note 最长 255 字' })
+  note?: string;
+}
+
+/**
  * `POST /today-agenda/:id/action`（今日动线处理反馈，→ 接口 §4.14.4 / §5.6）。
  *
  * 规格原文 req：`{action:"done"|"snoozed"|"ignored",reason?}`：

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import dayjs from 'dayjs'
+import { message, Modal } from 'ant-design-vue'
 
 import { getRelation, type RelationDetail } from '../api/relation'
+import { createAppointment } from '../api/appointment'
 import { formatDateTime } from '../format'
 import {
   stageNameOf,
@@ -100,11 +103,41 @@ function memberTypeNameOf(code: string): string {
 function memberSourceNameOf(code: string | null): string {
   return code === null || code === '' ? '—' : (MEMBER_SOURCE_NAMES[code] ?? code)
 }
+
+// ===== 新增预约（→ §五 页 4 / §5.8 `POST /appointments`；关系预填，联系人可选）=====
+const createState = ref<{
+  visible: boolean
+  at: string | null
+  note: string
+}>({ visible: false, at: null, note: '' })
+
+function openCreate(): void {
+  createState.value = { visible: true, at: null, note: '' }
+}
+
+async function submitCreate(): Promise<void> {
+  if (createState.value.at === null) {
+    message.warning('请选择预约时间')
+    return
+  }
+  try {
+    await createAppointment({
+      relation_id: relationId.value,
+      appointment_at: dayjs(createState.value.at).toISOString(),
+      note: createState.value.note || undefined,
+    })
+    message.success('已新增预约')
+    createState.value.visible = false
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '新增预约失败')
+  }
+}
 </script>
 
 <template>
   <PageContainer :title="detail?.company?.name ?? '（档案已删除）'">
     <template #extra>
+      <a-button type="primary" size="small" @click="openCreate">新增预约</a-button>
       <a-button type="link" size="small" @click="router.push('/relations')">
         ← 返回业务关系列表
       </a-button>
@@ -161,7 +194,23 @@ function memberSourceNameOf(code: string | null): string {
       </template>
 
       <EmptyState v-else-if="!loading && errorText === ''" description="没有这条业务关系" />
-    </a-spin>
+      </a-spin>
+
+      <a-modal v-model:open="createState.visible" title="新增预约" @ok="submitCreate">
+        <a-form layout="vertical">
+          <a-form-item label="预约时间" required>
+            <a-date-picker
+              v-model:value="createState.at"
+              show-time
+              format="YYYY-MM-DD HH:mm"
+              style="width: 100%"
+            />
+          </a-form-item>
+          <a-form-item label="备注">
+            <a-textarea v-model:value="createState.note" :rows="3" />
+          </a-form-item>
+        </a-form>
+      </a-modal>
   </PageContainer>
 </template>
 

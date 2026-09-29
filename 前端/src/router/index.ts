@@ -48,6 +48,22 @@ const routes: RouteRecordRaw[] = [
     meta: { page: 'workbench' },
   },
   {
+    // 预约管理（§五 页 4）：4 Tab（今日 / 未来 / 过期 / 未预约），`tab` 缺省＝过期（前端文档 §五 页 4）。
+    // 路由参数 `:tab` 映射到 `GET /appointments?tab=` 的查询；后端按可见私海关系收敛。
+    path: '/appointment/:tab',
+    name: 'appointment',
+    component: () => import('../views/AppointmentView.vue'),
+    meta: { page: 'appointment' },
+  },
+  {
+    // 数据看板（§五 页面清单 #2）：消费 `GET /reports/dashboard` 的 5 区 ＋ KPI ＋ 公海决策待办；
+    // 可见性由 `access.ts` 的 `dashboard` 矩阵行（§4.2）统一判定，守卫无需另写角色判断。
+    path: '/dashboard',
+    name: 'dashboard',
+    component: () => import('../views/DashboardView.vue'),
+    meta: { page: 'dashboard' },
+  },
+  {
     path: '/entry',
     name: 'entry',
     component: () => import('../views/EntryView.vue'),

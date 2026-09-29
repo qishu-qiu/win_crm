@@ -228,3 +228,60 @@ export class ActivateRelationResultDto extends RelationVoDto {
   })
   linked_events!: number;
 }
+
+/**
+ * 预约管理列表项（→ §5.8 预约项 ＋ 前端 §五 页 4「预约管理」）。
+ *
+ * ★ **统一形状**覆盖四 Tab（今日 / 未来 / 过期 / 未预约）：`appointment_id` 为 `null` ＝「未预约」行
+ *   （没有预约实体，只有关系），前端据此切换「完成 / 改期」与「新增预约」两类操作。
+ * ★ `drop_in_x_days` 由前端按 `relation_id` 从关系列表取（D 域不许跨 F 域算掉海倒计时，→ 架构 §3），
+ *   服务端一律回 `null` 占位（不编 0，避免把"算不出"显示成"今天到期"）。
+ */
+export class AppointmentItemVoDto {
+  @ApiProperty({ description: '业务关系 id（十进制字符串）', example: '5' })
+  relation_id!: string;
+
+  @ApiProperty({ description: '公司名称快照（取自关系引用）', example: '安徽鑫中网信息技术有限公司' })
+  company_name!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '预约 id（**未预约行＝`null`**；十进制字符串）',
+    example: '12',
+  })
+  appointment_id!: string | null;
+
+  @ApiProperty({ type: EngineRefDto, nullable: true, description: '对着哪个联系人（未约行＝`null`）' })
+  contact!: EngineRefDto | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '预约时间（ISO；未约行＝`null`）',
+    example: '2026-09-30T14:00:00.000Z',
+  })
+  appointment_at!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '备注（未约行＝`null`）', example: '带报价单' })
+  note!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '预约状态（`pending` 待赴约 / `done` 已完成 / 未约行＝`null`）',
+    example: 'pending',
+  })
+  status!: string | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: '距掉公海还剩几天（**前端填**，服务端恒 `null` 占位，→ 架构 §3 不跨域算）',
+    example: 3,
+  })
+  drop_in_x_days!: number | null;
+
+  @ApiProperty({ enum: ['appointment', 'missing'], description: '行类型：`appointment` 有约 / `missing` 缺约' })
+  row_type!: string;
+}

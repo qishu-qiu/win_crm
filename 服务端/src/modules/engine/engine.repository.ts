@@ -442,4 +442,111 @@ export class EngineRepository {
       select: { id: true, status: true },
     });
   }
+
+  // ===== 预约（appointment，→ 接口 §4.7 / §5.8；本域「行动」族，与 `action_event` 同库同事务）=====
+  //
+  // ★ 为什么落在 D 域仓储：预约完成要**强制生成 `action_event`**（接口 §5.8），而 `action_event`
+  //   是 D 域的表；若放独立模块会写出跨域表（架构 §5.2 禁）。故预约的增 / 改 / 完成 ＋ 事件落库
+  //   都在本域一个 `$transaction` 里完成。
+
+  /** 预约读出的列（→ §5.8 预约项；不 select 用不到的列） */
+  private static readonly APPOINTMENT_SELECT = {
+    id: true,
+    relation_id: true,
+    contact_id: true,
+    appointment_at: true,
+    note: true,
+    status: true,
+    action_event_id: true,
+    created_at: true,
+  } as const;
+
+  /** 新建预约（relation_id / contact_id / appointment_at / note 由 service 组装好，仓储只落库） */
+  createAppointment(data: {
+    relation_id: bigint;
+    contact_id: bigint | null;
+    appointment_at: Date;
+    note: string | null;
+    created_by: bigint;
+  }) {
+    return this.prisma.appointment.create({
+      data: {
+        relation_id: data.relation_id,
+        contact_id: data.contact_id,
+        appointment_at: data.appointment_at,
+        note: data.note,
+        created_by: data.created_by,
+      },
+      select: EngineRepository.APPOINTMENT_SELECT,
+    });
+  }
+
+  /** 按主键取一条预约（**不带范围条件**：范围由 service 调 `RelationService` 判） */
+  findAppointmentById(id: bigint) {
+    return this.prisma.appointment.findFirst({
+      where: { id },
+      select: EngineRepository.APPOINTMENT_SELECT,
+    });
+  }
+
+  /** 改期（只动 `appointment_at` / `note` ＋ 写 `reschedule_log`） */
+  updateAppointment(
+    id: bigint,
+    data: { appointment_at: Date; note: string | null; reschedule_log: unknown },
+  ) {
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        appointment_at: data.appointment_at,
+        note: data.note,
+        reschedule_log: data.reschedule_log as Prisma.InputJsonValue,
+      },
+      select: EngineRepository.APPOINTMENT_SELECT,
+    });
+  }
+
+  /** 完成预约：置 `status='done'` ＋ 关联强制生成的事件（在 `$transaction` 内调用） */
+  completeAppointment(id: bigint, actionEventId: bigint, tx?: EngineTxClient) {
+    const client = tx ?? this.prisma;
+    return client.appointment.update({
+      where: { id },
+      data: { status: 'done', action_event_id: actionEventId },
+      select: EngineRepository.APPOINTMENT_SELECT,
+    });
+  }
+
+  /**
+   * 预约列表（→ `GET /appointments`）。`relationIds` 已是**范围收敛后**的可见关系 id 集；
+   * `tab` 决定时间窗：today＝今天、future＝明天起、expired＝今天之前仍未完成。
+   * ★ `relationIds` 为空 ⇒ 直接回空（`IN ()` 无意义，也不该白跑）。
+   */
+  listAppointments(relationIds: readonly bigint[], tab: 'today' | 'future' | 'expired', dayStart: Date, dayEnd: Date) {
+    if (relationIds.length === 0) return Promise.resolve([]);
+    const statusWhere = { status: 'pending' as const };
+    const timeWhere =
+      tab === 'today'
+        ? { appointment_at: { gte: dayStart, lt: dayEnd } }
+        : tab === 'future'
+          ? { appointment_at: { gte: dayEnd } }
+          : { appointment_at: { lt: dayStart } };
+    return this.prisma.appointment.findMany({
+      where: { relation_id: { in: [...relationIds] }, ...statusWhere, ...timeWhere },
+      select: EngineRepository.APPOINTMENT_SELECT,
+      orderBy: { appointment_at: tab === 'expired' ? 'asc' : 'desc' },
+    });
+  }
+
+  /**
+   * 「未预约」Tab 用：返回**这些关系里有「未来 / 今天待赴约」预约**的关系 id 集合。
+   * 取反即为「该约还没约的客户」（→ 接口 §5.8 / 前端 §五 页 4）。
+   * ★ 只数 `pending` 且 `appointment_at >= 当天 00:00`（含今天），已过期未赴的不算"有约"。
+   */
+  listUpcomingAppointmentRelationIds(relationIds: readonly bigint[], dayStart: Date) {
+    if (relationIds.length === 0) return Promise.resolve([]);
+    return this.prisma.appointment.findMany({
+      where: { relation_id: { in: [...relationIds] }, status: 'pending', appointment_at: { gte: dayStart } },
+      select: { relation_id: true },
+      distinct: ['relation_id'],
+    });
+  }
 }

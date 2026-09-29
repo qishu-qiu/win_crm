@@ -39,6 +39,8 @@ export type PageKey =
   | 'contacts'
   | 'contactDetail'
   | 'appearance'
+  // 预约管理（§五 页 4）：4 Tab（今日 / 未来 / 过期 / 未预约）。
+  | 'appointment'
   // 系统设置（§五 页 25）：本轮只建成「公海规则」一个子页（其余 5 子页建设中，不摆假入口，
   // →《欠账登记表》D-70）；页签级落点，故登记为独立 PageKey 由路由 / 守卫接矩阵。
   | 'settings'
@@ -78,6 +80,17 @@ const ACCESS: Record<PageKey, Record<RoleCode, PageAccess>> = {
     sale: 'full',
     service: 'full',
     delivery: 'full',
+    dept_manager: 'full',
+    gm: 'full',
+    admin: 'hidden',
+  },
+  // 预约管理（§五 页 4）：**逐行抄 §4.2 矩阵**（行 80）—— 销售 ✅ ｜ 交付 / 客服 ➖ ｜
+  //   经理 ✅ ｜ 总经理 ✅ ｜ 管理员 ➖。★ 与 `sea` 同档位逻辑：预约是客户经营动作，
+  //   交付 / 客服不进、管理员不参与客户经营（→ 需求 §4.2 / §13.4）。
+  appointment: {
+    sale: 'full',
+    service: 'hidden',
+    delivery: 'hidden',
     dept_manager: 'full',
     gm: 'full',
     admin: 'hidden',
@@ -221,6 +234,8 @@ const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   // §4.1 顺序：数据看板 → 工作台 → 预约管理 → 业务关系 → 录入 → …（未建的整段跳过）
   { key: 'dashboard', label: '数据看板', page: 'dashboard', path: '/dashboard', children: [] },
   { key: 'workbench', label: '工作台', page: 'workbench', path: '/', children: [] },
+  // §4.1 顺序：工作台 → **预约管理** → 业务关系（页 4；默认落「过期」Tab，→ 前端文档 §五 页 4）。
+  { key: 'appointment', label: '预约管理', page: 'appointment', path: '/appointment/expired', children: [] },
   { key: 'relations', label: '业务关系', page: 'relations', path: '/relations', children: [] },
   { key: 'entry', label: '录入', page: 'entry', path: '/entry', children: [] },
   {

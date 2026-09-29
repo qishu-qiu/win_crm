@@ -773,6 +773,32 @@ export class RelationRepository {
     });
   }
 
+  // ===== 预约（D 域）出口：`GET /appointments` 收敛到「我可见的私海关系」=====
+  //
+  // ★ 与上面「某公司下」三兄弟**同一套私海条件**、只是**不收 `company_id`**（预约跨公司列，
+  //   不该按公司切）—— 范围规则仍只有一份（复用 `privateSeaWhere*`）。
+
+  /** 全部私海关系 id（`all` 档：总经理 / 管理员） */
+  listAllPrivateRelationIds() {
+    return this.prisma.businessRelation.findMany({ where: this.privateSeaWhere(), select: { id: true } });
+  }
+
+  /** 这些部门的私海关系 id（`dept` 档：经理＝管辖部门） */
+  listPrivateRelationIdsOfDepts(deptIds: readonly bigint[]) {
+    return this.prisma.businessRelation.findMany({
+      where: this.privateSeaWhereOfDepts(deptIds),
+      select: { id: true },
+    });
+  }
+
+  /** **我参与的**私海关系 id（`mine` 档：销售 / 交付 · 客服；`now` 判协同有效期） */
+  listPrivateRelationIdsOfEmployee(employeeId: bigint, now: Date) {
+    return this.prisma.businessRelation.findMany({
+      where: this.privateSeaWhereOfEmployee(employeeId, now),
+      select: { id: true },
+    });
+  }
+
   /**
    * 「**我可见的公司**」的 company_id 去重集合（→ 需求 §6.1 ⑪；D-28）。
    *

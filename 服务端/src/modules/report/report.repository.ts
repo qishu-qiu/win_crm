@@ -149,7 +149,7 @@ export class ReportRepository {
       content: string | null;
       overdue_flag: bigint;
     }[]>`
-      SELECT c.relation_id, co.name AS relation_name, c.contact_id, ct.name AS contact_name,
+      SELECT c.relation_id, co.full_name AS relation_name, c.contact_id, ct.name AS contact_name,
              c.due_at, c.content,
              CASE WHEN c.due_at < ${range.start} THEN 1 ELSE 0 END AS overdue_flag
       FROM commitment c
@@ -191,7 +191,7 @@ export class ReportRepository {
       service_end: Date | null;
       days_left: bigint | null;
     }[]>`
-      SELECT ct.id AS contract_id, ct.contract_no, br.id AS relation_id, co.name AS relation_name,
+      SELECT ct.id AS contract_id, ct.contract_no, br.id AS relation_id, co.full_name AS relation_name,
              ct.service_end, DATEDIFF(ct.service_end, ${from}) AS days_left
       FROM contract ct
       INNER JOIN business_relation br ON br.id = ct.relation_id
@@ -229,7 +229,7 @@ export class ReportRepository {
       owner_name: string | null;
       created_at: Date;
     }[]>`
-      SELECT br.id AS relation_id, co.name AS relation_name,
+      SELECT br.id AS relation_id, co.full_name AS relation_name,
              rm.employee_id AS owner_id, e.name AS owner_name, br.created_at
       FROM business_relation br
       LEFT JOIN company co ON co.id = br.company_id
@@ -340,7 +340,7 @@ export class ReportRepository {
       last_event_at: Date | null;
       no_progress_days: bigint;
     }[]>`
-      SELECT br.id AS relation_id, co.name AS relation_name,
+      SELECT br.id AS relation_id, co.full_name AS relation_name,
              rm.employee_id AS owner_id, e.name AS owner_name, br.last_event_at,
              CASE WHEN br.last_event_at IS NULL THEN 9999
                   ELSE DATEDIFF(${now}, br.last_event_at) END AS no_progress_days

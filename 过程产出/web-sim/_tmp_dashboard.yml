@@ -1,0 +1,29 @@
+- generic [ref=e32]:
+  - complementary [ref=e33]:
+    - menu [ref=e34]:
+      - menuitem "数据看板" [ref=e35] [cursor=pointer]
+      - menuitem "工作台" [ref=e37] [cursor=pointer]
+      - menuitem "预约管理" [ref=e39] [cursor=pointer]
+      - generic [ref=e41] [cursor=pointer]: 业务关系
+      - list [ref=e43]:
+        - menuitem "我的关系" [ref=e44] [cursor=pointer]
+        - menuitem "系统公海" [ref=e46] [cursor=pointer]
+        - menuitem "部门公海" [ref=e48] [cursor=pointer]
+      - menuitem "录入" [ref=e50] [cursor=pointer]
+      - generic [ref=e52] [cursor=pointer]: 客户档案
+      - list [ref=e54]:
+        - menuitem "联系人档案" [ref=e55] [cursor=pointer]
+  - generic [ref=e57]:
+    - banner [ref=e58]:
+      - generic [ref=e59]:
+        - generic [ref=e60]: 销售
+        - generic [ref=e61]: 销售一部
+      - button "王 王海涛" [ref=e62] [cursor=pointer]:
+        - generic [ref=e63]: 王
+        - generic [ref=e65]: 王海涛
+    - main [ref=e66]:
+      - generic [ref=e67]:
+        - generic [ref=e69]:
+          - heading "数据看板" [level=2] [ref=e70]
+          - paragraph [ref=e71]: 个人视角（即将上线）
+        - paragraph [ref=e75]: 你的「个人视角数据看板（含我的日报）」规划中，先用顶部「工作台」跟进今日动线

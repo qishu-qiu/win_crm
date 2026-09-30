@@ -1,0 +1,59 @@
+- generic [ref=f3e3]:
+  - complementary [ref=f3e4]:
+    - menu [ref=f3e5]:
+      - menuitem "数据看板" [ref=f3e6] [cursor=pointer]
+      - menuitem "工作台" [ref=f3e8] [cursor=pointer]
+      - menuitem "预约管理" [ref=f3e10] [cursor=pointer]
+      - generic [ref=f3e14] [cursor=pointer]:
+        - generic [ref=f3e15]: 业务关系
+        - generic [ref=f3e16]: "3"
+      - menuitem "录入" [ref=f3e17] [cursor=pointer]
+      - generic [ref=f3e19] [cursor=pointer]: 客户档案
+      - list [ref=f3e21]:
+        - menuitem "联系人档案" [ref=f3e22] [cursor=pointer]
+  - generic [ref=f3e24]:
+    - banner [ref=f3e25]:
+      - generic [ref=f3e26]:
+        - generic [ref=f3e27]: 销售
+        - generic [ref=f3e28]: 销售一部
+      - button "王 王海涛" [ref=f3e29] [cursor=pointer]:
+        - generic [ref=f3e30]: 王
+        - generic [ref=f3e32]: 王海涛
+    - main [ref=f3e33]:
+      - generic [ref=f3e34]:
+        - generic [ref=f3e36]:
+          - heading "录入" [level=2] [ref=f3e37]
+          - paragraph [ref=f3e38]: 三步走完一次录入：先记人，再挂公司，最后确认激活业务关系。第 2 步可以跳过（暂不填公司，先存为待跟进）。
+        - generic [ref=f3e39]:
+          - generic [ref=f3e40]:
+            - button "check 联系人" [ref=f3e91] [cursor=pointer]:
+              - img "check" [ref=f3e93]
+              - generic [ref=f3e44]: 联系人
+            - button "check 公司" [ref=f3e135] [cursor=pointer]:
+              - img "check" [ref=f3e137]
+              - generic [ref=f3e49]: 公司
+            - button "3 确认" [ref=f3e52]:
+              - generic [ref=f3e53]: "3"
+              - generic [ref=f3e54]: 确认
+          - generic "3 · 确认" [ref=f3e140]:
+            - generic [ref=f3e141]:
+              - generic [ref=f3e142]:
+                - generic [ref=f3e143]:
+                  - term [ref=f3e144]: 联系人
+                  - definition [ref=f3e145]: web模拟测试联系人 ｜ 13800009999
+                - generic [ref=f3e146]:
+                  - term [ref=f3e147]: 公司
+                  - definition [ref=f3e148]:
+                    - text: web模拟测试公司2026
+                    - generic [ref=f3e149]: 本次新建
+              - generic [ref=f3e150]:
+                - generic [ref=f3e152]:
+                  - generic "承接部门" [ref=f3e154]
+                  - combobox [ref=f3e161] [cursor=pointer]
+                - generic [ref=f3e168]:
+                  - generic "产品线" [ref=f3e170]
+                  - combobox [disabled] [ref=f3e177]
+              - paragraph [ref=f3e179]: 激活后这条关系归你（换人要走转交审批）。同公司 × 同部门 × 同产品线只能有一条关系， 已有归属时服务端会拦下并说明原因。
+              - generic [ref=f3e180]:
+                - button "确认并激活业务关系" [disabled] [ref=f3e181]
+                - button "上一步" [ref=f3e183] [cursor=pointer]

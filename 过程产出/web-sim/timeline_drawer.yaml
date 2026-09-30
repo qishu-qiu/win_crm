@@ -1,0 +1,423 @@
+- generic [ref=f4e1]:
+  - generic [ref=f4e4]:
+    - complementary [ref=f4e5]:
+      - menu [ref=f4e6]:
+        - menuitem "数据看板" [ref=f4e7] [cursor=pointer]
+        - menuitem "工作台" [ref=f4e9] [cursor=pointer]
+        - menuitem "预约管理" [ref=f4e11] [cursor=pointer]
+        - generic [ref=f4e13] [cursor=pointer]: 业务关系
+        - list [ref=f4e15]:
+          - menuitem "我的关系" [ref=f4e16] [cursor=pointer]
+          - menuitem "系统公海" [ref=f4e18] [cursor=pointer]
+          - menuitem "部门公海" [ref=f4e20] [cursor=pointer]
+        - menuitem "录入" [ref=f4e22] [cursor=pointer]
+        - generic [ref=f4e24] [cursor=pointer]: 客户档案
+        - list [ref=f4e26]:
+          - menuitem "联系人档案" [ref=f4e27] [cursor=pointer]
+    - generic [ref=f4e29]:
+      - banner [ref=f4e30]:
+        - generic [ref=f4e31]:
+          - generic [ref=f4e32]: 销售
+          - generic [ref=f4e33]: 销售一部
+        - button "王 王海涛" [ref=f4e34] [cursor=pointer]:
+          - generic [ref=f4e35]: 王
+          - generic [ref=f4e37]: 王海涛
+      - main [ref=f4e38]:
+        - generic [ref=f4e39]:
+          - generic [ref=f4e41]:
+            - heading "业务关系" [level=2] [ref=f4e42]
+            - paragraph [ref=f4e43]: 列表由服务端按你的数据范围收敛：销售＝我参与的关系 ＋ 我所属部门的公海；经理＝管辖部门；总经理 / 管理员＝全部。
+          - generic [ref=f4e44]:
+            - button "私海" [pressed] [ref=f4e45] [cursor=pointer]
+            - button "公海" [ref=f4e46] [cursor=pointer]
+          - generic [ref=f4e47]:
+            - generic [ref=f4e48]: 视图
+            - button "我的全部" [pressed] [ref=f4e49] [cursor=pointer]
+            - button "跟进中" [ref=f4e50] [cursor=pointer]
+            - button "已合作" [ref=f4e51] [cursor=pointer]
+            - button "已流失" [ref=f4e52] [cursor=pointer]
+            - generic [ref=f4e53]: 紧迫档
+            - button "周重点" [ref=f4e54] [cursor=pointer]
+            - button "月重点" [ref=f4e56] [cursor=pointer]
+            - button "季度跟" [ref=f4e58] [cursor=pointer]
+            - button "长期跟" [ref=f4e60] [cursor=pointer]
+            - button "灰度" [ref=f4e62] [cursor=pointer]
+          - generic [ref=f4e66]:
+            - table [ref=f4e70]:
+              - rowgroup [ref=f4e83]:
+                - row [ref=f4e84]:
+                  - columnheader "Select all" [ref=f4e85]:
+                    - checkbox "Select all" [ref=f4e89] [cursor=pointer]
+                  - columnheader "公司" [ref=f4e91]
+                  - columnheader "部门" [ref=f4e92]
+                  - columnheader "产品线" [ref=f4e93]
+                  - columnheader "阶段" [ref=f4e94]
+                  - columnheader "紧迫" [ref=f4e95]
+                  - columnheader "开发价值" [ref=f4e96]
+                  - columnheader "主责" [ref=f4e97]
+                  - columnheader "最近沟通" [ref=f4e98]
+                  - columnheader "掉海" [ref=f4e99]
+                  - columnheader "操作" [ref=f4e100]
+              - rowgroup [ref=f4e101]:
+                - row "web模拟测试公司2026 销售一部 财税 初步建联 灰度 — 王 王海涛 — — 时间线" [ref=f4e102]:
+                  - cell [ref=f4e103]:
+                    - checkbox [ref=f4e106] [cursor=pointer]
+                  - cell [ref=f4e108]:
+                    - link "web模拟测试公司2026" [ref=f4e109] [cursor=pointer]:
+                      - /url: /relations/32
+                  - cell "销售一部" [ref=f4e110]
+                  - cell "财税" [ref=f4e111]
+                  - cell "初步建联" [ref=f4e112]
+                  - cell "灰度" [ref=f4e113]
+                  - cell "—" [ref=f4e117]
+                  - cell "王 王海涛" [ref=f4e118]:
+                    - generic [ref=f4e119]:
+                      - generic [ref=f4e120]: 王
+                      - generic [ref=f4e121]: 王海涛
+                  - cell "—" [ref=f4e123]
+                  - cell "—" [ref=f4e124]
+                  - cell [ref=f4e125]:
+                    - button "时间线" [ref=f4e126] [cursor=pointer]
+                - row "M8NEGco175804 销售一部 财税 初步建联 灰度 — 王 王海涛 2026-09-29 17:58 — 时间线" [ref=f4e128]:
+                  - cell [ref=f4e129]:
+                    - checkbox [ref=f4e132] [cursor=pointer]
+                  - cell [ref=f4e134]:
+                    - link "M8NEGco175804" [ref=f4e135] [cursor=pointer]:
+                      - /url: /relations/31
+                  - cell "销售一部" [ref=f4e136]
+                  - cell "财税" [ref=f4e137]
+                  - cell "初步建联" [ref=f4e138]
+                  - cell "灰度" [ref=f4e139]
+                  - cell "—" [ref=f4e143]
+                  - cell "王 王海涛" [ref=f4e144]:
+                    - generic [ref=f4e145]:
+                      - generic [ref=f4e146]: 王
+                      - generic [ref=f4e147]: 王海涛
+                  - cell "2026-09-29 17:58" [ref=f4e149]
+                  - cell "—" [ref=f4e150]
+                  - cell [ref=f4e151]:
+                    - button "时间线" [ref=f4e152] [cursor=pointer]
+                - row "M8NEGco175554 销售一部 财税 初步建联 灰度 — 王 王海涛 2026-09-29 17:55 — 时间线" [ref=f4e154]:
+                  - cell [ref=f4e155]:
+                    - checkbox [ref=f4e158] [cursor=pointer]
+                  - cell [ref=f4e160]:
+                    - link "M8NEGco175554" [ref=f4e161] [cursor=pointer]:
+                      - /url: /relations/30
+                  - cell "销售一部" [ref=f4e162]
+                  - cell "财税" [ref=f4e163]
+                  - cell "初步建联" [ref=f4e164]
+                  - cell "灰度" [ref=f4e165]
+                  - cell "—" [ref=f4e169]
+                  - cell "王 王海涛" [ref=f4e170]:
+                    - generic [ref=f4e171]:
+                      - generic [ref=f4e172]: 王
+                      - generic [ref=f4e173]: 王海涛
+                  - cell "2026-09-29 17:55" [ref=f4e175]
+                  - cell "—" [ref=f4e176]
+                  - cell [ref=f4e177]:
+                    - button "时间线" [ref=f4e178] [cursor=pointer]
+                - row "M8NEG公司175406 销售一部 GEO 初步建联 灰度 — 王 王海涛 — — 时间线" [ref=f4e180]:
+                  - cell [ref=f4e181]:
+                    - checkbox [ref=f4e184] [cursor=pointer]
+                  - cell [ref=f4e186]:
+                    - link "M8NEG公司175406" [ref=f4e187] [cursor=pointer]:
+                      - /url: /relations/29
+                  - cell "销售一部" [ref=f4e188]
+                  - cell "GEO" [ref=f4e189]
+                  - cell "初步建联" [ref=f4e190]
+                  - cell "灰度" [ref=f4e191]
+                  - cell "—" [ref=f4e195]
+                  - cell "王 王海涛" [ref=f4e196]:
+                    - generic [ref=f4e197]:
+                      - generic [ref=f4e198]: 王
+                      - generic [ref=f4e199]: 王海涛
+                  - cell "—" [ref=f4e201]
+                  - cell "—" [ref=f4e202]
+                  - cell [ref=f4e203]:
+                    - button "时间线" [ref=f4e204] [cursor=pointer]
+                - row "M8NEG公司175406 销售一部 财税 初步建联 灰度 — 王 王海涛 2026-09-29 17:54 — 时间线" [ref=f4e206]:
+                  - cell [ref=f4e207]:
+                    - checkbox [ref=f4e210] [cursor=pointer]
+                  - cell [ref=f4e212]:
+                    - link "M8NEG公司175406" [ref=f4e213] [cursor=pointer]:
+                      - /url: /relations/28
+                  - cell "销售一部" [ref=f4e214]
+                  - cell "财税" [ref=f4e215]
+                  - cell "初步建联" [ref=f4e216]
+                  - cell "灰度" [ref=f4e217]
+                  - cell "—" [ref=f4e221]
+                  - cell "王 王海涛" [ref=f4e222]:
+                    - generic [ref=f4e223]:
+                      - generic [ref=f4e224]: 王
+                      - generic [ref=f4e225]: 王海涛
+                  - cell "2026-09-29 17:54" [ref=f4e227]
+                  - cell "—" [ref=f4e228]
+                  - cell [ref=f4e229]:
+                    - button "时间线" [ref=f4e230] [cursor=pointer]
+                - row "CLI动线验证公司有限公司 销售一部 财税 初步建联 灰度 — 王 王海涛 2026-09-22 17:15 — 时间线" [ref=f4e232]:
+                  - cell [ref=f4e233]:
+                    - checkbox [ref=f4e236] [cursor=pointer]
+                  - cell [ref=f4e238]:
+                    - link "CLI动线验证公司有限公司" [ref=f4e239] [cursor=pointer]:
+                      - /url: /relations/19
+                  - cell "销售一部" [ref=f4e240]
+                  - cell "财税" [ref=f4e241]
+                  - cell "初步建联" [ref=f4e242]
+                  - cell "灰度" [ref=f4e243]
+                  - cell "—" [ref=f4e247]
+                  - cell "王 王海涛" [ref=f4e248]:
+                    - generic [ref=f4e249]:
+                      - generic [ref=f4e250]: 王
+                      - generic [ref=f4e251]: 王海涛
+                  - cell "2026-09-22 17:15" [ref=f4e253]
+                  - cell "—" [ref=f4e254]
+                  - cell [ref=f4e255]:
+                    - button "时间线" [ref=f4e256] [cursor=pointer]
+                - row "测试3 销售一部 法务 初步建联 灰度 — 王 王海涛 2026-09-22 16:48 — 时间线" [ref=f4e258]:
+                  - cell [ref=f4e259]:
+                    - checkbox [ref=f4e262] [cursor=pointer]
+                  - cell [ref=f4e264]:
+                    - link "测试3" [ref=f4e265] [cursor=pointer]:
+                      - /url: /relations/18
+                  - cell "销售一部" [ref=f4e266]
+                  - cell "法务" [ref=f4e267]
+                  - cell "初步建联" [ref=f4e268]
+                  - cell "灰度" [ref=f4e269]
+                  - cell "—" [ref=f4e273]
+                  - cell "王 王海涛" [ref=f4e274]:
+                    - generic [ref=f4e275]:
+                      - generic [ref=f4e276]: 王
+                      - generic [ref=f4e277]: 王海涛
+                  - cell "2026-09-22 16:48" [ref=f4e279]
+                  - cell "—" [ref=f4e280]
+                  - cell [ref=f4e281]:
+                    - button "时间线" [ref=f4e282] [cursor=pointer]
+                - row "123123 销售一部 网站 初步建联 灰度 — 王 王海涛 — — 时间线" [ref=f4e284]:
+                  - cell [ref=f4e285]:
+                    - checkbox [ref=f4e288] [cursor=pointer]
+                  - cell [ref=f4e290]:
+                    - link "123123" [ref=f4e291] [cursor=pointer]:
+                      - /url: /relations/15
+                  - cell "销售一部" [ref=f4e292]
+                  - cell "网站" [ref=f4e293]
+                  - cell "初步建联" [ref=f4e294]
+                  - cell "灰度" [ref=f4e295]
+                  - cell "—" [ref=f4e299]
+                  - cell "王 王海涛" [ref=f4e300]:
+                    - generic [ref=f4e301]:
+                      - generic [ref=f4e302]: 王
+                      - generic [ref=f4e303]: 王海涛
+                  - cell "—" [ref=f4e305]
+                  - cell "—" [ref=f4e306]
+                  - cell [ref=f4e307]:
+                    - button "时间线" [ref=f4e308] [cursor=pointer]
+                - row "M8验收走查客户 销售一部 财税 初步建联 灰度 — 王 王海涛 2026-09-22 14:29 — 时间线" [ref=f4e310]:
+                  - cell [ref=f4e311]:
+                    - checkbox [ref=f4e314] [cursor=pointer]
+                  - cell [ref=f4e316]:
+                    - link "M8验收走查客户" [ref=f4e317] [cursor=pointer]:
+                      - /url: /relations/13
+                  - cell "销售一部" [ref=f4e318]
+                  - cell "财税" [ref=f4e319]
+                  - cell "初步建联" [ref=f4e320]
+                  - cell "灰度" [ref=f4e321]
+                  - cell "—" [ref=f4e325]
+                  - cell "王 王海涛" [ref=f4e326]:
+                    - generic [ref=f4e327]:
+                      - generic [ref=f4e328]: 王
+                      - generic [ref=f4e329]: 王海涛
+                  - cell "2026-09-22 14:29" [ref=f4e331]
+                  - cell "—" [ref=f4e332]
+                  - cell [ref=f4e333]:
+                    - button "时间线" [ref=f4e334] [cursor=pointer]
+                - row "合肥测试建材有限公司 销售一部 法务 初步建联 灰度 — 王 王海涛 — — 时间线" [ref=f4e336]:
+                  - cell [ref=f4e337]:
+                    - checkbox [ref=f4e340] [cursor=pointer]
+                  - cell [ref=f4e342]:
+                    - link "合肥测试建材有限公司" [ref=f4e343] [cursor=pointer]:
+                      - /url: /relations/8
+                  - cell "销售一部" [ref=f4e344]
+                  - cell "法务" [ref=f4e345]
+                  - cell "初步建联" [ref=f4e346]
+                  - cell "灰度" [ref=f4e347]
+                  - cell "—" [ref=f4e351]
+                  - cell "王 王海涛" [ref=f4e352]:
+                    - generic [ref=f4e353]:
+                      - generic [ref=f4e354]: 王
+                      - generic [ref=f4e355]: 王海涛
+                  - cell "—" [ref=f4e357]
+                  - cell "—" [ref=f4e358]
+                  - cell [ref=f4e359]:
+                    - button "时间线" [ref=f4e360] [cursor=pointer]
+                - row "安徽鑫中网信息技术有限公司 销售一部 财税 初步建联 灰度 — 王 王海涛 — — 时间线" [ref=f4e362]:
+                  - cell [ref=f4e363]:
+                    - checkbox [ref=f4e366] [cursor=pointer]
+                  - cell [ref=f4e368]:
+                    - link "安徽鑫中网信息技术有限公司" [ref=f4e369] [cursor=pointer]:
+                      - /url: /relations/7
+                  - cell "销售一部" [ref=f4e370]
+                  - cell "财税" [ref=f4e371]
+                  - cell "初步建联" [ref=f4e372]
+                  - cell "灰度" [ref=f4e373]
+                  - cell "—" [ref=f4e377]
+                  - cell "王 王海涛" [ref=f4e378]:
+                    - generic [ref=f4e379]:
+                      - generic [ref=f4e380]: 王
+                      - generic [ref=f4e381]: 王海涛
+                  - cell "—" [ref=f4e383]
+                  - cell "—" [ref=f4e384]
+                  - cell [ref=f4e385]:
+                    - button "时间线" [ref=f4e386] [cursor=pointer]
+                - row "?????????? 销售一部 财税 初步建联 灰度 — 王 王海涛 2026-09-18 14:42 — 时间线" [ref=f4e388]:
+                  - cell [ref=f4e389]:
+                    - checkbox [ref=f4e392] [cursor=pointer]
+                  - cell [ref=f4e394]:
+                    - link "??????????" [ref=f4e395] [cursor=pointer]:
+                      - /url: /relations/6
+                  - cell "销售一部" [ref=f4e396]
+                  - cell "财税" [ref=f4e397]
+                  - cell "初步建联" [ref=f4e398]
+                  - cell "灰度" [ref=f4e399]
+                  - cell "—" [ref=f4e403]
+                  - cell "王 王海涛" [ref=f4e404]:
+                    - generic [ref=f4e405]:
+                      - generic [ref=f4e406]: 王
+                      - generic [ref=f4e407]: 王海涛
+                  - cell "2026-09-18 14:42" [ref=f4e409]
+                  - cell "—" [ref=f4e410]
+                  - cell [ref=f4e411]:
+                    - button "时间线" [ref=f4e412] [cursor=pointer]
+                - row "合肥验证建材120943 有限公司 销售一部 财税 初步建联 灰度 — 王 王海涛 2026-09-16 08:16 — 时间线" [ref=f4e414]:
+                  - cell [ref=f4e415]:
+                    - checkbox [ref=f4e418] [cursor=pointer]
+                  - cell [ref=f4e420]:
+                    - link "合肥验证建材120943 有限公司" [ref=f4e421] [cursor=pointer]:
+                      - /url: /relations/5
+                  - cell "销售一部" [ref=f4e422]
+                  - cell "财税" [ref=f4e423]
+                  - cell "初步建联" [ref=f4e424]
+                  - cell "灰度" [ref=f4e425]
+                  - cell "—" [ref=f4e429]
+                  - cell "王 王海涛" [ref=f4e430]:
+                    - generic [ref=f4e431]:
+                      - generic [ref=f4e432]: 王
+                      - generic [ref=f4e433]: 王海涛
+                  - cell "2026-09-16 08:16" [ref=f4e435]
+                  - cell "—" [ref=f4e436]
+                  - cell [ref=f4e437]:
+                    - button "时间线" [ref=f4e438] [cursor=pointer]
+                - row "安徽鑫中网信息技术有限公司 销售一部 法务 初步建联 月重点 待定 王 王海涛 — — 时间线" [ref=f4e440]:
+                  - cell [ref=f4e441]:
+                    - checkbox [ref=f4e444] [cursor=pointer]
+                  - cell [ref=f4e446]:
+                    - link "安徽鑫中网信息技术有限公司" [ref=f4e447] [cursor=pointer]:
+                      - /url: /relations/3
+                  - cell "销售一部" [ref=f4e448]
+                  - cell "法务" [ref=f4e449]
+                  - cell "初步建联" [ref=f4e450]
+                  - cell "月重点" [ref=f4e451]
+                  - cell "待定" [ref=f4e455]
+                  - cell "王 王海涛" [ref=f4e456]:
+                    - generic [ref=f4e457]:
+                      - generic [ref=f4e458]: 王
+                      - generic [ref=f4e459]: 王海涛
+                  - cell "—" [ref=f4e461]
+                  - cell "—" [ref=f4e462]
+                  - cell [ref=f4e463]:
+                    - button "时间线" [ref=f4e464] [cursor=pointer]
+                - row "合肥测试建材有限公司 销售一部 财税 初步建联 周重点 高 王 王海涛 — — 时间线" [ref=f4e466]:
+                  - cell [ref=f4e467]:
+                    - checkbox [ref=f4e470] [cursor=pointer]
+                  - cell [ref=f4e472]:
+                    - link "合肥测试建材有限公司" [ref=f4e473] [cursor=pointer]:
+                      - /url: /relations/1
+                  - cell "销售一部" [ref=f4e474]
+                  - cell "财税" [ref=f4e475]
+                  - cell "初步建联" [ref=f4e476]
+                  - cell "周重点" [ref=f4e477]
+                  - cell "高" [ref=f4e481]
+                  - cell "王 王海涛" [ref=f4e482]:
+                    - generic [ref=f4e483]:
+                      - generic [ref=f4e484]: 王
+                      - generic [ref=f4e485]: 王海涛
+                  - cell "—" [ref=f4e487]
+                  - cell "—" [ref=f4e488]
+                  - cell [ref=f4e489]:
+                    - button "时间线" [ref=f4e490] [cursor=pointer]
+            - list [ref=f4e492]:
+              - listitem [ref=f4e493]: 共 15 条
+              - listitem "Previous Page" [ref=f4e494]:
+                - button [disabled] [ref=f4e495]:
+                  - img "left" [ref=f4e496]
+              - listitem "1" [ref=f4e499] [cursor=pointer]
+              - listitem "Next Page" [ref=f4e501]:
+                - button [disabled] [ref=f4e502]:
+                  - img "right" [ref=f4e503]
+              - listitem [ref=f4e506]:
+                - generic [ref=f4e508] [cursor=pointer]:
+                  - combobox [ref=f4e510]
+                  - generic [ref=f4e511]: 20 / page
+  - generic [ref=f4e514]:
+    - generic [ref=f4e516]:
+      - button "Close" [ref=f4e517] [cursor=pointer]:
+        - img "close" [ref=f4e518]
+      - generic [ref=f4e521]: 时间线 · web模拟测试公司2026
+    - generic [ref=f4e522]:
+      - heading "记一条跟单" [level=3] [ref=f4e523]
+      - generic [ref=f4e524]:
+        - generic [ref=f4e526] [cursor=pointer]:
+          - combobox [ref=f4e528]
+          - generic "电话" [ref=f4e529]
+        - generic [ref=f4e531] [cursor=pointer]:
+          - combobox [ref=f4e533]
+          - generic "有进展" [ref=f4e534]
+        - textbox "一句话结果（有效沟通必填）" [ref=f4e535]
+        - generic [ref=f4e536]:
+          - generic [ref=f4e537]:
+            - button "Increase Value" [ref=f4e538] [cursor=pointer]:
+              - img "up" [ref=f4e539]
+            - button "Decrease Value" [ref=f4e542] [cursor=pointer]:
+              - img "down" [ref=f4e543]
+          - spinbutton "分钟" [ref=f4e547]
+        - button "记下来" [ref=f4e548] [cursor=pointer]
+      - heading "时间线（按时间倒序，默认近 1 个月）" [level=3] [ref=f4e550]
+      - table [ref=f4e557]:
+        - rowgroup [ref=f4e565]:
+          - row [ref=f4e566]:
+            - columnheader "动作" [ref=f4e567]
+            - columnheader "一句话结果" [ref=f4e568]
+            - columnheader "结果" [ref=f4e569]
+            - columnheader "谁写的" [ref=f4e570]
+            - columnheader "分线" [ref=f4e571]
+            - columnheader "时间" [ref=f4e572]
+        - rowgroup [ref=f4e573]:
+          - row [ref=f4e574]:
+            - cell "系统" [ref=f4e575]
+            - cell "建档：激活业务关系" [ref=f4e576]
+            - cell "—" [ref=f4e577]
+            - cell "王海涛" [ref=f4e578]
+            - cell "主线" [ref=f4e579]
+            - cell "2026-09-29 18:26" [ref=f4e580]
+      - heading "承诺" [level=3] [ref=f4e581]
+      - generic [ref=f4e582]:
+        - generic [ref=f4e584] [cursor=pointer]:
+          - combobox [ref=f4e586]
+          - generic "我答应客户（催自己）" [ref=f4e587]
+        - generic [ref=f4e589] [cursor=pointer]:
+          - combobox [ref=f4e591]
+          - generic "交付资料" [ref=f4e592]
+        - textbox "一句话承诺" [ref=f4e593]
+        - textbox [ref=f4e594]
+        - button "建承诺" [ref=f4e595] [cursor=pointer]
+      - table [ref=f4e603]:
+        - rowgroup [ref=f4e610]:
+          - row [ref=f4e611]:
+            - columnheader "承诺人" [ref=f4e612]
+            - columnheader "内容" [ref=f4e613]
+            - columnheader "到期" [ref=f4e614]
+            - columnheader "状态" [ref=f4e615]
+            - columnheader "操作" [ref=f4e616]
+        - rowgroup [ref=f4e617]:
+          - row [ref=f4e618]:
+            - cell [ref=f4e619]:
+              - paragraph [ref=f4e634]: 暂无承诺

@@ -1,0 +1,70 @@
+- generic [ref=f1e4]:
+  - complementary [ref=f1e5]:
+    - menu [ref=f1e6]:
+      - menuitem "数据看板" [ref=f1e7] [cursor=pointer]
+      - menuitem "工作台" [ref=f1e9] [cursor=pointer]
+      - menuitem "预约管理" [ref=f1e11] [cursor=pointer]
+      - generic [ref=f1e13] [cursor=pointer]: 业务关系
+      - list [ref=f1e15]:
+        - menuitem "我的关系" [ref=f1e16] [cursor=pointer]
+        - menuitem "系统公海" [ref=f1e18] [cursor=pointer]
+        - menuitem "部门公海" [ref=f1e20] [cursor=pointer]
+      - menuitem "录入" [ref=f1e22] [cursor=pointer]
+      - generic [ref=f1e24] [cursor=pointer]: 客户档案
+      - list [ref=f1e26]:
+        - menuitem "联系人档案" [ref=f1e27] [cursor=pointer]
+  - generic [ref=f1e29]:
+    - banner [ref=f1e30]:
+      - generic [ref=f1e31]:
+        - generic [ref=f1e32]: 销售
+        - generic [ref=f1e33]: 销售一部
+      - button "王 王海涛" [ref=f1e34] [cursor=pointer]:
+        - generic [ref=f1e35]: 王
+        - generic [ref=f1e37]: 王海涛
+    - main [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]:
+          - heading "web模拟公海公司2026" [level=2] [ref=f1e42]
+          - generic [ref=f1e43]:
+            - button "新增预约" [ref=f1e44] [cursor=pointer]
+            - button "← 返回业务关系列表" [ref=f1e46] [cursor=pointer]
+        - generic [ref=f1e49]:
+          - generic [ref=f1e50]:
+            - generic [ref=f1e51]: 阶段：初步建联
+            - generic [ref=f1e54]: 灰度
+            - generic [ref=f1e57]: 开发价值：—
+            - generic [ref=f1e60]: 公海
+          - table [ref=f1e65]:
+            - rowgroup [ref=f1e66]:
+              - row [ref=f1e67]:
+                - rowheader "公司" [ref=f1e68]
+                - cell "web模拟公海公司2026" [ref=f1e69]
+                - rowheader "部门" [ref=f1e71]
+                - cell "销售一部" [ref=f1e72]
+                - rowheader "产品线" [ref=f1e74]
+                - cell "财税" [ref=f1e75]
+              - row [ref=f1e77]:
+                - rowheader "主责" [ref=f1e78]
+                - cell "（公海 · 待领取）" [ref=f1e79]
+                - rowheader "最近沟通" [ref=f1e81]
+                - cell "—" [ref=f1e82]
+                - rowheader "下一步" [ref=f1e84]
+                - cell "—" [ref=f1e85]
+          - heading "成员" [level=3] [ref=f1e87]
+          - table [ref=f1e94]:
+            - rowgroup [ref=f1e100]:
+              - row [ref=f1e101]:
+                - columnheader "成员" [ref=f1e102]
+                - columnheader "类型" [ref=f1e103]
+                - columnheader "来源" [ref=f1e104]
+                - columnheader "有效期至" [ref=f1e105]
+            - rowgroup [ref=f1e106]:
+              - row [ref=f1e107]:
+                - cell "王 王海涛" [ref=f1e108]:
+                  - generic [ref=f1e109]:
+                    - generic [ref=f1e110]: 王
+                    - generic [ref=f1e111]: 王海涛
+                - cell "主责销售" [ref=f1e113]
+                - cell "—" [ref=f1e114]
+                - cell "—" [ref=f1e115]
+          - paragraph [ref=f1e116]: 合同 / 工单 / 关系网 / 复盘等分组属后续里程碑（服务端尚未提供对应数据）—— 本页**不摆点了没用的入口**；时间线仍在列表页那一行的「时间线」抽屉里（M4-17 已落）。

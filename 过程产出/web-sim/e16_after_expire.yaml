@@ -1,0 +1,15 @@
+- generic [ref=f2e4]:
+  - heading "销售 CRM" [level=1] [ref=f2e5]
+  - paragraph [ref=f2e6]: 请使用公司账号登录
+  - generic [ref=f2e7]:
+    - generic [ref=f2e9]:
+      - generic "手机号 / 登录账号名" [ref=f2e11]: "* 手机号 / 登录账号名"
+      - textbox "* 手机号 / 登录账号名" [ref=f2e15]:
+        - /placeholder: 手机号 或 登录账号名
+    - generic [ref=f2e17]:
+      - generic "密码" [ref=f2e19]: "* 密码"
+      - generic [ref=f2e23]:
+        - textbox "* 密码" [ref=f2e24]:
+          - /placeholder: 请输入密码
+        - img "eye-invisible" [ref=f2e26] [cursor=pointer]
+    - button "登 录" [ref=f2e30] [cursor=pointer]

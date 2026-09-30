@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e32]:
+    - complementary [ref=e33]:
+      - menu [ref=e34]:
+        - menuitem "数据看板" [ref=e35] [cursor=pointer]
+        - menuitem "工作台" [ref=e37] [cursor=pointer]
+        - menuitem "预约管理" [ref=e39] [cursor=pointer]
+        - generic [ref=e41] [cursor=pointer]: 业务关系
+        - list [ref=e43]:
+          - menuitem "我的关系" [ref=e44] [cursor=pointer]
+          - menuitem "系统公海" [ref=e46] [cursor=pointer]
+          - menuitem "部门公海" [ref=e48] [cursor=pointer]
+        - menuitem "录入" [ref=e50] [cursor=pointer]
+        - generic [ref=e52] [cursor=pointer]: 客户档案
+        - list [ref=e54]:
+          - menuitem "联系人档案" [ref=e55] [cursor=pointer]
+    - generic [ref=e57]:
+      - banner [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]: 销售
+          - generic [ref=e61]: 销售一部
+        - button "王 王海涛" [ref=e62] [cursor=pointer]:
+          - generic [ref=e63]: 王
+          - generic [ref=e65]: 王海涛
+      - main [ref=e66]:
+        - generic [ref=e81]:
+          - heading "部门公海" [level=2] [ref=e84]
+          - generic [ref=e85]:
+            - link "掉海记录" [ref=e87] [cursor=pointer]:
+              - /url: /sea/records
+            - link "经理决策待办" [ref=e89] [cursor=pointer]:
+              - /url: /sea/manager-decision
+          - generic [ref=e92]:
+            - generic "部门" [ref=e94]: "部门 :"
+            - generic [ref=e99] [cursor=pointer]:
+              - combobox [ref=e101]
+              - generic [ref=e102]: 销售一部
+          - paragraph [ref=e160]: 该部门公海暂无数据
+  - generic [ref=e162]:
+    - img "check-circle" [ref=e163]
+    - text: 已领取到私海

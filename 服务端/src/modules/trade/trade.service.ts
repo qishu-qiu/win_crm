@@ -33,7 +33,12 @@ import { CompanyService } from '../company/company.service';
 import { OrgService } from '../org/org.service';
 import { RelationService } from '../relation/relation.service';
 import { computePayProgress, expireLevelOf, isContractStatus } from './domain/contract';
+import { findSuspectedDuplicates, type DuplicateCheckContract } from './domain/contract-duplicate';
+import type { SuspectedDuplicate } from './domain/contract-duplicate';
 import type { ContractFilter } from './domain/contract-filter';
+
+/** 疑似重复检测结果类型（→ B6 出参；从 domain 纯函数导出，供 controller 引用） */
+export type { SuspectedDuplicate };
 import {
   TradeRepository,
   type ContractRow,
@@ -219,6 +224,41 @@ export class TradeService {
       result.total,
       pagination,
     );
+  }
+
+  // ===== 疑似重复合同（B6：只读、经理侧可见）=====
+
+  /**
+   * 疑似重复合同清单（→ §4.8 / §5.9 `GET /contracts/suspected-duplicates`）。
+   *
+   * ★ **经理侧可见**：`self`（销售）/ `serving`（交付·客服）→ **403**（→ 接口 §4.8「经理侧」）；
+   *   `all`（总经理 / 管理员）＝全公司、`dept`（部门经理）＝管辖部门（经底层关系 `dept_id` 收敛）。
+   * ★ 系统**只列清单**、不自动合并 / 拦截 / 删（→ 需求 §十六 N7）；判定重复是人的活。
+   * ★ `window_days` 默认 7，下限 1（归一化在 domain 纯函数内）。
+   */
+  async getSuspectedDuplicates(windowDays?: number): Promise<SuspectedDuplicate[]> {
+    const viewer = requireViewer();
+    if (viewer.dataScope === 'self' || viewer.dataScope === 'serving') {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '疑似重复合同仅经理 / 总经理 / 管理员可见', {
+        constraint: 'contract.duplicate_forbidden',
+      });
+    }
+
+    const scopeWhere =
+      viewer.dataScope === 'all'
+        ? { deleted_at: null }
+        : { deleted_at: null, relation: { dept_id: { in: [...viewer.deptIds] } } };
+
+    const rows = await this.repository.findForDuplicateCheck(scopeWhere);
+    const checkRows: DuplicateCheckContract[] = rows.map((row) => ({
+      id: row.id,
+      contract_no: row.contract_no,
+      company_id: row.company_id,
+      signer_id: row.signer_id,
+      amount: row.amount.toString(),
+      sign_date: row.sign_date,
+    }));
+    return findSuspectedDuplicates(checkRows, windowDays ?? 7);
   }
 
   // ===== 更新 =====

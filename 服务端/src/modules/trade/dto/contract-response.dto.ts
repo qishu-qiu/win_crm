@@ -96,3 +96,30 @@ export class ContractPageResultDto {
   @ApiProperty({ description: '每页条数（默认 20，最大 100）', example: 20 })
   page_size!: number;
 }
+
+/** 可疑对中的单条合同（→ §4.8 出参 `contracts:[{id,contract_no,amount,sign_date,signer_id}]`） */
+export class SuspectedDuplicateContractDto {
+  @ApiProperty({ description: '合同 id（十进制字符串）', example: '1' })
+  id!: string;
+
+  @ApiProperty({ description: '合同编号（唯一，服务端生成）', example: 'CN20260923000001' })
+  contract_no!: string;
+
+  @ApiProperty({ description: '合同金额（Decimal 字符串）', example: '120000.00' })
+  amount!: string;
+
+  @ApiProperty({ type: String, nullable: true, description: '签约日期（ISO）' })
+  sign_date!: string | null;
+
+  @ApiProperty({ description: '签单人 id（十进制字符串）', example: '5' })
+  signer_id!: string;
+}
+
+/** 一组可疑对（→ §4.8 出参 `[{company_id, contracts:[...]}]`） */
+export class SuspectedDuplicateItemDto {
+  @ApiProperty({ description: '公司 id（十进制字符串）', example: '10' })
+  company_id!: string;
+
+  @ApiProperty({ type: [SuspectedDuplicateContractDto], description: '可疑对（两条合同）' })
+  contracts!: SuspectedDuplicateContractDto[];
+}

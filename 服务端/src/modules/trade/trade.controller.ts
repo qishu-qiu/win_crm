@@ -17,8 +17,8 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@
 
 import { Audit, type PageResult } from '../../kernel/index';
 import { CreateContractDto, ListContractQueryDto, UpdateContractDto } from './dto/contract-request.dto';
-import { ContractPageResultDto, ContractVoDto } from './dto/contract-response.dto';
-import { TRADE_AUDIT_ACTIONS, TradeService, type ContractVo } from './trade.service';
+import { ContractPageResultDto, ContractVoDto, SuspectedDuplicateItemDto } from './dto/contract-response.dto';
+import { TRADE_AUDIT_ACTIONS, TradeService, type ContractVo, type SuspectedDuplicate } from './trade.service';
 
 @ApiTags('合同')
 @Controller()
@@ -54,6 +54,23 @@ export class TradeController {
   @ApiOkResponse({ type: ContractPageResultDto })
   listContracts(@Query() query: ListContractQueryDto): Promise<PageResult<ContractVo>> {
     return this.trade.listContracts(query);
+  }
+
+  // ===== 疑似重复合同（B6：只读、经理侧可见）=====
+
+  @Get('contracts/suspected-duplicates')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '疑似重复合同清单（经理侧）',
+    description:
+      '同 `company_id` ＋ 同 `signer_id` ＋ 同 `amount` ＋ `sign_date` 相近（≤ `window_days`，默认 7）分组返回可疑对；' +
+      '**仅经理 / 总经理 / 管理员可见**（销售 / 交付·客服 → 403）。' +
+      '系统只列清单，**不自动合并 / 不自动拦截 / 不自动删**（→ 需求 §十六 N7）：同公司同金额可能是两笔真合同（续费 / 增购）。',
+  })
+  @ApiOkResponse({ type: [SuspectedDuplicateItemDto] })
+  getSuspectedDuplicates(@Query('window_days') windowDays?: string): Promise<SuspectedDuplicate[]> {
+    const parsed = windowDays === undefined ? undefined : Number(windowDays);
+    return this.trade.getSuspectedDuplicates(parsed);
   }
 
   // ===== 详情 =====

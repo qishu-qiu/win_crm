@@ -283,7 +283,32 @@ export class TradeRepository {
   listContractsServing(now: Date, filter: ContractFilter, pagination: Pagination, options: ContractListOptions) {
     return this.pageOf({ deleted_at: null, service_end: { gte: now } }, filter, pagination, options);
   }
+
+  /**
+   * 疑似重复合同检测取数（→ B6 `GET /contracts/suspected-duplicates`）。
+   * ★ 不收敛数据范围：范围由 service 通过 `scopeWhere` 传入（经理＝管辖部门 / 总经理＝全公司）；
+   *   销售 / 交付·客服在 service 层直接 403（不进本查询）。
+   * ★ 不分页、不限 `sign_date`（null 的无法比对，由 domain 在配对时跳过）。
+   */
+  findForDuplicateCheck(scopeWhere: Prisma.ContractWhereInput) {
+    return this.prisma.contract.findMany({
+      where: scopeWhere,
+      select: {
+        id: true,
+        contract_no: true,
+        company_id: true,
+        signer_id: true,
+        amount: true,
+        sign_date: true,
+      },
+    });
+  }
 }
+
+/** 疑似重复检测取出的合同行（结构取自 `findForDuplicateCheck` 的 select，不手抄字段） */
+export type ContractDuplicateRow = NonNullable<
+  Awaited<ReturnType<TradeRepository['findForDuplicateCheck']>>
+>[number];
 
 /** 仓储读出的合同行（结构取自 `CONTRACT_SELECT`，不手抄字段） */
 export type ContractRow = NonNullable<Awaited<ReturnType<TradeRepository['findById']>>>;

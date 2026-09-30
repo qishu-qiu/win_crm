@@ -143,6 +143,8 @@ interface FakeOptions {
 
 function createService(options: FakeOptions = {}) {
   const ownerId = options.ownerId === undefined ? OWNER : options.ownerId;
+  // ★ 实时兜底：组装写入的动线要在「二次读取」时回得出来（真库会反映写入；桩按真实形状回传）
+  const createdAgendaRows: Record<string, unknown>[] = [];
   const repository = {
     createEvent: jest.fn(async (data: Record<string, unknown>) => {
       if (options.createError !== undefined) throw options.createError;
@@ -160,7 +162,9 @@ function createService(options: FakeOptions = {}) {
     updateCommitment: jest.fn(async (id: bigint, data: Record<string, unknown>) =>
       commitmentRow({ ...data, id }),
     ),
-    listAgendaOfUser: jest.fn(async () => options.agenda ?? []),
+    listAgendaOfUser: jest.fn(async () =>
+      createdAgendaRows.length > 0 ? createdAgendaRows : (options.agenda ?? []),
+    ),
     // M6-14：把联系人名下**孤儿跟单**批量挂到新关系（`updateMany` 回 `{count}`）
     rehangOrphanEventsOfContact: jest.fn(async () => ({ count: options.linkedEvents ?? 0 })),
     // F-01：领取公海 → 该关系 open 承诺整体转新 owner（`updateMany` 回 `{count}`）
@@ -170,7 +174,11 @@ function createService(options: FakeOptions = {}) {
     // M8-06 Phase 2-A：动线处理反馈 + 实时兜底
     findAgendaById: jest.fn(async () => options.agendaById ?? null),
     findAgendaByRef: jest.fn(async () => null),
-    createAgenda: jest.fn(async (data: Record<string, unknown>) => agendaRow({ ...data })),
+    createAgenda: jest.fn(async (data: Record<string, unknown>) => {
+      const row = agendaRow({ ...data });
+      createdAgendaRows.push(row);
+      return row;
+    }),
     updateAgenda: jest.fn(async (id: bigint, data: Record<string, unknown>) =>
       agendaRow({ ...data, id }),
     ),
@@ -1240,7 +1248,7 @@ describe('EngineService（M4-07 写跟单 / M4-08 时间线）', () => {
       expect(written.ref_id).toBe(201n);
       expect(String(written.reason)).toContain('逾期');
       expect(items).toHaveLength(1);
-      expect(items[0]?.ref_id).toBe('201');
+      expect(items[0]?.ref_id).toBe(201n); // 动线回带 ref 供前端定位（与 AgendaItemVo.ref_id: bigint 一致）
     });
 
     it('「只有联系人、还没挂关系」的条目 → `relation` 为 `null`，**不编一个关系**', async () => {

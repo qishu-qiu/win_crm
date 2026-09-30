@@ -198,6 +198,7 @@ export class OrgController {
 
   // ===== 退出（清刷新 Cookie） =====
 
+  @AuditSkip() // ★ 语义是**读**（只清 Cookie、不写业务数据、不回查库）—— 不留痕（与 login/refresh 同口径）
   @Public() // 清 Cookie 不需鉴权：即便 access 已过期也允许清掉残留会话
   @Post('account/logout')
   @HttpCode(200) // 成功 200（→ §2.3）

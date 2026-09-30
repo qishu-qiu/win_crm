@@ -50,6 +50,7 @@ const SKIP_ALLOWLIST = new Set([
   'POST /companies/search-dup',
   'POST /account/login',
   'POST /account/refresh',
+  'POST /account/logout',
 ]);
 
 interface WriteEndpoint {

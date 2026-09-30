@@ -16,6 +16,7 @@ import { OrgService } from './org.service';
 type HandlerName =
   | 'login'
   | 'refresh'
+  | 'logout'
   | 'me'
   | 'updatePreferences'
   | 'listDepartments'
@@ -36,6 +37,7 @@ interface RouteExpectation {
 const ROUTES: RouteExpectation[] = [
   { handler: 'login', path: 'account/login', method: RequestMethod.POST, isPublic: true },
   { handler: 'refresh', path: 'account/refresh', method: RequestMethod.POST, isPublic: true },
+  { handler: 'logout', path: 'account/logout', method: RequestMethod.POST, isPublic: true },
   { handler: 'me', path: 'account/me', method: RequestMethod.GET, isPublic: false },
   // 2026-09-18（D-37）：个人偏好，接口 §4.14.9 / §5.2 —— 需鉴权（改的是**自己**的偏好）
   { handler: 'updatePreferences', path: 'account/preferences', method: RequestMethod.PUT, isPublic: false },
@@ -50,6 +52,7 @@ function createServiceStub() {
   return {
     login: jest.fn(async () => ({ access_token: 'a', refresh_token: 'r', user: { id: 7n } })),
     refresh: jest.fn(async () => ({ access_token: 'a2', refresh_token: 'r2' })),
+    logout: jest.fn(async () => undefined),
     me: jest.fn(async () => ({ id: 7n })),
     updatePreferences: jest.fn(async () => ({ id: 7n })),
     listDepartments: jest.fn(async () => [{ id: 1n }]),
@@ -127,6 +130,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
     const HANDLER_ARGS: Record<HandlerName, unknown[]> = {
       login: [{ account: '13800000000', password: 'Passw0rd!' }, '10.0.0.8', 'jest-agent', 'req-1', fakeRes],
       refresh: ['crm_refresh_token=opaque-token', fakeRes],
+      logout: [fakeRes],
       me: [],
       // 部分更新：只切主题（`nav_open` 不给 = 不改）
       updatePreferences: [{ theme: 'dark' }],
@@ -137,7 +141,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       listPermissions: [],
     };
 
-    it.each(ROUTES.map((route) => route.handler))('%s 转交 service，且**只调一次**（本层不做编排）', async (handler) => {
+    it.each(ROUTES.filter((route) => route.handler !== 'logout').map((route) => route.handler))('%s 转交 service，且**只调一次**（本层不做编排）', async (handler) => {
       const { controller, stub } = createController();
 
       await (controller[handler] as (...args: unknown[]) => Promise<unknown>)(...HANDLER_ARGS[handler]);

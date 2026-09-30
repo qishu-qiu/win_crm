@@ -198,10 +198,11 @@ function createRepository(options: FakeOptions = {}) {
     // D-08：仓储列表返回 `{rows,total}`（分页）—— 假件按**真实形状**造，否则用例假绿
     listCompanies: jest.fn(async () => ({ rows: [] as CompanyRowFixture[], total: 0 })),
     createContact: jest.fn(async (data?: unknown) => {
-      void data; // 入参只用于断言（`mock.calls`），这里不参与造值
-      return options.createContactError === undefined
-        ? (options.createdContact ?? contactRow())
-        : Promise.reject(options.createContactError);
+      if (options.createContactError !== undefined) return Promise.reject(options.createContactError);
+      // ★ 按真实形状回传：落库返回的 `phone` 应是 service 算出的占位号（9 开头），
+      //   否则「返回占位号」断言会误读成默认 `13800000000`（→ 桩件按真实形状造，坑 35）
+      const input = (data ?? {}) as { phone?: string };
+      return contactRow({ ...options.createdContact, phone: input.phone ?? options.createdContact?.phone });
     }),
     // 收一个占位入参（同 `listContacts` 的理由）：`mock.calls[n][0]` 在类型上要存在，用例才能断言写了哪几列
     createCompanyContact: jest.fn(async (input: Record<string, unknown>) => {
@@ -475,6 +476,7 @@ describe('B 域服务（M2-08 / M2-09 / M2-10 / M2-13 / M2-14）', () => {
       await expect(service.searchDup({ name: '完全没见过科技有限公司' })).resolves.toEqual({
         candidates: [],
         suggest: 'create_new',
+        matched_contact: null,
       });
     });
 

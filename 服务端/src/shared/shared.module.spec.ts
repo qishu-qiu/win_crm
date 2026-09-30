@@ -27,6 +27,7 @@ import {
   type RequestContext,
 } from '../kernel/index';
 import { SharedModule } from './shared.module';
+import { PrismaService } from '../prisma/prisma.service';
 
 // 必须在建应用之前设好：SharedModule 的 JwtModule 工厂在 DI 初始化期读它（缺失会拒绝启动）
 process.env.JWT_SECRET = 'unit-test-secret-for-shared-module'.padEnd(48, 'x');
@@ -104,10 +105,27 @@ class ProbeController {
  *     拦截器住在 `SharedModule` 内，**父模块的 provider 对子模块不可见**（Nest 的模块可见性规则），
  *     放错地方＝起服直接「依赖解析失败」。
  */
+/**
+ * `SharedModule` 经 `IdempotencyService` 间接依赖 `@Global` 的 `PrismaService`，
+ * 而 `PrismaService` 构造即重读 `DATABASE_URL`、起服 `onModuleInit` 真连库 —— 本 spec 不验库，
+ * 故**同 `AuditService` 手法**在 `@Global` 桩里一并桩掉，避免起服因缺 `DATABASE_URL` 崩（→ D-15）。
+ */
+const prismaStub = {
+  idempotencyKey: {
+    findFirst: jest.fn(async () => null),
+    create: jest.fn(async () => ({})),
+  },
+  $connect: jest.fn(async () => {}),
+  $disconnect: jest.fn(async () => {}),
+};
+
 @Global()
 @Module({
-  providers: [{ provide: AuditService, useValue: { recordStandalone: async () => true } }],
-  exports: [AuditService],
+  providers: [
+    { provide: AuditService, useValue: { recordStandalone: async () => true } },
+    { provide: PrismaService, useValue: prismaStub },
+  ],
+  exports: [AuditService, PrismaService],
 })
 class StubAuditModule {}
 

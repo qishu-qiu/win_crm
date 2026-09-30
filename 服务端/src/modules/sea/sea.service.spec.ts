@@ -769,7 +769,16 @@ describe('SeaService.listManagerTodo（M8-06 Phase 4 切片③）', () => {
   it('销售（self 范围）→ 403 / sea.manager_todo.forbidden，且不查库', async () => {
     const { service, repository } = createService();
 
-    const error = await runWithContext(ruleContextOf(['sale']), () =>
+    // ★ 销售属 `self` 档（不是 `dept`）：`ruleContextOf` 默认把非 gm/admin 当 `dept`，会漏掉 403，
+    //   故这里直接造 `self` 上下文（→ 接口 §5.16：经理待办只给 all/dept 档）
+    const selfContext: RequestContext = {
+      employeeId: ME,
+      deptIds: [DEPT_ID],
+      roleCodes: ['sale'],
+      dataScope: { type: 'self', deptIds: [DEPT_ID] },
+    };
+
+    const error = await runWithContext(selfContext, () =>
       captureAppError(() => service.listManagerTodo()),
     );
 

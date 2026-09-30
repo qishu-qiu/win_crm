@@ -97,9 +97,9 @@ describe('domain/contract-duplicate 疑似重复检测', () => {
     it('出参 sign_date 为 ISO 字符串（带 Z）', () => {
       const rows = [row(1, 10, 5, '100.00', '2026-09-01'), row(2, 10, 5, '100.00', '2026-09-03')];
       const result = findSuspectedDuplicates(rows, 7);
-      for (const pair of result[0].contracts) {
-        expect(pair.sign_date).toBe('2026-09-01T00:00:00.000Z');
-      }
+      // ★ 同一对里两条合同各自保留自己的签约日（不归一），故分别断言
+      expect(result[0].contracts[0].sign_date).toBe('2026-09-01T00:00:00.000Z');
+      expect(result[0].contracts[1].sign_date).toBe('2026-09-03T00:00:00.000Z');
     });
   });
 });

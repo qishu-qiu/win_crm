@@ -59,6 +59,12 @@ export const ErrorCode = {
    *   （同 `20407` / `20408` 一族）；**不给 400** —— 那档是「字段缺失 / 类型错 / 枚举非法」（→ 接口 §2.4）。
    */
   PRODUCT_LINE_NOT_SERVED: 20409,
+  /**
+   * 422 · **ledger 类签约校验项的 `field_key` 未先登记 `field_template`**（→ 接口 §5.15
+   *   `POST /sign-checklists`：ledger 类 `field_key` 须已登记 `field_template` 否则 422；
+   *   同「422 ＋ 204xx＝业务校验不通过」归类）。
+   */
+  FIELD_TEMPLATE_NOT_REGISTERED: 20410,
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];

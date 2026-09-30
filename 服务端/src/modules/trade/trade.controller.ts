@@ -13,12 +13,19 @@
 //     GET 不标（读不审计，管理员查看留痕由 C 域口径单列，本期沿用切面兜底名）。
 // =============================================================================
 import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 import { Audit, type PageResult } from '../../kernel/index';
 import { CreateContractDto, ListContractQueryDto, UpdateContractDto } from './dto/contract-request.dto';
-import { ContractPageResultDto, ContractVoDto, SuspectedDuplicateItemDto } from './dto/contract-response.dto';
-import { TRADE_AUDIT_ACTIONS, TradeService, type ContractVo, type SuspectedDuplicate } from './trade.service';
+import { ContractPageResultDto, ContractVoDto, SignChecklistItemDto, SuspectedDuplicateItemDto } from './dto/contract-response.dto';
+import { CreateSignChecklistDto, UpdateSignChecklistDto } from './dto/sign-checklist.dto';
+import {
+  TRADE_AUDIT_ACTIONS,
+  TradeService,
+  type ContractVo,
+  type SignChecklistVo,
+  type SuspectedDuplicate,
+} from './trade.service';
 
 @ApiTags('合同')
 @Controller()
@@ -71,6 +78,53 @@ export class TradeController {
   getSuspectedDuplicates(@Query('window_days') windowDays?: string): Promise<SuspectedDuplicate[]> {
     const parsed = windowDays === undefined ? undefined : Number(windowDays);
     return this.trade.getSuspectedDuplicates(parsed);
+  }
+
+  // ===== 签约校验清单（B3：管理员配置 ＋ 创建前硬卡）=====
+
+  @Get('sign-checklists')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '签约校验清单（按产品线查询）',
+    description:
+      '返回该线**全部**项（含 disabled）。所有角色可读——前端建单时据此标红 / 跳补；' +
+      '仅写动作（POST / PUT）限管理员（其余 403）。',
+  })
+  @ApiQuery({ name: 'product_line_id', required: true, description: '产品线 id（十进制字符串）', type: String })
+  @ApiOkResponse({ type: [SignChecklistItemDto] })
+  listSignChecklist(@Query('product_line_id') productLineId: string): Promise<SignChecklistVo[]> {
+    return this.trade.listSignChecklist(productLineId);
+  }
+
+  @Audit(TRADE_AUDIT_ACTIONS.signChecklistCreate, 'sign_checklist')
+  @Post('sign-checklists')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '新增签约校验项（管理员）',
+    description:
+      '超 `uk_line_scope_field` → **409**；ledger 类 `field_key` 须已登记 `field_template` 否则 **422 / 20410**；' +
+      '`product_line_id` / `scope` / `field_key` 保存后不可变。仅管理员可写（其余 403）。',
+  })
+  @ApiOkResponse({ type: SignChecklistItemDto })
+  createSignChecklist(@Body() body: CreateSignChecklistDto): Promise<SignChecklistVo> {
+    return this.trade.createSignChecklist(body);
+  }
+
+  @Audit(TRADE_AUDIT_ACTIONS.signChecklistUpdate, 'sign_checklist')
+  @Put('sign-checklists/:id')
+  @HttpCode(200)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: '改签约校验项（管理员）',
+    description:
+      '仅 `required` / `sort` / `status` 可改（产品线下钻铁律）；`product_line_id` / `scope` / `field_key` 不可变。' +
+      '仅管理员可写（其余 403）。删除＝置 `status=disabled`（停用不删）。',
+  })
+  @ApiParam({ name: 'id', description: '清单项 id（十进制字符串）' })
+  @ApiOkResponse({ type: SignChecklistItemDto })
+  updateSignChecklist(@Param('id') id: string, @Body() body: UpdateSignChecklistDto): Promise<SignChecklistVo> {
+    return this.trade.updateSignChecklist(id, body);
   }
 
   // ===== 详情 =====

@@ -123,3 +123,54 @@ export class SuspectedDuplicateItemDto {
   @ApiProperty({ type: [SuspectedDuplicateContractDto], description: '可疑对（两条合同）' })
   contracts!: SuspectedDuplicateContractDto[];
 }
+
+/** 签约校验清单项（→ §5.15 `SignChecklistItem`） */
+export class SignChecklistItemDto {
+  @ApiProperty({ description: '清单项 id', example: '1' })
+  id!: string;
+
+  @ApiProperty({ description: '产品线 id', example: '1' })
+  product_line_id!: string;
+
+  @ApiProperty({ description: '校验层级', enum: ['company', 'relation', 'ledger'] })
+  scope!: string;
+
+  @ApiProperty({ description: '字段键（company/relation 为真实列名；ledger 为 field_template.field_key）' })
+  field_key!: string;
+
+  @ApiProperty({ description: '中文显示名（弹窗用）' })
+  label!: string;
+
+  @ApiProperty({ description: '是否必填' })
+  required!: boolean;
+
+  @ApiProperty({ description: '排序' })
+  sort!: number;
+
+  @ApiProperty({ description: '状态（active / disabled）' })
+  status!: string;
+}
+
+/** 签约校验缺项（→ §5.15 `ContractSignMissing.missing[]`） */
+export class ContractSignMissingItemDto {
+  @ApiProperty({ description: '校验层级', enum: ['company', 'relation', 'ledger'] })
+  scope!: string;
+
+  @ApiProperty({ description: '字段键' })
+  field_key!: string;
+
+  @ApiProperty({ description: '中文显示名' })
+  label!: string;
+
+  @ApiProperty({
+    description: '缺项锚点（company＝内联补 / relation＝跳关系值 / ledger＝跳台账）',
+    enum: ['inline_company', 'goto_relation_value', 'goto_ledger'],
+  })
+  goto!: string;
+}
+
+/** 签约校验 422 响应体（→ §5.15 `ContractSignMissing`；创建合同缺项时返回） */
+export class ContractSignMissingDto {
+  @ApiProperty({ type: [ContractSignMissingItemDto], description: '缺失清单（供前端内联补 / 跳补）' })
+  missing!: ContractSignMissingItemDto[];
+}

@@ -43,9 +43,11 @@ import {
   TradeRepository,
   type ContractRow,
   type CreateContractData,
+  type SignChecklistRow,
   type UpdateContractData,
 } from './trade.repository';
 import type { CreateContractDto, ListContractQueryDto, UpdateContractDto } from './dto/contract-request.dto';
+import { CreateSignChecklistDto, UpdateSignChecklistDto } from './dto/sign-checklist.dto';
 
 /** 合同出参（→ §5.9；未落地字段见响应 DTO 文件头清单） */
 export interface ContractVo {
@@ -65,6 +67,18 @@ export interface ContractVo {
   updated_at: string;
 }
 
+/** 签约校验清单项出参（→ §5.15 `SignChecklistItem`；id / product_line_id 为 bigint，统一出口转字符串） */
+export interface SignChecklistVo {
+  id: bigint;
+  product_line_id: bigint;
+  scope: string;
+  field_key: string;
+  label: string;
+  required: boolean;
+  sort: number;
+  status: string;
+}
+
 /**
  * E 域写动作的审计动作名（→ A10 口径 `模块.动词`）。
  * ★ 集中一处导出：动作名是「谁在何时干了什么」的检索键，写歪一次就再也查不到那条记录。
@@ -77,6 +91,10 @@ export const TRADE_AUDIT_ACTIONS = {
   update: 'contract.update',
   /** 查看合同详情 → `GET /contracts/:id`（管理员查看留痕在 C 域口径下暂未单列，沿用切面兜底） */
   view: 'contract.view',
+  /** 新增签约校验项 → `POST /sign-checklists`（管理员配置） */
+  signChecklistCreate: 'sign_checklist.create',
+  /** 改签约校验项 → `PUT /sign-checklists/:id`（管理员配置） */
+  signChecklistUpdate: 'sign_checklist.update',
 } as const;
 
 @Injectable()
@@ -259,6 +277,93 @@ export class TradeService {
       sign_date: row.sign_date,
     }));
     return findSuspectedDuplicates(checkRows, windowDays ?? 7);
+  }
+
+  // ===== 签约校验清单（B3：管理员配置 ＋ 创建前硬卡）=====
+
+  /** 配置项 → 出参 Vo（id / product_line_id 为 bigint，统一出口转字符串） */
+  private toSignChecklistVo(row: SignChecklistRow): SignChecklistVo {
+    return {
+      id: row.id,
+      product_line_id: row.product_line_id,
+      scope: row.scope,
+      field_key: row.field_key,
+      label: row.label,
+      required: row.required,
+      sort: row.sort,
+      status: row.status,
+    };
+  }
+
+  /**
+   * 签约校验清单（→ §5.15 `GET /sign-checklists`）。按产品线返回**全部**项（含 disabled）。
+   * ★ 所有角色可读（前端建单时据此标红 / 跳补）；仅写动作限管理员（见下）。
+   */
+  async listSignChecklist(productLineId: string): Promise<SignChecklistVo[]> {
+    const pid = jsonToBigint(productLineId, 'product_line_id');
+    const rows = await this.repository.listSignChecklist(pid);
+    return rows.map((row) => this.toSignChecklistVo(row));
+  }
+
+  /**
+   * 新增签约校验项（→ §5.15 `POST /sign-checklists`；**管理员可写，其余 403**）。
+   *
+   * ★ ledger 类 `field_key` 须先在该产品线登记 `field_template`，否则 **422 / `20410`**。
+   * ★ 唯一冲突 `uk_line_scope_field` → 409（经 `mapPrismaError` 同源一句人话）。
+   */
+  async createSignChecklist(dto: CreateSignChecklistDto): Promise<SignChecklistVo> {
+    const viewer = requireViewer();
+    if (!viewer.roleCodes.includes('admin')) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '签约校验清单仅管理员可配置', {
+        constraint: 'sign_checklist.write_forbidden',
+      });
+    }
+    const pid = jsonToBigint(dto.product_line_id, 'product_line_id');
+    if (dto.scope === 'ledger') {
+      const exists = await this.repository.fieldTemplateExists(pid, dto.field_key);
+      if (!exists) {
+        throw new AppError(
+          ErrorCode.FIELD_TEMPLATE_NOT_REGISTERED,
+          422,
+          'ledger 类 field_key 须先在对应产品线登记 field_template',
+          { constraint: 'sign_checklist.field_template_missing' },
+        );
+      }
+    }
+    const row = await this.repository
+      .createSignChecklist({
+        product_line_id: pid,
+        scope: dto.scope,
+        field_key: dto.field_key,
+        label: dto.label,
+        required: dto.required ?? true,
+      })
+      .catch((error: unknown) => {
+        const mapped = mapPrismaError(error);
+        if (mapped !== null) throw mapped;
+        throw error;
+      });
+    return this.toSignChecklistVo(row);
+  }
+
+  /**
+   * 改签约校验项（→ §5.15 `PUT /sign-checklists/:id`；**管理员可写，其余 403**）。
+   * ★ 仅 `required` / `sort` / `status` 可改；`product_line_id` / `scope` / `field_key` 保存后不可变。
+   */
+  async updateSignChecklist(id: string, dto: UpdateSignChecklistDto): Promise<SignChecklistVo> {
+    const viewer = requireViewer();
+    if (!viewer.roleCodes.includes('admin')) {
+      throw new AppError(ErrorCode.FORBIDDEN, 403, '签约校验清单仅管理员可配置', {
+        constraint: 'sign_checklist.write_forbidden',
+      });
+    }
+    const itemId = jsonToBigint(id, 'id');
+    const row = await this.repository.updateSignChecklist(itemId, {
+      ...(dto.required === undefined ? {} : { required: dto.required }),
+      ...(dto.sort === undefined ? {} : { sort: dto.sort }),
+      ...(dto.status === undefined ? {} : { status: dto.status }),
+    });
+    return this.toSignChecklistVo(row);
   }
 
   // ===== 更新 =====

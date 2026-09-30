@@ -303,11 +303,81 @@ export class TradeRepository {
       },
     });
   }
+
+  // ===== 签约校验清单（B3：sign_checklist 表；ledger 类校验涉及 field_template，同域 E6）=====
+
+  /** 某产品线全部清单项（含 disabled；→ §5.15 `GET /sign-checklists`） */
+  listSignChecklist(productLineId: bigint) {
+    return this.prisma.signChecklist.findMany({
+      where: { product_line_id: productLineId },
+      orderBy: { sort: 'asc' },
+      select: {
+        id: true,
+        product_line_id: true,
+        scope: true,
+        field_key: true,
+        label: true,
+        required: true,
+        sort: true,
+        status: true,
+      },
+    });
+  }
+
+  /** 创建前硬卡用的 active＋required 项（→ §5.9 / §5.15） */
+  getActiveRequiredSignChecklist(productLineId: bigint) {
+    return this.prisma.signChecklist.findMany({
+      where: { product_line_id: productLineId, status: 'active', required: true },
+      select: {
+        id: true,
+        product_line_id: true,
+        scope: true,
+        field_key: true,
+        label: true,
+        required: true,
+        sort: true,
+        status: true,
+      },
+    });
+  }
+
+  /** 新增清单项（唯一冲突 `uk_line_scope_field` 由 service 层 `mapPrismaError` → 409） */
+  createSignChecklist(data: {
+    product_line_id: bigint;
+    scope: string;
+    field_key: string;
+    label: string;
+    required: boolean;
+  }) {
+    return this.prisma.signChecklist.create({ data });
+  }
+
+  /** 改清单项：仅 `required` / `sort` / `status` 可改（→ §5.15；不可变字段不在此处接收） */
+  updateSignChecklist(
+    id: bigint,
+    data: { required?: boolean; sort?: number; status?: string },
+  ) {
+    return this.prisma.signChecklist.update({ where: { id }, data });
+  }
+
+  /** ledger 类 `field_key` 须先登记 `field_template`（→ §5.15 422 判据；`uk_line_key` 复合唯一） */
+  async fieldTemplateExists(productLineId: bigint, fieldKey: string): Promise<boolean> {
+    const row = await this.prisma.fieldTemplate.findUnique({
+      where: { product_line_id_field_key: { product_line_id: productLineId, field_key: fieldKey } },
+      select: { id: true },
+    });
+    return row !== null;
+  }
 }
 
 /** 疑似重复检测取出的合同行（结构取自 `findForDuplicateCheck` 的 select，不手抄字段） */
 export type ContractDuplicateRow = NonNullable<
   Awaited<ReturnType<TradeRepository['findForDuplicateCheck']>>
+>[number];
+
+/** 签约校验清单项（结构取自 `listSignChecklist` / `createSignChecklist` 的 select） */
+export type SignChecklistRow = NonNullable<
+  Awaited<ReturnType<TradeRepository['listSignChecklist']>>
 >[number];
 
 /** 仓储读出的合同行（结构取自 `CONTRACT_SELECT`，不手抄字段） */

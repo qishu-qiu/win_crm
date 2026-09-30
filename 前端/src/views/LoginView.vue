@@ -37,7 +37,7 @@ async function submit(): Promise<void> {
   submitting.value = true
   try {
     const result = await login({ account: form.account, password: form.password })
-    setTokens(result.access_token, result.refresh_token)
+    setTokens(result.access_token)
     signIn(result.user)
     // 登录后去处（**M6-10**）：守卫拦下来的原页面（`?redirect=`）优先，但**必须是本人可见的页面**
     //   —— 否则回自己的首个可见页（例：管理员被守卫从 `/entry` 弹回来时，`redirect` 里仍写着 `/entry`，

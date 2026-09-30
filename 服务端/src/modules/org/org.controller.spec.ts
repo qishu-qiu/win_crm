@@ -120,10 +120,13 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       expect(paramTypes).toEqual([OrgService]);
     });
 
-    /** 每个 handler 的最小合法入参（位置与运行时装饰器注入顺序一致：body → ip → ua → req_id） */
+    /** 刷新令牌 Cookie 的假响应对象（controller 只调 `.cookie` / `.clearCookie`，不依赖真实 express） */
+    const fakeRes = { cookie: jest.fn(), clearCookie: jest.fn() };
+
+    /** 每个 handler 的最小合法入参（位置与运行时装饰器注入顺序一致：body → ip → ua → req_id → res[cookie]） */
     const HANDLER_ARGS: Record<HandlerName, unknown[]> = {
-      login: [{ account: '13800000000', password: 'Passw0rd!' }, '10.0.0.8', 'jest-agent', 'req-1'],
-      refresh: [{ refresh_token: 'opaque-token' }],
+      login: [{ account: '13800000000', password: 'Passw0rd!' }, '10.0.0.8', 'jest-agent', 'req-1', fakeRes],
+      refresh: ['crm_refresh_token=opaque-token', fakeRes],
       me: [],
       // 部分更新：只切主题（`nav_open` 不给 = 不改）
       updatePreferences: [{ theme: 'dark' }],
@@ -146,7 +149,7 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       const { controller, stub } = createController();
       const body = { account: '13800000000', password: 'Passw0rd!' };
 
-      await controller.login(body, '10.0.0.8', 'jest-agent', 'req-0001');
+      await controller.login(body, '10.0.0.8', 'jest-agent', 'req-0001', fakeRes);
 
       expect(stub.login).toHaveBeenCalledWith(body, {
         ip: '10.0.0.8',
@@ -155,10 +158,10 @@ describe('A 域控制器（M1-11 / M1-12 / M1-13）', () => {
       });
     });
 
-    it('refresh 只把 `refresh_token` 一个字段交给 service（不接受整包过手，避免把 body 直接塞进 jwt.verify）', async () => {
+    it('refresh 从 Cookie 头解出 `refresh_token` 交给 service（不接收 body，避免把请求体直接塞进 jwt.verify）', async () => {
       const { controller, stub } = createController();
 
-      await controller.refresh({ refresh_token: 'opaque-token' });
+      await controller.refresh('crm_refresh_token=opaque-token', fakeRes);
 
       expect(stub.refresh).toHaveBeenCalledWith('opaque-token');
     });

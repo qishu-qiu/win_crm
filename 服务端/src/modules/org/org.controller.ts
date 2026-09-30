@@ -19,10 +19,15 @@
 //   故此前保留默认值未拍板。现定：**成功一律 200**（与 §2.3「成功 / 失败」两态对称），
 //   故 login / refresh 两个 POST 显式 `@HttpCode(200)`；前端仍按 `body.code === 0` 判成功。
 // =============================================================================
-import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Put, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+/** 仅声明 controller 用到的响应方法（避免引 `@types/express` 新增依赖，→ CODE-007 依赖纪律） */
+interface CookieResponse {
+  cookie(name: string, value: string, options: Record<string, unknown>): void;
+  clearCookie(name: string, options: Record<string, unknown>): void;
+}
 
-import { Audit, AuditSkip, Public } from '../../kernel/index';
+import { AppError, Audit, AuditSkip, ErrorCode, Public, REFRESH_TOKEN_TTL } from '../../kernel/index';
 import { LoginDto } from './dto/login.dto';
 import {
   DepartmentVoDto,
@@ -34,7 +39,6 @@ import {
   RoleVoDto,
   UserVoDto,
 } from './dto/org-response.dto';
-import { RefreshDto } from './dto/refresh.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import {
   ORG_AUDIT_ACTIONS,
@@ -49,6 +53,60 @@ import {
 const REQUEST_ID_HEADER = 'x-request-id';
 /** 客户端标识请求头（→ §7.4 审计字段 `user_agent`） */
 const USER_AGENT_HEADER = 'user-agent';
+
+/**
+ * 刷新令牌 Cookie 名（**HttpOnly**：JS 读不到，从根上关掉 XSS 偷会话，→ 审计报告 CODE-001）。
+ * 此前 refresh_token 落在登录/刷新响应体、前端存 localStorage —— 同域任意脚本可读，
+ * 长期 refresh token 被盗即可持续换 access。改为 HttpOnly Cookie 后浏览器自动随同源请求带上，JS 拿不到。
+ */
+const REFRESH_COOKIE = 'crm_refresh_token';
+
+/** 把 `REFRESH_TOKEN_TTL`（如 `'14d'`）转成 Cookie `maxAge` 毫秒，保持与 JWT 有效期**同源**。 */
+function refreshCookieMaxAge(): number {
+  const matched = /^(\d+)([smhd])$/.exec(REFRESH_TOKEN_TTL);
+  if (matched === null) return 0;
+  const unitMs = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
+  return Number(matched[1]) * unitMs[matched[2] as 's' | 'm' | 'h' | 'd'];
+}
+
+/**
+ * 刷新令牌 Cookie 选项：
+ * · `httpOnly` —— JS 不可读（核心）；
+ * · `sameSite: 'lax'` —— 同源代理（dev）/ 同域部署（prod）足够，且规避 CSRF 跨站带 Cookie；
+ * · `secure` —— 仅生产（HTTPS）开启，dev（HTTP）关掉否则 Cookie 下不去；
+ * · `path: '/'` —— 全站生效，刷新接口任意路径都能收到。
+ */
+function refreshCookieOptions(): {
+  httpOnly: true;
+  sameSite: 'lax';
+  secure: boolean;
+  path: string;
+  maxAge: number;
+} {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: refreshCookieMaxAge(),
+  };
+}
+
+/**
+ * 从请求 `Cookie` 头取刷新令牌（不引 `cookie-parser`，手工解析，避免新增依赖）。
+ * @returns 取不到返回 `undefined`（→ 刷新接口据此抛 401）。
+ */
+function refreshTokenFromCookie(header: string | undefined): string | undefined {
+  if (header === undefined) return undefined;
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    if (part.slice(0, eq).trim() === REFRESH_COOKIE) {
+      return decodeURIComponent(part.slice(eq + 1).trim());
+    }
+  }
+  return undefined;
+}
 
 /**
  * 组装审计用的请求元信息（→ §7.4：IP / UA / req_id）。
@@ -97,8 +155,13 @@ export class OrgController {
     @Ip() ip: string | undefined,
     @Headers(USER_AGENT_HEADER) userAgent: string | undefined,
     @Headers(REQUEST_ID_HEADER) requestId: string | undefined,
-  ): Promise<LoginResult> {
-    return this.org.login(body, toRequestMeta(ip, userAgent, requestId));
+    @Res({ passthrough: true }) res: CookieResponse,
+  ): Promise<Omit<LoginResult, 'refresh_token'>> {
+    return this.org.login(body, toRequestMeta(ip, userAgent, requestId)).then((result) => {
+      // 刷新令牌改走 HttpOnly Cookie（JS 读不到，关掉 XSS 偷会话，→ 审计报告 CODE-001）
+      res.cookie(REFRESH_COOKIE, result.refresh_token, refreshCookieOptions());
+      return { access_token: result.access_token, user: result.user };
+    });
   }
 
   // ===== M1-12 刷新 =====
@@ -109,11 +172,48 @@ export class OrgController {
   @HttpCode(200) // 成功 200（→ §2.3）
   @ApiOperation({
     summary: '刷新令牌',
-    description: '用 `refresh_token` 换一对新令牌；**重新装载**最新角色与管辖部门（撤销经理后立即收窄数据范围）',
+    description:
+      '刷新令牌经 **HttpOnly Cookie** 自动随请求带上（JS 读不到）；用其换一对新令牌并**轮换** Cookie；' +
+      '**重新装载**最新角色与管辖部门（撤销经理后立即收窄数据范围）',
   })
-  @ApiOkResponse({ type: RefreshResultDto, description: '统一响应包的 `data` 即本结构' })
-  refresh(@Body() body: RefreshDto): Promise<RefreshResult> {
-    return this.org.refresh(body.refresh_token);
+  @ApiOkResponse({
+    type: RefreshResultDto,
+    description: '统一响应包的 `data` 即本结构（仅含新 access_token，refresh 经 Set-Cookie 轮换）',
+  })
+  refresh(
+    @Headers('cookie') cookieHeader: string | undefined,
+    @Res({ passthrough: true }) res: CookieResponse,
+  ): Promise<Omit<RefreshResult, 'refresh_token'>> {
+    const refreshToken = refreshTokenFromCookie(cookieHeader);
+    if (refreshToken === undefined) {
+      throw new AppError(ErrorCode.UNAUTHENTICATED, 401, '刷新令牌缺失或已失效', {
+        constraint: 'account.refresh.cookie',
+      });
+    }
+    return this.org.refresh(refreshToken).then((result) => {
+      res.cookie(REFRESH_COOKIE, result.refresh_token, refreshCookieOptions());
+      return { access_token: result.access_token };
+    });
+  }
+
+  // ===== 退出（清刷新 Cookie） =====
+
+  @Public() // 清 Cookie 不需鉴权：即便 access 已过期也允许清掉残留会话
+  @Post('account/logout')
+  @HttpCode(200) // 成功 200（→ §2.3）
+  @ApiOperation({
+    summary: '退出登录',
+    description:
+      '清除 **HttpOnly** 刷新令牌 Cookie（前端同步清 access_token）；不回查、不写审计。' +
+      '→ 审计报告 CODE-001：刷新令牌不再落 JS 可读的 localStorage',
+  })
+  async logout(@Res({ passthrough: true }) res: CookieResponse): Promise<void> {
+    res.clearCookie(REFRESH_COOKIE, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
   }
 
   // ===== M1-10 我是谁 =====

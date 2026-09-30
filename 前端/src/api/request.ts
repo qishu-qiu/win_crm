@@ -25,13 +25,12 @@ type RefreshResult = components['schemas']['RefreshResultDto']
 type RefreshInput = components['schemas']['RefreshDto']
 
 const ACCESS_KEY = 'crm_access_token'
-const REFRESH_KEY = 'crm_refresh_token'
 
 /**
  * 登录 / 刷新接口路径（→ API §5.2）。
  * ⚠ M0-56 骨架里写的是 `/auth/refresh` ＋ `{refreshToken}` ＋ `{accessToken}` ——
- *   那是**照通行做法猜的**，与规格不符（规格：`/account/refresh`、入参 `refresh_token`、
- *   出参 `access_token` / `refresh_token`）。此处按规格改回，否则刷新链路第一次 401 就会失效。
+ *   那是**照通行做法猜的**，与规格不符（规格：`/account/refresh`、入参走 **HttpOnly Cookie**、
+ *   出参 `access_token`；refresh 经 Set-Cookie 轮换）。此处按规格改回，否则刷新链路第一次 401 就会失效。
  */
 const LOGIN_PATH = '/account/login'
 const REFRESH_PATH = '/account/refresh'
@@ -45,6 +44,7 @@ export const UNAUTHORIZED_EVENT = 'crm:unauthorized'
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 15000,
+  withCredentials: true, // 允许浏览器自动携带 / 回写 HttpOnly 刷新 Cookie（→ 审计报告 CODE-001）
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -69,20 +69,29 @@ function isAuthPath(url: string | undefined): boolean {
   return url !== undefined && (url.includes(LOGIN_PATH) || url.includes(REFRESH_PATH))
 }
 
-async function doRefresh(): Promise<string> {
-  const refreshToken = localStorage.getItem(REFRESH_KEY)
-  if (!refreshToken) throw new Error('缺少刷新令牌')
+/**
+ * 刷新请求独立超时：裸 axios 不复用 request 的 15000ms 超时，
+ * 避免后端挂死 / 网络闪断时 `doRefresh` 永远 pending ——
+ * 否则 `isRefreshing` 卡死为 true、后续所有 401 请求无限堆积在 `waitQueue`（审计报告 CODE-003）。
+ * 超时抛错后由下方响应拦截器的 catch 统一 `waitQueue.forEach(reject)` 释放并退回登录页。
+ */
+const REFRESH_TIMEOUT_MS = 5000
 
-  // 用裸 axios：绝不能走 request 拦截器，否则刷新失败会递归触发刷新
-  const payload: RefreshInput = { refresh_token: refreshToken }
+async function doRefresh(): Promise<string> {
+  // 刷新令牌走 **HttpOnly Cookie**（后端自动随同源请求带上，JS 读不到，→ 审计报告 CODE-001），
+  // 故此处不再从 localStorage 取、也不再在 body 里传 refresh_token。
+  // 用裸 axios：绝不能走 request 拦截器，否则刷新失败会递归触发刷新。
+  const payload: RefreshInput = {}
   const { data: body } = await axios.post<ApiResponse<RefreshResult>>(
     `${request.defaults.baseURL}${REFRESH_PATH}`,
     payload,
+    { timeout: REFRESH_TIMEOUT_MS },
   )
 
   if (body.code !== 0) throw new Error(body.message || '刷新失败')
 
-  setTokens(body.data.access_token, body.data.refresh_token)
+  // 仅落 access_token；refresh 已由后端经 Set-Cookie 写入 HttpOnly Cookie
+  setTokens(body.data.access_token)
   return body.data.access_token
 }
 
@@ -152,14 +161,12 @@ export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_KEY)
 }
 
-export function setTokens(access: string, refresh: string): void {
+export function setTokens(access: string): void {
   localStorage.setItem(ACCESS_KEY, access)
-  localStorage.setItem(REFRESH_KEY, refresh)
 }
 
 export function clearTokens(): void {
   localStorage.removeItem(ACCESS_KEY)
-  localStorage.removeItem(REFRESH_KEY)
 }
 
 export default request

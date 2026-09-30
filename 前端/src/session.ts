@@ -2,6 +2,7 @@ import { ref } from 'vue'
 
 import { fetchMe, updatePreferences, type PreferencesInput, type UserVo } from './api/auth'
 import { clearTokens, getAccessToken } from './api/request'
+import { logout } from './api/auth'
 import { applyAccountTheme } from './theme'
 
 /**
@@ -62,8 +63,17 @@ export async function pushPreferences(input: PreferencesInput): Promise<void> {
   currentUser.value = await updatePreferences(input)
 }
 
-/** 退出 / 会话失效：清 token 与当前人（**不跳路由** —— 跳由 App 或页面负责） */
-export function signOut(): void {
+/**
+ * 退出 / 会话失效：清后端 HttpOnly 刷新 Cookie + 前端 access_token，再清当前人。
+ * ★ 退出**必须**清刷新 Cookie：否则只清 access 会被 refresh 续上，会话删不掉（→ 审计报告 CODE-001）。
+ * 清 Cookie 失败不阻塞前端登出（本地 access 仍清掉）。
+ */
+export async function signOut(): Promise<void> {
+  try {
+    await logout()
+  } catch {
+    // 后端清 Cookie 失败（如 access 已过期）不阻塞前端登出
+  }
   clearTokens()
   currentUser.value = null
   sessionReady.value = true

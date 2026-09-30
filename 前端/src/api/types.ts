@@ -1000,22 +1000,16 @@ export interface components {
             nav_open: string[];
         };
         LoginResultDto: {
-            /** @description 访问令牌（Bearer JWT，建议 2h） */
+            /** @description 访问令牌（Bearer JWT，建议 2h）；存前端 localStorage */
             access_token: string;
-            /** @description 刷新令牌 */
-            refresh_token: string;
             /** @description 当前登录人（前端据此渲染菜单 / 数据范围） */
             user: components["schemas"]["UserVoDto"];
         };
-        RefreshDto: {
-            /** @description 登录时下发的 `refresh_token`（JWT 串） */
-            refresh_token: string;
-        };
+        /** 刷新令牌经 HttpOnly Cookie 自动带上，body 无需传参（→ 审计报告 CODE-001） */
+        RefreshDto: {};
         RefreshResultDto: {
-            /** @description 新的访问令牌 */
+            /** @description 新的访问令牌（refresh 经 Set-Cookie 轮换下发，不在此体） */
             access_token: string;
-            /** @description 新的刷新令牌 */
-            refresh_token: string;
         };
         UpdatePreferencesDto: {
             /**

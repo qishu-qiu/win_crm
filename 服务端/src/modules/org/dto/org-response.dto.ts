@@ -117,25 +117,27 @@ export class UserVoDto {
   nav_open!: string[];
 }
 
-/** 登录出参（→ §5.2） */
+/**
+ * 登录出参（→ §5.2）。
+ * ⚠ 刷新令牌**不在此体**：改用 **HttpOnly Cookie** 下发（JS 读不到，从根上关掉 XSS 偷会话，
+ * → 审计报告 CODE-001）。前端只拿 `access_token` 存 localStorage（短期、Bearer 用），`refresh` 由浏览器自动带 Cookie。
+ */
 export class LoginResultDto {
-  @ApiProperty({ description: '访问令牌（Bearer JWT，建议 2h）' })
+  @ApiProperty({ description: '访问令牌（Bearer JWT，建议 2h）；存前端 localStorage' })
   access_token!: string;
-
-  @ApiProperty({ description: '刷新令牌' })
-  refresh_token!: string;
 
   @ApiProperty({ type: UserVoDto, description: '当前登录人（前端据此渲染菜单 / 数据范围）' })
   user!: UserVoDto;
 }
 
-/** 刷新出参（→ §三 `/account/refresh`；规格未给字段名，与 §2.2 的键名保持一致） */
+/**
+ * 刷新出参（→ §三 `/account/refresh`）。
+ * ⚠ 刷新令牌**不在此体**：经 **Set-Cookie（HttpOnly）** 轮换下发，JS 读不到；
+ * 本体只回新的 `access_token`（→ 审计报告 CODE-001）。
+ */
 export class RefreshResultDto {
   @ApiProperty({ description: '新的访问令牌' })
   access_token!: string;
-
-  @ApiProperty({ description: '新的刷新令牌' })
-  refresh_token!: string;
 }
 
 /** 部门（→ §5.3） */

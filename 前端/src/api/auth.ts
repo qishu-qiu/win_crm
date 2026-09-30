@@ -40,3 +40,11 @@ export async function updatePreferences(input: PreferencesInput): Promise<UserVo
   const { data } = await request.put<UserVo>('/account/preferences', input)
   return data
 }
+
+/**
+ * 退出登录（`POST /account/logout`）：清后端 **HttpOnly** 刷新 Cookie（→ 审计报告 CODE-001）。
+ * 前端侧 access_token 由 `session.signOut` 同步清掉。
+ */
+export async function logout(): Promise<void> {
+  await request.post('/account/logout')
+}

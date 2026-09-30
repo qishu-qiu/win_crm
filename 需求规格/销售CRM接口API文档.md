@@ -30,7 +30,7 @@
 - 字符集 UTF-8；`Content-Type: application/json`。
 
 ### 2.2 认证与数据权限（[铁律]）
-- 登录：`POST /account/login` → 返回 `access_token`（Bearer JWT，建议 2h）+ `refresh_token`。
+- 登录：`POST /account/login` → 返回 `access_token`（Bearer JWT，建议 2h）；**`refresh_token` 改经 HttpOnly Cookie 下发（JS 读不到，从根上关掉 XSS 偷会话，→ 审计报告 CODE-001）**，前端 `localStorage` 只存 `access_token`。
 - 所有请求头：`Authorization: Bearer <access_token>`。
 - **数据权限在服务端按登录人收敛**，前端不自行计算：
   - 销售：本人 owner 私海（含 collaborator/ask_help 并集）∪ 公海。
@@ -136,7 +136,7 @@
 
 | 域 | 分组 | 端点（方法 + 路径） |
 |---|---|---|
-| 认证 | account | `P /account/login`、`P /account/refresh`、`G /account/me`、`U /account/preferences` ★ |
+| 认证 | account | `P /account/login`、`P /account/refresh`、`P /account/logout`、`G /account/me`、`U /account/preferences` ★ |
 | 组织 | org | `G/P/U/D /org/departments` ★、`G/P/D /org/departments/:id/managers` ★、`G/P/U /org/employees` ★、`G/U /org/employees/:id/roles` ★、`P /org/employees/:id/offboard` ★、`G /org/roles`、`G /org/permissions`、`G/P/U /org/product-lines` ★、`G/U /org/dept-rule` |
 | 组织 | dict | `G/P/U /dict/types`、`G/P/U /dict/items` ★ |
 | 公司 | company | `G/P /companies`、`G/U /companies/:id`、`G/P/D /companies/:id/profile-tags`、`P /companies/search-dup`、`P /companies/:id/merge` ★、`G /companies/:id/contacts` ★ |
@@ -338,11 +338,12 @@
 **派生字段（出参算、库不存）**：`old_customer`（有历史合同）、`address_maintained`（address 或坐标为空→false）、`drop_in_x_days`、`overdue`、`is_weekly`、`pay_progress`、`expire_level`、`stat_unit`（`relation`｜`company`）。
 
 ### 5.2 认证 account
-- `POST /account/login` req `{account,password}` → resp `{access_token,refresh_token,user:UserVO}`
+- `POST /account/login` req `{account,password}` → resp `{access_token,user:UserVO}`（**`refresh_token` 经 `Set-Cookie`（HttpOnly）下发，不在此体**，→ 审计报告 CODE-001）
   - **`account` ＝ 手机号 或 登录账号名**（`employee.username`），**二选一**；**服务端判别**（11 位手机号格式按手机号查，否则按账号名查）。**两种通道共用同一个 `password_hash`**。
   - ⚠ **2026-09-14 变更**：入参由 `{phone,password}` 扩为 `{account,password}`；**前端只给一个输入框**（`→《前端页面与交互文档》登录页`）。
   - 账号不存在 / 密码错 → **一律 401 / 20002**「手机号或密码不正确」（**不泄露账号是否存在，也不区分是账号名错还是密码错**）。
-- `POST /account/refresh` req `{refresh_token}` → resp **`{access_token,refresh_token}`** —— **不带 `user`**（2026-09-15 定；刷新只负责换令牌，前端要用户信息就调 `GET /account/me`，避免两个出口各带一份用户信息）。
+- `POST /account/refresh` req **（刷新令牌经 HttpOnly Cookie 自动随请求带上，body 无需传参）** → resp `{access_token}`（**`refresh_token` 经 `Set-Cookie` 轮换下发，不在此体**）；**不带 `user`**（2026-09-15 定；刷新只负责换令牌，前端要用户信息就调 `GET /account/me`，避免两个出口各带一份用户信息）。
+- `POST /account/logout` → 清除 **HttpOnly** 刷新令牌 Cookie（前端同步清 `access_token`）；不回查、不写审计。（→ 审计报告 CODE-001：刷新令牌不再落 JS 可读的 localStorage）
 - `GET /account/me` → `UserVO` ＝ `{id,name,username?,role,dept:{id,name},managed_dept_ids:[],activatable_dept_ids:[],product_line_ids:[],permissions:{"perm_key":"level"},theme,nav_open:[]}`
   - **`activatable_dept_ids`**（V1.40 回填 · 原缺口 →《欠账登记表》D-73）：**可建业务关系的部门集合** —— 与 `POST /relations` / `POST /contacts/:id/activate-relation` 的 `dept_id` 校验**同一口径、单一真相源**（判据落点＝`relation` 域 `checkActivateScope`，口径正文 → 架构 §7.2「新建（激活）时的部门范围」）：**`[]` ＝ 不限制**（总经理 / 管理员可建任意部门）；销售＝**我所属部门（主部门 ∪ 兼部门）**；部门经理＝**管辖部门**。
     - ⚠ 它**只负责让前端收敛下拉**，**不是权限本身**：越权兜底仍是服务端 **403 / 20003**；前端**不得在本集之上再加任何规则**（2026-09-22 真账号走查实测：加了「承接我业务线的部门也给」＝比服务端宽 ⇒ 选中即 403，已删）。

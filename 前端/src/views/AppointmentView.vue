@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import { message, Modal } from 'ant-design-vue'
@@ -60,7 +60,7 @@ async function loadDropMap(): Promise<void> {
   try {
     const page = await listRelations({ tab: 'private', pageSize: 100 })
     const map = new Map<string, number | null>()
-    for (const item of page.items as RelationListItem[]) {
+    for (const item of page.list as RelationListItem[]) {
       map.set(item.id, item.drop_in_x_days)
     }
     dropMap.value = map
@@ -227,7 +227,7 @@ async function openCreate(row: AppointmentItem): Promise<void> {
     const companyId = detail.company?.id
     if (companyId) {
       const page: ContactPage = await listCompanyContacts(companyId, { pageSize: 100 })
-      createState.value.contacts = (page.items ?? []).map((c) => ({ id: c.id, name: c.name }))
+      createState.value.contacts = (page.list ?? []).map((c) => ({ id: c.id, name: c.name }))
     }
   } catch {
     createState.value.contacts = []

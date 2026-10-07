@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
-import { message, Modal } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 
 import { getRelation, type RelationDetail } from '../api/relation'
 import { createAppointment } from '../api/appointment'

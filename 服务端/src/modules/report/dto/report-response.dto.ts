@@ -2,12 +2,17 @@ import { ApiProperty } from '@nestjs/swagger';
 
 import { SeaManagerTodoResultDto } from '../../sea/dto/sea-response.dto';
 
+// ★ 全文件铁律（→ 2026-10-07 修）：**可空字段（`X | null`）的 `@ApiProperty` 必须显式写 `type`**。
+//   联合类型反射成 `Object` → Swagger 生成为空对象 → 前端生成物里是 `Record<string, never>`
+//   （实测：本文件 10 个可空字段全部中招，前端 `vue-tsc` 直接编译不过）。
+//   非空字段不加 `type` 也能推断（`number` / `string` / `boolean`），故只在此处强制。
+
 /** 本月签约额（→ 接口 §5.13 / §4.12） */
 export class MonthSignedDto {
   @ApiProperty({ description: '本月签约额（元）' })
   amount!: number;
 
-  @ApiProperty({ description: '环比上月 ＝ (本月 − 上月) / 上月；上月为 0 → `null`', nullable: true })
+  @ApiProperty({ type: Number, nullable: true, description: '环比上月 ＝ (本月 − 上月) / 上月；上月为 0 → `null`' })
   chain_ratio!: number | null;
 }
 
@@ -28,13 +33,13 @@ export class PendingTodoItemDto {
   @ApiProperty({ description: '业务关系 id（十进制字符串）' })
   relation_id!: string;
 
-  @ApiProperty({ nullable: true, description: '关系展示名（公司名）' })
+  @ApiProperty({ type: String, nullable: true, description: '关系展示名（公司名）' })
   relation_name!: string | null;
 
-  @ApiProperty({ nullable: true, description: '关联联系人 id（承诺直接绑定的联系人）' })
+  @ApiProperty({ type: String, nullable: true, description: '关联联系人 id（承诺直接绑定的联系人）' })
   contact_id!: string | null;
 
-  @ApiProperty({ nullable: true, description: '关联联系人姓名' })
+  @ApiProperty({ type: String, nullable: true, description: '关联联系人姓名' })
   contact_name!: string | null;
 
   @ApiProperty({ description: '承诺到期时间（ISO8601）' })
@@ -43,7 +48,7 @@ export class PendingTodoItemDto {
   @ApiProperty({ description: '是否已逾期（due_at 早于北京今日 0 点 → 前端置红）' })
   overdue!: boolean;
 
-  @ApiProperty({ nullable: true, description: '承诺内容（作为待办描述）' })
+  @ApiProperty({ type: String, nullable: true, description: '承诺内容（作为待办描述）' })
   content!: string | null;
 }
 
@@ -55,25 +60,25 @@ export class WarningItemDto {
   @ApiProperty({ description: '业务关系 id（十进制字符串）' })
   relation_id!: string;
 
-  @ApiProperty({ nullable: true, description: '关系展示名（公司名）' })
+  @ApiProperty({ type: String, nullable: true, description: '关系展示名（公司名）' })
   relation_name!: string | null;
 
-  @ApiProperty({ nullable: true, description: '`new_biz`：在位 owner 员工 id' })
+  @ApiProperty({ type: String, nullable: true, description: '`new_biz`：在位 owner 员工 id' })
   owner_id!: string | null;
 
-  @ApiProperty({ nullable: true, description: '`new_biz`：在位 owner 姓名' })
+  @ApiProperty({ type: String, nullable: true, description: '`new_biz`：在位 owner 姓名' })
   owner_name!: string | null;
 
-  @ApiProperty({ nullable: true, description: '`contract_expire`：合同到期日（ISO8601）' })
+  @ApiProperty({ type: String, nullable: true, description: '`contract_expire`：合同到期日（ISO8601）' })
   service_end!: string | null;
 
-  @ApiProperty({ nullable: true, description: '`contract_expire`：剩余天数（负＝已过期未续）' })
+  @ApiProperty({ type: Number, nullable: true, description: '`contract_expire`：剩余天数（负＝已过期未续）' })
   days_left!: number | null;
 
-  @ApiProperty({ nullable: true, description: '`new_biz`：建档时间（ISO8601）' })
+  @ApiProperty({ type: String, nullable: true, description: '`new_biz`：建档时间（ISO8601）' })
   created_at!: string | null;
 
-  @ApiProperty({ nullable: true, description: '`sea_drop`：已停留公海自然日数' })
+  @ApiProperty({ type: Number, nullable: true, description: '`sea_drop`：已停留公海自然日数' })
   dropped_days!: number | null;
 }
 
@@ -112,16 +117,16 @@ export class ZombieWeeklyItemDto {
   @ApiProperty({ description: '业务关系 id（十进制字符串）' })
   relation_id!: string;
 
-  @ApiProperty({ nullable: true, description: '关系展示名（公司名）' })
+  @ApiProperty({ type: String, nullable: true, description: '关系展示名（公司名）' })
   relation_name!: string | null;
 
-  @ApiProperty({ nullable: true, description: '在位 owner 员工 id' })
+  @ApiProperty({ type: String, nullable: true, description: '在位 owner 员工 id' })
   owner_id!: string | null;
 
-  @ApiProperty({ nullable: true, description: '在位 owner 姓名' })
+  @ApiProperty({ type: String, nullable: true, description: '在位 owner 姓名' })
   owner_name!: string | null;
 
-  @ApiProperty({ nullable: true, description: '最近一次有效跟进时间（ISO8601，无则 null）' })
+  @ApiProperty({ type: String, nullable: true, description: '最近一次有效跟进时间（ISO8601，无则 null）' })
   last_event_at!: string | null;
 
   @ApiProperty({ description: '距最近有效跟进的自然日数（无跟进＝9999）' })

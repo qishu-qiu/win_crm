@@ -55,9 +55,29 @@ export interface paths {
         put?: never;
         /**
          * 刷新令牌
-         * @description 用 `refresh_token` 换一对新令牌；**重新装载**最新角色与管辖部门（撤销经理后立即收窄数据范围）
+         * @description 刷新令牌经 **HttpOnly Cookie** 自动随请求带上（JS 读不到）；用其换一对新令牌并**轮换** Cookie；**重新装载**最新角色与管辖部门（撤销经理后立即收窄数据范围）
          */
         post: operations["OrgController_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 退出登录
+         * @description 清除 **HttpOnly** 刷新令牌 Cookie（前端同步清 access_token）；不回查、不写审计。→ 审计报告 CODE-001：刷新令牌不再落 JS 可读的 localStorage
+         */
+        post: operations["OrgController_logout"];
         delete?: never;
         options?: never;
         head?: never;
@@ -644,6 +664,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/contracts/suspected-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 疑似重复合同清单（经理侧）
+         * @description 同 `company_id` ＋ 同 `signer_id` ＋ 同 `amount` ＋ `sign_date` 相近（≤ `window_days`，默认 7）分组返回可疑对；**仅经理 / 总经理 / 管理员可见**（销售 / 交付·客服 → 403）。系统只列清单，**不自动合并 / 不自动拦截 / 不自动删**（→ 需求 §十六 N7）：同公司同金额可能是两笔真合同（续费 / 增购）。
+         */
+        get: operations["TradeController_getSuspectedDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-checklists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 签约校验清单（按产品线查询）
+         * @description 返回该线**全部**项（含 disabled）。所有角色可读——前端建单时据此标红 / 跳补；仅写动作（POST / PUT）限管理员（其余 403）。
+         */
+        get: operations["TradeController_listSignChecklist"];
+        put?: never;
+        /**
+         * 新增签约校验项（管理员）
+         * @description 超 `uk_line_scope_field` → **409**；ledger 类 `field_key` 须已登记 `field_template` 否则 **422 / 20410**；`product_line_id` / `scope` / `field_key` 保存后不可变。仅管理员可写（其余 403）。
+         */
+        post: operations["TradeController_createSignChecklist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-checklists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 改签约校验项（管理员）
+         * @description 仅 `required` / `sort` / `status` 可改（产品线下钻铁律）；`product_line_id` / `scope` / `field_key` 不可变。仅管理员可写（其余 403）。删除＝置 `status=disabled`（停用不删）。
+         */
+        put: operations["TradeController_updateSignChecklist"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/contracts/{id}": {
         parameters: {
             query?: never;
@@ -1005,10 +1089,8 @@ export interface components {
             /** @description 当前登录人（前端据此渲染菜单 / 数据范围） */
             user: components["schemas"]["UserVoDto"];
         };
-        /** 刷新令牌经 HttpOnly Cookie 自动带上，body 无需传参（→ 审计报告 CODE-001） */
-        RefreshDto: {};
         RefreshResultDto: {
-            /** @description 新的访问令牌（refresh 经 Set-Cookie 轮换下发，不在此体） */
+            /** @description 新的访问令牌 */
             access_token: string;
         };
         UpdatePreferencesDto: {
@@ -1276,6 +1358,12 @@ export interface components {
              */
             match_type: "same" | "high_sim";
         };
+        ContactRefVoDto: {
+            /** @example 7 */
+            id: string;
+            /** @example 张伟 */
+            name: string;
+        };
         SearchDupResultVoDto: {
             /** @description 候选清单（可空数组） */
             candidates: components["schemas"]["DupCandidateVoDto"][];
@@ -1285,7 +1373,7 @@ export interface components {
              */
             suggest: "use_exists" | "create_new";
             /** @description ★ M8-06 Phase 2（A3）：按 phone 命中时回命中联系人 `{id,name}`（无则 null）；前端据此直接跳到该联系人 */
-            matched_contact?: Record<string, never> | null;
+            matched_contact?: components["schemas"]["ContactRefVoDto"] | null;
         };
         ExtraPhoneDto: {
             /**
@@ -1661,7 +1749,7 @@ export interface components {
              * @description 该业务线最近签约日期（ISO 串；多条合同取最大；无签约合同为 `null`，→ D-61 桥③）
              * @example 2026-09-01T00:00:00.000Z
              */
-            sign_date: Record<string, never> | null;
+            sign_date: string | null;
             /**
              * @description 该业务线已签约合同金额合计（字符串，两位小数；单位＝元；多个合同求和，→ D-61 桥③）
              * @example 120000.00
@@ -1710,12 +1798,6 @@ export interface components {
              * @example 5
              */
             event_count_30d: number;
-        };
-        ContactRefVoDto: {
-            /** @example 7 */
-            id: string;
-            /** @example 王海涛 */
-            name: string;
         };
         ContactExtraPhoneVoDto: {
             /**
@@ -2370,6 +2452,110 @@ export interface components {
              */
             page_size: number;
         };
+        SuspectedDuplicateContractDto: {
+            /**
+             * @description 合同 id（十进制字符串）
+             * @example 1
+             */
+            id: string;
+            /**
+             * @description 合同编号（唯一，服务端生成）
+             * @example CN20260923000001
+             */
+            contract_no: string;
+            /**
+             * @description 合同金额（Decimal 字符串）
+             * @example 120000.00
+             */
+            amount: string;
+            /** @description 签约日期（ISO） */
+            sign_date: string | null;
+            /**
+             * @description 签单人 id（十进制字符串）
+             * @example 5
+             */
+            signer_id: string;
+        };
+        SuspectedDuplicateItemDto: {
+            /**
+             * @description 公司 id（十进制字符串）
+             * @example 10
+             */
+            company_id: string;
+            /** @description 可疑对（两条合同） */
+            contracts: components["schemas"]["SuspectedDuplicateContractDto"][];
+        };
+        SignChecklistItemDto: {
+            /**
+             * @description 清单项 id
+             * @example 1
+             */
+            id: string;
+            /**
+             * @description 产品线 id
+             * @example 1
+             */
+            product_line_id: string;
+            /**
+             * @description 校验层级
+             * @enum {string}
+             */
+            scope: "company" | "relation" | "ledger";
+            /** @description 字段键（company/relation 为真实列名；ledger 为 field_template.field_key） */
+            field_key: string;
+            /** @description 中文显示名（弹窗用） */
+            label: string;
+            /** @description 是否必填 */
+            required: boolean;
+            /** @description 排序 */
+            sort: number;
+            /** @description 状态（active / disabled） */
+            status: string;
+        };
+        CreateSignChecklistDto: {
+            /**
+             * @description 产品线 id（十进制字符串）
+             * @example 1
+             */
+            product_line_id: string;
+            /**
+             * @description 校验层级（company＝公司级 / relation＝关系级 / ledger＝台账级）
+             * @enum {string}
+             */
+            scope: "company" | "relation" | "ledger";
+            /**
+             * @description 字段键：company/relation 用真实列名；ledger 用 `field_template.field_key`
+             * @example credit_code
+             */
+            field_key: string;
+            /**
+             * @description 中文显示名（弹窗用，前端不硬编码）
+             * @example 统一社会信用代码
+             */
+            label: string;
+            /**
+             * @description 是否必填（默认 true）
+             * @example true
+             */
+            required?: boolean;
+        };
+        UpdateSignChecklistDto: {
+            /**
+             * @description 是否必填
+             * @example true
+             */
+            required?: boolean;
+            /**
+             * @description 排序
+             * @example 0
+             */
+            sort?: number;
+            /**
+             * @description 状态（active / disabled；停用不删）
+             * @enum {string}
+             */
+            status?: "active" | "disabled";
+        };
         UpdateContractDto: {
             /**
              * @description 收款方式
@@ -2389,8 +2575,10 @@ export interface components {
             service_start?: string;
             /** @description 服务结束日期（YYYY-MM-DD）；传 null 清空 */
             service_end?: string;
-            /** @description 附件（JSON；落库 `attachments` 列） */
-            attachments?: Record<string, never>;
+            /** @description 附件（JSON；落库 `attachments` 列）。★ 不强制结构：本域只存 `file_asset` 的引用指针，上传与带鉴权下载属 B 域（`file_asset` 未建）。⚠ 用 `type: object` ＋ `additionalProperties` 而不是 `type: Object`：后者在生成物里是`Record<string, never>`（＝空对象、类型不可用，→《AI执行清单》#17 要求 grep 为 0）。 */
+            attachments?: {
+                [key: string]: unknown;
+            };
         };
         RelationListItemVoDto: {
             /**
@@ -2807,7 +2995,7 @@ export interface components {
             /** @description 本月签约额（元） */
             amount: number;
             /** @description 环比上月 ＝ (本月 − 上月) / 上月；上月为 0 → `null` */
-            chain_ratio: Record<string, never> | null;
+            chain_ratio: number | null;
         };
         DashboardKpiDto: {
             /** @description 今日新增关系数（`business_relation.created_at` 落北京今日） */
@@ -2821,17 +3009,17 @@ export interface components {
             /** @description 业务关系 id（十进制字符串） */
             relation_id: string;
             /** @description 关系展示名（公司名） */
-            relation_name: Record<string, never> | null;
+            relation_name: string | null;
             /** @description 关联联系人 id（承诺直接绑定的联系人） */
-            contact_id: Record<string, never> | null;
+            contact_id: string | null;
             /** @description 关联联系人姓名 */
-            contact_name: Record<string, never> | null;
+            contact_name: string | null;
             /** @description 承诺到期时间（ISO8601） */
             due_at: string;
             /** @description 是否已逾期（due_at 早于北京今日 0 点 → 前端置红） */
             overdue: boolean;
             /** @description 承诺内容（作为待办描述） */
-            content: Record<string, never> | null;
+            content: string | null;
         };
         WarningItemDto: {
             /**
@@ -2842,19 +3030,19 @@ export interface components {
             /** @description 业务关系 id（十进制字符串） */
             relation_id: string;
             /** @description 关系展示名（公司名） */
-            relation_name: Record<string, never> | null;
+            relation_name: string | null;
             /** @description `new_biz`：在位 owner 员工 id */
-            owner_id: Record<string, never> | null;
+            owner_id: string | null;
             /** @description `new_biz`：在位 owner 姓名 */
-            owner_name: Record<string, never> | null;
+            owner_name: string | null;
             /** @description `contract_expire`：合同到期日（ISO8601） */
-            service_end: Record<string, never> | null;
+            service_end: string | null;
             /** @description `contract_expire`：剩余天数（负＝已过期未续） */
-            days_left: Record<string, never> | null;
+            days_left: number | null;
             /** @description `new_biz`：建档时间（ISO8601） */
-            created_at: Record<string, never> | null;
+            created_at: string | null;
             /** @description `sea_drop`：已停留公海自然日数 */
-            dropped_days: Record<string, never> | null;
+            dropped_days: number | null;
         };
         DeptCompareItemDto: {
             /** @description 部门 id（十进制字符串） */
@@ -2880,13 +3068,13 @@ export interface components {
             /** @description 业务关系 id（十进制字符串） */
             relation_id: string;
             /** @description 关系展示名（公司名） */
-            relation_name: Record<string, never> | null;
+            relation_name: string | null;
             /** @description 在位 owner 员工 id */
-            owner_id: Record<string, never> | null;
+            owner_id: string | null;
             /** @description 在位 owner 姓名 */
-            owner_name: Record<string, never> | null;
+            owner_name: string | null;
             /** @description 最近一次有效跟进时间（ISO8601，无则 null） */
-            last_event_at: Record<string, never> | null;
+            last_event_at: string | null;
             /** @description 距最近有效跟进的自然日数（无跟进＝9999） */
             no_progress_days: number;
         };
@@ -3028,13 +3216,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RefreshDto"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description 统一响应包的 `data` 即本结构 */
+            /** @description 统一响应包的 `data` 即本结构（仅含新 access_token，refresh 经 Set-Cookie 轮换） */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3042,6 +3226,23 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RefreshResultDto"];
                 };
+            };
+        };
+    };
+    OrgController_logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3915,6 +4116,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContractVoDto"];
+                };
+            };
+        };
+    };
+    TradeController_getSuspectedDuplicates: {
+        parameters: {
+            query: {
+                window_days: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuspectedDuplicateItemDto"][];
+                };
+            };
+        };
+    };
+    TradeController_listSignChecklist: {
+        parameters: {
+            query: {
+                /** @description 产品线 id（十进制字符串） */
+                product_line_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignChecklistItemDto"][];
+                };
+            };
+        };
+    };
+    TradeController_createSignChecklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSignChecklistDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignChecklistItemDto"];
+                };
+            };
+        };
+    };
+    TradeController_updateSignChecklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 清单项 id（十进制字符串） */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSignChecklistDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignChecklistItemDto"];
                 };
             };
         };

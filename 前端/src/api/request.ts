@@ -22,7 +22,6 @@ export interface ApiResponse<T = unknown> {
 
 /** 出参类型一律取自 OpenAPI 生成物（禁止手写对接，→ M0-57） */
 type RefreshResult = components['schemas']['RefreshResultDto']
-type RefreshInput = components['schemas']['RefreshDto']
 
 const ACCESS_KEY = 'crm_access_token'
 
@@ -80,11 +79,13 @@ const REFRESH_TIMEOUT_MS = 5000
 async function doRefresh(): Promise<string> {
   // 刷新令牌走 **HttpOnly Cookie**（后端自动随同源请求带上，JS 读不到，→ 审计报告 CODE-001），
   // 故此处不再从 localStorage 取、也不再在 body 里传 refresh_token。
+  // ★ 请求体给 `undefined`（不发 body）：后端 `/account/refresh` **没有入参 DTO**
+  //   （令牌在 Cookie 里），此前这里发 `{}` 并引用一个并不存在的 `RefreshDto` 类型 ——
+  //   `gen:types` 重生成后那段类型消失，`vue-tsc` 直接编译不过（2026-10-07 实测）。
   // 用裸 axios：绝不能走 request 拦截器，否则刷新失败会递归触发刷新。
-  const payload: RefreshInput = {}
   const { data: body } = await axios.post<ApiResponse<RefreshResult>>(
     `${request.defaults.baseURL}${REFRESH_PATH}`,
-    payload,
+    undefined,
     { timeout: REFRESH_TIMEOUT_MS },
   )
 

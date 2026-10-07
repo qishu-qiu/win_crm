@@ -4,6 +4,8 @@
 // 口径来源（★ 真相源，勿自造）：
 //   · 《销售CRM接口API文档》§2.3：失败响应 `{ code, message, request_id, data: null }`
 //     —— 注意 **data 恒为 null**（不是省略、不是空对象）；`message` 是**给销售看的人话**。
+//     ★ **唯一例外（2026-10-07）**：§5.9 签约校验要求 422 回 `missing[]` 缺项清单（前端据此标红 / 跳补），
+//       故 `AppError` 可显式带 `data` 出参 —— **不带则仍恒 `null`**（§2.3 的默认行为一个字没动）。
 //   · 同 §2.4 错误码表：左列 HTTP 状态、右列业务 code，两套编号并存（`CODE_BY_HTTP_STATUS` 逐行转写）。
 //   · 《销售CRM架构设计说明》§7.5 异常映射：P2002 → 409（**不是** MySQL 1062），
 //     映射与文案的唯一实现在 `kernel/errors/prisma-error.mapper.ts`，本文件只**调用**、不重写。
@@ -177,11 +179,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(`${trace} ${describeRequest(exception)}`);
     }
 
-    const body: ApiEnvelope<null> = {
+    // ★ `data`：默认 `null`（§2.3 失败响应固定），**唯一例外**＝`AppError` 显式带了 `data`
+    //   （§5.9 签约校验缺项要回 `missing[]` 让前端标红 / 跳补）。不加这个口子，前端只能靠人话猜。
+    const failureData = exception instanceof AppError ? exception.data : undefined;
+    const body: ApiEnvelope<unknown> = {
       code: resolved.code,
       message: resolved.message,
       request_id: requestId,
-      data: null, // → §2.3 失败响应固定为 null
+      data: failureData ?? null, // → §2.3 失败响应固定为 null（无 data 时）
     };
     response.status(resolved.httpStatus).json(body);
   }

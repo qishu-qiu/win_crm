@@ -121,7 +121,15 @@ export class UpdateContractDto {
   service_end?: string;
 
   /** 附件（JSON；不强制结构，跨域文件资产由 B 域 `file_asset` 承载，本域只存引用指针） */
-  @ApiPropertyOptional({ description: '附件（JSON；落库 `attachments` 列）' })
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: true,
+    description:
+      '附件（JSON；落库 `attachments` 列）。★ 不强制结构：本域只存 `file_asset` 的引用指针，' +
+      '上传与带鉴权下载属 B 域（`file_asset` 未建）。' +
+      '⚠ 用 `type: object` ＋ `additionalProperties` 而不是 `type: Object`：后者在生成物里是' +
+      '`Record<string, never>`（＝空对象、类型不可用，→《AI执行清单》#17 要求 grep 为 0）。',
+  })
   @IsOptional()
   attachments?: unknown;
 }

@@ -14,6 +14,15 @@
 export const SIGN_CHECKLIST_SCOPES = ['company', 'relation', 'ledger'] as const;
 export type SignChecklistScope = (typeof SIGN_CHECKLIST_SCOPES)[number];
 
+/**
+ * 库里的 `scope` 列是 `VARCHAR(16)`（→ 无 DB ENUM，§5 数据层口径），读出来是 `string`；
+ * 本函数把它**收窄**成三种合法层级。写入端（`POST /sign-checklists`）已用 DTO 卡住枚举，
+ * 故返回 `null` 只可能是**历史脏数据**——调用方据此跳过该项（不静默当成"已填"）。
+ */
+export function parseScope(value: string): SignChecklistScope | null {
+  return (SIGN_CHECKLIST_SCOPES as readonly string[]).includes(value) ? (value as SignChecklistScope) : null;
+}
+
 /** 配置项（→ §5.15 `SignChecklistItem`） */
 export interface SignChecklistItem {
   scope: SignChecklistScope;
@@ -40,6 +49,32 @@ export function gotoOf(scope: SignChecklistScope): SignChecklistGoto {
 /** 构建「已填字段」集合的键（与 `validateSignChecklist` 的 `filledKeys` 同构） */
 export function filledKey(scope: SignChecklistScope, fieldKey: string): string {
   return `${scope}:${fieldKey}`;
+}
+
+/** 各层级「哪些 `field_key` 已填」的入参（键＝`field_key`；未出现的键＝未填） */
+export interface SignCheckFilledInput {
+  company?: Readonly<Record<string, boolean>>;
+  relation?: Readonly<Record<string, boolean>>;
+  ledger?: Readonly<Record<string, boolean>>;
+}
+
+/**
+ * 把各层级的「已填」标记拼成 `validateSignChecklist` 要的集合（→ `filledKey(scope,field_key)`）。
+ *
+ * ★ 分层理由：service 只该**取数**（公司字段走 B 域出口、关系字段本域已有），**拼键与判定归本文件**。
+ * ★ **没传的层级 / 没列出的 `field_key` 一律算未填** —— 与 E8「非空即过」同向，
+ *   不做"没查过就算过"的宽松兜底（那等于让校验形同虚设）。
+ */
+export function buildFilledKeys(input: SignCheckFilledInput): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const scope of SIGN_CHECKLIST_SCOPES) {
+    const bag = input[scope];
+    if (bag === undefined) continue;
+    for (const [fieldKey, filled] of Object.entries(bag)) {
+      if (filled) keys.add(filledKey(scope, fieldKey));
+    }
+  }
+  return keys;
 }
 
 /** 缺项（→ §5.15 422 响应体 `missing[]`） */

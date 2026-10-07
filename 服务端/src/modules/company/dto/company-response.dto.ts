@@ -72,6 +72,24 @@ export class CompanyVoDto {
   updated_at!: string;
 }
 
+/**
+ * 「实体引用」`{id,name}`（→ §四）
+ *
+ * ★ 服务于 `matched_contact`（§5.4 查重按 phone 命中）与 `phone_locked_by`。
+ *   **这也是 `matched_contact` 必须引用本类、不能写内联字面量的原因**：
+ *   内联对象字面量（或 `type: Object`）在 Swagger 里只生成空对象，
+ *   前端生成物退化成 `Record<string, never>`（＝类型不可用，→《AI执行清单》#17）。
+ * ★ 必须**声明在使用它的类之前**（class 不提升，装饰器在类定义时即执行，
+ *   放后面会报 TS2449「used before its declaration」）。
+ */
+export class ContactRefVoDto {
+  @ApiProperty({ type: String, example: '7' })
+  id!: string;
+
+  @ApiProperty({ example: '张伟' })
+  name!: string;
+}
+
 /** 查重候选（→ §5.4） */
 export class DupCandidateVoDto {
   @ApiProperty({ type: String, example: '1' })
@@ -106,11 +124,11 @@ export class SearchDupResultVoDto {
   suggest!: string;
 
   @ApiPropertyOptional({
-    type: Object,
+    type: ContactRefVoDto,
     nullable: true,
     description: '★ M8-06 Phase 2（A3）：按 phone 命中时回命中联系人 `{id,name}`（无则 null）；前端据此直接跳到该联系人',
   })
-  matched_contact?: { id: string; name: string } | null;
+  matched_contact?: ContactRefVoDto | null;
 }
 
 /** 联系人简卡（→ §5.5 `ContactBrief`；列表 / 卡片一律 `phone_masked`） */
@@ -139,15 +157,6 @@ export class ContactBriefVoDto {
 
   @ApiProperty({ description: '是否当前在职（`company_contact.is_current`；历史就职给 false）' })
   is_current!: boolean;
-}
-
-/** 「实体引用」`{id,name}`（→ §四；此处用于 `phone_locked_by`） */
-export class ContactRefVoDto {
-  @ApiProperty({ type: String, example: '7' })
-  id!: string;
-
-  @ApiProperty({ example: '王海涛' })
-  name!: string;
 }
 
 /**
@@ -396,6 +405,7 @@ export class RelationsSummaryItemVoDto {
   product_line!: ProductLineRefVoDto;
 
   @ApiProperty({
+    type: String,
     description: '该业务线最近签约日期（ISO 串；多条合同取最大；无签约合同为 `null`，→ D-61 桥③）',
     example: '2026-09-01T00:00:00.000Z',
     nullable: true,

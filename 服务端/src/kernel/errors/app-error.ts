@@ -77,6 +77,16 @@ export interface AppErrorOptions {
   constraint?: string;
   /** 原始异常（如 Prisma 的 P2002 对象），只进日志便于排查；同样不出接口 */
   cause?: unknown;
+  /**
+   * **失败响应体要带的业务数据**（→ §2.3 失败响应的**唯一例外**，→ §5.9 签约校验缺项清单）。
+   *
+   * ★ 为什么要有这个口子：§2.3 写「失败 `data` 恒 `null`」，但 §5.9 明确要求签约校验缺项时
+   *   「422 + 响应 `{missing:[{scope,field_key,label,goto}]}`」—— 前端要靠这份清单**标红 / 跳补**，
+   *   只回一句人话做不到。故：**默认仍为 `null`（守住 §2.3）**，只有显式带 `data` 的业务校验才例外。
+   * ★ 与 `constraint` 的区别：`constraint` / `cause` **永不出接口**（§2.4 尾注：内部原话不丢给销售）；
+   *   本字段是**规格明文要求回给前端**的业务数据，出参前必须已脱敏、不得含内部字段名。
+   */
+  data?: unknown;
 }
 
 /**
@@ -89,6 +99,8 @@ export class AppError extends Error {
   readonly httpStatus: number;
   /** 内部定位信息：命中的约束名等（可选） */
   readonly constraint?: string;
+  /** 失败响应体要带的业务数据（可选；不传 ＝ 响应 `data` 恒 `null`，→ §2.3） */
+  readonly data?: unknown;
 
   constructor(code: number, httpStatus: number, message: string, options: AppErrorOptions = {}) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
@@ -97,6 +109,9 @@ export class AppError extends Error {
     this.httpStatus = httpStatus;
     if (options.constraint !== undefined) {
       this.constraint = options.constraint;
+    }
+    if (options.data !== undefined) {
+      this.data = options.data;
     }
   }
 }

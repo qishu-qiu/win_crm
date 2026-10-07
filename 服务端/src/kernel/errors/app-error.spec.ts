@@ -29,6 +29,20 @@ describe('M0-22 AppError 基类（code / httpStatus / message）', () => {
     expect(err.message).not.toContain('Duplicate entry');
   });
 
+  it('data（失败响应要带的业务数据）与 constraint 分工相反：data 出接口、constraint 不出', () => {
+    const missing = [{ scope: 'company', field_key: 'credit_code', label: '统一社会信用代码', goto: 'inline_company' }];
+    const err = new AppError(ErrorCode.REQUIRED_MISSING, 422, '必填未填', {
+      constraint: 'contract.sign_checklist_missing',
+      data: { missing },
+    });
+    expect(err.data).toEqual({ missing });
+    expect(err.message).not.toContain('contract.sign_checklist_missing'); // 内部约束名不进 message
+  });
+
+  it('不传 data 时 data 为 undefined（过滤器据此把响应 data 归一成 null，§2.3）', () => {
+    expect(new AppError(ErrorCode.PARAM_INVALID, 400, 'x').data).toBeUndefined();
+  });
+
   it('code 与 httpStatus 是两套编号，互不干扰', () => {
     const err = new AppError(ErrorCode.UNIQUE_CONFLICT, 409, 'x');
     expect(err.httpStatus).not.toBe(err.code);

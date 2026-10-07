@@ -52,6 +52,7 @@ import { DictService } from '../org/dict.service';
 import { OrgService } from '../org/org.service';
 import { compareCompanyNameCore, type CompanyMatchType } from './domain/company-name-similarity';
 import { isPhoneLockedForViewer } from './domain/contact-lock';
+import { isFieldFilled } from './domain/field-filled';
 import { toNameCore } from './domain/company-name';
 import { isEmptyPhone, normalizeContactPhone } from './domain/contact-phone';
 import { CompanyRepository, type CompanyTxClient, type CreateCompanyData } from './company.repository';
@@ -70,6 +71,24 @@ export const COMPANY_AUDIT_ACTIONS = {
   /** 管理员查看公司详情 → `GET /companies/:id`（→ D-35：仅 `admin` 角色写 `operation_log`） */
   view: 'company.view',
 } as const;
+
+/**
+ * **签约校验用的公司字段「是否已填」**（→ 数据架构 E8 `scope=company` 四项 ＋ `scope=relation/contact` 的联系人项；
+ * 消费方＝E 域 `createContract` 的清单校验，→ 接口 §5.9）。
+ *
+ * ★ 为什么是**布尔**而不是原文：公司档案是全公司共享资料层，这四个字段属于**敏感工商信息**，
+ *   契约校验只需要"填了没有"，不需要值 —— 出口只给 `true/false`，顺带天然满足脱敏（§2.4 出口统一脱敏）。
+ * ★ 四项逐字取 E8「真实列名」（`registered_address` / `industry` / `region` 是逻辑名，`company` 表**无同名列**）：
+ *   `credit_code` / `address` / `industry_l1` / `province`；**每项取主列判定**，二级 / 细分列不单独卡。
+ */
+export interface CompanySignCheckFieldsVo {
+  credit_code: boolean;
+  address: boolean;
+  industry_l1: boolean;
+  province: boolean;
+  /** 该公司有在职联系人（`company_contact.is_current=1`）—— E8 `scope=relation / contact` 的判据 */
+  has_current_contact: boolean;
+}
 
 /** 公司出参（→ §5.4 列表项；跨域字段 `relation_count` / `old_customer` 待 M3/M4） */
 export interface CompanyVo {
@@ -840,6 +859,34 @@ export class CompanyService {
       contacts: contacts.rows.map((cc) =>
         toContactBrief(cc.contact, viewerId, { position: cc.position, is_current: cc.is_current }),
       ),
+    };
+  }
+
+  /**
+   * 签约校验用的字段「是否已填」（→ 数据架构 E8；消费方＝E 域 `createContract`，跨域走 service 不查表，§5.2 路之①）。
+   *
+   * ★ **不是 HTTP 端点、也不写审计**：
+   *   - 不开端点 —— 它只被建合同的校验调用，前端要那份清单走 `GET /sign-checklists`（→ §5.15）；
+   *   - 不留痕 —— 语义是**读**（§7.4 留痕只针对增删改），且公司档案本就全公司共享、不做范围过滤。
+   * ★ 公司不存在 / 已合并 → 抛 400（与 `getCompany` 同口径 `company.not_found`）；
+   *   ⚠ 出参**全布尔**，不泄露工商信息原文（出口脱敏，§2.4）。
+   */
+  async getSignCheckFields(companyId: bigint): Promise<CompanySignCheckFieldsVo> {
+    const [row, hasCurrentContact] = await Promise.all([
+      this.repository.findCompanyById(companyId),
+      this.repository.hasCurrentContact(companyId),
+    ]);
+    if (row === null) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '参数错误：公司不存在（或已删除 / 已合并）', {
+        constraint: 'company.not_found',
+      });
+    }
+    return {
+      credit_code: isFieldFilled(row.credit_code),
+      address: isFieldFilled(row.address),
+      industry_l1: isFieldFilled(row.industry_l1),
+      province: isFieldFilled(row.province),
+      has_current_contact: hasCurrentContact,
     };
   }
 

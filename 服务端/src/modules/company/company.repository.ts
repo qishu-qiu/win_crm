@@ -167,6 +167,21 @@ export class CompanyRepository {
   }
 
   /**
+   * 该公司**是否有在职联系人**（→ E 域签约校验 `scope=relation / contact` 项的判据，→ 数据架构 E8）。
+   *
+   * ★ 口径逐字取 E8：「`company_contact` 有 `is_current=1` 记录」＝ 签约联系人已关联；
+   *   **不要求 `left_at` 为空** —— `is_current` 就是那一个开关，两者由 B 域维护时保持一致。
+   * ★ 只回 `true/false`，**不出人名**（调用方只判"有没有"，不需要知道是谁）。
+   */
+  async hasCurrentContact(companyId: bigint): Promise<boolean> {
+    const row = await this.prisma.companyContact.findFirst({
+      where: { company_id: companyId, is_current: true },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
+  /**
    * 按 id 批量取公司引用（**只取 id / 全称**）—— 供 C 域 `company:{id,name}` 装配。
    *
    * ★ 跨域只走出口（§5.2）：关系列表要显示公司名，但 `company` 是 B 域的表，

@@ -31,11 +31,13 @@ import {
 } from '../../kernel/index';
 import { CompanyService } from '../company/company.service';
 import { OrgService } from '../org/org.service';
+import type { RelationDetailVo } from '../relation/relation.service';
 import { RelationService } from '../relation/relation.service';
 import { computePayProgress, expireLevelOf, isContractStatus } from './domain/contract';
 import { findSuspectedDuplicates, type DuplicateCheckContract } from './domain/contract-duplicate';
 import type { SuspectedDuplicate } from './domain/contract-duplicate';
 import type { ContractFilter } from './domain/contract-filter';
+import { buildFilledKeys, parseScope, validateSignChecklist } from './domain/sign-checklist';
 
 /** 疑似重复检测结果类型（→ B6 出参；从 domain 纯函数导出，供 controller 引用） */
 export type { SuspectedDuplicate };
@@ -106,17 +108,19 @@ export class TradeService {
     private readonly relation: RelationService,
   ) {}
 
-  // ===== 创建（合同号服务端生成 ＋ 关系可见性 ＋ 唯一性预检 ＋ 落库）=====
+  // ===== 创建（合同号服务端生成 ＋ 关系可见性 ＋ 签约校验 ＋ 唯一性预检 ＋ 落库）=====
 
   /**
    * 创建合同（→ §5.9 `POST /contracts`）。
    *
-   * 顺序＝**先可见性、再金额下限、再唯一性、最后落库**：
+   * 顺序＝**先可见性、再金额下限、再签约校验、再唯一性、最后落库**：
    *   ① 关系可见性 —— 调 `RelationService.getRelation`，不存在 / 越界给 400 / 403（跨域走 service，不查表）；
    *   ② 公司 / 产品线必须能从关系取到（被逻辑删的关系取不到 → 400）；
    *   ③ 金额必须 > 0（DTO 已卡两位小数格式，这里卡业务下限）；
-   *   ④ 合同号服务端生成 ＋ `findByContractNo` 预检（撞号给 409，**与 P2002 兜底同一句人话**）；
-   *   ⑤ 落库（catch `P2002` → `mapPrismaError` → 409，覆盖并发下预检漏过的竞态）。
+   *   ④ **签约校验清单**（M9-E / B3-5，→ §5.9 / 数据架构 E8）：缺项 → **422 / `20403`** ＋ 回 `missing[]`；
+   *   ⑤ 合同号服务端生成 ＋ `findByContractNo` 预检（撞号给 409，**与 P2002 兜底同一句人话**）；
+   *   ⑥ 落库（catch `P2002` → `mapPrismaError` → 409，覆盖并发下预检漏过的竞态）。
+   * ★ 校验放在**生成合同号之前**：号码是 `CN+日期+6位随机` 的真占用，提前校验失败就不白占一位。
    * ★ `signer_id` ＝ **当前登录人**（签单人锁定＝业绩归属，终身不变，→ 数据架构 E1）。
    * ★ `company_id` / `product_line_id` 由关系**派生**（合同不存 dept，且避免与关系漂移）。
    */
@@ -141,6 +145,9 @@ export class TradeService {
         constraint: 'contract.amount_invalid',
       });
     }
+
+    // ④ 签约校验清单（M9-E / B3-5）：缺项 422 ＋ 回缺项清单（§5.9 / E8）
+    await this.assertSignChecklistPassed(relation, productLineId);
 
     const contractNo = await this.reserveContractNo();
 
@@ -172,6 +179,65 @@ export class TradeService {
       });
 
     return this.buildVo(created, await this.loadRefs([created]));
+  }
+
+  /**
+   * **签约校验清单**（M9-E / B3-5；→ 接口 §5.9「创建前硬卡」＋ 数据架构 E8）。
+   *
+   * 取该 `product_line_id` 下 `status=active AND required=true` 的全部项 → 逐项查对应层级字段
+   * 是否已填 → 任一缺失 → **422 / `20403`** ＋ 回 `{missing:[{scope,field_key,label,goto}]}`
+   * （前端据此**内联补 / 跳补**；这是 §2.3「失败 `data` 恒 null」的**唯一例外**，见 `AppErrorOptions.data`）。
+   *
+   * ★ 取数分两路（**跨域不查表**，架构 §5.2 路之①）：
+   *   - 公司层四项 + 「有无在职联系人」→ B 域出口 `CompanyService.getSignCheckFields`（只给布尔，不给原文）；
+   *   - 关系层 `value_tier` → C 域出口 `getRelation` 已带（E8：「`business_relation.value_tier` 非空」）。
+   * ★ 判定本身在 `domain/sign-checklist.ts`（`buildFilledKeys` ＋ `validateSignChecklist`），本方法只取数编排。
+   * ★ **空清单不卡**：一条都没配（`items.length === 0`）直接放过 —— 清单由管理员按产品线自配，
+   *   没配就等于这条线没要求，不该让建合同建不了。
+   * ⚠ **ledger 层当前一律按未填**（B8 台账 / `field_template` 应用层未建，无出口可判）⇒ 不假通过；
+   *   默认清单不种 ledger 项（→ `prisma/seed/003_sign_checklist_seed.sql`），故现网不可达，
+   *   一旦可达（管理员加了 ledger 项）即说明 B8 该补了 → 欠账见《欠账登记表》**D-77**。
+   */
+  private async assertSignChecklistPassed(relation: RelationDetailVo, productLineId: bigint): Promise<void> {
+    const rows = await this.repository.getActiveRequiredSignChecklist(productLineId);
+    if (rows.length === 0) return;
+    // 库列是 VARCHAR（§5 枚举一律 String），收窄成三值层级；非法值只可能来自历史脏数据 → 跳过该项
+    const items = rows.flatMap((row) => {
+      const scope = parseScope(row.scope);
+      return scope === null
+        ? []
+        : [{ scope, field_key: row.field_key, label: row.label, required: row.required }];
+    });
+
+    const companyId = relation.company?.id;
+    if (companyId === undefined) {
+      throw new AppError(ErrorCode.PARAM_INVALID, 400, '该业务关系所属公司档案不存在', {
+        constraint: 'contract.company_missing',
+      });
+    }
+    const companyFields = await this.company.getSignCheckFields(companyId);
+
+    const filled = buildFilledKeys({
+      company: {
+        credit_code: companyFields.credit_code,
+        address: companyFields.address,
+        industry_l1: companyFields.industry_l1,
+        province: companyFields.province,
+      },
+      relation: {
+        value_tier: relation.value_tier !== null && relation.value_tier.trim() !== '',
+        contact: companyFields.has_current_contact,
+      },
+      // ⚠ ledger 层见文件头说明：无出口可判 ⇒ 不传 ＝ 全部未填（不假通过）
+    });
+
+    const missing = validateSignChecklist(items, filled);
+    if (missing.length === 0) return;
+
+    throw new AppError(ErrorCode.REQUIRED_MISSING, 422, '签约前还有必填项未补齐，请按提示补齐后再提交', {
+      constraint: 'contract.sign_checklist_missing',
+      data: { missing },
+    });
   }
 
   // ===== 详情 / 列表 =====

@@ -147,6 +147,55 @@ describe('全局异常过滤器（M0-34）', () => {
       expect(captured.headers[REQUEST_ID_HEADER]).toBe('trace-abc');
     });
 
+    it('★ AppError 显式带 `data` 时原样出参（§5.9 签约缺项清单；§2.3「失败 data 恒 null」的**唯一例外**）', () => {
+      const { host, captured } = createHttpHost();
+
+      filter.catch(
+        new AppError(ErrorCode.REQUIRED_MISSING, 422, '签约前还有必填项未补齐', {
+          constraint: 'contract.sign_checklist_missing',
+          data: { missing: [{ scope: 'company', field_key: 'credit_code', label: '统一社会信用代码', goto: 'inline_company' }] },
+        }),
+        host,
+      );
+
+      expect(captured.status).toBe(422);
+      expect(Object.keys(captured.body as object).sort()).toEqual(['code', 'data', 'message', 'request_id']);
+      expect(captured.body).toEqual({
+        code: ErrorCode.REQUIRED_MISSING,
+        message: '签约前还有必填项未补齐',
+        request_id: expect.any(String),
+        data: {
+          missing: [
+            { scope: 'company', field_key: 'credit_code', label: '统一社会信用代码', goto: 'inline_company' },
+          ],
+        },
+      });
+    });
+
+    it('`data` 只在显式带上时出现；带 `constraint` 而不带 `data` 仍恒 null（内部约束名绝不外泄）', () => {
+      const { host, captured } = createHttpHost();
+
+      filter.catch(
+        new AppError(ErrorCode.REQUIRED_MISSING, 422, '必填未填', { constraint: 'uk_phone_active' }),
+        host,
+      );
+
+      expect(captured.body).toEqual({
+        code: ErrorCode.REQUIRED_MISSING,
+        message: '必填未填',
+        request_id: expect.any(String),
+        data: null,
+      });
+    });
+
+    it('非 AppError（框架 / 未知异常）→ 绝不带 data（不会被塞进任何东西）', () => {
+      const { host, captured } = createHttpHost();
+
+      filter.catch(new Error('boom'), host);
+
+      expect((captured.body as { data: unknown }).data).toBeNull();
+    });
+
     it('调用方没带 X-Request-Id 时自生成（保证「排错必带」永远有值）', () => {
       const { host, captured } = createHttpHost();
 
